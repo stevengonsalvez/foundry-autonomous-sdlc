@@ -307,7 +307,8 @@ class FakeGitHub:
 
     def list_tree(self, ref: str) -> list[str]:
         self._record("list_tree")
-        return sorted(path for branch, path in self.files if branch == ref)
+        names = {ref} | {b for b, sha in self.branches.items() if sha == ref}     # a branch or its tip sha
+        return sorted(path for branch, path in self.files if branch in names)
 
     def put_file(self, path: str, content: str, *, branch: str, message: str) -> None:
         self._record("put_file")
@@ -405,7 +406,7 @@ def default_responses() -> dict[str, Responder]:
         "sdlc-triage": {"severity": "s3", "owner": "api", "summary": "Lowercase tracking numbers rejected.",
                         "suspected_area": "app/core validation", "rationale": "Workaround exists."},
         "sdlc-ci-triage": {"cause": "stale-test", "explanation": "Heading copy changed on purpose.",
-                           "test_files": ["app/web/src/pages/Home.test.tsx"]},
+                           "test_files": ["app/web/tests/home-page.test.tsx"]},
         "sdlc-release-notes": ("### Highlights\n- Shipped the change.\n\n### Changes\n- feat: change\n\n"
                                "### Quality\n- Tests added."),
     }
@@ -439,6 +440,7 @@ class FakeCoder:
         self.status_override: dict[str, Any] | None = None
         self.extra_status: dict[str, Any] = {}          # merged into every status reply (log_tail, engine_events, ...)
         self.cancel_error: Exception | None = None
+        self.lost_jobs: set[str] = set()       # status for these job ids: HTTP 400 session_not_accessible
 
     def _new_session(self) -> str:
         self.sessions += 1
@@ -466,6 +468,8 @@ class FakeCoder:
                 self.lose_next_start_reply = False
                 raise AgentRunError("read timed out", transient=True, ambiguous=True)
             return {"job_id": job["job_id"], "status": self.start_status}, session
+        if op == "status" and body["job_id"] in self.lost_jobs:
+            raise AgentRunError("sdlc-coder: invocation returned HTTP 400: session_not_accessible", http_status=400)
         record = self.by_session.get((session, body["job_id"]))
         if record is None:
             raise AgentRunError("sdlc-coder: invocation returned HTTP 404: unknown_job", http_status=404)

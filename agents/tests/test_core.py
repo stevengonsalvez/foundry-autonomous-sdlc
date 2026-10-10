@@ -169,7 +169,9 @@ def test_building_polls_until_the_deadline_and_needs_a_job() -> None:
     st.data["coder"] = {"job_id": "j-7-1", "started_at": NOW, "attempts": 1}
     assert machine.next_action(ctx(st)).kind is Kind.POLL_CODER
     late = machine.next_action(ctx(st, now="2026-10-10T18:20:00Z"))
-    assert late.kind is Kind.ESCALATE and late.cancel_coder
+    assert late.kind is Kind.CODER_LOST                       # past deadline + 30 min: lost, restarted once
+    st.data["coder"].update(status="lost", mode="feature")
+    assert machine.next_action(ctx(st)).kind is Kind.START_CODER
 
 
 def test_review_stage_decisions() -> None:

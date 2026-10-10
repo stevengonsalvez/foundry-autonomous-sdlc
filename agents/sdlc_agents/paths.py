@@ -19,6 +19,44 @@ VITEST_SUFFIXES = (".test.ts", ".test.tsx")
 _SAFE_CHARS = re.compile(r"^[A-Za-z0-9._/-]+$")
 
 
+TEST_FILE_SUFFIXES = (".test.ts", ".test.tsx", ".spec.ts")
+_FAILING_LINE = re.compile(r"\bFAIL\b|failed|\u276f|\u00d7|\u2717")
+_LOGGED_TEST = re.compile(r"(?:\|(?P<ws>[\w.-]+)\|\s+)?(?P<path>(?:[\w.-]+/)*[\w.-]+\.(?:test|spec)\.[jt]sx?)\b")
+
+
+def _match(name: str, real: list[str]) -> str | None:
+    """The one real path equal to `name`, ending in `/name`, or sharing its basename; None if not unique."""
+    name = name.strip().lstrip("./")
+    if name in real:
+        return name
+    for candidates in ([p for p in real if p.endswith("/" + name)],
+                       [p for p in real if PurePosixPath(p).name == PurePosixPath(name).name]):
+        if len(candidates) == 1:
+            return candidates[0]
+        if candidates:
+            return None
+    return None
+
+
+def resolve_test_files(claimed: list[str], real: list[str], log: str) -> list[str]:
+    """
+    The real test files a stale-test repair may change: each claimed path that matches a real one
+    (exactly, by unique suffix or by unique basename), plus every test file the log reports failing
+    (vitest prints workspace files as `|web| tests/x.test.tsx`, which is app/web/tests/x.test.tsx).
+    Anything not in `real` is dropped, so a hallucinated path never reaches the coder.
+    """
+    found = {m for c in claimed if isinstance(c, str) and (m := _match(c, real))}
+    for line in log.splitlines():
+        if "\u2713" in line or not _FAILING_LINE.search(line):
+            continue
+        for hit in _LOGGED_TEST.finditer(line):
+            path = f"app/{hit['ws']}/{hit['path']}" if hit["ws"] else hit["path"]
+            match = path if path in real else (None if hit["ws"] else _match(path, real))
+            if match:
+                found.add(match)
+    return sorted(found)
+
+
 def is_test_path(path: str) -> bool:
     """True when the repo-relative path matches one of the architecture's test globs."""
     parts = PurePosixPath(path).parts

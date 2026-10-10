@@ -47,7 +47,8 @@ CI_REVISABLE = ("test", "coverage", "e2e")   # code failures; gitleaks, tdd-orde
 MAX_TEST_REPAIRS = 2              # coder reported tests-invalid: designer repairs before agent-error
 CODER_DEADLINE_S = 7_200           # sent in every job; the coder stops itself at this point
 MAX_CODER_RESUMES = 3              # restarts of an interrupted job before giving up
-CODER_GRACE_S = 900                # after which the orchestrator cancels and escalates
+CODER_GRACE_S = 1_800              # past the deadline by this much a job is lost, whatever its polls say
+MAX_LOST_RESTARTS = 1              # a lost job (session gone, or past deadline + grace) restarts once
 FAILURE_LIMIT = 3
 POLL_FAILURE_LIMIT = 6             # coder status errors tolerated (30 minutes of ticks)
 CHECKS_TIMEOUT_S = 3 * 3600        # required checks missing or pending this long: the run never came
@@ -69,6 +70,7 @@ class Kind(StrEnum):
     START_CODER = "start-coder"
     RECONCILE = "reconcile-coder"  # a start whose outcome is unknown, or refused because a lease is held
     POLL_CODER = "poll-coder"
+    CODER_LOST = "coder-lost"      # the job is past its deadline plus grace: cancel it, restart once
     CI_TRIAGE = "ci-triage"
     REVIEW = "review"
     MERGE = "merge"
@@ -287,9 +289,12 @@ def _poll_coder(ctx: Context) -> Action:
         if int(coder.get("resumes", 0)) > MAX_CODER_RESUMES:
             return Action(Kind.ESCALATE, f"coder interrupted {coder['resumes']} times", label=ESC_BUILD_FAILED)
         return Action(Kind.START_CODER, "resume", mode=str(coder.get("mode")))
+    if coder.get("status") == "lost":
+        return _start_coder(ctx.state, str(coder.get("mode")))
     started = coder.get("started_at")
     if started and seconds_between(started, ctx.now) > CODER_DEADLINE_S + CODER_GRACE_S:
-        return Action(Kind.ESCALATE, "coder exceeded the six hour deadline", label=ESC_BUILD_FAILED, cancel_coder=True)
+        return Action(Kind.CODER_LOST, f"coder job still unfinished {CODER_GRACE_S // 60} minutes past its "
+                      f"{CODER_DEADLINE_S // 3600} h deadline")
     return Action(Kind.POLL_CODER)
 
 

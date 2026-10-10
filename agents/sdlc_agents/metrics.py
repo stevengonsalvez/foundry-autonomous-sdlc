@@ -75,6 +75,7 @@ METRICS_SCHEMA: dict[str, Any] = {
                 "gates": {"type": "object"},
                 "gate_attempts": {"type": "object"},
                 "deferred": {"type": ["string", "null"]},
+                "coder_sessions_lost": _COUNT,
             },
             "required": [
                 "number", "title", "scenario", "type", "outcome", "opened_at", "closed_at", "stages",
@@ -152,6 +153,7 @@ def _issue_entry(item: Issue, st: State) -> dict[str, Any]:
                  "calls": cost.call_count(st)},
         "gates": dict(st.data.get("gates") or {}),
         "gate_attempts": _gate_attempts(st),
+        "coder_sessions_lost": int(st.data.get("coder_sessions_lost", 0)),
     }
 
 
