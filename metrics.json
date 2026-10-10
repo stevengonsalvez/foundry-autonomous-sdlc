@@ -4,41 +4,41 @@
     "agent-scope": {
       "fail": 0,
       "first_fail": 0,
-      "first_pass": 7,
-      "pass": 7
+      "first_pass": 8,
+      "pass": 8
     },
     "coverage": {
-      "fail": 2,
-      "first_fail": 2,
+      "fail": 3,
+      "first_fail": 3,
       "first_pass": 5,
       "pass": 5
     },
     "e2e": {
-      "fail": 3,
-      "first_fail": 3,
+      "fail": 4,
+      "first_fail": 4,
       "first_pass": 4,
       "pass": 4
     },
     "gitleaks": {
       "fail": 0,
       "first_fail": 0,
-      "first_pass": 7,
-      "pass": 7
+      "first_pass": 8,
+      "pass": 8
     },
     "tdd-order": {
       "fail": 0,
       "first_fail": 0,
-      "first_pass": 7,
-      "pass": 7
+      "first_pass": 8,
+      "pass": 8
     },
     "test": {
-      "fail": 3,
-      "first_fail": 3,
+      "fail": 4,
+      "first_fail": 4,
       "first_pass": 4,
       "pass": 4
     }
   },
-  "generated_at": "2026-10-10T19:25:17Z",
+  "generated_at": "2026-10-10T19:30:25Z",
   "issues": [
     {
       "closed_at": "2026-10-10T12:28:43Z",
@@ -1320,16 +1320,72 @@
       ],
       "title": "Update the home page heading copy",
       "type": "maintenance"
+    },
+    {
+      "closed_at": null,
+      "coder_engine": null,
+      "coder_sessions_lost": 0,
+      "cost": {
+        "calls": 1,
+        "coder_model_usd": 0.0,
+        "coder_usd": 0.0,
+        "model_usd": 0.007703,
+        "usd": 0.007703
+      },
+      "deferred": null,
+      "escalation": null,
+      "gate_attempts": {
+        "agent-scope": [
+          "success"
+        ],
+        "coverage": [
+          "failure"
+        ],
+        "e2e": [
+          "failure"
+        ],
+        "gitleaks": [
+          "success"
+        ],
+        "tdd-order": [
+          "success"
+        ],
+        "test": [
+          "failure"
+        ]
+      },
+      "gates": {
+        "agent-scope": "success",
+        "coverage": "failure",
+        "e2e": "failure",
+        "gitleaks": "success",
+        "tdd-order": "success",
+        "test": "failure"
+      },
+      "kind": "pr",
+      "number": null,
+      "opened_at": "2026-10-10T19:24:18Z",
+      "outcome": "open",
+      "owner": null,
+      "pr": 36,
+      "quality_score": null,
+      "release": null,
+      "resolution_seconds": null,
+      "scenario": "d-maintenance",
+      "severity": null,
+      "stages": [],
+      "title": "Update the home page heading copy",
+      "type": "maintenance"
     }
   ],
   "repo": "stevengonsalvez/foundry-autonomous-sdlc",
   "totals": {
     "deferred": 0,
     "escalated": 15,
-    "issues": 19,
-    "orchestrator_usd": 0.601666,
+    "issues": 20,
+    "orchestrator_usd": 0.606809,
     "released": 4,
-    "usd": 1.52669
+    "usd": 1.539536
   },
   "version": 1
 }
