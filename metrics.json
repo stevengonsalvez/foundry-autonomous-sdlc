@@ -5,40 +5,40 @@
       "fail": 0,
       "first_fail": 0,
       "first_pass": 9,
-      "pass": 10
+      "pass": 11
     },
     "coverage": {
       "fail": 4,
       "first_fail": 4,
       "first_pass": 5,
-      "pass": 6
+      "pass": 7
     },
     "e2e": {
       "fail": 6,
       "first_fail": 5,
       "first_pass": 4,
-      "pass": 4
+      "pass": 5
     },
     "gitleaks": {
       "fail": 0,
       "first_fail": 0,
       "first_pass": 9,
-      "pass": 10
+      "pass": 11
     },
     "tdd-order": {
       "fail": 0,
       "first_fail": 0,
       "first_pass": 9,
-      "pass": 10
+      "pass": 11
     },
     "test": {
       "fail": 5,
       "first_fail": 5,
       "first_pass": 4,
-      "pass": 5
+      "pass": 6
     }
   },
-  "generated_at": "2026-10-10T20:20:18Z",
+  "generated_at": "2026-10-10T20:25:27Z",
   "issues": [
     {
       "closed_at": "2026-10-10T12:28:43Z",
@@ -1404,41 +1404,47 @@
       "coder_engine": "agy-unrestricted",
       "coder_sessions_lost": 0,
       "cost": {
-        "calls": 1,
+        "calls": 2,
         "coder_model_usd": 0.0,
         "coder_usd": 0.029992,
-        "model_usd": 0.007706,
-        "usd": 0.037698
+        "model_usd": 0.00925,
+        "usd": 0.039242
       },
       "deferred": null,
       "escalation": null,
       "gate_attempts": {
         "agent-scope": [
+          "success",
           "success"
         ],
         "coverage": [
-          "failure"
+          "failure",
+          "success"
         ],
         "e2e": [
-          "failure"
+          "failure",
+          "success"
         ],
         "gitleaks": [
+          "success",
           "success"
         ],
         "tdd-order": [
+          "success",
           "success"
         ],
         "test": [
-          "failure"
+          "failure",
+          "success"
         ]
       },
       "gates": {
         "agent-scope": "success",
-        "coverage": "failure",
-        "e2e": "failure",
+        "coverage": "success",
+        "e2e": "success",
         "gitleaks": "success",
         "tdd-order": "success",
-        "test": "failure"
+        "test": "success"
       },
       "kind": "pr",
       "number": null,
@@ -1473,9 +1479,9 @@
     "deferred": 0,
     "escalated": 16,
     "issues": 21,
-    "orchestrator_usd": 0.660925,
+    "orchestrator_usd": 0.666133,
     "released": 4,
-    "usd": 1.690957
+    "usd": 1.697709
   },
   "version": 1
 }
