@@ -8,6 +8,7 @@ import { HOME_HREF } from "../router";
 import { useParcelService } from "../service-context";
 import { useDocumentTitle } from "../useDocumentTitle";
 import { useRemote } from "../useRemote";
+import { formatEstimatedDelivery } from "../format";
 
 function ParcelError({ error, trackingNumber, onRetry }: { error: unknown; trackingNumber: string; onRetry: () => void }) {
   if (error instanceof InvalidTrackingNumberError) {
@@ -53,6 +54,15 @@ export function ParcelPage({ trackingNumber }: { trackingNumber: string }) {
           </h1>
           {state.status === "success" && <StatusBadge status={state.data.status} />}
         </div>
+        {state.status === "success" &&
+          (state.data.status === "label_created" ||
+            state.data.status === "in_transit" ||
+            state.data.status === "out_for_delivery") &&
+          Boolean(state.data.estimatedDelivery) && (
+            <p className="parcel-header__delivery">
+              Estimated delivery: {formatEstimatedDelivery(state.data.estimatedDelivery as string)}
+            </p>
+          )}
       </header>
 
       {state.status === "loading" && <Loading label="Loading parcel" rows={4} />}
