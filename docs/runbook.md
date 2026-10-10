@@ -185,7 +185,7 @@ curl -N "$ENDPOINT/agents/sdlc-coder/sessions/$SESSION:logstream?api-version=v1"
   -H "Authorization: Bearer $TOKEN" -H "Accept: text/event-stream"
 ```
 
-Inside the sandbox each job keeps `$HOME/jobs/<job_id>/state.json` and `$HOME/jobs/<job_id>/log` (secrets redacted). `$HOME` survives idle eviction. A job whose sandbox was evicted mid-run reports `failed` with reason `interrupted`; sending `start` again with the same job resumes from the pushed branch.
+Inside the sandbox each job keeps `$HOME/jobs/<job_id>/state.json` and `$HOME/jobs/<job_id>/log` (secrets redacted). `$HOME` survives idle eviction. A job whose sandbox was evicted mid-run reports `failed` with reason `interrupted`; sending `start` again with the same job resumes from the pushed branch. `state.json` is rewritten at least every 30 seconds while a job runs, so `stale_s` in `status` well above 30 means the job thread is stuck or gone. Memory, for diagnosing an out-of-memory kill (the sandbox has 4 GiB): the job log records the cgroup `memory.max` and `memory.peak` at job start and end, and after every child step (install, tests, typecheck, lint, each engine round) a line `memory <step>: peak group RSS <n> MiB, largest process <n> MiB`, sampled from `/proc` once a second while the step runs. Unhandled exceptions (job threads and requests) are printed with their traceback to stdout, so the logstream shows them.
 
 Last resort, if the session does not answer: disable the routine (above), then force-delete the coder, which terminates its sessions, and redeploy it. The redeployed agent gets a new identity, so rerun `roles`.
 
@@ -209,8 +209,10 @@ uv run --project agents python scripts/deploy_agents.py roles
 | `failed` / `install-failed`, `branch-missing`, `branch-conflict`, `error` | Setup problems; `detail` has the cause. |
 | `failed` / `sandbox-unavailable` | The unprivileged engine user could not be created; the coder never runs agy, install or tests as root, so it did nothing. |
 | `failed` / `lease-held` | Another job already holds `agent-lease/<issue>`; this one did no work (reply to `start`, not persisted). |
-| `failed` / `interrupted` | The sandbox was evicted while the job ran. `start` with the same job resumes. |
-| `timeout` / `deadline` | `deadline_s` elapsed. |
+| `failed` / `interrupted` | The sandbox was evicted while the job ran (a restarted server marks such jobs at once). `start` with the same job resumes. |
+| `failed` / `internal-error` | An unexpected exception in the coder itself. `detail` has the redacted traceback tail, the same traceback is in the job log and on stdout (the platform logstream); the lease was released. A coder bug: read the traceback before retrying. |
+| `failed` / `invalid-allowed-paths` | revise or maintenance: no `allowed_paths` entry matches a file at the head of the branch (`detail` names them). Fix the paths the orchestrator sent. |
+| `timeout` / `deadline` | `deadline_s` elapsed. If the job was stuck, the watchdog (every 30 s heartbeat) records this 60 s past the deadline and cancels it, `detail` starting `watchdog:`. |
 | `cancelled` | A `cancel` call stopped it. |
 
 ## 8. Cost caps
