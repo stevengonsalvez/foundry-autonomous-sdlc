@@ -38,7 +38,7 @@
       "pass": 1
     }
   },
-  "generated_at": "2026-10-10T15:36:21Z",
+  "generated_at": "2026-10-10T15:40:43Z",
   "issues": [
     {
       "closed_at": "2026-10-10T12:28:43Z",
@@ -649,9 +649,14 @@
         },
         {
           "entered_at": "2026-10-10T15:35:34Z",
+          "seconds": 280,
+          "stage": "stage:tests-written"
+        },
+        {
+          "entered_at": "2026-10-10T15:40:14Z",
           "in_progress": true,
           "seconds": 0,
-          "stage": "stage:tests-written"
+          "stage": "stage:building"
         }
       ],
       "title": "Show when the parcel was last updated on the parcel page",
@@ -661,11 +666,11 @@
       "closed_at": null,
       "coder_engine": null,
       "cost": {
-        "calls": 3,
+        "calls": 4,
         "coder_model_usd": 0.0,
         "coder_usd": 0.0,
-        "model_usd": 0.004773,
-        "usd": 0.004773
+        "model_usd": 0.005763,
+        "usd": 0.005763
       },
       "deferred": null,
       "escalation": null,
@@ -690,9 +695,14 @@
         },
         {
           "entered_at": "2026-10-10T15:35:42Z",
+          "seconds": 282,
+          "stage": "stage:ready"
+        },
+        {
+          "entered_at": "2026-10-10T15:40:24Z",
           "in_progress": true,
           "seconds": 0,
-          "stage": "stage:ready"
+          "stage": "stage:feasible"
         }
       ],
       "title": "Make the parcel tracker better",
@@ -702,11 +712,11 @@
       "closed_at": null,
       "coder_engine": null,
       "cost": {
-        "calls": 3,
+        "calls": 4,
         "coder_model_usd": 0.0,
         "coder_usd": 0.0,
-        "model_usd": 0.012683,
-        "usd": 0.012683
+        "model_usd": 0.014547,
+        "usd": 0.014547
       },
       "deferred": null,
       "escalation": null,
@@ -718,7 +728,7 @@
       "outcome": "open",
       "owner": null,
       "pr": null,
-      "quality_score": 68,
+      "quality_score": 90,
       "release": null,
       "resolution_seconds": null,
       "scenario": "c",
@@ -726,9 +736,14 @@
       "stages": [
         {
           "entered_at": "2026-10-10T15:25:32Z",
+          "seconds": 901,
+          "stage": "stage:needs-refinement"
+        },
+        {
+          "entered_at": "2026-10-10T15:40:33Z",
           "in_progress": true,
           "seconds": 0,
-          "stage": "stage:needs-refinement"
+          "stage": "stage:ready"
         }
       ],
       "title": "Move the live carrier integration to the new vendor and rotate the production keys",
@@ -738,11 +753,11 @@
       "closed_at": null,
       "coder_engine": null,
       "cost": {
-        "calls": 3,
+        "calls": 4,
         "coder_model_usd": 0.0,
         "coder_usd": 0.0,
-        "model_usd": 0.004499,
-        "usd": 0.004499
+        "model_usd": 0.006263,
+        "usd": 0.006263
       },
       "deferred": null,
       "escalation": null,
@@ -754,7 +769,7 @@
       "outcome": "open",
       "owner": "api",
       "pr": null,
-      "quality_score": 78,
+      "quality_score": 100,
       "release": null,
       "resolution_seconds": null,
       "scenario": "d",
@@ -762,9 +777,14 @@
       "stages": [
         {
           "entered_at": "2026-10-10T15:30:43Z",
+          "seconds": 598,
+          "stage": "stage:needs-refinement"
+        },
+        {
+          "entered_at": "2026-10-10T15:40:41Z",
           "in_progress": true,
           "seconds": 0,
-          "stage": "stage:needs-refinement"
+          "stage": "stage:ready"
         }
       ],
       "title": "Lowercase tracking numbers are rejected as invalid",
@@ -776,9 +796,9 @@
     "deferred": 0,
     "escalated": 9,
     "issues": 14,
-    "orchestrator_usd": 0.405778,
+    "orchestrator_usd": 0.411602,
     "released": 1,
-    "usd": 0.739511
+    "usd": 0.749952
   },
   "version": 1
 }
