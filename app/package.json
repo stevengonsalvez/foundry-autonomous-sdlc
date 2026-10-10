@@ -1,0 +1,47 @@
+{
+  "name": "parcel-tracker",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Parcel tracker demo app: core domain, carrier mock, API and web UI.",
+  "type": "module",
+  "engines": {
+    "node": ">=22.12.0"
+  },
+  "workspaces": [
+    "core",
+    "contracts",
+    "carrier-mock",
+    "api",
+    "web",
+    "e2e"
+  ],
+  "scripts": {
+    "dev": "node scripts/dev.mjs",
+    "lint": "eslint .",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "test": "vitest run",
+    "test:coverage": "vitest run --coverage",
+    "build": "npm run build --workspaces --if-present",
+    "build:pages": "npm run build:pages --workspace @parcel/web",
+    "e2e": "npm run e2e --workspace @parcel/e2e"
+  },
+  "devDependencies": {
+    "@eslint/js": "10.0.1",
+    "@types/node": "22.20.5",
+    "@vitest/coverage-v8": "5.0.3",
+    "eslint": "10.12.0",
+    "eslint-plugin-jsx-a11y": "6.10.2",
+    "eslint-plugin-react-hooks": "7.1.1",
+    "globals": "17.13.0",
+    "tsx": "4.23.15",
+    "typescript": "5.9.3",
+    "typescript-eslint": "8.71.1",
+    "vite": "7.3.7",
+    "vitest": "5.0.3"
+  },
+  "overrides": {
+    "eslint-plugin-jsx-a11y": {
+      "eslint": "$eslint"
+    }
+  }
+}
