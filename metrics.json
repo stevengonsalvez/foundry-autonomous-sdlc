@@ -38,7 +38,7 @@
       "pass": 1
     }
   },
-  "generated_at": "2026-10-10T16:48:46Z",
+  "generated_at": "2026-10-10T16:50:52Z",
   "issues": [
     {
       "closed_at": "2026-10-10T12:28:43Z",
@@ -866,11 +866,11 @@
       "closed_at": null,
       "coder_engine": null,
       "cost": {
-        "calls": 4,
+        "calls": 5,
         "coder_model_usd": 0.0,
         "coder_usd": 0.0,
-        "model_usd": 0.01343,
-        "usd": 0.01343
+        "model_usd": 0.01895,
+        "usd": 0.01895
       },
       "deferred": null,
       "escalation": null,
@@ -895,9 +895,14 @@
         },
         {
           "entered_at": "2026-10-10T16:47:03Z",
+          "seconds": 210,
+          "stage": "stage:feasible"
+        },
+        {
+          "entered_at": "2026-10-10T16:50:33Z",
           "in_progress": true,
           "seconds": 0,
-          "stage": "stage:feasible"
+          "stage": "stage:tests-written"
         }
       ],
       "title": "Show when the parcel was last updated on the parcel page",
@@ -946,9 +951,14 @@
         },
         {
           "entered_at": "2026-10-10T16:48:26Z",
+          "seconds": 131,
+          "stage": "stage:tests-written"
+        },
+        {
+          "entered_at": "2026-10-10T16:50:37Z",
           "in_progress": true,
           "seconds": 0,
-          "stage": "stage:tests-written"
+          "stage": "stage:building"
         }
       ],
       "title": "Make the parcel tracker better",
@@ -992,9 +1002,14 @@
         },
         {
           "entered_at": "2026-10-10T16:48:43Z",
+          "seconds": 123,
+          "stage": "stage:tests-written"
+        },
+        {
+          "entered_at": "2026-10-10T16:50:46Z",
           "in_progress": true,
           "seconds": 0,
-          "stage": "stage:tests-written"
+          "stage": "stage:building"
         }
       ],
       "title": "Lowercase tracking numbers are rejected as invalid",
@@ -1006,9 +1021,9 @@
     "deferred": 0,
     "escalated": 13,
     "issues": 17,
-    "orchestrator_usd": 0.482544,
+    "orchestrator_usd": 0.488741,
     "released": 1,
-    "usd": 1.093717
+    "usd": 1.105435
   },
   "version": 1
 }
