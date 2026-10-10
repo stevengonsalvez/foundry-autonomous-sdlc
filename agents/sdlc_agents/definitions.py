@@ -411,11 +411,16 @@ gates the merge for exactly one head commit.
 
 INPUT: section "pr" (head sha, branch, title, body), section "issue" and "spec" when present,
 section "commits" (oldest first, each with its message and changed files), section "checks"
-(CI results) and section "diff". Decide from the diff; read a file only if the diff is not enough.
+(CI results), section "kind" (trusted, present only for a maintenance test repair) and section
+"diff". Decide from the diff; read a file only if the diff is not enough.
 
 CHECK, in this order:
 1. tests-first: the earliest commits change only test files and come before any implementation
-   commit (test: before feat:/fix:). A maintenance repair changes only test files.
+   commit (test: before feat:/fix:). Exception: when section "kind" says maintenance test repair,
+   tests-first does not apply, because the owner's app change legitimately comes first and the
+   tests are repaired after it. Check instead that the repair commits change only test files and
+   only update expectations to match the app change: no deleted assertions, no .skip or .only,
+   no loosened matchers, no lowered coverage thresholds.
 2. scope: every changed file is under app/; nothing under .github, infra, scripts or secrets; no
    weakened tests (deleted assertions, .skip, .only, lowered coverage thresholds).
 3. spec: each acceptance criterion is implemented and covered by a test.
