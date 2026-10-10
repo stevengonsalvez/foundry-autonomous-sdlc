@@ -37,7 +37,7 @@
       "pass": 0
     }
   },
-  "generated_at": "2026-10-10T13:22:27Z",
+  "generated_at": "2026-10-10T13:23:32Z",
   "issues": [
     {
       "closed_at": "2026-10-10T12:28:43Z",
@@ -296,22 +296,22 @@
     },
     {
       "closed_at": null,
-      "coder_engine": "agy",
+      "coder_engine": "loop",
       "cost": {
         "calls": 3,
-        "coder_model_usd": 0.0,
-        "coder_usd": 0.010674,
+        "coder_model_usd": 0.005099,
+        "coder_usd": 0.023452,
         "model_usd": 0.007852,
-        "usd": 0.018526
+        "usd": 0.036403
       },
       "deferred": null,
-      "escalation": null,
+      "escalation": "escalated:build-failed",
       "gate_attempts": {},
       "gates": {},
       "kind": "issue",
       "number": 8,
       "opened_at": "2026-10-10T13:15:48Z",
-      "outcome": "open",
+      "outcome": "escalated",
       "owner": null,
       "pr": null,
       "quality_score": 100,
@@ -337,9 +337,13 @@
         },
         {
           "entered_at": "2026-10-10T13:18:11Z",
-          "in_progress": true,
-          "seconds": 0,
+          "seconds": 318,
           "stage": "stage:building"
+        },
+        {
+          "entered_at": "2026-10-10T13:23:29Z",
+          "seconds": 0,
+          "stage": "escalated:build-failed"
         }
       ],
       "title": "Show the estimated delivery date on the parcel page",
@@ -347,13 +351,13 @@
     },
     {
       "closed_at": null,
-      "coder_engine": null,
+      "coder_engine": "loop",
       "cost": {
         "calls": 6,
-        "coder_model_usd": 0.0,
-        "coder_usd": 0.0,
+        "coder_model_usd": 0.004847,
+        "coder_usd": 0.004585,
         "model_usd": 0.011822,
-        "usd": 0.011822
+        "usd": 0.021254
       },
       "deferred": null,
       "escalation": null,
@@ -405,11 +409,11 @@
   "repo": "stevengonsalvez/foundry-autonomous-sdlc",
   "totals": {
     "deferred": 0,
-    "escalated": 5,
+    "escalated": 6,
     "issues": 7,
-    "orchestrator_usd": 0.115746,
+    "orchestrator_usd": 0.120496,
     "released": 0,
-    "usd": 0.215947
+    "usd": 0.248006
   },
   "version": 1
 }
