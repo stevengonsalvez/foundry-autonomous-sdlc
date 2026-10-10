@@ -8,10 +8,10 @@ Header: repository, time the data was generated, and counts of issues, released 
 
 | Panel | Shows | Notes |
 |-------|-------|-------|
-| Cycle time per stage | Median time in each stage across issues, and one stacked bar per issue | Stages with no recorded duration (still running) are left out of the median, never counted as zero. A table with every value sits behind the charts. |
+| Cycle time per stage | Median time in each stage across issues, and one stacked bar per issue | Stages still running are drawn faded and left out of the median, never counted as zero. A table with every value sits behind the charts. |
 | Gate pass rates | Per gate: share of issues that passed on the first attempt and eventually, with counts | First attempt needs per-issue `gate_attempts` (see below). Without it the panel says so and shows only the eventual rate. |
-| Defect owner and resolution time | Bugs only: owner, severity, time from opened to merged | Open bugs show no resolution time. |
-| Cost per issue | Model cost, coder cost, calls and total per issue, and the total against the 5 USD cap | Progress bar marks the 4.50 USD point where the loop stops new work. Each row shows the 1 USD per issue line and flags issues over it. |
+| Defect owner and resolution time | Bugs only: owner, severity, time from opened to release | Open bugs show no resolution time. |
+| Cost per issue | Model cost, coder cost (runtime plus its model), calls and total per issue, and the total against the 5 USD cap | Progress bar marks the 4.50 USD point where the loop stops new work. Orchestrator compute is its own row. Each row shows the 1 USD per issue line and flags issues over it. |
 | Scenarios and issues | Every issue with scenario, type, outcome, and links to its GitHub issue, pull request and release | Links are built from `repo` and the numbers in the data. |
 
 Page states: loading, no data yet (file missing or empty, or no issues), and error (fetch failure, invalid JSON, or an unsupported schema version, with a retry button). The dashboard never invents data.
@@ -20,14 +20,17 @@ Page states: loading, no data yet (file missing or empty, or no issues), and err
 
 `metrics.json` is written by the orchestrator to the `metrics` branch. `scripts/build_pages.sh` validates it (JSON object, matching `version`) and copies it to `dashboard/metrics.json` in the Pages artifact.
 
-Fields read beyond the documented schema, all optional:
+Fields read beyond the base schema (the orchestrator writes all of them; each is optional for the dashboard):
 
-- `gate_attempts` on an issue: `{"coverage": ["failure", "success"]}`, ordered check conclusions per gate, oldest first. The first element is the first attempt; the final `gates` value is the eventual result.
-- `gate_pass_rates[gate]` as `{"pass": n, "fail": n}`: shown as raw run counts in the gate table.
-- A missing stage `seconds` is derived from the next stage's `entered_at`; a missing `resolution_seconds` falls back to `opened_at` to the `stage:merged` entry.
-- `type` and `owner` may carry their label prefix (`type:bug`, `owner:api`).
+- `gate_attempts` on an entry: ordered check conclusions per gate, oldest first. First element is the first attempt, the final `gates` value is the eventual result.
+- `gate_pass_rates[gate]`: `pass` and `fail` count evaluated heads and are shown as run counts; `first_pass` and `first_fail` give the first-attempt rate across all objects. Without them the first attempt is derived from `gate_attempts`, and without those it shows "n/a".
+- The stage an object is in has `in_progress: true` and `seconds: 0`. The dashboard measures it up to `generated_at`, draws it faded, and keeps it out of the medians. Terminal stages (`stage:released`, `escalated:*`) have no duration and are not charted.
+- An entry with `kind: "pr"` and `number: null` (the maintenance PR) is identified by its `pr` and shown as "PR #n".
+- `escalation` is shown next to the Escalated outcome. `resolution_seconds` is opened to released, so the defect column reads "Opened to release".
+- Cost: "Coder" is `coder_usd` plus `coder_model_usd`. `totals.orchestrator_usd` is its own row in the cost table and part of the total. `totals.escalated` feeds the header count.
+- A missing stage `seconds` is derived from the next stage's `entered_at`; `type` and `owner` may carry their label prefix.
 
-Entries without a valid issue number are skipped and the page says how many.
+Entries with neither an issue number nor a `pr` are skipped and the page says how many.
 
 ## Layout
 

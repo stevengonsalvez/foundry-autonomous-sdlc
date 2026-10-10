@@ -78,7 +78,7 @@ export function stackedChart(width, perIssue, maxTotal, presentStages, label) {
   perIssue.forEach((issue, i) => {
     const top = i * rowH;
     const barY = compact ? top + 20 : top + (rowH - barH) / 2;
-    const caption = `#${issue.number} ${issue.title}`;
+    const caption = `${issue.label} ${issue.title}`;
 
     svg.append(s('rect', { x: barX, y: barY, width: barW, height: barH, rx: 3, class: 'rail' }));
 
@@ -86,8 +86,8 @@ export function stackedChart(width, perIssue, maxTotal, presentStages, label) {
     for (const seg of issue.segments) {
       const w = Math.max(1.5, seg.seconds * scale);
       svg.append(
-        s('rect', { x, y: barY, width: w, height: barH, class: `${stageClass(seg.stage, presentStages)} seg` },
-          s('title', {}, `#${issue.number} ${stageLabel(seg.stage)}: ${formatDuration(seg.seconds)}`)),
+        s('rect', { x, y: barY, width: w, height: barH, class: `${stageClass(seg.stage, presentStages)} seg${seg.open ? ' seg-open' : ''}` },
+          s('title', {}, `${issue.label} ${stageLabel(seg.stage)}: ${formatDuration(seg.seconds)}${seg.open ? ' so far' : ''}`)),
       );
       x += w;
     }

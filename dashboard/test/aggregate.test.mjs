@@ -19,6 +19,7 @@ const fixture = JSON.parse(await readFile(new URL('./fixtures/metrics.sample.jso
 const parsedFixture = parseMetrics(fixture);
 const issues = parsedFixture.metrics.issues;
 const byNumber = (n) => issues.find((i) => i.number === n);
+const byRef = (r) => issues.find((i) => i.ref === r);
 
 const ok = (raw) => {
   const r = parseMetrics(raw);
@@ -127,13 +128,14 @@ test('stageDurations: medians follow state machine order and ignore unknown dura
     d.stages.map((s) => s.stage),
     ['stage:needs-refinement', 'stage:ready', 'stage:feasible', 'stage:tests-written', 'stage:building', 'stage:in-review', 'stage:merged'],
   );
+  // issue 12 is still building: it is left out of the median
   const building = d.stages.find((s) => s.stage === 'stage:building');
   assert.equal(building.count, 4);
   assert.equal(building.median, median([3120, 5280, 2160, 8640]));
-  // issue 13 has a tests-written stage with no duration: left out, not counted as zero
+  // issue 13 is still in tests-written: left out, not counted as zero
   const tests = d.stages.find((s) => s.stage === 'stage:tests-written');
-  assert.equal(tests.count, 5);
-  assert.equal(d.perIssue.find((p) => p.number === 13).hasUnknown, true);
+  assert.equal(tests.count, 6);
+  assert.equal(d.perIssue.find((p) => p.ref === 13).hasOpen, true);
 });
 
 test('stageDurations: repeated stages in one issue are summed, unknown stages appended last', () => {
@@ -161,10 +163,12 @@ test('stageDurations: repeated stages in one issue are summed, unknown stages ap
 });
 
 test('stageDurations: an escalated issue with no PR still contributes its stages', () => {
-  const p = stageDurations(issues).perIssue.find((x) => x.number === 5);
+  const p = stageDurations(issues).perIssue.find((x) => x.ref === 5);
   assert.equal(byNumber(5).pr, null);
   assert.equal(p.total, 345);
   assert.equal(p.outcome, 'escalated');
+  // the terminal escalated:* entry has no duration and is not charted
+  assert.deepEqual(p.segments.map((s) => s.stage), ['stage:needs-refinement', 'stage:ready']);
 });
 
 test('stageDurations: issue with no stages yields an empty row and no total', () => {
@@ -215,14 +219,18 @@ test('gateRates: empty input has no rates', () => {
 
 test('costSummary: totals, cap and per issue line', () => {
   const c = costSummary(parsedFixture.metrics);
-  assert.equal(c.total, 1.8515);
+  assert.equal(c.total, 1.9915);
   assert.equal(c.cap, 5);
-  assert.ok(Math.abs(c.percentOfCap - 37.03) < 0.01);
-  assert.ok(Math.abs(c.remaining - 3.1485) < 1e-9);
+  assert.ok(Math.abs(c.percentOfCap - 39.83) < 0.01);
+  assert.ok(Math.abs(c.remaining - 3.0085) < 1e-9);
   assert.equal(c.haltReached, false);
-  assert.deepEqual(c.rows.filter((r) => r.overLine).map((r) => r.number), [10]);
-  assert.equal(c.callsTotal, 75);
-  assert.ok(Math.abs(c.rowTotal - 1.8515) < 1e-9);
+  assert.deepEqual(c.rows.filter((r) => r.overLine).map((r) => r.ref), [10]);
+  assert.equal(c.callsTotal, 82);
+  assert.ok(Math.abs(c.rowTotal - 1.9503) < 1e-9);
+  assert.equal(c.orchestrator, 0.0412);
+  assert.ok(Math.abs(c.accounted - c.total) < 1e-9);
+  // coder cost is the coder runtime plus the model spend of its fallback loop
+  assert.ok(Math.abs(c.rows.find((r) => r.ref === 10).coder - 0.13) < 1e-9);
 });
 
 test('costSummary: sums rows when totals.usd is missing, tolerates issues without cost', () => {
@@ -244,7 +252,7 @@ test('costSummary: over the cap is clamped for the bar but not for the figure', 
 
 test('defectSummary: bugs only, grouped by owner, open bug has no resolution', () => {
   const d = defectSummary(issues);
-  assert.deepEqual(d.bugs.map((b) => b.number), [6, 13]);
+  assert.deepEqual(d.bugs.map((b) => b.ref), [6, 13]);
   assert.equal(d.bugs[0].resolutionSeconds, 3155);
   assert.equal(d.bugs[1].resolutionSeconds, null);
   assert.deepEqual(d.byOwner.map((o) => [o.owner, o.count, o.medianResolution]), [
@@ -263,7 +271,7 @@ test('defectSummary: no bugs, and bugs with no owner', () => {
 });
 
 test('headlineCounts prefers totals, falls back to counting', () => {
-  assert.deepEqual(headlineCounts(parsedFixture.metrics), { issues: 7, released: 4, escalated: 2 });
+  assert.deepEqual(headlineCounts(parsedFixture.metrics), { issues: 8, released: 4, escalated: 2 });
   const m = ok({ version: 1, issues: [{ number: 1, outcome: 'released' }, { number: 2, outcome: 'escalated' }, { number: 3, outcome: 'open' }] });
   assert.deepEqual(headlineCounts(m), { issues: 3, released: 1, escalated: 1 });
 });
@@ -279,6 +287,77 @@ test('issueLinks derive from repo and numbers, and degrade without a valid repo'
   assert.deepEqual(issueLinks(null, { number: 1, pr: 2, release: 'v1' }), { repo: null, issue: null, pr: null, release: null });
   assert.equal(issueLinks('bad repo', { number: 1, pr: null, release: null }).issue, null);
   assert.equal(issueLinks('o/r', { number: 1, pr: null, release: 'v1/../x' }).release, 'https://github.com/o/r/releases/tag/v1%2F..%2Fx');
+});
+
+test('a pull request entry without an issue number is kept, identified by its pr', () => {
+  const pr = byRef(9);
+  assert.equal(pr.number, null);
+  assert.equal(pr.kind, 'pr');
+  assert.equal(pr.label, 'PR #9');
+  assert.equal(pr.scenario, 'd-maintenance');
+  const links = issueLinks('o/r', pr);
+  assert.equal(links.issue, null);
+  assert.equal(links.pr, 'https://github.com/o/r/pull/9');
+  assert.equal(normalizeIssue({ number: null, kind: 'pr' }), null);
+  assert.equal(normalizeIssue({ number: null, pr: null }), null);
+});
+
+test('the current stage is measured up to generated_at and kept out of medians', () => {
+  const m = ok({
+    version: 1,
+    generated_at: '2026-10-10T12:00:00Z',
+    issues: [
+      {
+        number: 1,
+        stages: [
+          { stage: 'stage:ready', entered_at: '2026-10-10T10:00:00Z', seconds: 60 },
+          { stage: 'stage:building', entered_at: '2026-10-10T10:01:00Z', seconds: 0, in_progress: true },
+        ],
+      },
+    ],
+  });
+  const [issue] = m.issues;
+  assert.equal(issue.stages[1].inProgress, true);
+  assert.equal(issue.stages[1].seconds, 7140);
+  const d = stageDurations(m.issues);
+  assert.deepEqual(d.stages.map((s) => s.stage), ['stage:ready']);
+  assert.deepEqual(d.perIssue[0].segments.map((s) => [s.stage, s.open]), [['stage:ready', false], ['stage:building', true]]);
+  assert.equal(d.medianTotal, null);
+});
+
+test('an in progress stage has unknown duration when generated_at is missing', () => {
+  const m = ok({ version: 1, issues: [{ number: 1, stages: [{ stage: 'stage:building', entered_at: '2026-10-10T10:01:00Z', seconds: 0, in_progress: true }] }] });
+  assert.equal(m.issues[0].stages[0].seconds, null);
+  assert.deepEqual(stageDurations(m.issues).stages, []);
+});
+
+test('terminal stages carry no duration', () => {
+  const m = ok({ version: 1, issues: [{ number: 1, stages: [{ stage: 'stage:ready', seconds: 5 }, { stage: 'escalated:cost-cap', seconds: 0 }, { stage: 'stage:released', seconds: 0 }] }] });
+  assert.deepEqual(stageDurations(m.issues).perIssue[0].segments.map((s) => s.stage), ['stage:ready']);
+});
+
+test('escalation reason loses its label prefix', () => {
+  assert.equal(byNumber(5).escalation, 'not-agent-suitable');
+  assert.equal(normalizeIssue({ number: 1, escalation: 'escalated:cost-cap' }).escalation, 'cost-cap');
+  assert.equal(normalizeIssue({ number: 1, escalation: null }).escalation, null);
+});
+
+test('gateRates prefers the reported first-attempt counts and falls back to gate_attempts', () => {
+  const reported = { e2e: { pass: 9, fail: 1, firstPass: 7, firstFail: 3 } };
+  const e2e = gateRates(issues, reported).find((g) => g.gate === 'e2e');
+  assert.deepEqual([e2e.first.pass, e2e.first.total], [7, 10]);
+  assert.deepEqual(e2e.runs, { pass: 9, fail: 1 });
+  const derived = gateRates(issues, { e2e: { pass: 9, fail: 1, firstPass: null, firstFail: null } }).find((g) => g.gate === 'e2e');
+  assert.equal(derived.first.total, 5);
+});
+
+test('the fixture reports first-attempt counts that agree with its attempts', () => {
+  const fromReport = gateRates(issues, parsedFixture.metrics.gatePassRates);
+  const fromAttempts = gateRates(issues, {});
+  for (const g of fromReport) {
+    const other = fromAttempts.find((x) => x.gate === g.gate);
+    assert.deepEqual([g.first.pass, g.first.total], [other.first.pass, other.first.total], g.gate);
+  }
 });
 
 test('formatting helpers', () => {

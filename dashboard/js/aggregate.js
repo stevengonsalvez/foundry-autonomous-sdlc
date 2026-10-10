@@ -55,16 +55,28 @@ export function classifyResult(result) {
   return 'other';
 }
 
-function normalizeStages(rawStages) {
+export const isTerminalStage = (stage) => stage === 'stage:released' || String(stage).startsWith('escalated:');
+
+/**
+ * Stage seconds come from the orchestrator. The stage an object is in right now arrives with
+ * `in_progress: true` and 0 seconds; it is measured here up to the time the file was generated.
+ * A missing duration is derived from the next stage's entry time when both are known.
+ */
+function normalizeStages(rawStages, nowMs) {
   const list = Array.isArray(rawStages) ? rawStages.filter(isRecord).filter((s) => str(s.stage)) : [];
   const stages = list.map((s) => ({
     stage: s.stage,
     enteredMs: toMs(s.entered_at),
     enteredAt: toMs(s.entered_at) === null ? null : s.entered_at,
     seconds: nonNegative(s.seconds),
+    inProgress: s.in_progress === true,
+    terminal: isTerminalStage(s.stage),
   }));
-  // A missing duration is derived from the next stage's entry time when both are known.
   stages.forEach((s, i) => {
+    if (s.inProgress) {
+      s.seconds = s.enteredMs !== null && nowMs !== null && nowMs >= s.enteredMs ? (nowMs - s.enteredMs) / 1000 : null;
+      return;
+    }
     if (s.seconds !== null) return;
     const next = stages[i + 1];
     if (next && s.enteredMs !== null && next.enteredMs !== null && next.enteredMs >= s.enteredMs) {
@@ -77,7 +89,10 @@ function normalizeStages(rawStages) {
 function normalizeCost(raw) {
   const cost = isRecord(raw) ? raw : {};
   const model = nonNegative(cost.model_usd);
-  const coder = nonNegative(cost.coder_usd);
+  const coderRuntime = nonNegative(cost.coder_usd);
+  const coderModel = nonNegative(cost.coder_model_usd);
+  // "Coder" is the coder runtime plus the model spend of its fallback loop.
+  const coder = coderRuntime === null && coderModel === null ? null : (coderRuntime ?? 0) + (coderModel ?? 0);
   let usd = nonNegative(cost.usd);
   if (usd === null && (model !== null || coder !== null)) usd = (model ?? 0) + (coder ?? 0);
   const calls = isNum(cost.calls) && cost.calls >= 0 ? Math.trunc(cost.calls) : null;
@@ -104,16 +119,28 @@ function normalizeAttempts(raw) {
   return attempts;
 }
 
-export function normalizeIssue(raw) {
-  if (!isRecord(raw) || !Number.isInteger(raw.number) || raw.number <= 0) return null;
-  const stages = normalizeStages(raw.stages);
+const positiveInt = (v) => (Number.isInteger(v) && v > 0 ? v : null);
+
+/**
+ * `number` is null for an entry that is a pull request on its own (the maintenance PR,
+ * `kind: "pr"`); such an entry is identified by its `pr`.
+ */
+export function normalizeIssue(raw, nowMs = null) {
+  if (!isRecord(raw)) return null;
+  const number = positiveInt(raw.number);
+  const pr = positiveInt(raw.pr);
+  const isPr = raw.kind === 'pr' || number === null;
+  const ref = number ?? pr;
+  if (ref === null) return null;
+
+  const stages = normalizeStages(raw.stages, nowMs);
   const type = stripPrefix(raw.type, 'type:');
-  const merged = stages.find((s) => s.stage === 'stage:merged');
+  const endStage = stages.find((s) => s.stage === 'stage:released') ?? stages.find((s) => s.stage === 'stage:merged');
   const openedMs = toMs(raw.opened_at);
 
   let resolution = nonNegative(raw.resolution_seconds);
-  if (resolution === null && openedMs !== null && merged && merged.enteredMs !== null && merged.enteredMs >= openedMs) {
-    resolution = (merged.enteredMs - openedMs) / 1000;
+  if (resolution === null && openedMs !== null && endStage && endStage.enteredMs !== null && endStage.enteredMs >= openedMs) {
+    resolution = (endStage.enteredMs - openedMs) / 1000;
   }
 
   const gates = normalizeGates(raw.gates);
@@ -122,9 +149,13 @@ export function normalizeIssue(raw) {
     if (!(name in gates) && list.length > 0) gates[name] = list[list.length - 1];
   }
 
+  const label = number === null ? `PR #${ref}` : `#${ref}`;
   return {
-    number: raw.number,
-    title: str(raw.title) ?? `Issue #${raw.number}`,
+    number,
+    ref,
+    kind: isPr ? 'pr' : 'issue',
+    label,
+    title: str(raw.title) ?? (number === null ? `Pull request #${ref}` : `Issue #${ref}`),
     scenario: str(raw.scenario),
     type,
     outcome: OUTCOMES.has(raw.outcome) ? raw.outcome : 'unknown',
@@ -134,7 +165,8 @@ export function normalizeIssue(raw) {
     severity: /^s[1-4]$/.test(raw.severity ?? '') ? raw.severity : null,
     owner: stripPrefix(raw.owner, 'owner:'),
     resolutionSeconds: resolution,
-    pr: Number.isInteger(raw.pr) && raw.pr > 0 ? raw.pr : null,
+    pr,
+    escalation: stripPrefix(raw.escalation, 'escalated:'),
     release: str(raw.release),
     qualityScore: isNum(raw.quality_score) ? raw.quality_score : null,
     coderEngine: str(raw.coder_engine),
@@ -167,7 +199,8 @@ export function parseMetrics(raw) {
   }
 
   const rawIssues = raw.issues ?? [];
-  const issues = rawIssues.map(normalizeIssue).filter(Boolean);
+  const nowMs = toMs(raw.generated_at);
+  const issues = rawIssues.map((i) => normalizeIssue(i, nowMs)).filter(Boolean);
   const totals = isRecord(raw.totals) ? raw.totals : {};
   const metrics = {
     version: SCHEMA_VERSION,
@@ -175,6 +208,8 @@ export function parseMetrics(raw) {
     repo: typeof raw.repo === 'string' && REPO_PATTERN.test(raw.repo) ? raw.repo : null,
     totals: {
       usd: nonNegative(totals.usd),
+      orchestratorUsd: nonNegative(totals.orchestrator_usd),
+      escalated: Number.isInteger(totals.escalated) && totals.escalated >= 0 ? totals.escalated : null,
       issues: Number.isInteger(totals.issues) && totals.issues >= 0 ? totals.issues : null,
       released: Number.isInteger(totals.released) && totals.released >= 0 ? totals.released : null,
     },
@@ -188,10 +223,13 @@ export function parseMetrics(raw) {
 function normalizeRunCounts(raw) {
   const out = {};
   if (!isRecord(raw)) return out;
+  const count = (v) => (isNum(v) && v >= 0 ? v : null);
   for (const [gate, v] of Object.entries(raw)) {
-    if (isRecord(v) && isNum(v.pass) && isNum(v.fail) && v.pass >= 0 && v.fail >= 0) {
-      out[gate] = { pass: v.pass, fail: v.fail };
-    }
+    if (!isRecord(v)) continue;
+    const pass = count(v.pass);
+    const fail = count(v.fail);
+    if (pass === null || fail === null) continue;
+    out[gate] = { pass, fail, firstPass: count(v.first_pass), firstFail: count(v.first_fail) };
   }
   return out;
 }
@@ -201,7 +239,7 @@ export function headlineCounts(metrics) {
   return {
     issues: totals.issues ?? issues.length,
     released: totals.released ?? issues.filter((i) => i.outcome === 'released').length,
-    escalated: issues.filter((i) => i.outcome === 'escalated').length,
+    escalated: totals.escalated ?? issues.filter((i) => i.outcome === 'escalated').length,
   };
 }
 
@@ -212,8 +250,9 @@ export function stageKey(stage) {
 /**
  * Cycle time per stage. Stage order follows the state machine; unknown stages are appended.
  * Repeated stages within one issue (for example a second refinement round) are summed.
- * Stages whose duration is unknown (still running, or no following timestamp) are left out
- * of the median rather than counted as zero.
+ * Terminal stages (released, escalated) have no duration and are not charted.
+ * The stage an object is in right now is drawn up to the time the data was generated but
+ * stays out of the medians, as does any stage whose duration is unknown.
  */
 export function stageDurations(issues) {
   const perIssue = [];
@@ -221,22 +260,27 @@ export function stageDurations(issues) {
 
   for (const issue of issues) {
     const seconds = new Map();
+    const open = new Set();
     for (const s of issue.stages) {
-      if (s.seconds === null) continue;
+      if (s.terminal || s.seconds === null) continue;
       seconds.set(s.stage, (seconds.get(s.stage) ?? 0) + s.seconds);
+      if (s.inProgress) open.add(s.stage);
     }
     for (const [stage, value] of seconds) {
+      if (open.has(stage)) continue;
       if (!byStage.has(stage)) byStage.set(stage, []);
       byStage.get(stage).push(value);
     }
     const order = [...seconds.keys()].sort(compareStages);
     perIssue.push({
-      number: issue.number,
+      ref: issue.ref,
+      label: issue.label,
       title: issue.title,
       outcome: issue.outcome,
-      segments: order.map((stage) => ({ stage, seconds: seconds.get(stage) })),
+      segments: order.map((stage) => ({ stage, seconds: seconds.get(stage), open: open.has(stage) })),
       total: sum([...seconds.values()]),
-      hasUnknown: issue.stages.some((s) => s.seconds === null),
+      hasOpen: open.size > 0,
+      hasUnknown: issue.stages.some((s) => !s.terminal && s.seconds === null),
     });
   }
 
@@ -244,12 +288,14 @@ export function stageDurations(issues) {
     const values = byStage.get(stage);
     return { stage, median: median(values), count: values.length, max: Math.max(...values) };
   });
+  // End to end only counts issues that are done with every stage.
+  const finished = perIssue.filter((p) => p.total > 0 && !p.hasOpen && !p.hasUnknown).map((p) => p.total);
   const totals = perIssue.filter((p) => p.total > 0).map((p) => p.total);
   return {
     stages,
     perIssue,
-    medianTotal: median(totals),
-    totalCount: totals.length,
+    medianTotal: median(finished),
+    totalCount: finished.length,
     maxTotal: totals.length ? Math.max(...totals) : 0,
   };
 }
@@ -269,9 +315,9 @@ export function stageIndex(stage, present) {
 }
 
 /**
- * Gate pass rates. First attempt comes from per-issue gate_attempts (first element);
- * eventual comes from the final gate result. Gates with no recorded attempts contribute
- * to eventual only, so first-attempt may be unavailable (null rate).
+ * Gate pass rates. Eventual is the final gate result per issue. First attempt comes from the
+ * orchestrator's gate_pass_rates (first_pass, first_fail) when given, otherwise from the first
+ * element of each issue's gate_attempts. With neither, first attempt is unknown (null rate).
  */
 export function gateRates(issues, gatePassRates = {}) {
   const names = new Set(GATE_ORDER);
@@ -285,7 +331,7 @@ export function gateRates(issues, gatePassRates = {}) {
   const extra = [...names].filter((g) => !GATE_ORDER.includes(g)).sort();
 
   return [...known, ...extra].map((gate) => {
-    const first = { pass: 0, total: 0 };
+    const derivedFirst = { pass: 0, total: 0 };
     const eventual = { pass: 0, total: 0 };
     const derivedRuns = { pass: 0, fail: 0 };
     let sawAttempts = false;
@@ -296,8 +342,8 @@ export function gateRates(issues, gatePassRates = {}) {
         sawAttempts = true;
         const kind = classifyResult(attempts[0]);
         if (kind !== 'other') {
-          first.total += 1;
-          if (kind === 'pass') first.pass += 1;
+          derivedFirst.total += 1;
+          if (kind === 'pass') derivedFirst.pass += 1;
         }
         for (const r of attempts) {
           const k = classifyResult(r);
@@ -312,7 +358,12 @@ export function gateRates(issues, gatePassRates = {}) {
       }
     }
 
-    const runs = gatePassRates[gate] ?? (sawAttempts ? derivedRuns : null);
+    const reported = gatePassRates[gate] ?? null;
+    const first =
+      reported && reported.firstPass !== null && reported.firstFail !== null
+        ? { pass: reported.firstPass, total: reported.firstPass + reported.firstFail }
+        : derivedFirst;
+    const runs = reported ? { pass: reported.pass, fail: reported.fail } : sawAttempts ? derivedRuns : null;
     return {
       gate,
       first: { ...first, rate: first.total ? first.pass / first.total : null },
@@ -325,7 +376,8 @@ export function gateRates(issues, gatePassRates = {}) {
 export function costSummary(metrics) {
   const rows = metrics.issues
     .map((i) => ({
-      number: i.number,
+      ref: i.ref,
+      label: i.label,
       title: i.title,
       outcome: i.outcome,
       usd: i.cost.usd,
@@ -334,16 +386,20 @@ export function costSummary(metrics) {
       calls: i.cost.calls,
       overLine: i.cost.usd !== null && i.cost.usd > ISSUE_COST_LINE_USD,
     }))
-    .sort((a, b) => a.number - b.number);
+    .sort((a, b) => a.ref - b.ref);
 
+  const orchestrator = metrics.totals.orchestratorUsd ?? 0;
   const rowTotal = sum(rows.map((r) => r.usd ?? 0));
-  const total = metrics.totals.usd ?? rowTotal;
+  const accounted = rowTotal + orchestrator;
+  const total = metrics.totals.usd ?? accounted;
   const scale = Math.max(ISSUE_COST_LINE_USD, ...rows.map((r) => r.usd ?? 0));
   return {
     rows,
     total,
     totalReported: metrics.totals.usd !== null,
     rowTotal,
+    orchestrator,
+    accounted,
     modelTotal: sum(rows.map((r) => r.model ?? 0)),
     coderTotal: sum(rows.map((r) => r.coder ?? 0)),
     callsTotal: sum(rows.map((r) => r.calls ?? 0)),
@@ -360,9 +416,10 @@ export function costSummary(metrics) {
 export function defectSummary(issues) {
   const bugs = issues
     .filter((i) => i.type === 'bug')
-    .sort((a, b) => a.number - b.number)
+    .sort((a, b) => a.ref - b.ref)
     .map((i) => ({
-      number: i.number,
+      ref: i.ref,
+      label: i.label,
       title: i.title,
       outcome: i.outcome,
       severity: i.severity,
@@ -399,10 +456,11 @@ export function defectSummary(issues) {
 export function issueLinks(repo, issue) {
   if (!repo || !REPO_PATTERN.test(repo)) return { repo: null, issue: null, pr: null, release: null };
   const base = `https://github.com/${repo}`;
+  const release = issue.release ?? null;
   return {
     repo: base,
-    issue: `${base}/issues/${issue.number}`,
+    issue: issue.number === null || issue.number === undefined ? null : `${base}/issues/${issue.number}`,
     pr: issue.pr === null ? null : `${base}/pull/${issue.pr}`,
-    release: issue.release === null ? null : `${base}/releases/tag/${encodeURIComponent(issue.release)}`,
+    release: release === null ? null : `${base}/releases/tag/${encodeURIComponent(release)}`,
   };
 }

@@ -71,6 +71,16 @@ function outcomeBadge(outcome) {
   return badge(labels[outcome] ?? 'Unknown', tones[outcome] ?? 'neutral');
 }
 
+function outcomeCell(issue) {
+  const reason = issue.outcome === 'escalated' && issue.escalation ? issue.escalation.replace(/[-_]+/g, ' ') : null;
+  return h('span', { class: 'outcome' }, outcomeBadge(issue.outcome), reason ? h('span', { class: 'outcome-reason' }, reason) : null);
+}
+
+function scenarioLabel(scenario) {
+  const [letter, ...rest] = scenario.split('-');
+  return h('span', { class: 'scenario' }, letter.toUpperCase(), rest.length ? h('span', { class: 'scenario-note' }, rest.join(' ')) : null);
+}
+
 function severityBadge(severity) {
   if (!severity) return value(null);
   const tones = { s1: 'bad', s2: 'warn', s3: 'info', s4: 'neutral' };
@@ -89,8 +99,8 @@ function legend(items) {
   );
 }
 
-const issueRef = (n, title) =>
-  h('span', { class: 'issue-ref' }, h('span', { class: 'issue-num' }, `#${n}`), h('span', { class: 'issue-title' }, title));
+const issueRef = (label, title) =>
+  h('span', { class: 'issue-ref' }, h('span', { class: 'issue-num' }, label), h('span', { class: 'issue-title' }, title));
 
 function notice(text) {
   return h('p', { class: 'empty' }, text);
@@ -166,7 +176,7 @@ export function renderCycle(issues) {
     return h(
       'tr',
       {},
-      h('th', { scope: 'row' }, issueRef(p.number, p.title)),
+      h('th', { scope: 'row' }, issueRef(p.label, p.title)),
       present.map((stage) => h('td', { class: 'num' }, bySeconds.has(stage) ? formatDuration(bySeconds.get(stage)) : value(null))),
       h('td', { class: 'num strong' }, p.total > 0 ? formatDuration(p.total) : value(null)),
     );
@@ -188,8 +198,8 @@ export function renderCycle(issues) {
     h('h3', {}, 'Per issue'),
     legend(present.map((stage) => ({ cls: stageClass(stage, present), label: stageLabel(stage) }))),
     stacked,
-    data.perIssue.some((p) => p.hasUnknown)
-      ? h('p', { class: 'footnote' }, 'Stages still running, or without a following timestamp, have no duration yet and are left out of the medians.')
+    data.perIssue.some((p) => p.hasOpen || p.hasUnknown)
+      ? h('p', { class: 'footnote' }, 'Faded segments are stages still running, measured up to the time the data was generated. Running stages are left out of the medians and of the end to end figure.')
       : null,
     disclosure('Show data table', tableWrap('Cycle time per issue and stage', table('Time spent in each stage, per issue, with the median per stage', head, rows, foot))),
   );
@@ -258,7 +268,7 @@ export function renderDefects(issues) {
     h(
       'tr',
       {},
-      h('th', { scope: 'row' }, issueRef(b.number, b.title)),
+      h('th', { scope: 'row' }, issueRef(b.label, b.title)),
       h('td', {}, severityBadge(b.severity)),
       h('td', {}, b.owner ? h('span', { class: 'mono' }, b.owner) : value(null)),
       h(
@@ -281,7 +291,7 @@ export function renderDefects(issues) {
     { label: 'Issue' },
     { label: 'Severity' },
     { label: 'Owner' },
-    { label: 'Opened to merged', num: true },
+    { label: 'Opened to release', num: true },
   ];
 
   const owners = h(
@@ -303,9 +313,9 @@ export function renderDefects(issues) {
     'Defect owner and resolution time',
     data.medianResolution === null
       ? 'Bugs only: who owned the fix and how long it took.'
-      : `Bugs only. Median time from opened to merged is ${formatDuration(data.medianResolution)}.`,
+      : `Bugs only. Median time from opened to release is ${formatDuration(data.medianResolution)}.`,
     owners,
-    tableWrap('Bugs with owner, severity and resolution time', table('Bugs with owner, severity and time from opened to merged', head, rows)),
+    tableWrap('Bugs with owner, severity and resolution time', table('Bugs with owner, severity and time from opened to release', head, rows)),
   );
 }
 
@@ -348,7 +358,7 @@ export function renderCost(metrics) {
     return h(
       'tr',
       {},
-      h('th', { scope: 'row' }, issueRef(r.number, r.title)),
+      h('th', { scope: 'row' }, issueRef(r.label, r.title)),
       h('td', { class: 'num' }, r.model === null ? value(null) : formatUsd(r.model)),
       h('td', { class: 'num' }, r.coder === null ? value(null) : formatUsd(r.coder)),
       h('td', { class: 'num' }, r.calls === null ? value(null) : formatInteger(r.calls)),
@@ -368,6 +378,20 @@ export function renderCost(metrics) {
       ),
     );
   });
+  if (cost.orchestrator > 0) {
+    body.push(
+      h(
+        'tr',
+        {},
+        h('th', { scope: 'row' }, h('span', { class: 'issue-ref' }, h('span', { class: 'issue-title' }, 'Orchestrator compute'))),
+        h('td', { class: 'num' }, value(null)),
+        h('td', { class: 'num' }, value(null)),
+        h('td', { class: 'num' }, value(null)),
+        h('td', { class: 'num strong' }, formatUsd(cost.orchestrator)),
+        h('td', {}),
+      ),
+    );
+  }
   const foot = h(
     'tr',
     {},
@@ -375,7 +399,7 @@ export function renderCost(metrics) {
     h('td', { class: 'num' }, formatUsd(cost.modelTotal)),
     h('td', { class: 'num' }, formatUsd(cost.coderTotal)),
     h('td', { class: 'num' }, formatInteger(cost.callsTotal)),
-    h('td', { class: 'num strong' }, formatUsd(cost.rowTotal)),
+    h('td', { class: 'num strong' }, formatUsd(cost.accounted)),
     h('td', {}),
   );
   const head = [
@@ -386,15 +410,15 @@ export function renderCost(metrics) {
     { label: 'Total', num: true },
     { label: `Against ${formatUsd(ISSUE_COST_LINE_USD, 2)} line` },
   ];
-  const drift = cost.totalReported && Math.abs(cost.total - cost.rowTotal) > 0.00005;
+  const drift = cost.totalReported && Math.abs(cost.total - cost.accounted) > 0.00005;
 
   return panel(
     'cost',
     'Cost per issue',
-    'Model calls plus coder runtime, against the shared budget.',
+    'Model calls plus coder runtime and orchestrator compute, against the shared budget.',
     summary,
     tableWrap('Cost per issue', table('Model cost, coder cost, calls and total per issue, with the per issue line', head, body, foot)),
-    drift ? h('p', { class: 'footnote' }, `The reported total (${formatUsd(cost.total)}) differs from the sum of listed issues (${formatUsd(cost.rowTotal)}); it also covers spend not attributed to an issue.`) : null,
+    drift ? h('p', { class: 'footnote' }, `The reported total (${formatUsd(cost.total)}) differs from the sum of the rows above (${formatUsd(cost.accounted)}); it also keeps spend from objects no longer listed.`) : null,
   );
 }
 
@@ -402,13 +426,13 @@ export function renderCost(metrics) {
 
 export function renderIssues(metrics) {
   const rows = [...metrics.issues]
-    .sort((a, b) => a.number - b.number)
+    .sort((a, b) => a.ref - b.ref)
     .map((issue) => {
       const links = issueLinks(metrics.repo, issue);
       const link = (url, text, label) =>
         url ? h('a', { href: url, rel: 'noopener', 'aria-label': label }, text) : null;
       const refs = [
-        link(links.issue, `#${issue.number}`, `#${issue.number}, issue on GitHub`) ?? h('span', {}, `#${issue.number}`),
+        issue.number === null ? null : link(links.issue, `#${issue.number}`, `#${issue.number}, issue on GitHub`) ?? h('span', {}, `#${issue.number}`),
         issue.pr === null ? null : link(links.pr, `PR #${issue.pr}`, `PR #${issue.pr}, pull request on GitHub`) ?? h('span', {}, `PR #${issue.pr}`),
         issue.release === null ? null : link(links.release, issue.release, `${issue.release}, release on GitHub`) ?? h('span', {}, issue.release),
       ].filter(Boolean);
@@ -416,10 +440,10 @@ export function renderIssues(metrics) {
       return h(
         'tr',
         {},
-        h('th', { scope: 'row' }, issueRef(issue.number, issue.title)),
-        h('td', {}, issue.scenario ? h('span', { class: 'scenario' }, issue.scenario.toUpperCase()) : value(null)),
+        h('th', { scope: 'row' }, issueRef(issue.label, issue.title)),
+        h('td', {}, issue.scenario ? scenarioLabel(issue.scenario) : value(null)),
         h('td', {}, issue.type ? h('span', { class: 'mono' }, issue.type) : value(null)),
-        h('td', {}, outcomeBadge(issue.outcome)),
+        h('td', {}, outcomeCell(issue)),
         h('td', {}, h('span', { class: 'refs' }, refs)),
       );
     });
