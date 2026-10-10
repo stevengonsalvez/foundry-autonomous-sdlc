@@ -43,10 +43,10 @@ variable "allowed_ip_ranges" {
   validation {
     condition = length(var.allowed_ip_ranges) > 0 && alltrue([
       for r in var.allowed_ip_ranges :
-      !strcontains(r, ":")
-      && can(cidrhost(strcontains(r, "/") ? r : "${r}/32", 0))
-      && !endswith(r, "/31")
-      && !can(regex("^(10\\.|192\\.168\\.|172\\.(1[6-9]|2[0-9]|3[01])\\.)", r))
+      !strcontains(r, ":") &&
+      can(cidrhost(strcontains(r, "/") ? r : "${r}/32", 0)) &&
+      !endswith(r, "/31") &&
+      !can(regex("^(10\\.|192\\.168\\.|172\\.(1[6-9]|2[0-9]|3[01])\\.)", r))
     ])
     error_message = "allowed_ip_ranges must hold at least one public IPv4 address or CIDR range (no IPv6, no RFC1918 ranges, no /31; Azure Storage rejects them). Use `curl -4 -s https://ifconfig.me`."
   }
