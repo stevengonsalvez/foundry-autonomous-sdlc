@@ -38,7 +38,7 @@
       "pass": 1
     }
   },
-  "generated_at": "2026-10-10T16:00:14Z",
+  "generated_at": "2026-10-10T16:05:16Z",
   "issues": [
     {
       "closed_at": "2026-10-10T12:28:43Z",
@@ -699,22 +699,22 @@
     },
     {
       "closed_at": null,
-      "coder_engine": "agy",
+      "coder_engine": "loop",
       "cost": {
         "calls": 5,
-        "coder_model_usd": 0.0,
-        "coder_usd": 0.005262,
+        "coder_model_usd": 0.013035,
+        "coder_usd": 0.064493,
         "model_usd": 0.014367,
-        "usd": 0.019629
+        "usd": 0.091895
       },
       "deferred": null,
-      "escalation": null,
+      "escalation": "escalated:build-failed",
       "gate_attempts": {},
       "gates": {},
       "kind": "issue",
       "number": 16,
       "opened_at": "2026-10-10T15:22:24Z",
-      "outcome": "open",
+      "outcome": "escalated",
       "owner": null,
       "pr": null,
       "quality_score": 95,
@@ -745,9 +745,13 @@
         },
         {
           "entered_at": "2026-10-10T15:50:18Z",
-          "in_progress": true,
-          "seconds": 0,
+          "seconds": 896,
           "stage": "stage:building"
+        },
+        {
+          "entered_at": "2026-10-10T16:05:14Z",
+          "seconds": 0,
+          "stage": "escalated:build-failed"
         }
       ],
       "title": "Make the parcel tracker better",
@@ -800,13 +804,13 @@
     },
     {
       "closed_at": null,
-      "coder_engine": "agy",
+      "coder_engine": "agy-unrestricted",
       "cost": {
         "calls": 7,
         "coder_model_usd": 0.0,
-        "coder_usd": 0.008719,
+        "coder_usd": 0.036531,
         "model_usd": 0.016824,
-        "usd": 0.025543
+        "usd": 0.053356
       },
       "deferred": null,
       "escalation": null,
@@ -858,11 +862,11 @@
   "repo": "stevengonsalvez/foundry-autonomous-sdlc",
   "totals": {
     "deferred": 0,
-    "escalated": 11,
+    "escalated": 12,
     "issues": 14,
-    "orchestrator_usd": 0.434263,
+    "orchestrator_usd": 0.439086,
     "released": 1,
-    "usd": 0.84395
+    "usd": 0.948852
   },
   "version": 1
 }
