@@ -4,41 +4,41 @@
     "agent-scope": {
       "fail": 0,
       "first_fail": 0,
-      "first_pass": 0,
-      "pass": 0
+      "first_pass": 1,
+      "pass": 1
     },
     "coverage": {
       "fail": 0,
       "first_fail": 0,
-      "first_pass": 0,
-      "pass": 0
+      "first_pass": 1,
+      "pass": 1
     },
     "e2e": {
       "fail": 0,
       "first_fail": 0,
-      "first_pass": 0,
-      "pass": 0
+      "first_pass": 1,
+      "pass": 1
     },
     "gitleaks": {
       "fail": 0,
       "first_fail": 0,
-      "first_pass": 0,
-      "pass": 0
+      "first_pass": 1,
+      "pass": 1
     },
     "tdd-order": {
       "fail": 0,
       "first_fail": 0,
-      "first_pass": 0,
-      "pass": 0
+      "first_pass": 1,
+      "pass": 1
     },
     "test": {
       "fail": 0,
       "first_fail": 0,
-      "first_pass": 0,
-      "pass": 0
+      "first_pass": 1,
+      "pass": 1
     }
   },
-  "generated_at": "2026-10-10T15:11:27Z",
+  "generated_at": "2026-10-10T15:13:04Z",
   "issues": [
     {
       "closed_at": "2026-10-10T12:28:43Z",
@@ -524,16 +524,42 @@
       "closed_at": null,
       "coder_engine": "agy-unrestricted",
       "cost": {
-        "calls": 3,
+        "calls": 4,
         "coder_model_usd": 0.0,
         "coder_usd": 0.060058,
-        "model_usd": 0.008504,
-        "usd": 0.068562
+        "model_usd": 0.011444,
+        "usd": 0.071502
       },
       "deferred": null,
       "escalation": null,
-      "gate_attempts": {},
-      "gates": {},
+      "gate_attempts": {
+        "agent-scope": [
+          "success"
+        ],
+        "coverage": [
+          "success"
+        ],
+        "e2e": [
+          "success"
+        ],
+        "gitleaks": [
+          "success"
+        ],
+        "tdd-order": [
+          "success"
+        ],
+        "test": [
+          "success"
+        ]
+      },
+      "gates": {
+        "agent-scope": "success",
+        "coverage": "success",
+        "e2e": "success",
+        "gitleaks": "success",
+        "tdd-order": "success",
+        "test": "success"
+      },
       "kind": "issue",
       "number": 12,
       "opened_at": "2026-10-10T14:53:52Z",
@@ -582,9 +608,9 @@
     "deferred": 0,
     "escalated": 9,
     "issues": 10,
-    "orchestrator_usd": 0.357768,
+    "orchestrator_usd": 0.362887,
     "released": 0,
-    "usd": 0.656562
+    "usd": 0.664621
   },
   "version": 1
 }
