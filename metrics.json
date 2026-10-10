@@ -38,7 +38,7 @@
       "pass": 1
     }
   },
-  "generated_at": "2026-10-10T15:40:43Z",
+  "generated_at": "2026-10-10T15:45:57Z",
   "issues": [
     {
       "closed_at": "2026-10-10T12:28:43Z",
@@ -613,13 +613,13 @@
     },
     {
       "closed_at": null,
-      "coder_engine": null,
+      "coder_engine": "agy",
       "cost": {
         "calls": 3,
         "coder_model_usd": 0.0,
-        "coder_usd": 0.0,
+        "coder_usd": 0.008419,
         "model_usd": 0.00853,
-        "usd": 0.00853
+        "usd": 0.016949
       },
       "deferred": null,
       "escalation": null,
@@ -666,11 +666,11 @@
       "closed_at": null,
       "coder_engine": null,
       "cost": {
-        "calls": 4,
+        "calls": 5,
         "coder_model_usd": 0.0,
         "coder_usd": 0.0,
-        "model_usd": 0.005763,
-        "usd": 0.005763
+        "model_usd": 0.014367,
+        "usd": 0.014367
       },
       "deferred": null,
       "escalation": null,
@@ -700,9 +700,14 @@
         },
         {
           "entered_at": "2026-10-10T15:40:24Z",
+          "seconds": 322,
+          "stage": "stage:feasible"
+        },
+        {
+          "entered_at": "2026-10-10T15:45:46Z",
           "in_progress": true,
           "seconds": 0,
-          "stage": "stage:feasible"
+          "stage": "stage:tests-written"
         }
       ],
       "title": "Make the parcel tracker better",
@@ -712,20 +717,20 @@
       "closed_at": null,
       "coder_engine": null,
       "cost": {
-        "calls": 4,
+        "calls": 5,
         "coder_model_usd": 0.0,
         "coder_usd": 0.0,
-        "model_usd": 0.014547,
-        "usd": 0.014547
+        "model_usd": 0.015305,
+        "usd": 0.015305
       },
       "deferred": null,
-      "escalation": null,
+      "escalation": "escalated:not-agent-suitable",
       "gate_attempts": {},
       "gates": {},
       "kind": "issue",
       "number": 17,
       "opened_at": "2026-10-10T15:22:25Z",
-      "outcome": "open",
+      "outcome": "escalated",
       "owner": null,
       "pr": null,
       "quality_score": 90,
@@ -741,9 +746,13 @@
         },
         {
           "entered_at": "2026-10-10T15:40:33Z",
-          "in_progress": true,
-          "seconds": 0,
+          "seconds": 317,
           "stage": "stage:ready"
+        },
+        {
+          "entered_at": "2026-10-10T15:45:50Z",
+          "seconds": 0,
+          "stage": "escalated:not-agent-suitable"
         }
       ],
       "title": "Move the live carrier integration to the new vendor and rotate the production keys",
@@ -753,11 +762,11 @@
       "closed_at": null,
       "coder_engine": null,
       "cost": {
-        "calls": 4,
+        "calls": 5,
         "coder_model_usd": 0.0,
         "coder_usd": 0.0,
-        "model_usd": 0.006263,
-        "usd": 0.006263
+        "model_usd": 0.007308,
+        "usd": 0.007308
       },
       "deferred": null,
       "escalation": null,
@@ -782,9 +791,14 @@
         },
         {
           "entered_at": "2026-10-10T15:40:41Z",
+          "seconds": 314,
+          "stage": "stage:ready"
+        },
+        {
+          "entered_at": "2026-10-10T15:45:55Z",
           "in_progress": true,
           "seconds": 0,
-          "stage": "stage:ready"
+          "stage": "stage:feasible"
         }
       ],
       "title": "Lowercase tracking numbers are rejected as invalid",
@@ -794,11 +808,11 @@
   "repo": "stevengonsalvez/foundry-autonomous-sdlc",
   "totals": {
     "deferred": 0,
-    "escalated": 9,
+    "escalated": 10,
     "issues": 14,
-    "orchestrator_usd": 0.411602,
+    "orchestrator_usd": 0.417969,
     "released": 1,
-    "usd": 0.749952
+    "usd": 0.775145
   },
   "version": 1
 }
