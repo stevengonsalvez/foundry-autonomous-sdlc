@@ -1,0 +1,9 @@
+# Copy to backend.hcl (git-ignored) or generate it with:
+#   terraform -chdir=bootstrap output -raw backend_hcl > backend.hcl
+# Replace the storage account name with the one bootstrap created.
+resource_group_name  = "rg-fsdlc-tfstate"
+storage_account_name = "stfsdlctfxxxxx"
+container_name       = "tfstate"
+key                  = "foundry-sdlc-poc.tfstate"
+subscription_id      = "<subscription-id>"
+use_azuread_auth     = true

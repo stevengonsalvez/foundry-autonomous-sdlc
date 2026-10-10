@@ -1,0 +1,14 @@
+# Remote state in the storage account created by bootstrap/.
+#
+# Activate only after `terraform apply` in bootstrap/ has succeeded:
+#   cp backend.tf.example backend.tf
+#   terraform -chdir=bootstrap output -raw backend_hcl > backend.hcl
+#   terraform init -migrate-state -backend-config=backend.hcl
+#
+# Settings live in backend.hcl (partial configuration) so this file holds no
+# environment-specific names. Auth is Entra ID (use_azuread_auth); the state
+# account has shared keys disabled.
+
+terraform {
+  backend "azurerm" {}
+}

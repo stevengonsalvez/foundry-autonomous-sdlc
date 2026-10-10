@@ -1,0 +1,16 @@
+# Terraform working data and state (local backend for the PoC)
+.terraform/
+*.tfstate
+*.tfstate.*
+crash.log
+crash.*.log
+*.tfplan
+# Real variable files may hold the alert email and subscription id
+*.tfvars
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+tfplan*
+# Backend settings are environment-specific; commit only backend.hcl.example
+backend.hcl
