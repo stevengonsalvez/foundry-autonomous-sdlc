@@ -4,41 +4,41 @@
     "agent-scope": {
       "fail": 0,
       "first_fail": 0,
-      "first_pass": 4,
-      "pass": 4
+      "first_pass": 6,
+      "pass": 6
     },
     "coverage": {
       "fail": 1,
       "first_fail": 1,
-      "first_pass": 3,
-      "pass": 3
+      "first_pass": 5,
+      "pass": 5
     },
     "e2e": {
       "fail": 2,
       "first_fail": 2,
-      "first_pass": 2,
-      "pass": 2
+      "first_pass": 4,
+      "pass": 4
     },
     "gitleaks": {
       "fail": 0,
       "first_fail": 0,
-      "first_pass": 4,
-      "pass": 4
+      "first_pass": 6,
+      "pass": 6
     },
     "tdd-order": {
       "fail": 0,
       "first_fail": 0,
-      "first_pass": 4,
-      "pass": 4
+      "first_pass": 6,
+      "pass": 6
     },
     "test": {
       "fail": 2,
       "first_fail": 2,
-      "first_pass": 2,
-      "pass": 2
+      "first_pass": 4,
+      "pass": 4
     }
   },
-  "generated_at": "2026-10-10T17:20:34Z",
+  "generated_at": "2026-10-10T17:21:18Z",
   "issues": [
     {
       "closed_at": "2026-10-10T12:28:43Z",
@@ -866,16 +866,42 @@
       "closed_at": null,
       "coder_engine": "agy-unrestricted",
       "cost": {
-        "calls": 6,
+        "calls": 7,
         "coder_model_usd": 0.0,
         "coder_usd": 0.038936,
-        "model_usd": 0.022689,
-        "usd": 0.061624
+        "model_usd": 0.025095,
+        "usd": 0.064031
       },
       "deferred": null,
       "escalation": null,
-      "gate_attempts": {},
-      "gates": {},
+      "gate_attempts": {
+        "agent-scope": [
+          "success"
+        ],
+        "coverage": [
+          "success"
+        ],
+        "e2e": [
+          "success"
+        ],
+        "gitleaks": [
+          "success"
+        ],
+        "tdd-order": [
+          "success"
+        ],
+        "test": [
+          "success"
+        ]
+      },
+      "gates": {
+        "agent-scope": "success",
+        "coverage": "success",
+        "e2e": "success",
+        "gitleaks": "success",
+        "tdd-order": "success",
+        "test": "success"
+      },
       "kind": "issue",
       "number": 23,
       "opened_at": "2026-10-10T16:42:39Z",
@@ -937,16 +963,42 @@
       "closed_at": null,
       "coder_engine": "agy-unrestricted",
       "cost": {
-        "calls": 6,
+        "calls": 7,
         "coder_model_usd": 0.0,
         "coder_usd": 0.060509,
-        "model_usd": 0.016231,
-        "usd": 0.07674
+        "model_usd": 0.019142,
+        "usd": 0.079652
       },
       "deferred": null,
       "escalation": null,
-      "gate_attempts": {},
-      "gates": {},
+      "gate_attempts": {
+        "agent-scope": [
+          "success"
+        ],
+        "coverage": [
+          "success"
+        ],
+        "e2e": [
+          "success"
+        ],
+        "gitleaks": [
+          "success"
+        ],
+        "tdd-order": [
+          "success"
+        ],
+        "test": [
+          "success"
+        ]
+      },
+      "gates": {
+        "agent-scope": "success",
+        "coverage": "success",
+        "e2e": "success",
+        "gitleaks": "success",
+        "tdd-order": "success",
+        "test": "success"
+      },
       "kind": "issue",
       "number": 24,
       "opened_at": "2026-10-10T16:42:39Z",
@@ -1151,7 +1203,14 @@
       "resolution_seconds": null,
       "scenario": "d-maintenance",
       "severity": null,
-      "stages": [],
+      "stages": [
+        {
+          "entered_at": "2026-10-10T17:21:12Z",
+          "in_progress": true,
+          "seconds": 0,
+          "stage": "stage:building"
+        }
+      ],
       "title": "Update the home page heading copy",
       "type": "maintenance"
     }
@@ -1161,9 +1220,9 @@
     "deferred": 0,
     "escalated": 13,
     "issues": 18,
-    "orchestrator_usd": 0.531392,
+    "orchestrator_usd": 0.537227,
     "released": 2,
-    "usd": 1.29406
+    "usd": 1.305214
   },
   "version": 1
 }
