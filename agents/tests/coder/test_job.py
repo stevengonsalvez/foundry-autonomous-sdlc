@@ -180,3 +180,55 @@ def test_maintenance_refuses_protected_and_qualified_refs(branch: str) -> None:
 def test_shell_and_ref_fields_are_restricted(field: str, value: str) -> None:
     with pytest.raises(JobSpecError, match=field):
         JobSpec.from_request(request(**{field: value}))
+
+
+JWT = "eyJhbGciOiJSUzI1NiJ9.eyJzdWIiOiJ4In0.c2lnbmF0dXJlLXBhcnQ"
+BLOB = "QUJDREVGR0hJSktMTU5PUFFSU1RVVldYWVphYmNkZWZnaGlqa2xtbm9wcXJzdHV2d3h5ejAxMjM0NTY3ODk="
+
+
+def test_redactor_scrubs_secret_shapes_it_was_never_told_about() -> None:
+    redact = Redactor(env={})
+    text = redact(f"headers {{'Authorization': 'Bearer abc.def-ghi'}} Authorization: token zzz111 "
+                  f"clone https://x-access-token:pw123@github.com/o/r.git jwt {JWT} "
+                  f"pat ghp_{'A1' * 18} fine github_pat_{'B2' * 20} blob {BLOB}")
+    for leaked in ("abc.def-ghi", "zzz111", "pw123", JWT, "ghp_A1", "github_pat_B2", BLOB):
+        assert leaked not in text
+    assert "https://***@github.com/o/r.git" in text
+
+
+def test_redactor_keeps_shas_and_paths_readable() -> None:
+    redact = Redactor(env={})
+    sha = "0123456789abcdef0123456789abcdef01234567"
+    path = "/srv/sdlc-work/j-12-1/checkout/app/web/src/components/TrackingNumberInput.tsx"
+    tmp = "/private/var/folders/2y/jj4x2fjx2vn36g1jp774sly80000gr/T/pytest-of-x/agyuser-home/settings.json"
+    assert redact(f"commit {sha} at {path} {tmp}") == f"commit {sha} at {path} {tmp}"
+    assert BLOB[:30] not in redact(f"key a/b/{BLOB}")    # a blob behind a path is still caught
+
+
+def test_redactor_scrubs_values_of_secret_looking_environment_variables() -> None:
+    env = {"IDENTITY_HEADER": "hdr-0123456789", "IDENTITY_ENDPOINT": "http://100.64.100.2/msi/token",
+           "MY_SERVICE_PASSWORD": "planted-pw-555", "ANTHROPIC_API_KEY": "sk-planted-1234", "CI": "1",
+           "GIT_AUTHOR_NAME": "steven gonsalvez", "SSH_AUTH_SOCK": "/tmp/agent.sock.42", "LANG": "C.UTF-8"}
+    redact = Redactor(env=env)
+    text = redact(" ".join(env.values()))
+    for name in ("IDENTITY_HEADER", "IDENTITY_ENDPOINT", "MY_SERVICE_PASSWORD", "ANTHROPIC_API_KEY", "SSH_AUTH_SOCK"):
+        assert env[name] not in text
+    assert "steven gonsalvez" in text and "C.UTF-8" in text   # not secret-named; short values never redacted
+
+
+def test_tracebacks_are_redacted_capped_free_of_locals_and_home_paths() -> None:
+    redact = Redactor(env={})
+    redact.add("planted-pat-123456")
+
+    def fail() -> None:
+        secret_local = "local-only-value-987"   # noqa: F841  a traceback with locals would print it
+        raise RuntimeError("y" * 9000 + "\npush failed for /home/agyuser/.config/x using planted-pat-123456")
+
+    try:
+        fail()
+    except RuntimeError as exc:
+        text = redact.traceback(exc)
+    assert "local-only-value-987" not in text and "planted-pat-123456" not in text
+    assert "/home/agyuser" not in text and "~/.config/x" in text
+    assert text.startswith("Traceback (most recent call last):")
+    assert len(text) <= 4000

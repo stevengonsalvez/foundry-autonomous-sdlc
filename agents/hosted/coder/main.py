@@ -9,24 +9,26 @@ from __future__ import annotations
 
 import sys
 import threading
-import traceback
 
 from azure.ai.agentserver.invocations import InvocationAgentServerHost
 from starlette.requests import Request
 from starlette.responses import JSONResponse
 
+from sdlc_agents.coder.job import Redactor
 from sdlc_agents.coder.wiring import build_service
 
-
-def _print_thread_crash(args: threading.ExceptHookArgs) -> None:
-    """Anything that escapes a thread goes to stdout, which the platform logstream shows."""
-    name = args.thread.name if args.thread else "?"
-    text = "".join(traceback.format_exception(args.exc_type, args.exc_value, args.exc_traceback))
-    print(f"unhandled exception in thread {name}\n{text}", flush=True)
+_fallback = Redactor()   # until the service (and its redactor, which knows the fetched secrets) exists
 
 
-threading.excepthook = _print_thread_crash
-sys.excepthook = lambda kind, value, tb: print("".join(traceback.format_exception(kind, value, tb)), flush=True)
+def _report(where: str, exc: BaseException | None) -> None:
+    """Anything that escapes goes to stdout (the platform logstream), redacted and without local variables."""
+    redact = service.redact if "service" in globals() else _fallback
+    text = redact.traceback(exc) if exc is not None else "(no exception)"
+    print(f"unhandled exception in {where}\n{text}", flush=True)
+
+
+threading.excepthook = lambda args: _report(f"thread {args.thread.name if args.thread else '?'}", args.exc_value)
+sys.excepthook = lambda kind, value, tb: _report("main", value)
 
 app = InvocationAgentServerHost()
 service = build_service()

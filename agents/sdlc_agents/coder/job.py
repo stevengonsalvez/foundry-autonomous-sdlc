@@ -13,6 +13,8 @@ import math
 import os
 import re
 import threading
+import traceback
+from collections.abc import Mapping
 from dataclasses import asdict, dataclass, field
 from datetime import UTC, datetime
 from enum import StrEnum
@@ -299,12 +301,47 @@ def _seconds_between(earlier: str, later: str) -> int | None:
         return None
 
 
-class Redactor:
-    """Replaces every known secret (and its git basic-auth form) with ***."""
+# Secret shapes scrubbed even when nobody registered the value.
+_SHAPES = (
+    (re.compile(r"(?i)(authorization['\"]?\s*[:=]\s*['\"]?)(?:(?:bearer|basic|token)\s+)?[^\s'\",}]+"), r"\1***"),
+    (re.compile(r"(\b[a-z][a-z0-9+.-]*://)[^/\s:@]+(?::[^/\s@]*)?@"), r"\1***@"),        # credentials in a URL
+    (re.compile(r"\beyJ[A-Za-z0-9_-]{5,}\.[A-Za-z0-9_-]{5,}\.[A-Za-z0-9_-]*"), "***"),      # JWT
+    (re.compile(r"\b(?:gh[pousr]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,})"), "***"),  # GitHub tokens
+)
+_BLOB = re.compile(r"[A-Za-z0-9+/]{40,}={0,2}")
+_SECRET_ENV = re.compile(r"TOKEN|SECRET|PASSWORD|PASSWD|APIKEY|(?:^|_)(?:KEY|HEADER|AUTH)(?:_|$)|^IDENTITY_ENDPOINT$",
+                         re.IGNORECASE)
+_HOME = re.compile(r"/(?:home|Users)/[^/\s'\"]+")
+MIN_ENV_SECRET = 8        # shorter values (1, true) would redact half of every log line
+TRACEBACK_MAX_CHARS = 4000
 
-    def __init__(self) -> None:
+
+def _blob(match: re.Match[str]) -> str:
+    """Long base64 runs with mixed case and digits are secrets; hex shas and paths are not. A run with two or
+    more slashes is a path unless one of its segments alone looks random (random base64 of 40 characters
+    has about six digits and under one slash; a path of words rarely has three digits and an upper case)."""
+    text = match.group()
+    if text.count("/") < 2:
+        return "***" if _random(text, digits=3) else text
+    return "/".join("***" if len(seg) >= 20 and _random(seg, digits=2) else seg for seg in text.split("/"))
+
+
+def _random(text: str, *, digits: int) -> bool:
+    return (bool(re.search("[A-Z]", text) and re.search("[a-z]", text)) and len(re.findall("[0-9]", text)) >= digits
+            and not re.fullmatch(r"[0-9a-f]+", text))
+
+
+class Redactor:
+    """Replaces every known secret (and its git basic-auth form), the values of secret-named environment
+    variables, and anything shaped like a credential (Authorization values, URL userinfo, JWTs, GitHub
+    tokens, long base64 blobs) with ***."""
+
+    def __init__(self, env: Mapping[str, str] | None = None) -> None:
         self._secrets: set[str] = set()
         self._lock = threading.Lock()
+        for name, value in (os.environ if env is None else env).items():
+            if _SECRET_ENV.search(name) and len(value) >= MIN_ENV_SECRET:
+                self.add(value)
 
     def add(self, secret: str) -> None:
         if len(secret) < 4:
@@ -318,7 +355,18 @@ class Redactor:
             secrets = sorted(self._secrets, key=len, reverse=True)
         for secret in secrets:
             text = text.replace(secret, "***")
-        return text
+        for pattern, replacement in _SHAPES:
+            text = pattern.sub(replacement, text)
+        return _BLOB.sub(_blob, text)
+
+    def traceback(self, exc: BaseException, limit: int = TRACEBACK_MAX_CHARS) -> str:
+        """A redacted traceback for logs and status: no local variables, home paths shortened, the header
+        kept and the tail (where the error is) capped."""
+        text = _HOME.sub("~", self("".join(traceback.format_exception(exc))))
+        if len(text) <= limit:
+            return text
+        header = "Traceback (most recent call last):\n...\n"
+        return header + text[-(limit - len(header)):]
 
 
 def _json_strings(secret: str, min_len: int = 16) -> set[str]:

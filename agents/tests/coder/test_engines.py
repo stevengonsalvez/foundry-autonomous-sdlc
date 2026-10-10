@@ -439,3 +439,73 @@ def test_root_never_inspects_the_tree_while_agy_still_runs(tmp_path: Path) -> No
     assert all(checks)
     assert result.returncode == 0                       # edits made before the quota stop are kept
     assert "quota" in result.output
+
+
+@pytest.fixture
+def web(tmp_path: Path) -> Path:
+    """A slice of the real app: two workspaces, a stale test, a passing template test and a helper."""
+    files = {
+        "app/web/src/pages/HomePage.tsx": "export function HomePage() { return null; }\nexport const TITLE = 'x';\n",
+        "app/web/src/api.ts": "export async function fetchParcel(id: string) { return id; }\n"
+                              "export interface Parcel { id: string }\nexport type Status = 'a';\n",
+        "app/core/src/index.ts": "export class TrackingNumber {}\n",
+        "app/web/tests/helpers/render.tsx": "export function renderPage() { return 1; }\n",
+        "app/web/tests/home-page.test.tsx": "import { describe, expect, it } from 'vitest';\n// STALE HEADING\n",
+        "app/web/tests/about.test.tsx": "import { describe, expect, it } from 'vitest';\n// TEMPLATE STYLE\n",
+    }
+    for rel, content in files.items():
+        (tmp_path / rel).parent.mkdir(parents=True, exist_ok=True)
+        (tmp_path / rel).write_text(content)
+    return tmp_path
+
+
+def _maintenance_loop(client: ScriptedClient) -> ModelLoopEngine:
+    return ModelLoopEngine(client, allowed_paths=("app/web/tests/home-page.test.tsx",), protected=(),
+                           tests_only=True, failing=lambda: ("app/web/tests/home-page.test.tsx",))
+
+
+def test_the_loop_never_edits_blind(web: Path) -> None:
+    client = ScriptedClient([{"edits": [], "read": [], "note": "nothing"}])
+    _maintenance_loop(client).edit("repair the stale tests", workdir=str(web), timeout_s=60)
+    prompt = client.calls[0][0]["content"]
+    assert "// STALE HEADING" in prompt                                     # current content of the allowed file
+    assert "app/web/src/pages/HomePage.tsx: HomePage, TITLE" in prompt       # real paths and exported names
+    assert "app/web/src/api.ts: fetchParcel, Parcel, Status" in prompt
+    assert "app/core/src/index.ts: TrackingNumber" in prompt
+    assert "app/web/tests/helpers/render.tsx: renderPage" in prompt
+    assert "// TEMPLATE STYLE" in prompt                                     # a passing test as the style template
+    assert 'import { describe, expect, it } from "vitest"' in prompt         # the hard rules
+    assert "never invent" in prompt.lower()
+
+
+def test_the_loop_rejects_invented_imports_and_vitest_globals_and_asks_again(web: Path) -> None:
+    invented = "import { describe, expect, it } from 'vitest';\nimport Home from '../src/pages/Home';\n"
+    globals_only = "import { HomePage } from '../src/pages/HomePage';\ndescribe('h', () => { it('x', () => {}) });\n"
+    good = ("import { describe, expect, it } from 'vitest';\nimport { HomePage } from '../src/pages/HomePage';\n"
+            "import { tidy } from './helpers/tidy';\ndescribe('home', () => { it('renders', () => "
+            "{ expect(HomePage).toBeTruthy(); }); });\n")
+    client = ScriptedClient([
+        {"edits": [{"path": "app/web/tests/home-page.test.tsx", "content": invented}], "read": [], "note": ""},
+        {"edits": [{"path": "app/web/tests/home-page.test.tsx", "content": globals_only}], "read": [], "note": ""},
+        {"edits": [{"path": "app/web/tests/home-page.test.tsx", "content": good},
+                   {"path": "app/web/tests/helpers/tidy.ts", "content": "export const tidy = 1;\n"}],
+         "read": [], "note": ""},
+    ])
+    engine = ModelLoopEngine(client, allowed_paths=("app/web/tests/",), protected=(), tests_only=True,
+                             failing=lambda: ("app/web/tests/home-page.test.tsx",))
+    result = engine.edit("repair", workdir=str(web), timeout_s=60)
+    assert result.returncode == 0
+    assert (web / "app/web/tests/home-page.test.tsx").read_text() == good   # imports a file from the same proposal
+    second, third = client.calls[1][-1]["content"], client.calls[2][-1]["content"]
+    assert "'../src/pages/Home'" in second and "does not exist" in second
+    assert "describe, it" in third and "vitest" in third
+
+
+def test_the_loop_writes_nothing_when_every_proposal_is_invalid(web: Path) -> None:
+    bad = {"edits": [{"path": "app/web/tests/home-page.test.tsx", "content": "describe('x', () => {});\n"}],
+           "read": [], "note": ""}
+    engine = _maintenance_loop(ScriptedClient([bad, bad, bad]))
+    result = engine.edit("repair", workdir=str(web), timeout_s=60)
+    assert result.returncode == 0
+    assert "rejected" in result.output
+    assert "// STALE HEADING" in (web / "app/web/tests/home-page.test.tsx").read_text()

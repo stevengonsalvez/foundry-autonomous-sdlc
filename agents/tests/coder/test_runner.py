@@ -482,8 +482,8 @@ def test_all_engines_failing_exhausts_the_chain(world: World) -> None:
 
 
 def test_max_iterations_stops_a_job_that_never_goes_green(world: World) -> None:
-    world.engines = [ScriptedEngine("loop", [{"app/web/src/eta.txt": "wrong 1\n"},
-                                            {"app/web/src/eta.txt": "wrong 2\n"}])]
+    world.engines = [ScriptedEngine("agy-unrestricted", [{"app/web/src/eta.txt": "wrong 1\n"},
+                                                        {"app/web/src/eta.txt": "wrong 2\n"}])]
     service = world.service()
     start(service, job(max_iterations=2))
     status = wait(service, "j-12-1")
@@ -643,15 +643,53 @@ def test_install_failure_is_reported(world: World) -> None:
     assert "npm ERR!" in status["detail"]
 
 
-def test_agy_without_a_token_is_left_out_of_the_chain(world: World) -> None:
+def test_agy_without_a_token_fails_the_job_instead_of_running_the_loop_alone(world: World) -> None:
     world.engines = [ScriptedEngine("loop", [{"app/web/src/eta.txt": "2026-10-12\n"}])]
     service = world.service()
     service._deps.secrets = _Secrets({"github-pat": PAT})
     start(service, job())
     status = wait(service, "j-12-1")
-    assert status["status"] == "succeeded"
-    assert world.contexts[0].agy_binary is None
-    assert "agy unavailable" in status["log_tail"]
+    assert (status["status"], status["phase"], status["reason"]) == ("failed", "setup", "engine-unavailable")
+    assert "agy-cli-token" in status["detail"]
+    assert [e["reason"] for e in status["engine_events"]] == ["agy-unavailable"]
+    assert "agy-cli-token" in status["engine_events"][0]["detail"]
+    assert world.engines[0].prompts == []
+    assert git(world.remote_root / f"{REPO}.git", "branch", "--list", "agent/issue-12") == ""
+
+
+def test_a_failed_agy_install_is_retried_once(world: World) -> None:
+    world.engines = [ScriptedEngine("agy", [{"app/web/src/eta.txt": "2026-10-12\n"}])]
+    service = world.service()
+    tools = service._deps.toolchain
+    attempts: list[int] = []
+
+    def flaky() -> Path:
+        attempts.append(1)
+        if len(attempts) == 1:
+            raise RuntimeError("agy installer did not produce agy: curl: (6) could not resolve host")
+        return tools.agy_path
+
+    tools.ensure_agy = flaky   # type: ignore[method-assign]
+    start(service, job())
+    status = wait(service, "j-12-1")
+    assert status["status"] == "succeeded", status
+    assert len(attempts) == 2
+    assert "could not resolve host" in (world.tmp / "home/jobs/j-12-1/log").read_text()
+
+
+def test_agy_still_missing_after_the_retry_names_the_step_and_redacts(world: World) -> None:
+    world.engines = [ScriptedEngine("agy", [])]
+    service = world.service()
+
+    def broken() -> Path:
+        raise RuntimeError(f"agy installer did not produce agy: npm ERR! auth {PAT}")
+
+    service._deps.toolchain.ensure_agy = broken   # type: ignore[method-assign]
+    start(service, job())
+    status = wait(service, "j-12-1")
+    assert status["reason"] == "engine-unavailable", status
+    assert "install agy" in status["detail"] and "npm ERR!" in status["detail"]
+    assert PAT not in json.dumps(status)
 
 
 @pytest.mark.parametrize("error", [RuntimeError, SystemExit, KeyboardInterrupt])
@@ -1414,3 +1452,129 @@ def test_each_child_step_logs_its_memory_peak(world: World, monkeypatch: pytest.
     log = (world.tmp / "home/jobs/j-12-1/log").read_text()
     for step in ("tests", "npm run typecheck", "engine agy"):
         assert f"memory {step}: peak group RSS 800 MiB, largest process 600 MiB" in log
+
+
+def _everywhere(world: World, service: CoderService, job_id: str, printed: str) -> str:
+    """stdout, the job log, state.json and the status reply. state.json keeps the orchestrator's own request
+    verbatim (a resume needs it); it never leaves the sandbox, so it is left out here."""
+    _code, status = service.handle({"op": "status", "job_id": job_id})
+    jobs = world.tmp / "home/jobs" / job_id
+    state = json.loads((jobs / "state.json").read_text())
+    state.pop("request")
+    return "\n".join([printed, (jobs / "log").read_text(), json.dumps(state), json.dumps(status)])
+
+
+def test_secrets_in_an_exception_or_the_environment_reach_no_output(
+        world: World, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("IDENTITY_HEADER", "planted-identity-header-77")
+    monkeypatch.setenv("SDLC_PLANTED_API_KEY", "planted-env-key-value-88")
+    jwt = "eyJhbGciOiJSUzI1NiJ9.eyJzdWIiOiJwbGFudGVkIn0.cGxhbnRlZC1zaWc"
+    planted = [PAT, "ya29.SECRETAGY987654321", "planted-identity-header-77", "planted-env-key-value-88", jwt,
+               "planted-url-pw", "planted-bearer-99", "local-variable-secret-66"]
+
+    def boom(root: Path) -> None:
+        held = "local-variable-secret-66"   # noqa: F841  must not appear: tracebacks never print locals
+        raise RuntimeError(f"{PAT} ya29.SECRETAGY987654321 {os.environ['IDENTITY_HEADER']} "
+                           f"{os.environ['SDLC_PLANTED_API_KEY']} {jwt} https://u:planted-url-pw@example.com/x "
+                           "Authorization: Bearer planted-bearer-99")
+
+    world.engines = [ScriptedEngine("agy", [boom])]
+    service = world.service()
+    start(service, job())
+    assert wait(service, "j-12-1")["reason"] == "internal-error"
+    seen = _everywhere(world, service, "j-12-1", capsys.readouterr().out)
+    assert "RuntimeError" in seen
+    for secret in planted:
+        assert secret not in seen, secret
+
+
+def test_a_secret_on_a_command_line_reaches_no_output(world: World, capsys: pytest.CaptureFixture[str]) -> None:
+    token = "planted-cmdline-token-4242"
+    world.engines = [ScriptedEngine("agy", [])]
+    service = world.service()
+    start(service, job(install_cmd=f"definitely-not-installed-xyz --token={token}"))
+    status = wait(service, "j-12-1")
+    assert status["reason"] == "install-failed", status
+    seen = _everywhere(world, service, "j-12-1", capsys.readouterr().out)
+    assert "definitely-not-installed-xyz" in seen
+    assert token not in seen
+
+
+def test_a_loop_round_that_is_not_strictly_better_is_reverted_and_two_stop_the_loop(world: World) -> None:
+    world.engines = [ScriptedEngine("loop", [{"app/web/src/eta.txt": "wrong\n"},
+                                            {"app/web/src/eta.txt": "still wrong\n",
+                                             "app/web/src/extra.txt": "junk\n"},
+                                            {"app/web/src/eta.txt": "2026-10-12\n"}])]
+    service = world.service()
+    start(service, job(max_iterations=5))
+    status = wait(service, "j-12-1")
+    assert (status["status"], status["reason"]) == ("failed", "engines-exhausted"), status
+    assert status["iterations"] == 2                                  # stopped after two reverts, not five
+    assert [e["reason"] for e in status["engine_events"] if e["reason"] != "round"] == [
+        "reverted", "reverted", "engine-no-progress"]
+    assert remote_log(world.remote_root, "agent/issue-12") == ["test: add failing tests for #12"]
+    assert (world.checkout / "app/web/src/eta.txt").read_text() == "none\n"
+    assert not (world.checkout / "app/web/src/extra.txt").exists()
+
+
+def test_a_loop_round_that_trades_a_failure_for_a_type_error_is_reverted(world: World) -> None:
+    world.engines = [ScriptedEngine("loop", [{"app/web/src/eta.txt": "2026-10-12\n",
+                                             "app/web/src/eta.ts": "TYPE_ERROR Property 'eta' is missing.\n"},
+                                            {"app/web/src/eta.txt": "2026-10-12\n"}])]
+    service = world.service()
+    start(service, job(max_iterations=5))
+    status = wait(service, "j-12-1")
+    assert status["status"] == "succeeded", status
+    assert [e["reason"] for e in status["engine_events"] if e["reason"] not in ("round", "committed")] == [
+        "reverted"]
+    assert "Property 'eta' is missing" in world.engines[0].prompts[1]   # the reverted round's errors are fed back
+    assert not (world.checkout / "app/web/src/eta.ts").exists()
+
+
+def test_maintenance_pushes_one_squashed_commit_only_when_green(world: World) -> None:
+    bare = world.remote_root / f"{REPO}.git"
+    before = git(bare, "rev-parse", "agent/issue-30").strip()
+
+    def second(root: Path) -> CommandResult:
+        assert git(bare, "rev-parse", "agent/issue-30").strip() == before   # round 1 was not pushed
+        (root / "app/web/tests/title.test.ts").write_text("expect web/src/title.txt == Where is my parcel\n")
+        return CommandResult(0, "ok")
+
+    world.engines = [ScriptedEngine("agy", [{"app/web/tests/title.test.ts": "expect web/src/title.txt == Where\n"}]),
+                     ScriptedEngine("agy-unrestricted", [second])]
+    service = world.service()
+    start(service, maintenance(allowed_paths=["app/web/tests/title.test.ts"]))
+    status = wait(service, "j-30-1")
+    assert status["status"] == "succeeded", status
+    assert status["iterations"] == 2
+    assert remote_log(world.remote_root, "agent/issue-30") == [
+        "feat: work on agent/issue-30", "test: repair stale tests for #30"]
+    assert remote_file(world.remote_root, "agent/issue-30", "app/web/tests/title.test.ts") == \
+        "expect web/src/title.txt == Where is my parcel\n"
+
+
+def test_a_failed_maintenance_job_pushes_nothing(world: World) -> None:
+    bare = world.remote_root / f"{REPO}.git"
+    before = git(bare, "rev-parse", "agent/issue-30").strip()
+    world.engines = [ScriptedEngine("agy", [{"app/web/tests/title.test.ts": "expect web/src/title.txt == Nope\n"}]),
+                     ScriptedEngine("agy-unrestricted", [{"app/web/tests/title.test.ts": "expect web/src/title.txt "
+                                                                                       "== Still nope\n"}])]
+    service = world.service()
+    start(service, maintenance(allowed_paths=["app/web/tests/title.test.ts"], max_iterations=2))
+    status = wait(service, "j-30-1")
+    assert (status["status"], status["reason"]) == ("failed", "max-iterations"), status
+    assert git(bare, "rev-parse", "agent/issue-30").strip() == before
+
+
+def test_revise_pushes_one_squashed_commit(world: World) -> None:
+    world.engines = [ScriptedEngine("agy", [{"app/web/src/eta.txt": "broken\n"}]),        # round 1 goes red
+                     ScriptedEngine("agy-unrestricted", [{"app/web/src/eta.txt": "2026-10-12\n",
+                                                          "app/web/src/eta-label.txt": "Estimated delivery\n"}])]
+    service = world.service()
+    start(service, revise_job())
+    status = wait(service, "j-40-2")
+    assert status["status"] == "succeeded", status
+    assert status["iterations"] == 2
+    assert remote_log(world.remote_root, "agent/issue-40") == [
+        "test: add failing tests for #40", "feat: Show the ETA (#40)", "fix: address review findings for #40"]
+    assert remote_file(world.remote_root, "agent/issue-40", "app/web/src/eta.txt") == "2026-10-12\n"
