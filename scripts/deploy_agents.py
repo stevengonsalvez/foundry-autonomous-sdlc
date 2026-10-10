@@ -4,7 +4,7 @@ Deploy the agent side of the demo onto the Foundry project. Idempotent; every st
   connection     project connection github-mcp (RemoteTool, CustomKeys, Authorization: Bearer <PAT>)
   prompt-agents  prompt agent versions (python -m sdlc_agents.create_agents)
   hosted         hosted agents sdlc-orchestrator and sdlc-coder from zips, waits for status active
-                 (idle timeout: orchestrator 2 minutes so compute stops between ticks, coder 30 minutes)
+                 (idle timeout: orchestrator 2 minutes so compute stops between ticks, coder 10 minutes)
   roles          Key Vault Secrets User per secret, Foundry User on the project for both hosted agents
   routine        routine sdlc-tick: every five minutes, invocations {"op":"tick"} to sdlc-orchestrator
   status         agent versions, identities, routine state and the last routine runs
@@ -63,7 +63,7 @@ class HostedSize:
 
 # Hosted compute bills while a session is active. The orchestrator idles out between five minute ticks;
 # the coder stays up between the orchestrator's status polls.
-DEFAULT_SIZES: dict[str, HostedSize] = {ORCHESTRATOR: HostedSize("1", "2Gi", 2), CODER: HostedSize("2", "4Gi", 30)}
+DEFAULT_SIZES: dict[str, HostedSize] = {ORCHESTRATOR: HostedSize("1", "2Gi", 2), CODER: HostedSize("2", "4Gi", 10)}
 MODEL_DEPLOYMENT = "sdlc-default"
 CONNECTION_NAME = "github-mcp"
 MCP_TARGET = "https://api.githubcopilot.com/mcp/"
