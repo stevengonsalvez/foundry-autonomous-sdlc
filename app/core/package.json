@@ -1,0 +1,13 @@
+{
+  "name": "@parcel/core",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Domain types, tracking number validation, carrier mapping, the CarrierClient port and the sample shipments.",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  }
+}
