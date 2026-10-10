@@ -38,7 +38,7 @@
       "pass": 6
     }
   },
-  "generated_at": "2026-10-10T21:25:16Z",
+  "generated_at": "2026-10-10T21:30:20Z",
   "issues": [
     {
       "closed_at": "2026-10-10T12:28:43Z",
@@ -1529,14 +1529,14 @@
     },
     {
       "closed_at": null,
-      "coder_engine": "agy",
+      "coder_engine": "agy-unrestricted",
       "coder_sessions_lost": 0,
       "cost": {
         "calls": 1,
         "coder_model_usd": 0.0,
-        "coder_usd": 0.01804,
+        "coder_usd": 0.032397,
         "model_usd": 0.007752,
-        "usd": 0.025792
+        "usd": 0.040149
       },
       "deferred": null,
       "escalation": null,
@@ -1582,9 +1582,14 @@
       "stages": [
         {
           "entered_at": "2026-10-10T21:20:53Z",
+          "seconds": 565,
+          "stage": "stage:building"
+        },
+        {
+          "entered_at": "2026-10-10T21:30:18Z",
           "in_progress": true,
           "seconds": 0,
-          "stage": "stage:building"
+          "stage": "stage:in-review"
         }
       ],
       "title": "Update the home page heading copy",
@@ -1596,9 +1601,9 @@
     "deferred": 0,
     "escalated": 17,
     "issues": 22,
-    "orchestrator_usd": 0.736449,
+    "orchestrator_usd": 0.741375,
     "released": 4,
-    "usd": 1.818095
+    "usd": 1.837378
   },
   "version": 1
 }
