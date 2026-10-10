@@ -48,7 +48,7 @@ def build(out: Path, here: Path = HERE, package: Path = PACKAGE) -> str:
     with zipfile.ZipFile(out, "w", compression=zipfile.ZIP_DEFLATED) as zf:
         for name, source in entries(here, package):
             info = zipfile.ZipInfo(name, date_time=FIXED_TIME)
-            info.external_attr = 0o644 << 16
+            info.external_attr = 0o100644 << 16  # regular file bit; without it the service reports "No Python dependency manifest found"
             info.compress_type = zipfile.ZIP_DEFLATED
             zf.writestr(info, source.read_bytes())
     size = out.stat().st_size
