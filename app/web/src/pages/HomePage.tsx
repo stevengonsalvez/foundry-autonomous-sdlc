@@ -1,70 +1,70 @@
-import { useMemo } from "react";
-import { Link } from "react-router-dom";
+import React from "react";
+import { Link, useLocation, useNavigate } from "react-router-dom";
+import { useEffect, useMemo, useState } from "react";
 import { ParcelTable } from "../components/ParcelTable";
-import { SearchForm } from "../components/SearchForm";
 import { useService } from "../service-context";
-import { useSearchParams } from "react-router-dom";
 
-const STATUSES = ["label_created", "in_transit", "exception", "delivered"] as const;
-export type ParcelStatus = typeof STATUSES[number];
+function useQuery() {
+  const { search } = useLocation();
+  return useMemo(() => new URLSearchParams(search), [search]);
+}
 
-export function HomePage() {
+export const HomePage: React.FC = () => {
   const service = useService();
-  const [params, setParams] = useSearchParams();
+  const navigate = useNavigate();
+  const query = useQuery();
+  const [parcels, setParcels] = useState([] as any[]);
+  const [statusFilter, setStatusFilter] = useState<string | undefined>(() => query.get("status") ?? undefined);
 
-  const statusParam = params.get("status") ?? "";
-  const validStatus = STATUSES.includes(statusParam as ParcelStatus) ? (statusParam as ParcelStatus) : "";
+  useEffect(() => {
+    let mounted = true;
+    service.listParcels().then((p) => {
+      if (mounted) setParcels(p);
+    });
+    return () => {
+      mounted = false;
+    };
+  }, [service]);
 
-  const { parcels } = service.useListParcels();
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    if (statusFilter) params.set("status", statusFilter);
+    else params.delete("status");
+    navigate({ search: params.toString() ? `?${params.toString()}` : "" }, { replace: true });
+  }, [statusFilter, navigate]);
+
+  const statuses = Array.from(new Set(parcels.map((p) => p.status))).sort();
 
   const filtered = useMemo(() => {
-    if (!validStatus) return parcels;
-    return parcels.filter((p) => p.status === validStatus);
-  }, [parcels, validStatus]);
-
-  function handleChange(e: React.ChangeEvent<HTMLSelectElement>) {
-    const v = e.target.value;
-    if (v) {
-      params.set("status", v);
-    } else {
-      params.delete("status");
-    }
-    setParams(params);
-  }
+    if (!statusFilter) return parcels;
+    return parcels.filter((p) => p.status === statusFilter);
+  }, [parcels, statusFilter]);
 
   return (
-    <main className="container" id="main-content" tabIndex={-1}>
-      <section aria-labelledby="page-title" className="hero">
-        <h1 id="page-title" tabIndex={-1}>Track your parcel</h1>
-        <p className="lead">See where your parcel is, where it has been and what happens next.</p>
-        <SearchForm />
-      </section>
-
-      <section aria-labelledby="recent-heading" className="recent">
-        <h2 id="recent-heading">Recent parcels</h2>
-
-        <label htmlFor="filter-status">Filter by status</label>
-        <div style={{ marginBottom: "1rem" }}>
-          <select id="filter-status" value={validStatus} onChange={handleChange}>
-            <option value="">All</option>
-            {STATUSES.map((s) => (
-              <option key={s} value={s}>
-                {s.replace("_", " ")}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        {filtered.length === 0 ? (
-          <p>No parcels match this status.</p>
-        ) : (
-          <ParcelTable parcels={filtered} ariaLabelledBy="recent-heading" />
-        )}
-
-        <p>
-          <Link to="/">View all</Link>
-        </p>
-      </section>
-    </main>
+    <div>
+      <h1>Parcel Tracker</h1>
+      <label htmlFor="status-filter">Filter by status</label>
+      <select
+        id="status-filter"
+        value={statusFilter ?? ""}
+        onChange={(e) => setStatusFilter(e.target.value || undefined)}
+        data-testid="status-select"
+      >
+        <option value="">All</option>
+        {statuses.map((s) => (
+          <option key={s} value={s}>
+            {s}
+          </option>
+        ))}
+      </select>
+      {filtered.length === 0 ? (
+        <p>No parcels match this status.</p>
+      ) : (
+        <ParcelTable parcels={filtered} />
+      )}
+      <p>
+        <Link to="/parcel/PK1000000001">Example parcel</Link>
+      </p>
+    </div>
   );
-}
+};
