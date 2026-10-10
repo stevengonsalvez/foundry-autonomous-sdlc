@@ -38,11 +38,12 @@
       "pass": 4
     }
   },
-  "generated_at": "2026-10-10T17:40:14Z",
+  "generated_at": "2026-10-10T18:10:19Z",
   "issues": [
     {
       "closed_at": "2026-10-10T12:28:43Z",
       "coder_engine": null,
+      "coder_sessions_lost": 0,
       "cost": {
         "calls": 1,
         "coder_model_usd": 0.0,
@@ -83,6 +84,7 @@
     {
       "closed_at": "2026-10-10T13:15:45Z",
       "coder_engine": "agy",
+      "coder_sessions_lost": 0,
       "cost": {
         "calls": 3,
         "coder_model_usd": 0.0,
@@ -138,6 +140,7 @@
     {
       "closed_at": "2026-10-10T15:22:15Z",
       "coder_engine": "agy",
+      "coder_sessions_lost": 0,
       "cost": {
         "calls": 5,
         "coder_model_usd": 0.0,
@@ -198,6 +201,7 @@
     {
       "closed_at": "2026-10-10T15:22:17Z",
       "coder_engine": null,
+      "coder_sessions_lost": 0,
       "cost": {
         "calls": 4,
         "coder_model_usd": 0.0,
@@ -243,6 +247,7 @@
     {
       "closed_at": "2026-10-10T13:15:47Z",
       "coder_engine": "agy",
+      "coder_sessions_lost": 0,
       "cost": {
         "calls": 4,
         "coder_model_usd": 0.0,
@@ -298,6 +303,7 @@
     {
       "closed_at": "2026-10-10T13:54:16Z",
       "coder_engine": "loop",
+      "coder_sessions_lost": 0,
       "cost": {
         "calls": 3,
         "coder_model_usd": 0.005099,
@@ -353,6 +359,7 @@
     {
       "closed_at": "2026-10-10T13:54:19Z",
       "coder_engine": "loop",
+      "coder_sessions_lost": 0,
       "cost": {
         "calls": 6,
         "coder_model_usd": 0.012925,
@@ -413,6 +420,7 @@
     {
       "closed_at": "2026-10-10T14:36:49Z",
       "coder_engine": "loop",
+      "coder_sessions_lost": 0,
       "cost": {
         "calls": 3,
         "coder_model_usd": 0.01046,
@@ -468,6 +476,7 @@
     {
       "closed_at": "2026-10-10T14:53:50Z",
       "coder_engine": null,
+      "coder_sessions_lost": 0,
       "cost": {
         "calls": 3,
         "coder_model_usd": 0.0,
@@ -523,6 +532,7 @@
     {
       "closed_at": "2026-10-10T15:14:04Z",
       "coder_engine": "agy-unrestricted",
+      "coder_sessions_lost": 0,
       "cost": {
         "calls": 5,
         "coder_model_usd": 0.0,
@@ -614,6 +624,7 @@
     {
       "closed_at": "2026-10-10T16:42:31Z",
       "coder_engine": "agy-unrestricted",
+      "coder_sessions_lost": 0,
       "cost": {
         "calls": 3,
         "coder_model_usd": 0.0,
@@ -700,6 +711,7 @@
     {
       "closed_at": "2026-10-10T16:42:34Z",
       "coder_engine": "loop",
+      "coder_sessions_lost": 0,
       "cost": {
         "calls": 5,
         "coder_model_usd": 0.013035,
@@ -760,6 +772,7 @@
     {
       "closed_at": null,
       "coder_engine": null,
+      "coder_sessions_lost": 0,
       "cost": {
         "calls": 5,
         "coder_model_usd": 0.0,
@@ -805,6 +818,7 @@
     {
       "closed_at": "2026-10-10T16:42:36Z",
       "coder_engine": "loop",
+      "coder_sessions_lost": 0,
       "cost": {
         "calls": 7,
         "coder_model_usd": 0.011596,
@@ -865,6 +879,7 @@
     {
       "closed_at": "2026-10-10T17:25:21Z",
       "coder_engine": "agy-unrestricted",
+      "coder_sessions_lost": 0,
       "cost": {
         "calls": 8,
         "coder_model_usd": 0.0,
@@ -971,6 +986,7 @@
     {
       "closed_at": "2026-10-10T17:25:29Z",
       "coder_engine": "agy-unrestricted",
+      "coder_sessions_lost": 0,
       "cost": {
         "calls": 8,
         "coder_model_usd": 0.0,
@@ -1082,6 +1098,7 @@
     {
       "closed_at": "2026-10-10T17:10:27Z",
       "coder_engine": "agy-unrestricted",
+      "coder_sessions_lost": 0,
       "cost": {
         "calls": 6,
         "coder_model_usd": 0.0,
@@ -1172,16 +1189,17 @@
     },
     {
       "closed_at": null,
-      "coder_engine": "agy",
+      "coder_engine": "agy-unrestricted",
+      "coder_sessions_lost": 0,
       "cost": {
         "calls": 1,
         "coder_model_usd": 0.0,
-        "coder_usd": 0.003157,
+        "coder_usd": 0.129587,
         "model_usd": 0.007901,
-        "usd": 0.011058
+        "usd": 0.137488
       },
       "deferred": null,
-      "escalation": null,
+      "escalation": "escalated:build-failed",
       "gate_attempts": {
         "agent-scope": [
           "success"
@@ -1213,7 +1231,7 @@
       "kind": "pr",
       "number": null,
       "opened_at": "2026-10-10T17:17:34Z",
-      "outcome": "open",
+      "outcome": "escalated",
       "owner": null,
       "pr": 27,
       "quality_score": null,
@@ -1224,9 +1242,13 @@
       "stages": [
         {
           "entered_at": "2026-10-10T17:21:12Z",
-          "in_progress": true,
-          "seconds": 0,
+          "seconds": 2945,
           "stage": "stage:building"
+        },
+        {
+          "entered_at": "2026-10-10T18:10:17Z",
+          "seconds": 0,
+          "stage": "escalated:build-failed"
         }
       ],
       "title": "Update the home page heading copy",
@@ -1236,11 +1258,11 @@
   "repo": "stevengonsalvez/foundry-autonomous-sdlc",
   "totals": {
     "deferred": 0,
-    "escalated": 13,
+    "escalated": 14,
     "issues": 18,
-    "orchestrator_usd": 0.562596,
+    "orchestrator_usd": 0.567475,
     "released": 4,
-    "usd": 1.338105
+    "usd": 1.469413
   },
   "version": 1
 }
