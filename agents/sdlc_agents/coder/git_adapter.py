@@ -15,7 +15,6 @@ from __future__ import annotations
 import hashlib
 import os
 import shutil
-import subprocess
 import tempfile
 import threading
 from pathlib import Path
@@ -248,17 +247,16 @@ class SubprocessGit:
             env.update({"GIT_ASKPASS": script, TOKEN_VAR: self._token})
         # stdout only: porcelain parsing must not see stderr warnings.
         try:
-            proc = subprocess.run(["git", *args], cwd=cwd or self.workdir, env=env,  # noqa: S603, S607
-                                  capture_output=True, text=True, timeout=GIT_TIMEOUT_S, stdin=subprocess.DEVNULL)
-        except subprocess.TimeoutExpired:
-            raise GitError(f"git {args[0]} timed out after {GIT_TIMEOUT_S}s") from None
+            code, out, err = shell.capture(["git", *args], cwd=cwd or self.workdir, env=env, timeout_s=GIT_TIMEOUT_S)
         finally:
             if askpass_dir is not None:
                 shutil.rmtree(askpass_dir, ignore_errors=True)
-        if proc.returncode != 0:
-            detail = (proc.stderr + proc.stdout).strip()[-2000:]
-            raise GitError(f"git {args[0]} failed ({proc.returncode}): {detail}")
-        return proc.stdout
+        if code == shell.TIMEOUT_RC:
+            raise GitError(f"git {args[0]} timed out after {GIT_TIMEOUT_S}s")
+        if code != 0:
+            detail = (err + out).strip()[-2000:]
+            raise GitError(f"git {args[0]} failed ({code}): {detail}")
+        return out
 
 
 def _special(raw: str) -> list[str]:

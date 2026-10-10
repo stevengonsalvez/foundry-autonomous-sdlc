@@ -11,6 +11,7 @@ from unittest.mock import patch
 
 import pytest
 
+from sdlc_agents.coder import shell
 from sdlc_agents.coder.git_adapter import NEUTRAL_AUTHOR, SubprocessGit, resolve_author
 from sdlc_agents.ports import REPO, GitError
 
@@ -44,7 +45,7 @@ def test_askpass_hands_the_token_to_git_only_for_network_calls(tmp_path: Path) -
     seen: list[dict[str, str]] = []
     real_run = subprocess.run
 
-    def spy(cmd: list[str], **kwargs: Any) -> Any:
+    def spy(cmd: list[str], **kwargs: Any) -> tuple[int, str, str]:
         env = kwargs["env"]
         seen.append(dict(env))
         if "GIT_ASKPASS" in env:
@@ -57,9 +58,9 @@ def test_askpass_hands_the_token_to_git_only_for_network_calls(tmp_path: Path) -
             password = real_run([str(script), "Password for 'https://x-access-token@github.com': "], env=env,
                                 capture_output=True, text=True, check=True).stdout
             assert (user, password) == ("x-access-token\n", f"{PAT}\n")
-        return subprocess.CompletedProcess(cmd, 0, "", "")
+        return 0, "", ""
 
-    with patch.object(subprocess, "run", spy):
+    with patch.object(shell, "capture", spy):
         git._git("status", cwd=tmp_path)
         git._git("ls-remote", "origin", cwd=tmp_path)
     local, network = seen
