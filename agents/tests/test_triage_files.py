@@ -111,3 +111,16 @@ def test_text_removed_from_non_test_files_only() -> None:
     # text that comes back on an added line was not really removed
     kept = 'diff --git a/app/web/src/a.ts b/app/web/src/a.ts\n-x("Keep this text")\n+y("Keep this text")'
     assert removed_literals(kept) == []
+
+
+def test_reviewer_is_told_a_maintenance_pr_is_a_test_repair_so_tests_first_does_not_apply(world: World) -> None:
+    # Live PR #38: the reviewer rejected "tests-first violated" because the human copy change (app code)
+    # legitimately comes before the repair commit on a maintenance:test-repair PR.
+    from sdlc_agents.definitions import AGENTS
+    gh, foundry = world.gh, world.foundry
+    pr = open_stale_test_pr(world)
+    world.drive(lambda: state.RELEASED in gh.labels(pr))
+    review_input = foundry.agent_calls("sdlc-reviewer")[0]
+    assert "## kind" in review_input and "maintenance test repair" in review_input
+    prompt = next(a.instructions for a in AGENTS if a.name == "sdlc-reviewer")
+    assert "maintenance test repair" in prompt and "does not apply" in prompt

@@ -1198,6 +1198,9 @@ class _Tick:
         ]
         if obj.kind == "issue":
             sections += [self._issue_section(obj.item), self._spec_section(st)]
+        else:
+            sections.append(Section("kind", "maintenance test repair: the owner's app change comes first, the tests "
+                                    "are repaired after it, so tests-first ordering does not apply", trusted=True))
         sections += [
             Section("commits", commit_text),
             Section("checks", "\n".join(f"{k}: {v}" for k, v in ctx.checks.items()), trusted=True),
