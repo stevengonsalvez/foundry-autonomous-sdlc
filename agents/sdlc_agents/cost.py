@@ -5,16 +5,20 @@ orchestrator's own compute per tick.
 Prices (USD):
 - gpt-5-mini, Global Standard: 0.25 per 1M input tokens, 2.00 per 1M output tokens. Reasoning
   tokens are billed as output and are included in the output count the Responses API reports.
-- Hosted agent compute, UK South, Azure Retail Prices API (productName 'Foundry Agents', skuName
-  'Hosted', queried 2026-10-10), billed only while a session is active:
-    'Hosted vCPU Usage'   0.10934 per vCPU hour
-    'Hosted Memory Usage' 0.01298 per GiB hour
-  Query: https://prices.azure.com/api/retail/prices?$filter=productName eq 'Foundry Agents'
+- Hosted agent compute, UK South, billed only while a session is active, and metered twice (found by
+  comparing this ledger with Azure Cost Management on 2026-10-10: 1.86 USD estimated against 4.80 USD
+  billed): once as Foundry 'Hosted vCPU/Memory Usage' and again as Azure Container Apps
+  'Standard vCPU/Memory Active Usage':
+    Foundry hosted vCPU   0.10934 per vCPU hour    Container Apps vCPU    0.000034 per vCPU second
+    Foundry hosted memory 0.01298 per GiB hour     Container Apps memory  0.000004 per GiB second
+  so 0.2318 per vCPU hour and 0.0274 per GiB hour together. Foundry list query:
+  https://prices.azure.com/api/retail/prices?$filter=productName eq 'Foundry Agents'
   and armRegionName eq 'uksouth'
-- Coder: 2 vCPU, 4 GiB (scripts/deploy_agents.py), so 0.2706 USD per hour, charged per second of
-  job time the coder reports (elapsed_s), plus the model spend it reports for its fallback engine.
+- Coder: 2 vCPU, 4 GiB (scripts/deploy_agents.py), so 0.5731 USD per hour, charged per second of job
+  time the coder reports (elapsed_s) plus one idle tail (CODER_IDLE_S, the deployed idle timeout)
+  when the job ends, plus the model spend it reports for its fallback engine.
 - Orchestrator: 1 vCPU, 2 GiB with a 2 minute idle timeout, so each tick costs
-  (tick seconds + 120) / 3600 * 0.13530 USD. It belongs to no object and is added to totals.usd.
+  (tick seconds + 120) / 3600 * 0.28654 USD. It belongs to no object and is added to totals.usd.
 
 Stdlib only.
 """
@@ -26,8 +30,10 @@ from sdlc_agents.state import State
 INPUT_USD_PER_MTOK = 0.25
 OUTPUT_USD_PER_MTOK = 2.00
 
-HOSTED_VCPU_USD_PER_HOUR = 0.10934
-HOSTED_GIB_USD_PER_HOUR = 0.01298
+FOUNDRY_VCPU_USD_PER_HOUR, FOUNDRY_GIB_USD_PER_HOUR = 0.10934, 0.01298
+CONTAINER_APPS_VCPU_USD_PER_HOUR, CONTAINER_APPS_GIB_USD_PER_HOUR = 0.000034 * 3600, 0.000004 * 3600
+HOSTED_VCPU_USD_PER_HOUR = FOUNDRY_VCPU_USD_PER_HOUR + CONTAINER_APPS_VCPU_USD_PER_HOUR
+HOSTED_GIB_USD_PER_HOUR = FOUNDRY_GIB_USD_PER_HOUR + CONTAINER_APPS_GIB_USD_PER_HOUR
 
 
 def hosted_usd_per_hour(vcpu: float, gib: float) -> float:
@@ -38,6 +44,7 @@ CODER_VCPU, CODER_GIB = 2.0, 4.0
 CODER_USD_PER_SECOND = hosted_usd_per_hour(CODER_VCPU, CODER_GIB) / 3600
 ORCHESTRATOR_VCPU, ORCHESTRATOR_GIB = 1.0, 2.0
 ORCHESTRATOR_IDLE_S = 120
+CODER_IDLE_S = 600           # the coder's deployed idle timeout: billed once after a job ends
 ORCHESTRATOR_USD_PER_SECOND = hosted_usd_per_hour(ORCHESTRATOR_VCPU, ORCHESTRATOR_GIB) / 3600
 
 # The call list lives in the state comment (65,536 char limit): older calls fold into one entry.

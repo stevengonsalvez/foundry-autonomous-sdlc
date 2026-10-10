@@ -908,13 +908,13 @@ def test_post_run_scan_catches_links_and_git_metadata_changes(world: World, atta
 def test_status_reports_hosted_prices_and_the_agy_user(world: World) -> None:
     world.engines = [ScriptedEngine("agy", [{"app/web/src/eta.txt": "2026-10-12\n"}])]
     service = world.service()
-    service._deps.compute_usd_per_hour = 0.2706
+    service._deps.compute_usd_per_hour = 0.5730
     start(service, job())
     status = wait(service, "j-12-1")
-    assert status["cost"]["hosted_vcpu_usd_per_hour"] == 0.10934
-    assert status["cost"]["hosted_gib_usd_per_hour"] == 0.01298
+    assert status["cost"]["hosted_vcpu_usd_per_hour"] == pytest.approx(0.23174)
+    assert status["cost"]["hosted_gib_usd_per_hour"] == pytest.approx(0.02738)
     assert "agy_user: " in status["log_tail"] or "agy_user: " in (world.tmp / "home/jobs/j-12-1/log").read_text()
-    assert "0.10934 USD per vCPU-hour" in (world.tmp / "home/jobs/j-12-1/log").read_text()
+    assert "0.23174 USD per vCPU-hour" in (world.tmp / "home/jobs/j-12-1/log").read_text()
 
 
 def test_with_an_engine_user_agy_install_and_tests_run_as_that_user(world: World) -> None:

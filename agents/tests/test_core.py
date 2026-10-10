@@ -333,18 +333,21 @@ def test_check_summary_uses_the_latest_completed_run_and_pending_wins() -> None:
 def test_cost_prices_and_accounting() -> None:
     assert cost.token_usd(1_000_000, 0) == pytest.approx(0.25)
     assert cost.token_usd(0, 1_000_000) == pytest.approx(2.00)
-    assert pytest.approx(2 * 0.10934 + 4 * 0.01298) == cost.CODER_USD_PER_SECOND * 3600
+    # Foundry hosted meter plus the Container Apps meter Azure bills for the same session (see cost.py)
+    assert pytest.approx(0.10934 + 0.1224) == cost.HOSTED_VCPU_USD_PER_HOUR
+    assert pytest.approx(0.01298 + 0.0144) == cost.HOSTED_GIB_USD_PER_HOUR
+    assert pytest.approx(2 * 0.23174 + 4 * 0.02738, abs=1e-5) == cost.CODER_USD_PER_SECOND * 3600
     st = make_state()
     assert cost.record_call(st, "sdlc-req-gate", 900, 400) == pytest.approx(0.001025)
     added = cost.set_coder_spend(st, 3600, model_usd=0.05)
-    assert added == pytest.approx(0.27060 + 0.05, abs=1e-5)
-    assert st.usd == pytest.approx(0.001025 + 0.2706 + 0.05, abs=1e-5)
+    assert added == pytest.approx(0.5730 + 0.05, abs=1e-4)
+    assert st.usd == pytest.approx(0.001025 + 0.5730 + 0.05, abs=1e-4)
     assert cost.model_usd(st) == pytest.approx(0.001025)
     cost.set_coder_spend(st, -5, -1)
     assert st.data["cost"]["coder_seconds"] == 0 and st.data["cost"]["coder_model_usd"] == 0
     # the orchestrator: 1 vCPU and 2 GiB, each tick billed with the 2 minute idle tail
-    assert cost.orchestrator_tick_usd(60) == pytest.approx(180 / 3600 * (0.10934 + 2 * 0.01298))
-    assert cost.orchestrator_tick_usd(-1) == pytest.approx(120 / 3600 * 0.1353, abs=1e-6)
+    assert cost.orchestrator_tick_usd(60) == pytest.approx(180 / 3600 * (0.23174 + 2 * 0.02738), abs=1e-5)
+    assert cost.orchestrator_tick_usd(-1) == pytest.approx(120 / 3600 * 0.28650, abs=1e-5)
 
 
 @pytest.mark.parametrize("tags, bump, expected", [

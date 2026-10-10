@@ -69,7 +69,7 @@ def test_build_service_wires_vault_github_git_and_the_engine_chain(tmp_path: Pat
 
 
 def test_compute_price_comes_from_the_deployed_size() -> None:
-    assert compute_usd_per_hour({"HOSTED_CPU": "2", "HOSTED_MEMORY": "4Gi"}) == pytest.approx(0.2706)
+    assert compute_usd_per_hour({"HOSTED_CPU": "2", "HOSTED_MEMORY": "4Gi"}) == pytest.approx(0.5730, abs=1e-4)
     assert compute_usd_per_hour({}) == 0.0
     assert compute_usd_per_hour({"HOSTED_CPU": "two"}) == 0.0
 

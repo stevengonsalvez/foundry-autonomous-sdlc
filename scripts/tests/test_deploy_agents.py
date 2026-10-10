@@ -247,7 +247,7 @@ def test_hosted_creates_both_agents_with_sizes_and_env_and_waits_for_active() ->
     by_name = {c["name"]: c for c in rec.foundry.created}
     orchestrator, coder = by_name["sdlc-orchestrator"], by_name["sdlc-coder"]
     assert (orchestrator["cpu"], orchestrator["memory"], orchestrator["idle"]) == ("1", "2Gi", 2)
-    assert (coder["cpu"], coder["memory"], coder["idle"]) == ("2", "4Gi", 30)
+    assert (coder["cpu"], coder["memory"], coder["idle"]) == ("2", "4Gi", 10)
     assert coder["env"] == {
         "KEY_VAULT_URI": KV, "FOUNDRY_PROJECT_ENDPOINT": ENDPOINT, "FOUNDRY_MODEL_DEPLOYMENT": "sdlc-default",
         "REPO": "stevengonsalvez/foundry-autonomous-sdlc", "GITHUB_OWNER": "stevengonsalvez",

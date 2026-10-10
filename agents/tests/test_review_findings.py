@@ -79,6 +79,7 @@ def test_start_refused_because_the_request_never_left_is_retried_in_the_tick(wor
 
 def test_orphan_that_outlives_the_deadline_is_swept_and_escalated(world: World) -> None:
     gh, coder = world.gh, world.coder
+    world.budget = Budget(usd_cap_issue=10.0, usd_cap_total=50.0)    # jobs now cost what Azure bills
     coder.lose_next_start_reply = True
     n = gh.open_issue("Show the estimated delivery date", A_BODY)
     world.drive(lambda: coder.lease_refusals == 1)
@@ -156,6 +157,7 @@ def test_maintenance_pr_waiting_on_checks_escalates_after_three_hours(world: Wor
 
 def test_endless_transient_coder_errors_escalate_agent_error_after_24_ticks(world: World) -> None:
     n = to_building(world)
+    world.budget = Budget(usd_cap_issue=10.0, usd_cap_total=50.0)    # jobs now cost what Azure bills
     world.foundry.hosted_fail_next = [AgentRunError("HTTP 503", transient=True)] * 100_000
     reports = world.tick(23)
     assert {o.result for r in reports for o in r.objects if o.number == n} == {"deferred"}

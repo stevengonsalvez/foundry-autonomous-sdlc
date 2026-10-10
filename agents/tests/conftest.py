@@ -22,6 +22,7 @@ class World:
     coder: FakeCoder
     foundry: FakeFoundry
     sleeps: list[float]
+    budget: Budget | None = None     # a test that needs a different cap sets this; drive() and tick() use it
 
     def sleep(self, seconds: float) -> None:
         """Waits inside a tick (retry backoff) pass on the fake clock."""
@@ -31,8 +32,8 @@ class World:
     def tick(self, count: int = 1, *, budget: Budget | None = None, wall_s: int = 240) -> list[TickReport]:
         reports = []
         for _ in range(count):
-            reports.append(run_tick(self.gh, self.foundry, NoSecrets(), self.clock, wall_s, budget=budget,
-                                    sleep=self.sleep))
+            reports.append(run_tick(self.gh, self.foundry, NoSecrets(), self.clock, wall_s,
+                                    budget=budget or self.budget, sleep=self.sleep))
             self.clock.advance(300)
         return reports
 

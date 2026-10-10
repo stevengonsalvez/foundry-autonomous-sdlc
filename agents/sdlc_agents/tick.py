@@ -932,7 +932,8 @@ class _Tick:
         if status in ("failed", "timeout"):
             self._post_coder_log(obj, coder, reason, resp)
         coder_cost = resp.get("cost") if isinstance(resp.get("cost"), dict) else {}
-        cost.set_coder_spend(st, int(coder.get("prior_seconds", 0)) + coder["elapsed_s"],
+        idle_tail = cost.CODER_IDLE_S if status != "running" else 0    # billed after the job until the session idles
+        cost.set_coder_spend(st, int(coder.get("prior_seconds", 0)) + coder["elapsed_s"] + idle_tail,
                              float(coder.get("prior_model_usd", 0.0)) + float(coder_cost.get("model_usd") or 0.0))
         outcome = machine.after_coder(status, reason)
         if status != "running" and not outcome.resume:

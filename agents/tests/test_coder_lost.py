@@ -12,6 +12,7 @@ from conftest import World
 from test_scenarios import A_BODY, metrics_doc, open_stale_test_pr
 
 from sdlc_agents import machine, state
+from sdlc_agents.ports import Budget
 
 
 def start_jobs(world: World) -> list[dict]:
@@ -61,6 +62,7 @@ def test_one_unreachable_poll_is_not_a_loss(world: World) -> None:
 
 def test_a_job_still_running_past_deadline_plus_30_minutes_is_lost_and_restarted(world: World) -> None:
     gh, coder = world.gh, world.coder
+    world.budget = Budget(usd_cap_issue=10.0, usd_cap_total=50.0)    # jobs now cost what Azure bills
     coder.polls_to_finish = 10**6
     coder.extra_status = {"elapsed_s": 42}           # the live symptom: a progress report that never moves
     n = gh.open_issue("Show the estimated delivery date", A_BODY)

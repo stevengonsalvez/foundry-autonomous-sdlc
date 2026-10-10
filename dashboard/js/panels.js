@@ -415,7 +415,7 @@ export function renderCost(metrics) {
   return panel(
     'cost',
     'Cost per issue',
-    'Model calls plus coder runtime and orchestrator compute, against the shared budget.',
+    'Estimated from token counts and list prices: model calls plus coder runtime and orchestrator compute. The Azure invoice is the authority and ran higher, see docs/findings.md.',
     summary,
     tableWrap('Cost per issue', table('Model cost, coder cost, calls and total per issue, with the per issue line', head, body, foot)),
     drift ? h('p', { class: 'footnote' }, `The reported total (${formatUsd(cost.total)}) differs from the sum of the rows above (${formatUsd(cost.accounted)}); it also keeps spend from objects no longer listed.`) : null,
