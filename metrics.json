@@ -38,7 +38,7 @@
       "pass": 4
     }
   },
-  "generated_at": "2026-10-10T17:25:31Z",
+  "generated_at": "2026-10-10T17:26:17Z",
   "issues": [
     {
       "closed_at": "2026-10-10T12:28:43Z",
@@ -863,14 +863,14 @@
       "type": "bug"
     },
     {
-      "closed_at": null,
+      "closed_at": "2026-10-10T17:25:21Z",
       "coder_engine": "agy-unrestricted",
       "cost": {
-        "calls": 7,
+        "calls": 8,
         "coder_model_usd": 0.0,
         "coder_usd": 0.038936,
-        "model_usd": 0.025095,
-        "usd": 0.064031
+        "model_usd": 0.02749,
+        "usd": 0.066426
       },
       "deferred": null,
       "escalation": null,
@@ -905,12 +905,12 @@
       "kind": "issue",
       "number": 23,
       "opened_at": "2026-10-10T16:42:39Z",
-      "outcome": "open",
+      "outcome": "released",
       "owner": null,
       "pr": 28,
       "quality_score": 100,
-      "release": null,
-      "resolution_seconds": null,
+      "release": "v0.2.0",
+      "resolution_seconds": 2602,
       "scenario": "a",
       "severity": null,
       "stages": [
@@ -956,23 +956,27 @@
         },
         {
           "entered_at": "2026-10-10T17:25:21Z",
-          "in_progress": true,
-          "seconds": 0,
+          "seconds": 40,
           "stage": "stage:merged"
+        },
+        {
+          "entered_at": "2026-10-10T17:26:01Z",
+          "seconds": 0,
+          "stage": "stage:released"
         }
       ],
       "title": "Show when the parcel was last updated on the parcel page",
       "type": "feature"
     },
     {
-      "closed_at": null,
+      "closed_at": "2026-10-10T17:25:29Z",
       "coder_engine": "agy-unrestricted",
       "cost": {
-        "calls": 7,
+        "calls": 8,
         "coder_model_usd": 0.0,
         "coder_usd": 0.060509,
-        "model_usd": 0.019142,
-        "usd": 0.079652
+        "model_usd": 0.021112,
+        "usd": 0.081621
       },
       "deferred": null,
       "escalation": null,
@@ -1007,12 +1011,12 @@
       "kind": "issue",
       "number": 24,
       "opened_at": "2026-10-10T16:42:39Z",
-      "outcome": "open",
+      "outcome": "released",
       "owner": null,
       "pr": 29,
       "quality_score": 90,
-      "release": null,
-      "resolution_seconds": null,
+      "release": "v0.3.0",
+      "resolution_seconds": 2616,
       "scenario": "b",
       "severity": null,
       "stages": [
@@ -1063,9 +1067,13 @@
         },
         {
           "entered_at": "2026-10-10T17:25:29Z",
-          "in_progress": true,
-          "seconds": 0,
+          "seconds": 46,
           "stage": "stage:merged"
+        },
+        {
+          "entered_at": "2026-10-10T17:26:15Z",
+          "seconds": 0,
+          "stage": "stage:released"
         }
       ],
       "title": "Make the parcel tracker better",
@@ -1230,9 +1238,9 @@
     "deferred": 0,
     "escalated": 13,
     "issues": 18,
-    "orchestrator_usd": 0.542594,
-    "released": 2,
-    "usd": 1.313738
+    "orchestrator_usd": 0.548344,
+    "released": 4,
+    "usd": 1.323853
   },
   "version": 1
 }
