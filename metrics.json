@@ -37,7 +37,7 @@
       "pass": 0
     }
   },
-  "generated_at": "2026-10-10T12:59:44Z",
+  "generated_at": "2026-10-10T13:16:16Z",
   "issues": [
     {
       "closed_at": "2026-10-10T12:28:43Z",
@@ -80,7 +80,7 @@
       "type": "feature"
     },
     {
-      "closed_at": null,
+      "closed_at": "2026-10-10T13:15:45Z",
       "coder_engine": "agy",
       "cost": {
         "calls": 3,
@@ -136,22 +136,22 @@
     },
     {
       "closed_at": null,
-      "coder_engine": null,
+      "coder_engine": "agy",
       "cost": {
         "calls": 5,
         "coder_model_usd": 0.0,
-        "coder_usd": 0.0,
+        "coder_usd": 0.012327,
         "model_usd": 0.014183,
-        "usd": 0.014183
+        "usd": 0.02651
       },
       "deferred": null,
-      "escalation": null,
+      "escalation": "escalated:build-failed",
       "gate_attempts": {},
       "gates": {},
       "kind": "issue",
       "number": 5,
       "opened_at": "2026-10-10T12:28:45Z",
-      "outcome": "open",
+      "outcome": "escalated",
       "owner": null,
       "pr": null,
       "quality_score": 98,
@@ -182,9 +182,13 @@
         },
         {
           "entered_at": "2026-10-10T12:59:42Z",
-          "in_progress": true,
-          "seconds": 0,
+          "seconds": 979,
           "stage": "stage:building"
+        },
+        {
+          "entered_at": "2026-10-10T13:16:01Z",
+          "seconds": 0,
+          "stage": "escalated:build-failed"
         }
       ],
       "title": "Make the parcel tracker better",
@@ -236,7 +240,7 @@
       "type": "feature"
     },
     {
-      "closed_at": null,
+      "closed_at": "2026-10-10T13:15:47Z",
       "coder_engine": "agy",
       "cost": {
         "calls": 4,
@@ -289,16 +293,81 @@
       ],
       "title": "Lowercase tracking numbers are rejected as invalid",
       "type": "bug"
+    },
+    {
+      "closed_at": null,
+      "coder_engine": null,
+      "cost": {
+        "calls": 1,
+        "coder_model_usd": 0.0,
+        "coder_usd": 0.0,
+        "model_usd": 0.001401,
+        "usd": 0.001401
+      },
+      "deferred": null,
+      "escalation": null,
+      "gate_attempts": {},
+      "gates": {},
+      "kind": "issue",
+      "number": 8,
+      "opened_at": "2026-10-10T13:15:48Z",
+      "outcome": "open",
+      "owner": null,
+      "pr": null,
+      "quality_score": 100,
+      "release": null,
+      "resolution_seconds": null,
+      "scenario": "a",
+      "severity": null,
+      "stages": [
+        {
+          "entered_at": "2026-10-10T13:16:09Z",
+          "in_progress": true,
+          "seconds": 0,
+          "stage": "stage:ready"
+        }
+      ],
+      "title": "Show the estimated delivery date on the parcel page",
+      "type": "feature"
+    },
+    {
+      "closed_at": null,
+      "coder_engine": null,
+      "cost": {
+        "calls": 1,
+        "coder_model_usd": 0.0,
+        "coder_usd": 0.0,
+        "model_usd": 0.000793,
+        "usd": 0.000793
+      },
+      "deferred": null,
+      "escalation": null,
+      "gate_attempts": {},
+      "gates": {},
+      "kind": "issue",
+      "number": 9,
+      "opened_at": "2026-10-10T13:15:49Z",
+      "outcome": "open",
+      "owner": "api",
+      "pr": null,
+      "quality_score": null,
+      "release": null,
+      "resolution_seconds": null,
+      "scenario": "d",
+      "severity": "s3",
+      "stages": [],
+      "title": "Lowercase tracking numbers are rejected as invalid",
+      "type": "bug"
     }
   ],
   "repo": "stevengonsalvez/foundry-autonomous-sdlc",
   "totals": {
     "deferred": 0,
-    "escalated": 4,
-    "issues": 5,
-    "orchestrator_usd": 0.074358,
+    "escalated": 5,
+    "issues": 7,
+    "orchestrator_usd": 0.079565,
     "released": 0,
-    "usd": 0.131884
+    "usd": 0.151612
   },
   "version": 1
 }
