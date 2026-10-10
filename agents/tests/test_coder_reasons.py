@@ -15,7 +15,8 @@ from __future__ import annotations
 from conftest import World
 from test_scenarios import A_BODY, open_stale_test_pr
 
-from sdlc_agents import machine, state
+from sdlc_agents import cost, machine, state
+from sdlc_agents.ports import Budget
 
 BRANCH = "chore/update-home-heading"
 
@@ -39,6 +40,7 @@ def test_engine_unavailable_starts_a_new_job_in_a_fresh_session(world: World) ->
 
 def test_engine_unavailable_every_time_escalates_at_the_attempt_limit(world: World) -> None:
     gh = world.gh
+    world.budget = Budget(usd_cap_issue=10.0, usd_cap_total=50.0)    # jobs now cost what Azure bills
     world.coder.outcomes = ["failed:engine-unavailable"] * (machine.MAX_CODER_ATTEMPTS + 2)
     n = gh.open_issue("Show the estimated delivery date", A_BODY)
     world.drive(lambda: state.ESC_BUILD_FAILED in gh.labels(n), max_ticks=80)
@@ -98,3 +100,14 @@ def test_interrupted_job_whose_session_forgot_it_is_restarted_as_a_new_attempt(w
     world.drive(lambda: state.RELEASED in gh.labels(n))
     assert starts(world) == [(f"j-{n}-1", None), (f"j-{n}-1", "sess-1"), (f"j-{n}-2", None)]
     assert f"agent-lease/{n}" not in gh.branches
+
+
+def test_a_finished_coder_job_is_charged_its_idle_tail(world: World) -> None:
+    # Azure bills the session until it idles out; the 2.6x gap between the ledger and the invoice
+    # (1.86 vs 4.80 USD on 2026-10-10) was these tails plus the second Container Apps meter.
+    gh = world.gh
+    n = gh.open_issue("Show the estimated delivery date", A_BODY)
+    world.drive(lambda: state.RELEASED in gh.labels(n))
+    cost_block = gh.state_of(n)["cost"]
+    assert cost_block["coder_seconds"] >= cost.CODER_IDLE_S
+    assert cost_block["coder_usd"] >= cost.CODER_IDLE_S * cost.CODER_USD_PER_SECOND - 1e-6
