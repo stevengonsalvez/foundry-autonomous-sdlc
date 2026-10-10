@@ -63,6 +63,7 @@ class CheckRun:
     status: str           # "queued" | "in_progress" | "completed"
     conclusion: str | None  # "success" | "failure" | "cancelled" | "skipped" | ... | None while running
     completed_at: str | None = None
+    pull_requests: tuple[int, ...] = ()   # same-repo PRs the run belongs to (GitHub omits fork PRs)
 
 
 @dataclass(frozen=True)
@@ -94,16 +95,19 @@ class GitHubPort(Protocol):
     def get_pull(self, number: int) -> PullRequest: ...
     def get_pull_diff(self, number: int) -> str: ...
     def list_pull_commits(self, number: int) -> list[PullCommit]: ...
+    def list_pull_files(self, number: int) -> list[str]: ...                         # incl. rename sources
     def create_pull(self, *, title: str, head: str, base: str, body: str) -> PullRequest: ...
     def merge_pull(self, number: int, *, sha: str, method: str = "merge") -> str: ...  # returns merge commit sha
     def get_check_runs(self, sha: str) -> list[CheckRun]: ...
+    def get_check_log(self, sha: str, name: str) -> str: ...                        # log tail, "" if unavailable
 
     def get_file(self, path: str, *, ref: str) -> str | None: ...                   # None if absent
     def put_file(self, path: str, content: str, *, branch: str, message: str) -> None: ...  # create or update
     def get_branch_sha(self, branch: str) -> str | None: ...
-    def create_branch(self, branch: str, *, from_sha: str) -> None: ...             # raises GitHubError(422) if it exists
+    def create_branch(self, branch: str, *, from_sha: str) -> None: ...             # GitHubError(422) if it exists
     def delete_branch(self, branch: str) -> None: ...
     def branch_commit_time(self, branch: str) -> str | None: ...                    # ISO time of the branch tip commit
+    def create_commit(self, message: str, *, parent_sha: str) -> str: ...           # empty commit on parent's tree
 
     def list_tags(self) -> list[str]: ...
     def create_release(self, *, tag: str, target_sha: str, name: str, body: str) -> str: ...  # returns html_url
