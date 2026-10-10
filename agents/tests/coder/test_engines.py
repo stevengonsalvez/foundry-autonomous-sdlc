@@ -1,0 +1,335 @@
+"""Engines edit the working copy and nothing else; the model loop enforces scope on its own writes."""
+
+from __future__ import annotations
+
+import json
+import sys
+import time
+from pathlib import Path
+from typing import Any
+
+import pytest
+
+from sdlc_agents.coder import shell
+from sdlc_agents.coder.engines import (
+    AgyEngine,
+    ModelLoopEngine,
+    ModelReply,
+    ResponsesClient,
+    ResponsesError,
+)
+from sdlc_agents.coder.sandbox import RunAs
+from sdlc_agents.ports import CommandResult
+from sdlc_agents.transport import HttpRequest, HttpResponse
+
+
+def test_agy_runs_headless_without_shell_permission_and_with_a_scrubbed_env(
+        tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    for key in ("IDENTITY_ENDPOINT", "IDENTITY_HEADER", "AZURE_CLIENT_ID", "FOUNDRY_PROJECT_ENDPOINT",
+                "KEY_VAULT_URI", "GITHUB_TOKEN", "GIT_ASKPASS", "APPLICATIONINSIGHTS_CONNECTION_STRING"):
+        monkeypatch.setenv(key, "must-not-leak")
+    monkeypatch.setenv("LANG", "C.UTF-8")
+    fake = tmp_path / "bin" / "agy"
+    fake.parent.mkdir()
+    fake.write_text(f"#!{sys.executable}\nimport sys, os, pathlib, json\n"
+                    "pathlib.Path('argv.json').write_text(json.dumps(sys.argv[1:]))\n"
+                    "pathlib.Path('env.json').write_text(json.dumps(dict(os.environ)))\n")
+    fake.chmod(0o755)
+    work = tmp_path / "work"
+    work.mkdir()
+    agy_home = tmp_path / "agy-home"
+    result = AgyEngine(fake, home=agy_home).edit("make tests pass", workdir=str(work), timeout_s=30)
+    assert result.returncode == 0
+    assert json.loads((work / "argv.json").read_text()) == ["-p", "make tests pass", "--mode", "accept-edits",
+                                                             "--sandbox"]
+    env = json.loads((work / "env.json").read_text())
+    assert "must-not-leak" not in env.values()
+    assert set(env) <= {"PATH", "HOME", "LANG", "TERM", "TMPDIR", "PWD", "SHLVL", "_", "__CF_USER_TEXT_ENCODING"}
+    assert env["HOME"] == str(agy_home)
+    assert env["LANG"] == "C.UTF-8"
+    assert env["PATH"].startswith(f"{fake.parent}:")
+
+
+def test_agy_as_an_unprivileged_user_hands_it_the_checkout_first(tmp_path: Path) -> None:
+    calls: list[dict[str, Any]] = []
+    prepared: list[Path] = []
+
+    def run(cmd: list[str], **kwargs: Any) -> CommandResult:
+        calls.append({"cmd": cmd, **kwargs})
+        return CommandResult(0, "ok")
+
+    user = RunAs(name="agyuser", uid=1001, gid=1001, home=Path("/home/agyuser"))
+    reaped: list[RunAs] = []
+    engine = AgyEngine(Path("/usr/local/bin/agy"), home=user.home, run_as=user, run=run, prepare=prepared.append,
+                       reap=lambda u: reaped.append(u) or 0)
+    assert engine.edit("p", workdir=str(tmp_path), timeout_s=5).returncode == 0
+    assert reaped == [user]
+    assert prepared == [tmp_path]
+    assert calls[0]["user"] == 1001
+    assert calls[0]["group"] == 1001
+    assert calls[0]["env"]["HOME"] == "/home/agyuser"
+
+
+def test_agy_timeout_is_a_failed_edit(tmp_path: Path) -> None:
+    fake = tmp_path / "agy"
+    fake.write_text("#!/bin/sh\nsleep 30\n")
+    fake.chmod(0o755)
+    result = AgyEngine(fake, home=tmp_path).edit("p", workdir=str(tmp_path), timeout_s=1)
+    assert result.returncode == shell.TIMEOUT_RC
+
+
+def test_agy_prompt_is_capped_below_the_kernel_argument_limit(tmp_path: Path) -> None:
+    fake = tmp_path / "agy"
+    fake.write_text(f"#!{sys.executable}\nimport sys\nprint(len(sys.argv[2]))\n")
+    fake.chmod(0o755)
+    result = AgyEngine(fake, home=tmp_path).edit("x" * 500_000, workdir=str(tmp_path), timeout_s=30)
+    assert result.returncode == 0
+    assert int(result.output.strip()) <= 100_000
+
+
+class ScriptedClient:
+    def __init__(self, replies: list[Any]):
+        self.replies = replies
+        self.calls: list[list[dict[str, str]]] = []
+
+    def create(self, *, instructions: str, input_items: list[dict[str, str]], schema: dict[str, Any]) -> ModelReply:
+        self.calls.append(list(input_items))
+        reply = self.replies.pop(0)
+        if isinstance(reply, Exception):
+            raise reply
+        return ModelReply(text=reply if isinstance(reply, str) else json.dumps(reply), input_tokens=1000,
+                          output_tokens=200)
+
+
+@pytest.fixture
+def checkout(tmp_path: Path) -> Path:
+    files = {
+        "app/web/tests/eta.test.ts": "import { eta } from '../src/eta';\nimport x from './helper.js';\n",
+        "app/web/tests/helper.ts": "export default 1;\n",
+        "app/web/src/eta.ts": "export const eta = () => null;\n",
+        "app/node_modules/big/index.js": "ignored",
+        ".github/workflows/ci.yml": "on: push\n",
+    }
+    for rel, content in files.items():
+        (tmp_path / rel).parent.mkdir(parents=True, exist_ok=True)
+        (tmp_path / rel).write_text(content)
+    return tmp_path
+
+
+def _engine(client: ScriptedClient, *, tests_only: bool = False) -> ModelLoopEngine:
+    return ModelLoopEngine(client, allowed_paths=("app/",), protected=("app/web/tests/eta.test.ts",),
+                           tests_only=tests_only)
+
+
+def test_model_loop_reads_then_writes_only_allowed_files(checkout: Path) -> None:
+    client = ScriptedClient([
+        {"edits": [], "read": ["app/web/src/eta.ts", "../../etc/passwd", ".github/workflows/ci.yml"], "note": ""},
+        {"edits": [
+            {"path": "app/web/src/eta.ts", "content": "export const eta = () => '2026-10-12';\n"},
+            {"path": "app/web/src/new/view.ts", "content": "export {};\n"},
+            {"path": ".github/workflows/ci.yml", "content": "pwned"},
+            {"path": "app/web/tests/eta.test.ts", "content": "weakened"},
+        ], "read": [], "note": "done"},
+    ])
+    engine = _engine(client)
+    result = engine.edit("make it pass", workdir=str(checkout), timeout_s=60)
+    assert result.returncode == 0
+    assert (checkout / "app/web/src/eta.ts").read_text().endswith("'2026-10-12';\n")
+    assert (checkout / "app/web/src/new/view.ts").exists()
+    assert (checkout / ".github/workflows/ci.yml").read_text() == "on: push\n"
+    assert (checkout / "app/web/tests/eta.test.ts").read_text().startswith("import")
+    assert "rejected" in result.output
+    assert ".github/workflows/ci.yml" in result.output
+    first = client.calls[0][0]["content"]
+    assert "app/web/src/eta.ts" in first
+    assert "export const eta = () => null" in first
+    assert "export default 1" in first                                                  # ./helper.js -> helper.ts
+    assert "node_modules" not in first
+    served = client.calls[1][-1]["content"]
+    assert "export const eta" in served
+    assert "not readable" in served
+    assert engine.usage.input_tokens == 2000
+    assert engine.usage.output_tokens == 400
+
+
+def test_model_loop_in_maintenance_mode_writes_only_tests(checkout: Path) -> None:
+    client = ScriptedClient([{"edits": [{"path": "app/web/src/eta.ts", "content": "x"},
+                                        {"path": "app/web/tests/other.test.ts", "content": "ok"}],
+                              "read": [], "note": ""}])
+    engine = ModelLoopEngine(client, allowed_paths=("app/",), protected=(), tests_only=True)
+    result = engine.edit("repair", workdir=str(checkout), timeout_s=60)
+    assert result.returncode == 0
+    assert (checkout / "app/web/src/eta.ts").read_text() == "export const eta = () => null;\n"
+    assert (checkout / "app/web/tests/other.test.ts").read_text() == "ok"
+
+
+@pytest.mark.parametrize("reply", [ResponsesError("429 rate limited"), "not json", json.dumps({"edits": "x"})])
+def test_model_loop_failures_are_engine_failures(checkout: Path, reply: Any) -> None:
+    result = _engine(ScriptedClient([reply])).edit("p", workdir=str(checkout), timeout_s=60)
+    assert result.returncode == 1
+    assert "model loop failed" in result.output
+
+
+def test_model_loop_without_edits_is_a_successful_no_op(checkout: Path) -> None:
+    reads = {"edits": [], "read": ["app/web/src/eta.ts"], "note": ""}
+    result = _engine(ScriptedClient([reads, reads, reads])).edit("p", workdir=str(checkout), timeout_s=60)
+    assert result.returncode == 0
+    assert "no edits" in result.output
+    result = _engine(ScriptedClient([{"edits": [], "read": [], "note": "cannot"}])).edit(
+        "p", workdir=str(checkout), timeout_s=60)
+    assert result.returncode == 0
+    assert "cannot" in result.output
+
+
+def test_model_loop_stops_at_its_deadline(checkout: Path) -> None:
+    result = _engine(ScriptedClient([])).edit("p", workdir=str(checkout), timeout_s=0)
+    assert result.returncode == 1
+    assert "deadline" in result.output
+
+
+class FakeTransport:
+    def __init__(self, responses: list[tuple[int, dict[str, str], bytes]]):
+        self.responses = responses
+        self.requests: list[tuple[str, dict[str, Any], dict[str, str]]] = []
+
+    def __call__(self, request: HttpRequest) -> HttpResponse:
+        assert request.method == "POST"
+        assert request.body is not None
+        self.requests.append((request.url, json.loads(request.body), request.headers))
+        return HttpResponse(*self.responses.pop(0))
+
+
+def _ok_body(text: str) -> bytes:
+    return json.dumps({"status": "completed", "output": [
+        {"type": "reasoning", "summary": []},
+        {"type": "message", "content": [{"type": "output_text", "text": text}]},
+    ], "usage": {"input_tokens": 11, "output_tokens": 7}}).encode()
+
+
+def test_responses_client_posts_to_the_project_openai_endpoint_and_retries_429() -> None:
+    transport = FakeTransport([(429, {"retry-after": "2"}, b"{}"), (200, {}, _ok_body('{"edits":[]}'))])
+    sleeps: list[float] = []
+    client = ResponsesClient("https://acct.services.ai.azure.com/api/projects/proj/", "sdlc-default",
+                             token_provider=lambda: "tok", transport=transport, sleep=sleeps.append)
+    reply = client.create(instructions="i", input_items=[{"role": "user", "content": "u"}], schema={"type": "object"})
+    assert reply == ModelReply('{"edits":[]}', 11, 7)
+    url, body, headers = transport.requests[0]
+    assert url == "https://acct.services.ai.azure.com/api/projects/proj/openai/v1/responses"
+    assert headers["Authorization"] == "Bearer tok"
+    assert body["model"] == "sdlc-default"
+    assert body["text"]["format"]["type"] == "json_schema"
+    assert body["store"] is False
+    assert sleeps == [2.0]
+
+
+def test_responses_client_raises_on_errors_and_incomplete_output() -> None:
+    client = ResponsesClient("https://x/api/projects/p", "d", token_provider=lambda: "t",
+                             transport=FakeTransport([(401, {}, b'{"error":{"message":"no"}}')]), sleep=lambda s: None)
+    with pytest.raises(ResponsesError, match="401"):
+        client.create(instructions="i", input_items=[], schema={})
+    incomplete = json.dumps({"status": "incomplete", "output": [], "usage": {}}).encode()
+    client = ResponsesClient("https://x/api/projects/p", "d", token_provider=lambda: "t",
+                             transport=FakeTransport([(200, {}, incomplete)]), sleep=lambda s: None)
+    with pytest.raises(ResponsesError, match="incomplete"):
+        client.create(instructions="i", input_items=[], schema={})
+    busy = [(429, {}, b"{}")] * 4
+    client = ResponsesClient("https://x/api/projects/p", "d", token_provider=lambda: "t",
+                             transport=FakeTransport(busy), sleep=lambda s: None)
+    with pytest.raises(ResponsesError, match="429"):
+        client.create(instructions="i", input_items=[], schema={})
+
+
+@pytest.fixture
+def hostile_checkout(tmp_path: Path) -> Path:
+    root = tmp_path / "checkout"
+    (root / "app/src").mkdir(parents=True)
+    (root / ".git").mkdir()
+    (root / ".git/config").write_text("[core]\n")
+    (root / "app/src/ok.ts").write_text("ok\n")
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    (outside / "secret.txt").write_text("TOPSECRET\n")
+    (root / "app/link").symlink_to(outside)
+    (root / "app/secret.ts").symlink_to(outside / "secret.txt")
+    return root
+
+
+ESCAPES = ["../outside/secret.txt", "/etc/passwd", "app/link/secret.txt", "app/secret.ts",
+           "app/src/../../../outside/secret.txt", "app/../.git/config", ".git/config",
+           "app\\src\\ok.ts", "app/src/ok.ts\x00.png"]
+
+
+@pytest.mark.parametrize("path", ESCAPES)
+def test_model_loop_never_reads_outside_the_checkout(hostile_checkout: Path, path: str) -> None:
+    engine = ModelLoopEngine(ScriptedClient([]), allowed_paths=(".",), protected=(), tests_only=False)
+    served = engine._read(hostile_checkout, [path])
+    assert "TOPSECRET" not in served
+    assert "[core]" not in served
+    assert "not readable" in served
+
+
+@pytest.mark.parametrize("path", ESCAPES)
+def test_model_loop_never_writes_outside_the_checkout(hostile_checkout: Path, path: str) -> None:
+    reply = {"edits": [{"path": path, "content": "PWNED"}], "read": [], "note": ""}
+    engine = ModelLoopEngine(ScriptedClient([reply]), allowed_paths=(".",), protected=(), tests_only=False)
+    result = engine.edit("p", workdir=str(hostile_checkout), timeout_s=60)
+    assert result.returncode == 0
+    assert "rejected" in result.output
+    assert (hostile_checkout.parent / "outside/secret.txt").read_text() == "TOPSECRET\n"
+    assert (hostile_checkout / ".git/config").read_text() == "[core]\n"
+    assert not list(hostile_checkout.parent.rglob("*PWNED*"))
+    assert all("PWNED" not in f.read_text() for f in hostile_checkout.parent.rglob("*")
+               if f.is_file() and not f.is_symlink())
+
+
+def test_model_loop_scope_is_case_sensitive(hostile_checkout: Path) -> None:
+    reply = {"edits": [{"path": "App/src/ok.ts", "content": "PWNED"}], "read": [], "note": ""}
+    engine = ModelLoopEngine(ScriptedClient([reply]), allowed_paths=("app/",), protected=(), tests_only=False)
+    assert "rejected ['App/src/ok.ts']" in engine.edit("p", workdir=str(hostile_checkout), timeout_s=60).output
+    assert (hostile_checkout / "app/src/ok.ts").read_text() == "ok\n"
+
+
+def _fake_agy(tmp_path: Path, body: str) -> Path:
+    fake = tmp_path / "bin" / "agy"
+    fake.parent.mkdir(exist_ok=True)
+    fake.write_text(f"#!{sys.executable}\nimport sys, time, pathlib\n"
+                    f"calls = pathlib.Path({str(tmp_path / 'calls')!r})\n"
+                    "calls.write_text(calls.read_text() + 'x' if calls.exists() else 'x')\n" + body)
+    fake.chmod(0o755)
+    return fake
+
+
+def test_agy_waiting_for_a_login_is_killed_at_once_and_fails(tmp_path: Path) -> None:
+    fake = _fake_agy(tmp_path, "print('Authentication required. Please visit the URL to log in:', flush=True)\n"
+                               "print('https://accounts.example/x', flush=True)\ntime.sleep(60)\n")
+    started = time.monotonic()
+    result = AgyEngine(fake, home=tmp_path).edit("p", workdir=str(tmp_path), timeout_s=120)
+    assert result.returncode == shell.ABORTED_RC
+    assert "authentication" in result.output
+    assert time.monotonic() - started < 15
+
+
+def test_agy_quota_message_aborts_only_without_edits(tmp_path: Path) -> None:
+    fake = _fake_agy(tmp_path, "print('Error: RESOURCE_EXHAUSTED (429): quota exceeded', flush=True)\ntime.sleep(60)\n")
+    assert AgyEngine(fake, home=tmp_path, dirty=lambda: False).edit(
+        "p", workdir=str(tmp_path), timeout_s=120).returncode == shell.ABORTED_RC
+    finishing = _fake_agy(tmp_path, "print('retrying after 429', flush=True)\ntime.sleep(1)\nprint('done')\n")
+    result = AgyEngine(finishing, home=tmp_path, dirty=lambda: True).edit("p", workdir=str(tmp_path), timeout_s=120)
+    assert result.returncode == 0
+
+
+def test_agy_timeout_without_edits_is_retried_once_then_fails(tmp_path: Path) -> None:
+    fake = _fake_agy(tmp_path, "time.sleep(60)\n")
+    result = AgyEngine(fake, home=tmp_path, call_timeout_s=1, dirty=lambda: False).edit(
+        "p", workdir=str(tmp_path), timeout_s=120)
+    assert result.returncode == shell.TIMEOUT_RC
+    assert (tmp_path / "calls").read_text() == "xx"
+
+
+def test_agy_timeout_after_edits_keeps_them_for_the_test_run(tmp_path: Path) -> None:
+    fake = _fake_agy(tmp_path, "time.sleep(60)\n")
+    result = AgyEngine(fake, home=tmp_path, call_timeout_s=1, dirty=lambda: True).edit(
+        "p", workdir=str(tmp_path), timeout_s=120)
+    assert result.returncode == 0
+    assert "keeping them" in result.output
+    assert (tmp_path / "calls").read_text() == "x"
