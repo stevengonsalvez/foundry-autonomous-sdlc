@@ -1,57 +1,52 @@
 import React from "react";
 import { Link, useSearchParams } from "react-router-dom";
-import { ParcelTable } from "../components/ParcelTable";
-import { useParcelService } from "../service-context";
+import { useParcels } from "../service-context";
+import ParcelTable from "../components/ParcelTable";
 
-const STATUSES = ["label_created", "in_transit", "out_for_delivery", "delivered", "exception"] as const;
-export type Status = typeof STATUSES[number];
+const statuses = ["all", "label_created", "in_transit", "delivered", "exception"] as const;
+export type Status = (typeof statuses)[number];
 
-export function HomePage() {
-  const service = useParcelService();
+export default function HomePage() {
+  const { parcels } = useParcels();
   const [searchParams, setSearchParams] = useSearchParams();
-  const status = searchParams.get("status");
 
-  const allParcels = service.listParcels();
+  const status = (searchParams.get("status") as Status) ?? "all";
+  const valid = statuses.includes(status);
+  const filtered = !valid || status === "all" ? parcels : parcels.filter((p) => p.status === status);
 
-  const validStatus = STATUSES.includes(status as Status) ? (status as Status) : null;
-
-  const parcels = validStatus ? allParcels.filter((p) => p.status === validStatus) : allParcels;
-
-  function onChange(e: React.ChangeEvent<HTMLSelectElement>) {
-    const value = e.target.value;
-    if (value === "") {
-      searchParams.delete("status");
-      setSearchParams(searchParams);
-    } else {
-      searchParams.set("status", value);
-      setSearchParams(searchParams);
-    }
+  function apply(s: string) {
+    const params = new URLSearchParams(searchParams);
+    if (s === "all") params.delete("status");
+    else params.set("status", s);
+    setSearchParams(params);
   }
 
   return (
     <main>
       <h1>Parcels</h1>
       <label htmlFor="status-filter">Filter by status</label>
-      <select id="status-filter" value={validStatus ?? ""} onChange={onChange}>
-        <option value="">(all)</option>
-        {STATUSES.map((s) => (
+      <select
+        id="status-filter"
+        value={valid ? status : "all"}
+        onChange={(e) => apply(e.target.value)}
+        aria-label="Filter by status"
+      >
+        {statuses.map((s) => (
           <option key={s} value={s}>
-            {s}
+            {s === "all" ? "All" : s.replace(/_/g, " ")}
           </option>
         ))}
       </select>
 
-      {parcels.length === 0 ? (
+      {filtered.length === 0 ? (
         <p>No parcels match this status.</p>
       ) : (
-        <ParcelTable parcels={parcels} />
+        <ParcelTable parcels={filtered} />
       )}
 
       <p>
-        <Link to="/">Refresh</Link>
+        <Link to="/">Back to list</Link>
       </p>
     </main>
   );
 }
-
-export default HomePage;
