@@ -47,9 +47,15 @@ def test_the_eight_agents_from_the_architecture_table_exist() -> None:
 
 def test_only_feasibility_test_designer_and_reviewer_get_the_mcp_tool() -> None:
     assert {a.name for a in AGENTS if a.uses_mcp} == {"sdlc-feasibility", "sdlc-test-designer", "sdlc-reviewer"}
+    assert MCP_READ_ONLY_TOOLS == ("get_file_contents",)    # each tool schema is billed on every call
     assert "create_or_update_file" not in MCP_READ_ONLY_TOOLS and "merge_pull_request" not in MCP_READ_ONLY_TOOLS
     for agent in AGENTS:
         assert ("GITHUB TOOLS" in agent.instructions) == agent.uses_mcp
+        assert ("TOOL BUDGET (hard rule)" in agent.instructions) == agent.uses_mcp
+    for name in ("sdlc-feasibility", "sdlc-reviewer"):
+        assert "at most TWICE in total" in AGENT_BY_NAME[name].instructions
+    designer = AGENT_BY_NAME["sdlc-test-designer"].instructions
+    assert "at most FOUR times" in designer and "repo_files" in designer and "never on a directory" in designer
 
 
 @pytest.mark.parametrize("agent", [a for a in AGENTS if a.schema is not None], ids=lambda a: a.name)
