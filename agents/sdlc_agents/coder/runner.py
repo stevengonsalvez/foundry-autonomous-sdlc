@@ -938,6 +938,8 @@ class CoderService:
         with self._lock:
             if self._alive_locked(spec.job_id):
                 existing = self._store.load(spec.job_id)
+                if existing is not None and existing.status is not Status.RUNNING:
+                    return 200, self._view(existing)     # already finished; its thread is only winding down
                 return 200, {"job_id": spec.job_id, "status": Status.RUNNING.value,
                              "session_id": existing.session_id if existing else session_id}
             state = self._settle(self._store.load(spec.job_id))
