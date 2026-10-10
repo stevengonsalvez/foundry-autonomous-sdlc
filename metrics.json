@@ -37,7 +37,7 @@
       "pass": 0
     }
   },
-  "generated_at": "2026-10-10T13:23:32Z",
+  "generated_at": "2026-10-10T13:24:34Z",
   "issues": [
     {
       "closed_at": "2026-10-10T12:28:43Z",
@@ -354,19 +354,19 @@
       "coder_engine": "loop",
       "cost": {
         "calls": 6,
-        "coder_model_usd": 0.004847,
-        "coder_usd": 0.004585,
+        "coder_model_usd": 0.012925,
+        "coder_usd": 0.007592,
         "model_usd": 0.011822,
-        "usd": 0.021254
+        "usd": 0.032339
       },
       "deferred": null,
-      "escalation": null,
+      "escalation": "escalated:build-failed",
       "gate_attempts": {},
       "gates": {},
       "kind": "issue",
       "number": 9,
       "opened_at": "2026-10-10T13:15:49Z",
-      "outcome": "open",
+      "outcome": "escalated",
       "owner": "api",
       "pr": null,
       "quality_score": 95,
@@ -397,9 +397,13 @@
         },
         {
           "entered_at": "2026-10-10T13:22:24Z",
-          "in_progress": true,
-          "seconds": 0,
+          "seconds": 128,
           "stage": "stage:building"
+        },
+        {
+          "entered_at": "2026-10-10T13:24:32Z",
+          "seconds": 0,
+          "stage": "escalated:build-failed"
         }
       ],
       "title": "Lowercase tracking numbers are rejected as invalid",
@@ -409,11 +413,11 @@
   "repo": "stevengonsalvez/foundry-autonomous-sdlc",
   "totals": {
     "deferred": 0,
-    "escalated": 6,
+    "escalated": 7,
     "issues": 7,
-    "orchestrator_usd": 0.120496,
+    "orchestrator_usd": 0.125206,
     "released": 0,
-    "usd": 0.248006
+    "usd": 0.263801
   },
   "version": 1
 }
