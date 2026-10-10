@@ -9,6 +9,28 @@ import collect_evidence as ce  # noqa: E402
 OWNER = {"login": "stevengonsalvez"}
 
 
+def _maintenance_routes():
+    state = {"scenario": "d-maintenance", "type": "maintenance", "stages": [{"stage": "stage:building"},
+             {"stage": "stage:in-review"}, {"stage": "stage:merged"}, {"stage": "stage:released"}],
+             "quality": None, "coder": {"engine": "agy"}, "cost": {"usd": 0.03}, "release": {"tag": "v0.3.1", "url": "https://example.test/r2"}}
+    return {
+        "pulls?state=all": [{"number": 9, "user": OWNER, "labels": [{"name": "maintenance:test-repair"}]},
+                            {"number": 8, "user": OWNER, "labels": []}],
+        "issues/9/comments": [{"user": OWNER, "body": f"<!-- sdlc-state:v1\n{json.dumps(state)}\n-->"},
+                              {"user": OWNER, "body": '<!-- sdlc-review:v1 {"verdict":"approve","head":"' + "e" * 40 + '"} -->'}],
+        "pulls/9/commits": [{"sha": "d" * 40, "commit": {"message": "feat: copy", "verification": {"verified": False}}},
+                            {"sha": "e" * 40, "commit": {"message": "test: repair", "verification": {"verified": True}}}],
+        "commits/" + "d" * 40: {"files": [{"filename": "app/web/src/Home.tsx"}]},
+        "commits/" + "e" * 40: {"files": [{"filename": "app/web/tests/home.test.tsx"}]},
+        "pulls/9": {"number": 9, "title": "Update heading", "state": "closed", "merged_at": "2026-10-10T01:00:00Z",
+                    "merge_commit_sha": "f" * 40, "html_url": "https://example.test/pr/9", "head": {"sha": "e" * 40},
+                    "labels": [{"name": "stage:released"}, {"name": "maintenance:test-repair"}]},
+    }
+
+
+MAINTENANCE_ROUTES = _maintenance_routes()
+
+
 def fake_api(path: str):
     state = {"scenario": "a", "stages": [{"stage": "stage:ready"}, {"stage": "stage:released"}],
              "quality": {"score": 100}, "coder": {"engine": "agy"}, "cost": {"usd": 0.0123},
@@ -28,6 +50,7 @@ def fake_api(path: str):
         "metrics.json": {"content": base64.b64encode(json.dumps(
             {"totals": {"usd": 0.1}, "gate_pass_rates": {"test": {"pass": 1}}}).encode()).decode()},
     }
+    routes.update(MAINTENANCE_ROUTES)
     for key, value in routes.items():
         if key in path:
             return value
@@ -50,3 +73,12 @@ def test_implementation_first_is_flagged():
 def test_review_for_another_head_does_not_count():
     comments = [{"user": OWNER, "body": '<!-- sdlc-review:v1 {"verdict":"approve","head":"old"} -->'}]
     assert ce.review_verdict(comments, "new") == "none for this head"
+
+
+def test_maintenance_pr_is_reported_with_its_repair_commit_review_and_release():
+    text = ce.build(fake_api)
+    assert "Scenario d-maintenance: Update heading" in text
+    assert "pull/9" in text or "[#9]" in text
+    assert "Tests first: n/a" in text and "`tdd-order` exempts" in text
+    assert "`" + "e" * 10 + "` | test-only" in text and "approve" in text and "[v0.3.1](https://example.test/r2)" in text
+    assert "Scenario d-maintenance: #8" not in text      # a PR without the maintenance label is not collected

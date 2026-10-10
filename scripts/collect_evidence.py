@@ -80,14 +80,14 @@ def review_verdict(comments: list[dict], head: str) -> str:
 
 
 def render_item(title: str, issue: dict, state: dict | None, pr: dict | None, commits: list[dict],
-                checks: dict[str, str], verdict: str) -> str:
+                checks: dict[str, str], verdict: str, maintenance: bool = False) -> str:
     out = [f"### {title}", "", f"Issue: [#{issue['number']}](https://github.com/{REPO}/issues/{issue['number']}) "
            f"state `{issue['state']}`, labels {', '.join('`'+x['name']+'`' for x in issue['labels']) or 'none'}", ""]
     if state:
         stages = " ▶ ".join(s["stage"].replace("stage:", "") for s in state.get("stages", []))
         cost = state.get("cost", {})
-        out += [f"Timeline: {stages}", f"Quality score: {state.get('quality', {}).get('score')}, "
-                f"engine: {state.get('coder', {}).get('engine') if state.get('coder') else 'n/a'}, "
+        out += [f"Timeline: {stages}", f"Quality score: {(state.get('quality') or {}).get('score')}, "
+                f"engine: {(state.get('coder') or {}).get('engine') or 'n/a'}, "
                 f"cost: {cost.get('usd', 0):.4f} USD", ""]
         if state.get("escalation"):
             out += [f"Escalation: `{state['escalation']['label']}`: {'; '.join(state['escalation']['reasons'])}", ""]
@@ -97,7 +97,11 @@ def render_item(title: str, issue: dict, state: dict | None, pr: dict | None, co
                 f"merge commit `{(pr.get('merge_commit_sha') or '')[:10]}`", ""]
         out += ["| commit | kind | files | signed | subject |", "|---|---|---|---|---|"]
         out += [f"| `{c['sha']}` | {c['kind']} | {c['files']} | {c['signed']} | {c['subject']} |" for c in commits]
-        out += ["", f"Tests first: **{'yes' if tests_first(commits) else 'no'}**", ""]
+        if maintenance:
+            out += ["", "Tests first: n/a. A maintenance repair follows the owner's app change by design, "
+                    "so `tdd-order` exempts it; the repair commit must change only test files.", ""]
+        else:
+            out += ["", f"Tests first: **{'yes' if tests_first(commits) else 'no'}**", ""]
         out += ["| check | result |", "|---|---|"] + [f"| {g} | {checks.get(g, 'missing')} |" for g in GATES]
         out += ["", f"Review agent verdict for the head commit: **{verdict}**", ""]
     release = (state or {}).get("release")
@@ -123,6 +127,17 @@ def build(api: Api = gh_api) -> str:
         scenario = (state or {}).get("scenario", "?")
         sections.append(render_item(f"Scenario {scenario}: {issue['title']}", issue, state, pr, commits or [],
                                     checks or {}, verdict))
+    for listed in sorted(api(f"repos/{REPO}/pulls?state=all&per_page=100"),  # type: ignore[arg-type,union-attr]
+                         key=lambda p: p["number"]):
+        if listed["user"]["login"] != OWNER or "maintenance:test-repair" not in [x["name"] for x in listed["labels"]]:
+            continue
+        pr = api(f"repos/{REPO}/pulls/{listed['number']}")
+        comments = api(f"repos/{REPO}/issues/{pr['number']}/comments")  # type: ignore[index]
+        item = {"number": pr["number"], "state": pr["state"], "labels": pr["labels"]}  # type: ignore[index]
+        sections.append(render_item(f"Scenario d-maintenance: {pr['title']}", item,  # type: ignore[index]
+                                    state_of(comments), pr, commit_rows(api, pr["number"]),  # type: ignore[arg-type,index]
+                                    check_rows(api, pr["head"]["sha"]),  # type: ignore[index]
+                                    review_verdict(comments, pr["head"]["sha"]), maintenance=True))  # type: ignore[arg-type,index]
     try:
         blob = api(f"repos/{REPO}/contents/metrics.json?ref=metrics")
         metrics = json.loads(base64.b64decode(blob["content"]))  # type: ignore[index]
