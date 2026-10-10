@@ -190,4 +190,5 @@ class Budget:
     usd_total: float = 0.0
     usd_cap_total: float = 4.50
     usd_cap_issue: float = 1.00
+    known: bool = True        # False when spend could not be determined: every spending step halts
     extras: dict[str, Any] = field(default_factory=dict)

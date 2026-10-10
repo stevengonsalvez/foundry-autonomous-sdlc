@@ -14,6 +14,7 @@ The file lives on branch `metrics` and is rewritten when anything but `generated
 from __future__ import annotations
 
 import json
+from dataclasses import dataclass, field
 from typing import Any
 
 from sdlc_agents import cost, gates, schema_check, state
@@ -208,14 +209,37 @@ def build(objects: list[tuple[Issue, State]], now: str, *, orchestrator_usd: flo
     return doc
 
 
-def previous_totals(github: GitHubPort) -> dict[str, float]:
-    """totals.usd and totals.orchestrator_usd from the published metrics.json (0.0 when absent)."""
+@dataclass(frozen=True)
+class Ledger:
+    """Spend as last published: the floor under this tick's figures, so lost state never lowers them."""
+
+    usd: float = 0.0
+    orchestrator_usd: float = 0.0
+    objects: dict[int, float] = field(default_factory=dict)   # issue or PR number -> usd
+
+
+def _number(value: Any) -> float:
+    if isinstance(value, bool) or not isinstance(value, int | float) or value < 0:
+        raise ValueError(f"not a spend figure: {value!r}")
+    return float(value)
+
+
+def previous_totals(github: GitHubPort) -> Ledger | None:
+    """The published ledger; an empty one when nothing was published yet; None when the file exists
+    but cannot be read as a ledger (the caller must then fail closed)."""
     current = github.get_file(METRICS_PATH, ref=METRICS_BRANCH) if github.get_branch_sha(METRICS_BRANCH) else None
+    if current is None:
+        return Ledger()
     try:
-        totals = json.loads(current)["totals"] if current else {}
-        return {"usd": float(totals.get("usd", 0.0)), "orchestrator_usd": float(totals.get("orchestrator_usd", 0.0))}
+        doc = json.loads(current)
+        totals = doc["totals"]
+        objects = {}
+        for entry in doc.get("issues") or []:
+            number = entry["pr"] if entry.get("kind") == "pr" else entry["number"]
+            objects[int(number)] = _number(entry["cost"]["usd"])
+        return Ledger(_number(totals["usd"]), _number(totals.get("orchestrator_usd", 0.0)), objects)
     except (ValueError, KeyError, TypeError, AttributeError):
-        return {"usd": 0.0, "orchestrator_usd": 0.0}
+        return None
 
 
 UNCHANGED, TOTALS, CHANGED = "unchanged", "totals", "changed"

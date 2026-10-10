@@ -71,6 +71,10 @@ class AgentOutputError(ValueError):
     """The answer arrived (and was billed) but failed parsing or validation, also after a repair."""
 
 
+class AgentBudgetError(RuntimeError):
+    """A spend cap was reached part way through a step, so no further call (retry or repair) was made."""
+
+
 def _retry_after(headers: Any) -> float | None:
     try:
         value = headers.get("retry-after") if headers is not None else None
@@ -267,12 +271,21 @@ def _no_bill(_agent: str, _input_tokens: int, _output_tokens: int) -> None:
     return None
 
 
+Allow = Callable[[], str | None]   # a reason to stop before the next call, or None
+
+
+def _always() -> str | None:
+    return None
+
+
 def _call_once(foundry: FoundryPort, agent_name: str, sections: list[Section], bill: Bill,
-               retry: RetryPolicy | None) -> AgentResult:
+               retry: RetryPolicy | None, allow: Allow) -> AgentResult:
     agent = AGENT_BY_NAME[agent_name]
     text = build_input(sections, new_nonce())
 
     def attempt() -> AgentResult:
+        if stop := allow():
+            raise AgentBudgetError(f"{agent_name}: {stop}")
         try:
             return foundry.call_prompt_agent(agent_name, text, max_output_tokens=agent.max_output_tokens)
         except AgentRunError as exc:
@@ -292,16 +305,21 @@ def _parse(agent_name: str, text: str) -> dict[str, Any]:
 
 
 def run_agent(foundry: FoundryPort, agent_name: str, sections: list[Section], *,
-              bill: Bill = _no_bill, retry: RetryPolicy | None = None) -> AgentOutput:
-    result = _call_once(foundry, agent_name, sections, bill, retry)
+              bill: Bill = _no_bill, retry: RetryPolicy | None = None, allow: Allow = _always) -> AgentOutput:
+    """`allow` is asked before every call, retries and the repair included, so a cap reached part way
+    through a step stops it (AgentBudgetError) instead of spending past the cap."""
+    result = _call_once(foundry, agent_name, sections, bill, retry, allow)
     if AGENT_BY_NAME[agent_name].output_kind == "markdown":
         return AgentOutput(None, sanitise_markdown(result.text), result.input_tokens, result.output_tokens)
     try:
         return AgentOutput(_parse(agent_name, result.text), result.text, result.input_tokens, result.output_tokens)
     except ValueError as exc:
-        note = Section("repair", f"Your previous answer was rejected: {exc}. Answer again with exactly the "
-                                 "required JSON object and nothing else.", trusted=True)
-    repaired = _call_once(foundry, agent_name, [*sections, note], bill, retry)
+        # The validation error can quote the model's own output, so it travels as untrusted data.
+        notes = [Section("repair", "Your previous answer was rejected for the reason in section "
+                                   "repair_reason. Answer again with exactly the required JSON object and "
+                                   "nothing else.", trusted=True),
+                 Section("repair_reason", str(exc))]
+    repaired = _call_once(foundry, agent_name, [*sections, *notes], bill, retry, allow)
     try:
         data = _parse(agent_name, repaired.text)
     except ValueError as exc:

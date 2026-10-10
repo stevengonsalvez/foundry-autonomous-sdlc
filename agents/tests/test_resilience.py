@@ -156,17 +156,18 @@ def test_total_spend_never_shrinks_when_an_object_drops_out_of_view(world: World
     assert before["usd"] > 0
     assert after["usd"] == pytest.approx(before["usd"] + report.orchestrator_usd, abs=1e-6)
     assert after["orchestrator_usd"] == pytest.approx(before["orchestrator_usd"] + report.orchestrator_usd, abs=1e-6)
-    assert metrics.previous_totals(gh)["usd"] == after["usd"]
+    ledger = metrics.previous_totals(gh)
+    assert ledger is not None and ledger.usd == after["usd"]
 
 
-def test_previous_totals_tolerate_a_missing_or_corrupt_file(world: World) -> None:
-    empty = {"usd": 0.0, "orchestrator_usd": 0.0}
-    assert metrics.previous_totals(world.gh) == empty
+def test_previous_totals_are_empty_when_absent_and_unknown_when_corrupt(world: World) -> None:
+    assert metrics.previous_totals(world.gh) == metrics.Ledger()
     world.gh.branches["metrics"] = world.gh.branches["main"]
-    world.gh.files[("metrics", "metrics.json")] = "{not json"
-    assert metrics.previous_totals(world.gh) == empty
-    world.gh.files[("metrics", "metrics.json")] = "[1]"
-    assert metrics.previous_totals(world.gh) == empty
+    assert metrics.previous_totals(world.gh) == metrics.Ledger()          # branch but no file yet
+    for corrupt in ("{not json", "[1]", '{"totals": {}}', '{"totals": {"usd": -1}}',
+                    '{"totals": {"usd": 1}, "issues": [{"number": 1, "cost": {"usd": true}}]}'):
+        world.gh.files[("metrics", "metrics.json")] = corrupt
+        assert metrics.previous_totals(world.gh) is None, corrupt
 
 
 def test_maintenance_repair_survives_a_lost_coder_reply(world: World) -> None:

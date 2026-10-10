@@ -26,8 +26,17 @@ from dataclasses import asdict, dataclass, field
 from typing import Any
 
 from sdlc_agents import cost, gates, lock, machine, metrics, release, repo_context, state
+from sdlc_agents.clock import seconds_between
 from sdlc_agents.definitions import PO_LABEL
-from sdlc_agents.foundry import AgentOutput, AgentRunError, RetryPolicy, Section, call_with_retry, run_agent
+from sdlc_agents.foundry import (
+    AgentBudgetError,
+    AgentOutput,
+    AgentRunError,
+    RetryPolicy,
+    Section,
+    call_with_retry,
+    run_agent,
+)
 from sdlc_agents.machine import Action, Context, Kind
 from sdlc_agents.paths import is_test_path
 from sdlc_agents.ports import (
@@ -49,6 +58,13 @@ from sdlc_agents.state import State
 CODER_AGENT = "sdlc-coder"
 TEST_CMD = "npm test"
 CODER_WORKDIR = "app"
+CODER_PHASES = frozenset({"setup", "tests", "implement", "push", "pr"})
+CODER_ENGINES = frozenset({"agy", "loop"})
+CODER_REASONS = frozenset({
+    "tests-not-red", "scope-violation", "max-iterations", "engines-exhausted", "cost-cap", "install-failed",
+    "branch-missing", "branch-conflict", "interrupted", "deadline", "cancelled", "error",
+})
+UNREPORTED_CODER_SLACK_S = 900    # one missed poll is normal; longer gaps are billed as estimated time
 CODER_MAX_MODEL_USD = 0.5
 CODER_MAX_ITERATIONS = 5
 RESERVE_S = 45                    # wall time kept back for metrics and unlocking
@@ -185,6 +201,13 @@ def _object_type(item: Issue, st: State | None) -> str:
     return "feature"
 
 
+def _allowed(value: object, allowed: frozenset[str]) -> str | None:
+    """value if it is one of the allowed words, None if absent, else "other"."""
+    if value is None or value == "":
+        return None
+    return value if isinstance(value, str) and value in allowed else "other"
+
+
 def _scenario(body: str) -> str | None:
     match = _SCENARIO_RE.search(body)
     return match.group(1) if match else None
@@ -203,16 +226,20 @@ class _Tick:
         self.started = clock.monotonic()
         self.deadline = self.started + budget_wall_s - RESERVE_S
         self.objects: list[_Object] = []
-        self.previous = {"usd": 0.0, "orchestrator_usd": 0.0}
+        self.previous = metrics.Ledger()
 
     # -- loop -------------------------------------------------------------------
 
     def run(self) -> None:
         self._load()
         # The ledger never shrinks: an object that drops out of the listing keeps its spend.
-        self.previous = metrics.previous_totals(self.github)
-        objects_usd = sum(o.state.usd for o in self.objects if o.state)
-        self.budget.usd_total = max(objects_usd + self.previous["orchestrator_usd"], self.previous["usd"])
+        ledger = metrics.previous_totals(self.github)
+        if ledger is None:
+            self.budget.known = False        # fail closed: no model call, no coder start this tick
+            self.report.errors.append("metrics.json is unreadable: spend unknown, spending steps halted")
+        self.previous = ledger or metrics.Ledger()
+        objects_usd = sum(self._object_usd(o) for o in self.objects)
+        self.budget.usd_total = max(objects_usd + self.previous.orchestrator_usd, self.previous.usd)
         # Coder polls first: they are cheap and keep the coder's sandbox session alive.
         self.objects.sort(key=lambda o: (0 if o.state and o.state.stage == state.BUILDING else 1, o.item.number))
         for obj in self.objects:
@@ -243,6 +270,7 @@ class _Tick:
                 comment, st = state.find(comments)
             except ValueError as exc:
                 self.report.objects.append(ObjectReport(item.number, "issue", "load", "error", str(exc)))
+                self.budget.known = False    # its spend is unknown, so the total is too: fail closed
                 continue
             self.objects.append(_Object(item, comments, comment, st))
 
@@ -266,7 +294,12 @@ class _Tick:
             self._note(obj, action.kind.value, "ok", detail or action.reason)
         except Exception as exc:
             message = f"{type(exc).__name__}: {exc}"
-            if is_transient(exc):
+            if isinstance(exc, AgentBudgetError):
+                # A cap was reached part way through the step: keep the spend, count no failure;
+                # the next tick escalates cost-cap or halts.
+                self._note(obj, action.kind.value, "capped", message)
+                self._defer(obj)
+            elif is_transient(exc):
                 self._note(obj, action.kind.value, "deferred", message)
                 self.deferred[obj.item.number] = one_line(message, 300)
                 self._defer(obj)
@@ -332,6 +365,7 @@ class _Tick:
             number=obj.item.number, author=obj.item.author, labels=frozenset(obj.item.labels),
             is_open=obj.item.state == "open", object_type=_object_type(obj.item, st), state=st,
             now=self.clock.now_iso(), budget=self.budget, pr=pr, checks=checks, pr_touches_tests=touches,
+            object_usd=self._object_usd(obj),
         )
 
     # -- persistence --------------------------------------------------------------
@@ -382,12 +416,35 @@ class _Tick:
 
     # -- model calls --------------------------------------------------------------
 
+    def _object_usd(self, obj: _Object) -> float:
+        """Best known spend: the state comment, the published ledger, and coder time not yet reported."""
+        st = obj.state
+        known = max(st.usd if st else 0.0, self.previous.objects.get(obj.item.number, 0.0))
+        coder = (st.get("coder") or {}) if st else {}
+        if st and st.stage == state.BUILDING and coder.get("status") in ("running", "starting") \
+                and coder.get("started_at"):
+            # Status calls can fail for a while; the coder keeps running (and billing) meanwhile.
+            wall = seconds_between(coder["started_at"], self.clock.now_iso())
+            unreported = wall - int(coder.get("elapsed_s", 0)) - UNREPORTED_CODER_SLACK_S
+            known += cost.coder_usd(max(unreported, 0))
+        return known
+
+    def _spend_stop(self, obj: _Object) -> str | None:
+        """Why no further model call may be made for obj now, or None."""
+        if not self.budget.known:
+            return "spend cannot be determined"
+        if self._object_usd(obj) >= self.budget.usd_cap_issue:
+            return f"issue cap {self.budget.usd_cap_issue:.2f} USD reached"
+        if self.budget.usd_total >= self.budget.usd_cap_total:
+            return f"total cap {self.budget.usd_cap_total:.2f} USD reached"
+        return None
+
     def _retry(self) -> RetryPolicy:
         return RetryPolicy(sleep=self.sleep, monotonic=self.clock.monotonic, deadline=self.deadline)
 
     def _call(self, obj: _Object, agent: str, sections: list[Section]) -> AgentOutput:
         """Run a prompt agent with retries; every answered call (valid or not) is billed to the object."""
-        return run_agent(self.foundry, agent, sections, retry=self._retry(),
+        return run_agent(self.foundry, agent, sections, retry=self._retry(), allow=lambda: self._spend_stop(obj),
                          bill=lambda name, tokens_in, tokens_out: self._bill(obj, name, tokens_in, tokens_out))
 
     def _hosted(self, body: dict[str, Any], session_id: str | None) -> tuple[dict[str, Any], str]:
@@ -570,7 +627,8 @@ class _Tick:
             "max_iterations": CODER_MAX_ITERATIONS, "deadline_s": machine.CODER_DEADLINE_S,
             "allowed_paths": ["app/"],
             # The coder's fallback engine spends model tokens too: give it what is left under the cap.
-            "max_model_usd": round(min(CODER_MAX_MODEL_USD, max(self.budget.usd_cap_issue - st.usd, 0.0)), 4),
+            "max_model_usd": round(min(CODER_MAX_MODEL_USD,
+                                       max(self.budget.usd_cap_issue - self._object_usd(obj), 0.0)), 4),
         }
         findings = (st.get("review") or {}).get("findings", [])
         review_notes = "\n".join(f"- [{f['severity']}] {f['detail']}" for f in findings)
@@ -622,11 +680,13 @@ class _Tick:
             raise StepError(f"coder status unknown: {one_line(json.dumps(resp), 200)}")
         before = json.dumps(st.data, sort_keys=True)
         coder.update({
-            "status": status, "phase": resp.get("phase"), "engine": resp.get("engine"),
+            # Coder text is allow-listed before it is stored or shown.
+            "status": status, "phase": _allowed(resp.get("phase"), CODER_PHASES),
+            "engine": _allowed(resp.get("engine"), CODER_ENGINES),
             "iterations": int(resp.get("iterations") or 0), "elapsed_s": int(resp.get("elapsed_s") or 0),
             "session_id": session or coder.get("session_id"),
         })
-        reason = str(resp.get("reason") or "")
+        reason = _allowed(resp.get("reason"), CODER_REASONS) or ""
         coder_cost = resp.get("cost") if isinstance(resp.get("cost"), dict) else {}
         cost.set_coder_spend(st, int(coder.get("prior_seconds", 0)) + coder["elapsed_s"],
                              float(coder.get("prior_model_usd", 0.0)) + float(coder_cost.get("model_usd") or 0.0))
@@ -644,7 +704,7 @@ class _Tick:
         elif outcome.escalate:
             detail = resp.get("detail") or resp.get("log_tail") or ""
             tail = sanitise_markdown(one_line(str(detail), 300))
-            self._escalate(obj, outcome.escalate, [f"{outcome.reason} in phase {resp.get('phase')}", tail])
+            self._escalate(obj, outcome.escalate, [f"{outcome.reason} in phase {coder.get('phase')}", tail])
         else:
             st.data["failures"] = None
         if json.dumps(st.data, sort_keys=True) != before:
@@ -700,9 +760,9 @@ class _Tick:
             for i, c in enumerate(commits, 1)
         )
         sections = [
-            Section("head", f"head sha: {pr.head_sha}\nbranch: {pr.head_ref}\npull request: #{pr.number}",
-                    trusted=True),
-            Section("pr", f"{pr.title}\n\n{pr.body}"),
+            # Only values the orchestrator controls are trusted; the branch name is PR data.
+            Section("head", f"head sha: {pr.head_sha}\npull request: #{pr.number}", trusted=True),
+            Section("pr", f"branch: {pr.head_ref}\ntitle: {pr.title}\n\n{pr.body}"),
         ]
         if obj.kind == "issue":
             sections += [self._issue_section(obj.item), self._spec_section(st)]
@@ -758,7 +818,7 @@ class _Tick:
             check_runs=self.github.get_check_runs(pr.head_sha),
             pr_comments=self.github.list_comments(pr.number),
             pr_files=self.github.list_pull_files(pr.number),
-            object_usd=st.usd, usd_cap=self.budget.usd_cap_issue,
+            object_usd=self._object_usd(obj), usd_cap=self.budget.usd_cap_issue,
         )
         if result.scope_violation:
             self._record_gates(st, pr.head_sha, result.checks)
@@ -799,7 +859,7 @@ class _Tick:
             st.data["release"] = {"tag": tag, "pending": True}
             self._save(obj)
         messages = [c.message.splitlines()[0] for c in self.github.list_pull_commits(pr.number) if c.message]
-        if st.usd >= self.budget.usd_cap_issue or self.budget.usd_total >= self.budget.usd_cap_total:
+        if self._spend_stop(obj):
             # Merged work is always released; past a cap the notes are written without a model call.
             text = release.plain_notes(pr.title, messages)
         else:
@@ -859,8 +919,8 @@ class _Tick:
             pairs = [(o.item, o.state) for o in self.objects if o.state is not None]
             doc = metrics.build(
                 pairs, self.clock.now_iso(),
-                orchestrator_usd=self.previous["orchestrator_usd"] + tick_usd, deferred=self.deferred,
-                floor_usd=self.previous["usd"] + self.report.usd_this_tick + tick_usd,
+                orchestrator_usd=self.previous.orchestrator_usd + tick_usd, deferred=self.deferred,
+                floor_usd=self.previous.usd + self.report.usd_this_tick + tick_usd,
             )
             written = metrics.publish(self.github, doc)
             self.report.metrics_written = written != metrics.UNCHANGED

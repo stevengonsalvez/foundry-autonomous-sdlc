@@ -108,6 +108,7 @@ class Context:
     pr: PullRequest | None = None                      # the linked PR (issue) or the PR itself
     checks: Mapping[str, str] = field(default_factory=dict)  # gates.check_summary of pr.head_sha
     pr_touches_tests: bool | None = None               # maintenance: does the PR diff change test files
+    object_usd: float | None = None                    # best known spend (tick.py); else the state's
 
 
 def next_action(ctx: Context) -> Action:
@@ -135,7 +136,10 @@ def _guard(ctx: Context, action: Action) -> Action:
             reason = f"{action.kind.value} failed {failures['count']} times: {failures.get('error')}"
             return Action(Kind.ESCALATE, reason, label=label, cancel_coder=action.kind is Kind.POLL_CODER)
 
-    object_usd = state.usd if state else 0.0
+    if action.kind in SPEND_ACTIONS and not ctx.budget.known:
+        # Fail closed: without a trustworthy spend figure nothing that costs money may run.
+        return Action(Kind.HALT, "spend cannot be determined (unreadable metrics.json or state comment)")
+    object_usd = ctx.object_usd if ctx.object_usd is not None else (state.usd if state else 0.0)
     cap = ctx.budget.usd_cap_issue
     costs_money = action.kind in SPEND_ACTIONS or action.kind in (Kind.POLL_CODER, Kind.MERGE)
     if costs_money and object_usd >= cap:
