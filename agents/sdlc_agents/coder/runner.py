@@ -88,7 +88,8 @@ class CoderDeps:
     clock: ClockPort
     owner_user_id: Callable[[str], int | None] = lambda pat: None
     engine_user: Callable[[], sandbox.RunAs | None] = lambda: None
-    user_binary: Callable[[Path, sandbox.RunAs], Path] = sandbox.install_user_binary
+    agy_installer: Callable[[Path], Path] = sandbox.install_agy_binary
+    reap: Callable[[sandbox.RunAs], int] = sandbox.reap_user
     privileged_work_root: Path = sandbox.PRIVILEGED_WORK_ROOT
     compute_usd_per_hour: float = 0.0   # this agent's vCPU and memory at the hosted list price; 0 if unknown
 
@@ -123,6 +124,7 @@ class JobRunner:
         self._pat = ""
         self._git: CoderGit | None = None
         self._red_sha = ""
+        self._last_sha = ""
         self._red_output = ""
 
     # -- lifecycle -------------------------------------------------------------------------
@@ -202,15 +204,18 @@ class JobRunner:
             self.checkout = self.deps.privileged_work_root / self.spec.job_id / "checkout"
         self._agy = self._prepare_agy()
         self._git = self.deps.git(resolve_author(self.deps.owner_user_id(self._pat)), self.cancel)
+        self._quiesce()   # a previous job's leftovers must not race the delete
         shutil.rmtree(self.checkout, ignore_errors=True)
         self.git.clone(self.spec.repo, str(self.checkout), token=self._pat)
         if self.git.remote_has_branch(self.spec.branch):
             self._log(f"branch {self.spec.branch} exists, continuing from it")
             self.git.checkout_existing_branch(self.spec.branch)
+            self._last_sha = self.git.head_sha()
         elif not self.spec.mode.writes_red_tests:
             raise JobStop(Status.FAILED, "branch-missing", f"{self.spec.branch} does not exist")
         else:
             self.git.checkout_new_branch(self.spec.branch, base=self.spec.base)
+            self._last_sha = self.git.head_sha()
         self._install()
 
     def _prepare_agy(self) -> Path | None:
@@ -224,7 +229,7 @@ class JobRunner:
             # The token lives in the engine user's home; the Key Vault read stayed in this process.
             self.deps.toolchain.write_agy_token(token, home=self._run_as.home,
                                                 owner=(self._run_as.uid, self._run_as.gid))
-            return self.deps.user_binary(binary, self._run_as)
+            return self.deps.agy_installer(binary)
         except Exception as exc:
             self._log(f"agy unavailable, using the fallback engines: {type(exc).__name__}: {exc}")
             return None
@@ -239,12 +244,27 @@ class JobRunner:
     def _as_user(self) -> dict[str, int]:
         return {"user": self._run_as.uid, "group": self._run_as.gid} if self._run_as else {}
 
+    def _quiesce(self) -> None:
+        """Kill every engine-user process; root only touches the user's tree while nothing of it runs."""
+        if self._run_as is not None:
+            left = self.deps.reap(self._run_as)
+            if left:
+                raise JobStop(Status.FAILED, "error", f"{left} {self._run_as.name} processes survived SIGKILL")
+
     def _hand_over(self) -> None:
         if self._run_as is not None:
+            self._quiesce()
             sandbox.give_tree(self.checkout, self._run_as)
 
     def _snapshot(self) -> tuple[str, dict[str, str]]:
+        self._quiesce()
         return self.git.metadata_digest(), sandbox.symlinks(self.checkout)
+
+    def _push(self, sha: str) -> None:
+        """Push exactly the commit root verified, with no engine-user process alive."""
+        self._check_stops()
+        self._quiesce()
+        self.git.push(self.spec.branch, sha=sha)
 
     def _report_path(self) -> Path:
         if self._run_as is None:
@@ -262,6 +282,7 @@ class JobRunner:
         result = shell.run(self.spec.install_cmd, cwd=self.checkout / self.spec.workdir,
                            env=self._work_env(), timeout_s=self._timeout(INSTALL_TIMEOUT_S),
                            cancel=self.cancel, **self._as_user())
+        self._quiesce()
         self._scan(before, "install")
         self._log(f"install ({result.returncode}): {result.output[-3000:]}")
         if result.returncode != 0:
@@ -290,15 +311,14 @@ class JobRunner:
         if self._find_red():
             return
         self.git.write_files({t.path: t.content for t in self.spec.tests})
-        self._red_sha = self.git.commit_all(f"test: add failing tests for #{self.spec.issue_number}")
+        self._red_sha = self._last_sha = self.git.commit_all(f"test: add failing tests for #{self.spec.issue_number}")
         outcome = self._run_tests()
         if not outcome.report.is_red_for([t.path for t in self.spec.tests]):
             raise JobStop(Status.FAILED, "tests-not-red",
                           f"{outcome.report.summary()}\n{outcome.feedback(1500)}")
         self.state.red_summary = outcome.report.summary()
         self._red_output = outcome.feedback(3000)
-        self._check_stops()
-        self.git.push(self.spec.branch)
+        self._push(self._red_sha)
         self._checkpoint()
 
     def _run_tests(self) -> TestOutcome:
@@ -309,6 +329,7 @@ class JobRunner:
                             report_path=self._report_path(), env=self._work_env(), cancel=self.cancel,
                             run_as=self._as_user())
         outcome = runner.run(timeout_s=self._timeout(TEST_TIMEOUT_S))
+        self._quiesce()
         self._scan(before, "tests")
         self._log(f"tests ({outcome.returncode}): {outcome.report.summary()}\n{outcome.output[-3000:]}")
         self._check_stops()
@@ -349,6 +370,7 @@ class JobRunner:
             before = self._snapshot()
             result = self._edit(engine, outcome, red_files)
             self._account(engines)
+            self._quiesce()
             self._scan(before, f"engine {engine.name}")
             changed = self._contain(pre)
             if result.returncode != 0:
@@ -361,7 +383,7 @@ class JobRunner:
             self.state.engine = engine.name
             self._check_stops()
             self._enforce_scope(changed, protected, tests_only)
-            committed = self._commit_iteration(changed) or committed
+            committed = self._commit_iteration(changed, protected, tests_only) or committed
             outcome = self._run_tests()
             self._checkpoint()
         self.state.green_summary = outcome.report.summary()
@@ -423,7 +445,7 @@ class JobRunner:
             self.state.violations = bad
             raise JobStop(Status.FAILED, "scope-violation", "reverted out-of-scope edits: " + ", ".join(bad))
 
-    def _commit_iteration(self, changed: list[str]) -> bool:
+    def _commit_iteration(self, changed: list[str], protected: tuple[str, ...], tests_only: bool) -> bool:
         if not changed:
             self._log("engine made no changes")
             return False
@@ -437,9 +459,14 @@ class JobRunner:
         if i > 1:
             message = (f"{prefix}: address failing tests for #{n} (iteration {i})" if self.spec.mode.writes_red_tests
                        else f"{message} (iteration {i})")
-        self.git.commit_all(message)
-        self._check_stops()
-        self.git.push(self.spec.branch)
+        sha = self.git.commit_all(message)
+        # Re-check what the commit actually contains, then push exactly that commit.
+        bad = scope.violations(self.git.files_in_commit(sha), allowed_paths=self.spec.allowed_paths,
+                               protected=protected, tests_only=tests_only)
+        if bad:
+            raise JobStop(Status.FAILED, "scope-violation", "commit contained out-of-scope paths: " + ", ".join(bad))
+        self._last_sha = sha
+        self._push(sha)
         return True
 
     def _title(self) -> str:
@@ -471,8 +498,7 @@ class JobRunner:
 
     def _publish(self) -> None:
         self._checkpoint(Phase.PUSH)
-        self._check_stops()
-        self.git.push(self.spec.branch)
+        self._push(self._last_sha)
         if not self.spec.mode.writes_red_tests:
             # revise and maintenance update the PR they were given; they never open one.
             number = self.spec.pr_number

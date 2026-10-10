@@ -29,6 +29,7 @@ from sdlc_agents.transport import HttpRequest, Transport, urllib_transport
 
 MAX_PROMPT_CHARS = 100_000   # one argv string must stay under Linux MAX_ARG_STRLEN (128 KiB)
 MAX_FILE_CHARS = 12_000
+MAX_READ_BYTES = 2_000_000
 MAX_EDIT_FILES = 20
 MAX_EDIT_CHARS = 200_000
 SKIP_DIRS = {"node_modules", ".git", "dist", "dist-pages", "coverage", "playwright-report", "test-results"}
@@ -63,7 +64,7 @@ class AgyEngine:
     def __init__(self, binary: Path, *, home: Path, run_as: RunAs | None = None,
                  cancel: threading.Event | None = None, run: Callable[..., CommandResult] = shell.run,
                  prepare: Callable[[Path], None] | None = None,
-                 reap: Callable[[RunAs], int] = sandbox.kill_user_processes,
+                 reap: Callable[[RunAs], int] = sandbox.reap_user,
                  dirty: Callable[[], bool] = lambda: False, call_timeout_s: int = AGY_CALL_TIMEOUT_S):
         self._binary = binary
         self._env = agy_env(binary, home)
@@ -255,6 +256,14 @@ class ModelLoopEngine:
         rejected += [p for p, _ in edits[MAX_EDIT_FILES:]]
         return f"wrote {written}; rejected {rejected}"
 
+    @staticmethod
+    def _text(target: Path) -> str:
+        try:
+            data = sandbox.safe_read(target, max_bytes=MAX_READ_BYTES)
+        except sandbox.UnsafePathError:
+            return "(not readable)"
+        return data.decode("utf-8", errors="replace")[:MAX_FILE_CHARS]
+
     def _readable(self, root: Path, path: str) -> Path | None:
         target = scope.contained_path(root, path)
         if target is None or not scope.within_allowed(path, self._allowed) or not target.is_file():
@@ -266,7 +275,7 @@ class ModelLoopEngine:
         for path in paths[:4]:
             target = self._readable(root, path)
             if target is not None:
-                parts.append(f"--- {path}\n{target.read_text(errors='replace')[:MAX_FILE_CHARS]}")
+                parts.append(f"--- {path}\n{self._text(target)}")
             else:
                 parts.append(f"--- {path}\n(not readable: outside the allowed paths or missing)")
         return "Requested files:\n" + "\n".join(parts)
@@ -279,7 +288,7 @@ class ModelLoopEngine:
             target = self._readable(root, path)
             if target is None:
                 continue
-            text = target.read_text(errors="replace")[:MAX_FILE_CHARS]
+            text = self._text(target)
             if len(text) > budget:
                 break
             budget -= len(text)
@@ -309,7 +318,7 @@ class ModelLoopEngine:
             if source is None:
                 continue
             ordered.append(test)
-            for spec in _RELATIVE_IMPORT.findall(source.read_text(errors="replace")):
+            for spec in _RELATIVE_IMPORT.findall(self._text(source)):
                 resolved = _resolve_import(root, posixpath.dirname(test), spec)
                 if resolved and self._readable(root, resolved) and resolved not in ordered:
                     ordered.append(resolved)

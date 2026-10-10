@@ -70,11 +70,15 @@ class SubprocessGit:
 
     def write_files(self, files: dict[str, str]) -> None:
         for rel, content in files.items():
-            if not scope.is_safe_relative(rel):
+            target = scope.contained_path(self.workdir, rel)   # no link in any existing component
+            if target is None:
                 raise GitError(f"unsafe path {rel!r}")
-            target = self.workdir / rel
             target.parent.mkdir(parents=True, exist_ok=True)
-            target.write_text(content, encoding="utf-8")
+            if scope.contained_path(self.workdir, rel) != target:
+                raise GitError(f"unsafe path {rel!r}")
+            fd = os.open(target, os.O_WRONLY | os.O_CREAT | os.O_TRUNC | os.O_NOFOLLOW, 0o644)
+            with os.fdopen(fd, "w", encoding="utf-8") as fh:
+                fh.write(content)
 
     def changed_paths(self) -> list[str]:
         out = self._git("status", "--porcelain=v1", "-z", "--untracked-files=all")
@@ -102,7 +106,11 @@ class SubprocessGit:
             else:
                 if path in tracked:
                     self._git("rm", "--cached", "--quiet", "--", path)
-                (self.workdir / path).unlink(missing_ok=True)
+                target = scope.contained_path(self.workdir, path)
+                if target is not None:
+                    target.unlink(missing_ok=True)
+                elif os.path.islink(self.workdir / path):
+                    os.unlink(self.workdir / path)   # the link itself, never what it points to
 
     def commit_all(self, message: str) -> str:
         self._git("add", "--all")
@@ -111,8 +119,14 @@ class SubprocessGit:
         self._git("commit", "--quiet", "--no-verify", "-m", message)
         return self.head_sha()
 
-    def push(self, branch: str, *, force: bool = False) -> None:
-        self._git("push", "--quiet", *(["--force-with-lease"] if force else []), "origin", f"HEAD:refs/heads/{branch}")
+    def push(self, branch: str, *, sha: str | None = None, force: bool = False) -> None:
+        """Push `sha` (default HEAD). With `sha`, HEAD must still be exactly that commit, so nothing that ran
+        after the last scope check can change what leaves the sandbox."""
+        if sha is not None and self.head_sha() != sha:
+            raise GitError(f"HEAD moved since {sha[:12]} was verified; refusing to push")
+        source = sha or "HEAD"
+        self._git("push", "--quiet", *(["--force-with-lease"] if force else []), "origin",
+                  f"{source}:refs/heads/{branch}")
 
     def head_sha(self) -> str:
         return self._git("rev-parse", "HEAD").strip()

@@ -36,6 +36,9 @@ _JOB_ID = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,63}")
 _AGENT_BRANCH = re.compile(r"agent/[A-Za-z0-9._/-]+")
 _ANY_BRANCH = re.compile(r"[A-Za-z0-9][A-Za-z0-9._/-]*")
 _FORBIDDEN_BRANCHES = {"main", "master", "HEAD", "sdlc-lock", "metrics"}
+# Commands run through a shell (as the engine user): words of plain characters only, so no
+# job field can chain, substitute or redirect (no ; & | $ ` < > quotes or newlines).
+_COMMAND = re.compile(r"[A-Za-z0-9 ._/=:@,+%-]*")
 
 
 class Mode(StrEnum):
@@ -125,7 +128,8 @@ class JobSpec:
             mode = Mode(job.get("mode"))
         except ValueError:
             raise JobSpecError("mode must be feature, bugfix, revise or maintenance") from None
-        branch = _branch(_str(job, "branch"), mode, base=str(job.get("base", "main")))
+        base = _base(job.get("base", "main"))
+        branch = _branch(_str(job, "branch"), mode, base=base)
         pr = job.get("pr")
         pr_number = pr.get("number") if isinstance(pr, dict) else None
         if mode in (Mode.REVISE, Mode.MAINTENANCE) and (not isinstance(pr_number, int) or isinstance(pr_number, bool)):
@@ -155,14 +159,14 @@ class JobSpec:
             raise JobSpecError("workdir must be a repo-relative directory")
         spec = job.get("spec") or {}
         return cls(
-            job_id=job_id, repo=REPO, base=_str(job, "base", "main"), branch=branch, mode=mode,
+            job_id=job_id, repo=REPO, base=base, branch=branch, mode=mode,
             issue_number=issue["number"], issue_title=str(issue.get("title", "")),
             issue_body=str(issue.get("body", "")),
             acceptance_criteria=tuple(str(c) for c in spec.get("acceptance_criteria", ())),
-            notes=str(spec.get("notes", "")), tests=tests, test_cmd=_str(job, "test_cmd"),
+            notes=str(spec.get("notes", "")), tests=tests, test_cmd=_command(job, "test_cmd", required=True),
             max_iterations=_int(job, "max_iterations", DEFAULT_MAX_ITERATIONS, 1, MAX_ITERATIONS_CAP),
             deadline_s=_int(job, "deadline_s", DEFAULT_DEADLINE_S, MIN_DEADLINE_S, DEFAULT_DEADLINE_S),
-            allowed_paths=allowed, workdir=workdir, install_cmd=str(job.get("install_cmd", "npm ci")),
+            allowed_paths=allowed, workdir=workdir, install_cmd=_command(job, "install_cmd", default="npm ci"),
             max_model_usd=_usd(job.get("max_model_usd", DEFAULT_MAX_MODEL_USD)),
             pr_number=pr_number if isinstance(pr_number, int) else None,
         )
@@ -179,6 +183,20 @@ class JobSpec:
             "max_model_usd": self.max_model_usd,
             **({"pr": {"number": self.pr_number}} if self.pr_number is not None else {}),
         }
+
+
+def _command(job: dict[str, Any], key: str, *, required: bool = False, default: str = "") -> str:
+    value = job.get(key, default)
+    if not isinstance(value, str) or not _COMMAND.fullmatch(value) or (required and not value.strip()):
+        raise JobSpecError(f"{key} must be plain words (letters, digits, spaces and ._/=:@,+%-)")
+    return value
+
+
+def _base(base: Any) -> str:
+    if (not isinstance(base, str) or not _ANY_BRANCH.fullmatch(base) or ".." in base or base.startswith("refs/")
+            or base.endswith(("/", ".lock"))):
+        raise JobSpecError("base must be a plain branch name")
+    return base
 
 
 def _branch(branch: str, mode: Mode, *, base: str) -> str:

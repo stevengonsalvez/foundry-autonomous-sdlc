@@ -140,6 +140,7 @@ def test_tool_env_is_an_allowlist_without_identity_or_secrets(tmp_path: Path, mo
 def test_agy_token_can_go_to_the_engine_user_home(tmp_path: Path) -> None:
     tools = Toolchain(tmp_path / "coder", fetch=FakeFetch({}))
     owner = (os.getuid(), os.getgid())
+    (tmp_path / "agyuser").mkdir()          # useradd -m created it
     path = tools.write_agy_token('{"t":"x"}', home=tmp_path / "agyuser", owner=owner)
     assert path == tmp_path / "agyuser/.gemini/antigravity-cli/antigravity-oauth-token"
     assert stat.S_IMODE(path.stat().st_mode) == 0o600

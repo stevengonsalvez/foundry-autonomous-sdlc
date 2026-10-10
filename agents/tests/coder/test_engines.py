@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 import sys
 import time
 from pathlib import Path
@@ -333,3 +334,11 @@ def test_agy_timeout_after_edits_keeps_them_for_the_test_run(tmp_path: Path) -> 
     assert result.returncode == 0
     assert "keeping them" in result.output
     assert (tmp_path / "calls").read_text() == "x"
+
+
+def test_model_loop_does_not_block_on_a_fifo(hostile_checkout: Path) -> None:
+    os.mkfifo(hostile_checkout / "app/src/pipe.ts")
+    engine = ModelLoopEngine(ScriptedClient([]), allowed_paths=("app/",), protected=(), tests_only=False)
+    started = time.monotonic()
+    assert "not readable" in engine._read(hostile_checkout, ["app/src/pipe.ts"])
+    assert time.monotonic() - started < 5

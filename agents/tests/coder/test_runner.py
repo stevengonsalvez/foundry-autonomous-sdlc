@@ -71,9 +71,18 @@ print(f"fake vitest: {{total}} tests, {{bad}} failed")
 sys.exit(0 if ok else 1)
 '''
 
+# Install commands are plain words (JobSpec forbids shell syntax), so test behaviours live in scripts.
+TOOLS = {
+    "tools/noop.py": "",
+    "tools/install_fail.py": "import sys\nprint('npm ERR! missing package')\nsys.exit(1)\n",
+    "tools/dump_env.py": "import json, os, sys\nopen(sys.argv[1], 'w').write(json.dumps(dict(os.environ)))\n",
+    "tools/plant_link.py": "import os\nos.symlink('/etc', 'web/src/escape')\n",
+}
+
 SEED = {
     ".gitignore": "node_modules/\n",
     "tools/fake_vitest.py": FAKE_VITEST,
+    **TOOLS,
     "app/web/src/eta.txt": "none\n",
     "app/web/src/title.txt": "Track your parcel\n",
     "app/web/tests/title.test.ts": "expect web/src/title.txt == Track your parcel\n",
@@ -535,7 +544,7 @@ def test_a_branch_not_starting_with_a_test_commit_is_refused(world: World) -> No
 def test_install_failure_is_reported(world: World) -> None:
     world.engines = [ScriptedEngine("agy", [])]
     service = world.service()
-    start(service, job(install_cmd=f"{sys.executable} -c 'import sys; print(\"npm ERR!\"); sys.exit(1)'"))
+    start(service, job(install_cmd=f"{sys.executable} ../tools/install_fail.py"))
     status = wait(service, "j-12-1")
     assert status["status"] == "failed"
     assert status["reason"] == "install-failed"
@@ -647,7 +656,7 @@ def test_test_runner_config_edits_are_rejected(world: World) -> None:
 def test_green_faked_through_ignored_files_does_not_survive_a_clean_install(world: World) -> None:
     world.engines = [ScriptedEngine("agy", [{"app/node_modules/FORCE_GREEN": "1"}])]
     service = world.service()
-    start(service, job(max_iterations=1, install_cmd=f"{sys.executable} -c pass"))
+    start(service, job(max_iterations=1, install_cmd=f"{sys.executable} ../tools/noop.py"))
     status = wait(service, "j-12-1")
     assert status["status"] == "failed", status
     assert status["reason"] == "max-iterations"
@@ -769,16 +778,16 @@ def test_status_reports_hosted_prices_and_the_agy_user(world: World) -> None:
 
 def test_with_an_engine_user_agy_install_and_tests_run_as_that_user(world: World) -> None:
     user = RunAs("agyuser", os.getuid(), os.getgid(), world.tmp / "agyuser-home")
-    installed: list[tuple[Path, RunAs]] = []
+    installed: list[Path] = []
+    reaped: list[RunAs] = []
     marker = world.tmp / "install-env.json"
     world.engines = [ScriptedEngine("agy", [{"app/web/src/eta.txt": "2026-10-12\n"}])]
     service = world.service()
     service._deps.engine_user = lambda: user
     service._deps.privileged_work_root = world.tmp / "srv"
-    service._deps.user_binary = lambda src, who: installed.append((src, who)) or who.home / ".local/bin/agy"
-    install = (f"{sys.executable} -c \"import json, os; "
-               f"open({str(marker)!r}, 'w').write(json.dumps(dict(os.environ)))\"")
-    start(service, job(install_cmd=install))
+    service._deps.agy_installer = lambda src: installed.append(src) or Path("/opt/agy/bin/agy")
+    service._deps.reap = lambda who: reaped.append(who) or 0    # the real one would kill this test's own uid
+    start(service, job(install_cmd=f"{sys.executable} ../tools/dump_env.py {marker}"))
     status = wait(service, "j-12-1")
     assert status["status"] == "succeeded", status
     assert status["agy_user"] == "agyuser"
@@ -786,8 +795,10 @@ def test_with_an_engine_user_agy_install_and_tests_run_as_that_user(world: World
     ctx = world.contexts[0]
     assert ctx.run_as == user
     assert ctx.agy_home == user.home
-    assert ctx.agy_binary == user.home / ".local/bin/agy"
-    assert installed == [(world.tmp / "home/.local/bin/agy", user)]
+    assert ctx.agy_binary == Path("/opt/agy/bin/agy")
+    assert installed == [world.tmp / "home/.local/bin/agy"]
+    assert reaped
+    assert set(reaped) == {user}
     assert service._deps.toolchain.token_writes == [(user.home, (user.uid, user.gid))]
     assert (world.tmp / "srv/j-12-1/checkout/.git").is_dir()
     env = json.loads(marker.read_text())
@@ -838,8 +849,22 @@ def test_start_is_idempotent_per_job_id_and_reports_its_session(world: World) ->
 def test_untrusted_install_code_cannot_plant_symlinks(world: World) -> None:
     world.engines = [ScriptedEngine("agy", [])]
     service = world.service()
-    plant = f"{sys.executable} -c \"import os; os.symlink('/etc', 'web/src/escape')\""
-    start(service, job(install_cmd=plant))
+    start(service, job(install_cmd=f"{sys.executable} ../tools/plant_link.py"))
     status = wait(service, "j-12-1")
     assert status["reason"] == "scope-violation"
     assert "install created symlinks" in status["detail"]
+
+
+def test_surviving_engine_user_processes_stop_the_job_before_root_touches_the_tree(world: World) -> None:
+    user = RunAs("agyuser", os.getuid(), os.getgid(), world.tmp / "agyuser-home")
+    world.engines = [ScriptedEngine("agy", [])]
+    service = world.service()
+    service._deps.engine_user = lambda: user
+    service._deps.privileged_work_root = world.tmp / "srv"
+    service._deps.agy_installer = lambda src: Path("/opt/agy/bin/agy")
+    service._deps.reap = lambda who: 1                            # an unkillable process
+    start(service, job())
+    status = wait(service, "j-12-1")
+    assert status["status"] == "failed"
+    assert "survived SIGKILL" in status["detail"]
+    assert git(world.remote_root / f"{REPO}.git", "branch", "--list", "agent/issue-12").strip() == ""

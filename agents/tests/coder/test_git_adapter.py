@@ -190,3 +190,26 @@ def test_clean_ignored_removes_only_ignored_files(cloned: tuple[SubprocessGit, P
     git.clean_ignored("app")
     assert not (dest / "app/node_modules").exists()
     assert (dest / "app/src/new.ts").exists()
+
+
+def test_write_files_refuses_a_symlinked_parent(cloned: tuple[SubprocessGit, Path], tmp_path: Path) -> None:
+    git, dest = cloned
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    (dest / "app/tests").symlink_to(outside)
+    with pytest.raises(GitError, match="unsafe path"):
+        git.write_files({"app/tests/x.test.ts": "x"})
+    assert list(outside.iterdir()) == []
+
+
+def test_push_sends_exactly_the_verified_sha(cloned: tuple[SubprocessGit, Path], tmp_path: Path) -> None:
+    git, _ = cloned
+    git.checkout_new_branch("agent/new", base="main")
+    git.write_files({"app/tests/x.test.ts": "x\n"})
+    sha = git.commit_all("test: add x")
+    git.push("agent/new", sha=sha)
+    assert remote_log(tmp_path / "remote", "agent/new") == ["test: add x"]
+    git.write_files({"app/tests/y.test.ts": "y\n"})
+    git.commit_all("test: add y")
+    with pytest.raises(GitError, match="HEAD moved"):
+        git.push("agent/new", sha=sha)

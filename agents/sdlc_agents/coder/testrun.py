@@ -18,9 +18,10 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from sdlc_agents.coder import scope, shell
+from sdlc_agents.coder import sandbox, scope, shell
 
 EXCERPT_CHARS = 6000
+MAX_REPORT_BYTES = 50 * 1024 * 1024
 
 
 def with_json_reporter(test_cmd: str, report_path: str) -> str:
@@ -157,5 +158,8 @@ class TestRunner:
         self._report_path.unlink(missing_ok=True)
         result = shell.run(self._cmd, cwd=self._cwd, env=self._env, timeout_s=timeout_s, cancel=self._cancel,
                            **self._run_as)
-        text = self._report_path.read_text(errors="replace") if self._report_path.exists() else ""
+        try:   # the engine user writes the report: no links, no FIFOs, bounded size
+            text = sandbox.safe_read(self._report_path, max_bytes=MAX_REPORT_BYTES).decode("utf-8", errors="replace")
+        except sandbox.UnsafePathError:
+            text = ""
         return TestOutcome(result.returncode, result.output, parse_vitest_json(text))

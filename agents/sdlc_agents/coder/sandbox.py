@@ -9,11 +9,13 @@ environment, and the job log records that.
 
 from __future__ import annotations
 
+import contextlib
 import os
 import pwd
 import shutil
 import signal
 import stat
+import tempfile
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
@@ -25,6 +27,7 @@ AGY_USER = "agyuser"
 _ENV_PASSTHROUGH = ("LANG", "LC_ALL", "TERM", "TZ", "SSL_CERT_FILE", "SSL_CERT_DIR", "NODE_EXTRA_CA_CERTS",
                     "HTTPS_PROXY", "HTTP_PROXY", "NO_PROXY")
 PRIVILEGED_WORK_ROOT = Path("/srv/sdlc-work")
+AGY_DIR = Path("/opt/agy")    # root-owned, like /opt/node: the engine user runs it, cannot change it
 ENGINE_SKIP_DIRS = (".git",)
 
 
@@ -55,21 +58,34 @@ def ensure_agy_user(*, run: Callable[..., CommandResult] = shell.run,
     return RunAs(AGY_USER, entry.pw_uid, entry.pw_gid, Path(entry.pw_dir))
 
 
-def kill_user_processes(user: RunAs, *, proc_root: Path = Path("/proc"),
-                        kill: Callable[[int, int], None] = os.kill) -> int:
-    """SIGKILL every process the engine user still has (daemons that left agy's process group)."""
-    if user.uid == 0:
-        return 0   # never root: that would take the coder itself down
-    killed = 0
+def user_pids(user: RunAs, *, proc_root: Path = Path("/proc")) -> list[int]:
+    pids: list[int] = []
     for entry in proc_root.glob("[0-9]*") if proc_root.is_dir() else []:
         try:
-            if entry.stat().st_uid != user.uid:
-                continue
-            kill(int(entry.name), signal.SIGKILL)
-            killed += 1
+            if entry.stat().st_uid == user.uid:
+                pids.append(int(entry.name))
         except (OSError, ValueError):
             continue
-    return killed
+    return pids
+
+
+def reap_user(user: RunAs, *, list_pids: Callable[[RunAs], list[int]] = user_pids,
+              kill: Callable[[int, int], None] = os.kill, max_rounds: int = 50) -> int:
+    """SIGKILL every process of the engine user, repeating until none is left (a fork can land mid-pass).
+
+    Called before anything root does to the user-owned tree (scans, hand-over, reads, pushes), so the
+    tree cannot change under root. Returns how many processes survived (0 on success); never touches root.
+    """
+    if user.uid == 0:
+        return 0
+    for _ in range(max_rounds):
+        pids = list_pids(user)
+        if not pids:
+            return 0
+        for pid in pids:
+            with contextlib.suppress(ProcessLookupError, PermissionError):
+                kill(pid, signal.SIGKILL)
+    return len(list_pids(user))
 
 
 def give_tree(root: Path, user: RunAs, *, chown: Callable[[str, int, int], None] = os.lchown) -> None:
@@ -81,26 +97,89 @@ def give_tree(root: Path, user: RunAs, *, chown: Callable[[str, int, int], None]
             chown(os.path.join(dirpath, name), user.uid, user.gid)
 
 
-def install_user_binary(source: Path, user: RunAs) -> Path:
-    """Install agy for the engine user in its own ~/.local/bin (the coder's $HOME is not traversable for it)."""
-    dest = user.home / ".local" / "bin" / "agy"
-    if not dest.exists() or dest.stat().st_size != source.stat().st_size:
-        dest.parent.mkdir(parents=True, exist_ok=True)
-        tmp = dest.with_suffix(".tmp")
-        shutil.copyfile(source, tmp)
-        os.chmod(tmp, 0o700)
-        os.lchown(tmp, user.uid, user.gid)
-        os.replace(tmp, dest)
-    for directory in (dest.parent, dest.parent.parent):
-        os.lchown(directory, user.uid, user.gid)
+class UnsafePathError(RuntimeError):
+    pass
+
+
+def install_agy_binary(source: Path, dest_root: Path = AGY_DIR) -> Path:
+    """Install agy in a root-owned directory the engine user can execute from but not write to.
+
+    Never into the user's home: root writing there could be steered by links the user planted.
+    """
+    dest = dest_root / "bin" / "agy"
+    if dest.is_file() and not dest.is_symlink() and dest.stat().st_size == source.stat().st_size:
+        return dest
+    dest.parent.mkdir(mode=0o755, parents=True, exist_ok=True)
+    fd, tmp = tempfile.mkstemp(dir=dest.parent, prefix=".agy-")
+    with os.fdopen(fd, "wb") as out, open(source, "rb") as src:
+        shutil.copyfileobj(src, out)
+        os.fchmod(out.fileno(), 0o755)
+    os.replace(tmp, dest)
     return dest
+
+
+def write_private_file(base: Path, rel: str, data: bytes, *, owner: tuple[int, int]) -> Path:
+    """Write `base/rel` (0600, dirs 0700, all owned by `owner`) without following any link.
+
+    Every directory is opened relative to its verified parent with O_NOFOLLOW, and an existing file
+    or link at the target is unlinked and recreated with O_EXCL, so a link planted by the engine user
+    can neither redirect the write nor have root change permissions on a file it points to.
+    """
+    parts = rel.split("/")
+    flags = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW
+    try:
+        fd = os.open(base, flags)
+    except OSError as exc:
+        raise UnsafePathError(f"{base}: {exc}") from None
+    try:
+        for part in parts[:-1]:
+            with contextlib.suppress(FileExistsError):
+                os.mkdir(part, 0o700, dir_fd=fd)
+            try:
+                child = os.open(part, flags, dir_fd=fd)
+            except OSError as exc:
+                raise UnsafePathError(f"{rel}: {part} is not a plain directory ({exc})") from None
+            os.close(fd)
+            fd = child
+            os.fchown(fd, *owner)
+            os.fchmod(fd, 0o700)
+        with contextlib.suppress(FileNotFoundError):
+            os.unlink(parts[-1], dir_fd=fd)
+        out = os.open(parts[-1], os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600, dir_fd=fd)
+        try:
+            os.fchmod(out, 0o600)
+            os.fchown(out, *owner)
+            os.write(out, data)
+        finally:
+            os.close(out)
+    finally:
+        os.close(fd)
+    return base / rel
+
+
+def safe_read(path: Path, *, max_bytes: int) -> bytes:
+    """Read a file in a tree another user controls: regular files only, links refused, never blocking."""
+    try:
+        fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+    except OSError as exc:
+        raise UnsafePathError(f"{path}: {exc}") from None
+    try:
+        info = os.fstat(fd)
+        if not stat.S_ISREG(info.st_mode):
+            raise UnsafePathError(f"{path} is not a regular file")
+        if info.st_size > max_bytes:
+            raise UnsafePathError(f"{path} is larger than {max_bytes} bytes")
+        with os.fdopen(os.dup(fd), "rb") as fh:
+            return fh.read(max_bytes)
+    finally:
+        os.close(fd)
 
 
 def user_env(user: RunAs, node_bin: Path) -> dict[str, str]:
     """The complete environment for install, tests and agy as the engine user: built from nothing."""
     env = {k: os.environ[k] for k in _ENV_PASSTHROUGH if k in os.environ}
     env.update({"HOME": str(user.home), "CI": "1", "NO_COLOR": "1",
-                "PATH": f"{node_bin}:{user.home}/.local/bin:/usr/local/bin:/usr/bin:/bin"})
+                "PATH": f"{node_bin}:{AGY_DIR}/bin:/usr/local/bin:/usr/bin:/bin"})
     return env
 
 

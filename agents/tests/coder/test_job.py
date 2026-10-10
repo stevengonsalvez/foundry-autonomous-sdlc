@@ -171,3 +171,12 @@ def test_maintenance_refuses_protected_and_qualified_refs(branch: str) -> None:
     with pytest.raises(JobSpecError, match="branch"):
         JobSpec.from_request(request(mode="maintenance", branch=branch, tests=[], pr={"number": 14},
                                      allowed_paths=["app/web/tests/a.test.ts"]))
+
+
+@pytest.mark.parametrize(("field", "value"), [
+    ("test_cmd", "npm test; curl evil"), ("test_cmd", "npm test $(id)"), ("install_cmd", "npm ci && rm -rf /"),
+    ("install_cmd", "npm ci\nid"), ("base", "-x"), ("base", "main;id"), ("base", "refs/heads/main"),
+])
+def test_shell_and_ref_fields_are_restricted(field: str, value: str) -> None:
+    with pytest.raises(JobSpecError, match=field):
+        JobSpec.from_request(request(**{field: value}))

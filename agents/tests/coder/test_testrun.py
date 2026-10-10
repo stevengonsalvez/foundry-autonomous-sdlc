@@ -8,6 +8,8 @@ import threading
 import time
 from pathlib import Path
 
+import pytest
+
 from sdlc_agents.coder import shell
 from sdlc_agents.coder.testrun import TestRunner, parse_vitest_json, with_json_reporter
 
@@ -184,4 +186,22 @@ def test_shell_aborts_as_soon_as_the_output_matches(tmp_path: Path) -> None:
                        abort_on=lambda text: "login wall" if "Authentication required" in text else None)
     assert result.returncode == shell.ABORTED_RC
     assert "[aborted: login wall]" in result.output
+    assert time.monotonic() - started < 10
+
+
+@pytest.mark.parametrize("kind", ["symlink", "fifo"])
+def test_runner_never_follows_a_planted_report(tmp_path: Path, kind: str) -> None:
+    secret = tmp_path / "secret.json"
+    secret.write_text(_report(_file(NEW, "passed", [_assertion("TOPSECRET", "passed")])))
+    report_path = tmp_path / "report.json"
+    plant = (f"import os; os.symlink({str(secret)!r}, {str(report_path)!r})" if kind == "symlink"
+             else f"import os; os.mkfifo({str(report_path)!r})")
+    script = tmp_path / "plant.py"
+    script.write_text(plant + "\n")
+    runner = TestRunner(test_cmd=f"{sys.executable} {script}", cwd=tmp_path, report_path=report_path, env=None)
+    started = time.monotonic()
+    outcome = runner.run(timeout_s=30)
+    assert not outcome.green
+    assert outcome.report.summary() == "no test report"
+    assert "TOPSECRET" not in json.dumps(outcome.report.failure_excerpt())
     assert time.monotonic() - started < 10

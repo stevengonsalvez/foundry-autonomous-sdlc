@@ -19,7 +19,7 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
-from sdlc_agents.coder import shell
+from sdlc_agents.coder import sandbox, shell
 from sdlc_agents.ports import CommandResult
 
 NODE_INDEX = "https://nodejs.org/dist/latest-v22.x/"
@@ -142,16 +142,13 @@ class Toolchain:
     def write_agy_token(self, token: str, *, home: Path | None = None,
                         owner: tuple[int, int] | None = None) -> Path:
         """Write the agy token 0600 under `home` (default: the coder's), owned by `owner` when given."""
+        if owner is not None:   # another user's home: never follow what that user may have planted there
+            return sandbox.write_private_file(home or self.home, AGY_AUTH_FILE, token.encode(), owner=owner)
         path = (home or self.home) / AGY_AUTH_FILE
         path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
         os.chmod(path.parent, 0o700)
         fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC | os.O_NOFOLLOW, 0o600)
         with os.fdopen(fd, "w", encoding="utf-8") as fh:
             os.fchmod(fh.fileno(), 0o600)
-            if owner is not None:
-                os.fchown(fh.fileno(), *owner)
             fh.write(token)
-        if owner is not None:
-            for directory in (path.parent, path.parent.parent):   # .gemini/antigravity-cli and .gemini
-                os.lchown(directory, *owner)
         return path
