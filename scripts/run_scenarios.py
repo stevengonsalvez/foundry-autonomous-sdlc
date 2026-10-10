@@ -20,6 +20,7 @@ ROOT = Path(__file__).resolve().parent.parent
 SCENARIOS = ROOT / "scenarios"
 FILES = {
     "a": "a-feature.md",
+    "a2": "a2-feature.md",
     "b": "b-vague.md",
     "c": "c-not-suitable.md",
     "d": "d-bug.md",
