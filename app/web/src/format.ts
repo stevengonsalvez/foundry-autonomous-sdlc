@@ -1,15 +1,7 @@
-const dateTime = new Intl.DateTimeFormat("en-GB", {
-  day: "numeric",
-  month: "short",
-  year: "numeric",
-  hour: "2-digit",
-  minute: "2-digit",
-  hourCycle: "h23",
-  timeZone: "UTC",
-});
-
-/** `10 Oct 2026, 06:42 UTC`. Shown in UTC so everyone reads the same time. */
-export function formatDateTime(iso: string): string {
-  const instant = new Date(iso);
-  return Number.isNaN(instant.getTime()) ? iso : `${dateTime.format(instant)} UTC`;
+export function formatDate(dateOnly: string): string {
+  // Date-only string like YYYY-MM-DD. Parse without timezone shifts by splitting instead of Date constructor.
+  const [y, m, d] = dateOnly.split("-").map(Number);
+  const dt = new Date(Date.UTC(y, m - 1, d));
+  // Format as 'Mon 12 Oct 2026' in en-GB short month, weekday
+  return dt.toLocaleDateString("en-GB", { weekday: "short", day: "2-digit", month: "short", year: "numeric" });
 }
