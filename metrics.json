@@ -38,7 +38,7 @@
       "pass": 1
     }
   },
-  "generated_at": "2026-10-10T16:46:42Z",
+  "generated_at": "2026-10-10T16:47:16Z",
   "issues": [
     {
       "closed_at": "2026-10-10T12:28:43Z",
@@ -866,11 +866,11 @@
       "closed_at": null,
       "coder_engine": null,
       "cost": {
-        "calls": 1,
+        "calls": 2,
         "coder_model_usd": 0.0,
         "coder_usd": 0.0,
-        "model_usd": 0.001449,
-        "usd": 0.001449
+        "model_usd": 0.002501,
+        "usd": 0.002501
       },
       "deferred": null,
       "escalation": null,
@@ -890,9 +890,14 @@
       "stages": [
         {
           "entered_at": "2026-10-10T16:45:20Z",
+          "seconds": 103,
+          "stage": "stage:ready"
+        },
+        {
+          "entered_at": "2026-10-10T16:47:03Z",
           "in_progress": true,
           "seconds": 0,
-          "stage": "stage:ready"
+          "stage": "stage:feasible"
         }
       ],
       "title": "Show when the parcel was last updated on the parcel page",
@@ -902,11 +907,11 @@
       "closed_at": null,
       "coder_engine": null,
       "cost": {
-        "calls": 3,
+        "calls": 4,
         "coder_model_usd": 0.0,
         "coder_usd": 0.0,
-        "model_usd": 0.004594,
-        "usd": 0.004594
+        "model_usd": 0.005441,
+        "usd": 0.005441
       },
       "deferred": null,
       "escalation": null,
@@ -931,9 +936,14 @@
         },
         {
           "entered_at": "2026-10-10T16:46:35Z",
+          "seconds": 33,
+          "stage": "stage:ready"
+        },
+        {
+          "entered_at": "2026-10-10T16:47:08Z",
           "in_progress": true,
           "seconds": 0,
-          "stage": "stage:ready"
+          "stage": "stage:feasible"
         }
       ],
       "title": "Make the parcel tracker better",
@@ -943,11 +953,11 @@
       "closed_at": null,
       "coder_engine": null,
       "cost": {
-        "calls": 2,
+        "calls": 3,
         "coder_model_usd": 0.0,
         "coder_usd": 0.0,
-        "model_usd": 0.00211,
-        "usd": 0.00211
+        "model_usd": 0.003433,
+        "usd": 0.003433
       },
       "deferred": null,
       "escalation": null,
@@ -967,9 +977,14 @@
       "stages": [
         {
           "entered_at": "2026-10-10T16:46:09Z",
+          "seconds": 65,
+          "stage": "stage:ready"
+        },
+        {
+          "entered_at": "2026-10-10T16:47:14Z",
           "in_progress": true,
           "seconds": 0,
-          "stage": "stage:ready"
+          "stage": "stage:feasible"
         }
       ],
       "title": "Lowercase tracking numbers are rejected as invalid",
@@ -981,9 +996,9 @@
     "deferred": 0,
     "escalated": 13,
     "issues": 17,
-    "orchestrator_usd": 0.469751,
+    "orchestrator_usd": 0.475121,
     "released": 1,
-    "usd": 1.05752
+    "usd": 1.066112
   },
   "version": 1
 }
