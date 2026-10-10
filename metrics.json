@@ -38,7 +38,7 @@
       "pass": 1
     }
   },
-  "generated_at": "2026-10-10T16:46:11Z",
+  "generated_at": "2026-10-10T16:46:42Z",
   "issues": [
     {
       "closed_at": "2026-10-10T12:28:43Z",
@@ -902,11 +902,11 @@
       "closed_at": null,
       "coder_engine": null,
       "cost": {
-        "calls": 2,
+        "calls": 3,
         "coder_model_usd": 0.0,
         "coder_usd": 0.0,
-        "model_usd": 0.002932,
-        "usd": 0.002932
+        "model_usd": 0.004594,
+        "usd": 0.004594
       },
       "deferred": null,
       "escalation": null,
@@ -918,7 +918,7 @@
       "outcome": "open",
       "owner": null,
       "pr": null,
-      "quality_score": 5,
+      "quality_score": 90,
       "release": null,
       "resolution_seconds": null,
       "scenario": "b",
@@ -926,9 +926,14 @@
       "stages": [
         {
           "entered_at": "2026-10-10T16:45:26Z",
+          "seconds": 69,
+          "stage": "stage:needs-refinement"
+        },
+        {
+          "entered_at": "2026-10-10T16:46:35Z",
           "in_progress": true,
           "seconds": 0,
-          "stage": "stage:needs-refinement"
+          "stage": "stage:ready"
         }
       ],
       "title": "Make the parcel tracker better",
@@ -976,9 +981,9 @@
     "deferred": 0,
     "escalated": 13,
     "issues": 17,
-    "orchestrator_usd": 0.464407,
+    "orchestrator_usd": 0.469751,
     "released": 1,
-    "usd": 1.050514
+    "usd": 1.05752
   },
   "version": 1
 }
