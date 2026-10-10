@@ -1,4 +1,5 @@
 {
+  "deferrals": {},
   "gate_pass_rates": {
     "agent-scope": {
       "fail": 0,
@@ -37,7 +38,7 @@
       "pass": 0
     }
   },
-  "generated_at": "2026-10-10T14:16:05Z",
+  "generated_at": "2026-10-10T14:37:22Z",
   "issues": [
     {
       "closed_at": "2026-10-10T12:28:43Z",
@@ -410,7 +411,7 @@
       "type": "bug"
     },
     {
-      "closed_at": null,
+      "closed_at": "2026-10-10T14:36:49Z",
       "coder_engine": "loop",
       "cost": {
         "calls": 3,
@@ -463,16 +464,52 @@
       ],
       "title": "Show the estimated delivery date on the parcel page",
       "type": "feature"
+    },
+    {
+      "closed_at": null,
+      "coder_engine": null,
+      "cost": {
+        "calls": 1,
+        "coder_model_usd": 0.0,
+        "coder_usd": 0.0,
+        "model_usd": 0.001254,
+        "usd": 0.001254
+      },
+      "deferred": null,
+      "escalation": null,
+      "gate_attempts": {},
+      "gates": {},
+      "kind": "issue",
+      "number": 11,
+      "opened_at": "2026-10-10T14:36:50Z",
+      "outcome": "open",
+      "owner": null,
+      "pr": null,
+      "quality_score": 100,
+      "release": null,
+      "resolution_seconds": null,
+      "scenario": "a",
+      "severity": null,
+      "stages": [
+        {
+          "entered_at": "2026-10-10T14:37:20Z",
+          "in_progress": true,
+          "seconds": 0,
+          "stage": "stage:ready"
+        }
+      ],
+      "title": "Show the estimated delivery date on the parcel page",
+      "type": "feature"
     }
   ],
   "repo": "stevengonsalvez/foundry-autonomous-sdlc",
   "totals": {
     "deferred": 0,
     "escalated": 8,
-    "issues": 8,
-    "orchestrator_usd": 0.233286,
+    "issues": 9,
+    "orchestrator_usd": 0.238174,
     "released": 0,
-    "usd": 0.454949
+    "usd": 0.461091
   },
   "version": 1
 }
