@@ -37,7 +37,7 @@
       "pass": 0
     }
   },
-  "generated_at": "2026-10-10T12:53:13Z",
+  "generated_at": "2026-10-10T12:54:22Z",
   "issues": [
     {
       "closed_at": "2026-10-10T12:28:43Z",
@@ -83,11 +83,11 @@
       "closed_at": null,
       "coder_engine": null,
       "cost": {
-        "calls": 2,
+        "calls": 3,
         "coder_model_usd": 0.0,
         "coder_usd": 0.0,
-        "model_usd": 0.002537,
-        "usd": 0.002537
+        "model_usd": 0.007515,
+        "usd": 0.007515
       },
       "deferred": null,
       "escalation": null,
@@ -112,9 +112,14 @@
         },
         {
           "entered_at": "2026-10-10T12:52:48Z",
+          "seconds": 63,
+          "stage": "stage:feasible"
+        },
+        {
+          "entered_at": "2026-10-10T12:53:51Z",
           "in_progress": true,
           "seconds": 0,
-          "stage": "stage:feasible"
+          "stage": "stage:tests-written"
         }
       ],
       "title": "Show the estimated delivery date on the parcel page",
@@ -124,11 +129,11 @@
       "closed_at": null,
       "coder_engine": null,
       "cost": {
-        "calls": 3,
+        "calls": 4,
         "coder_model_usd": 0.0,
         "coder_usd": 0.0,
-        "model_usd": 0.005108,
-        "usd": 0.005108
+        "model_usd": 0.006101,
+        "usd": 0.006101
       },
       "deferred": null,
       "escalation": null,
@@ -153,9 +158,14 @@
         },
         {
           "entered_at": "2026-10-10T12:52:55Z",
+          "seconds": 61,
+          "stage": "stage:ready"
+        },
+        {
+          "entered_at": "2026-10-10T12:53:56Z",
           "in_progress": true,
           "seconds": 0,
-          "stage": "stage:ready"
+          "stage": "stage:feasible"
         }
       ],
       "title": "Make the parcel tracker better",
@@ -165,20 +175,20 @@
       "closed_at": null,
       "coder_engine": null,
       "cost": {
-        "calls": 3,
+        "calls": 4,
         "coder_model_usd": 0.0,
         "coder_usd": 0.0,
-        "model_usd": 0.006809,
-        "usd": 0.006809
+        "model_usd": 0.007688,
+        "usd": 0.007688
       },
       "deferred": null,
-      "escalation": null,
+      "escalation": "escalated:not-agent-suitable",
       "gate_attempts": {},
       "gates": {},
       "kind": "issue",
       "number": 6,
       "opened_at": "2026-10-10T12:28:46Z",
-      "outcome": "open",
+      "outcome": "escalated",
       "owner": null,
       "pr": null,
       "quality_score": 87,
@@ -194,9 +204,13 @@
         },
         {
           "entered_at": "2026-10-10T12:53:04Z",
-          "in_progress": true,
-          "seconds": 0,
+          "seconds": 57,
           "stage": "stage:ready"
+        },
+        {
+          "entered_at": "2026-10-10T12:54:01Z",
+          "seconds": 0,
+          "stage": "escalated:not-agent-suitable"
         }
       ],
       "title": "Move the live carrier integration to the new vendor and rotate the production keys",
@@ -206,11 +220,11 @@
       "closed_at": null,
       "coder_engine": null,
       "cost": {
-        "calls": 3,
+        "calls": 4,
         "coder_model_usd": 0.0,
         "coder_usd": 0.0,
-        "model_usd": 0.003689,
-        "usd": 0.003689
+        "model_usd": 0.007874,
+        "usd": 0.007874
       },
       "deferred": null,
       "escalation": null,
@@ -235,9 +249,14 @@
         },
         {
           "entered_at": "2026-10-10T12:53:11Z",
+          "seconds": 68,
+          "stage": "stage:feasible"
+        },
+        {
+          "entered_at": "2026-10-10T12:54:19Z",
           "in_progress": true,
           "seconds": 0,
-          "stage": "stage:feasible"
+          "stage": "stage:tests-written"
         }
       ],
       "title": "Lowercase tracking numbers are rejected as invalid",
@@ -247,11 +266,11 @@
   "repo": "stevengonsalvez/foundry-autonomous-sdlc",
   "totals": {
     "deferred": 0,
-    "escalated": 1,
+    "escalated": 2,
     "issues": 5,
-    "orchestrator_usd": 0.056337,
+    "orchestrator_usd": 0.06293,
     "released": 0,
-    "usd": 0.075729
+    "usd": 0.093357
   },
   "version": 1
 }
