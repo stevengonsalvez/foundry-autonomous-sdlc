@@ -521,6 +521,7 @@ class FakeRoutinesOps:
 
 
 def test_sdk_facade_maps_agents_versions_and_routines() -> None:
+    pytest.importorskip("azure.ai.projects")  # runs in the agents CI job, which installs the SDK
     agents, routines = FakeAgentsOps(), FakeRoutinesOps()
     client = SimpleNamespace(agents=agents, beta=SimpleNamespace(routines=routines))
     sdk = da.SdkFoundry(client, not_found=_NotFound)

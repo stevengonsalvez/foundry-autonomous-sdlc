@@ -350,5 +350,8 @@ jobs:
       - name: Run tests
         run: uv run --locked --all-extras --with "pytest==$PYTEST_VERSION" python -m pytest -q
 
+      - name: Run deploy script tests (needs the Azure SDK)
+        run: uv run --locked --all-extras --with "pytest==$PYTEST_VERSION" --with "pyyaml==$PYYAML_VERSION" python -m pytest -q ../scripts/tests/test_deploy_agents.py
+
       - name: Lint
         run: uvx --from "ruff==$RUFF_VERSION" ruff check .
