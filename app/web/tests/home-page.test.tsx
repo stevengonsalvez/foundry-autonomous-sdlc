@@ -1,5 +1,5 @@
 import { render, screen } from "@testing-library/react";
-import HomePage from "../src/pages/home";
+import HomePage from "../src/pages/Home";
 
 // render helper
 function renderWithProviders(ui: React.ReactElement) {

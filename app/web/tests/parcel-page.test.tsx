@@ -1,5 +1,5 @@
 import { render, screen } from "@testing-library/react";
-import ParcelPage from "../src/pages/parcel";
+import ParcelPage from "../src/pages/Parcel";
 
 // simple render helper
 function renderWithProviders(ui: React.ReactElement) {
