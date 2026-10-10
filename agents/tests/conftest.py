@@ -21,11 +21,18 @@ class World:
     gh: FakeGitHub
     coder: FakeCoder
     foundry: FakeFoundry
+    sleeps: list[float]
+
+    def sleep(self, seconds: float) -> None:
+        """Waits inside a tick (retry backoff) pass on the fake clock."""
+        self.sleeps.append(seconds)
+        self.clock.advance(seconds)
 
     def tick(self, count: int = 1, *, budget: Budget | None = None, wall_s: int = 240) -> list[TickReport]:
         reports = []
         for _ in range(count):
-            reports.append(run_tick(self.gh, self.foundry, NoSecrets(), self.clock, wall_s, budget=budget))
+            reports.append(run_tick(self.gh, self.foundry, NoSecrets(), self.clock, wall_s, budget=budget,
+                                    sleep=self.sleep))
             self.clock.advance(300)
         return reports
 
@@ -43,4 +50,4 @@ def world() -> World:
     clock = FakeClock()
     gh = FakeGitHub(clock)
     coder = FakeCoder(gh)
-    return World(clock, gh, coder, FakeFoundry(coder, clock))
+    return World(clock, gh, coder, FakeFoundry(coder, clock), [])

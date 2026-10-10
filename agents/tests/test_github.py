@@ -283,10 +283,13 @@ def test_branch_commit_time_of_a_missing_branch_is_none_and_ref_errors_raise() -
 def test_tags_releases_and_workflow_dispatch() -> None:
     gh, transport, _ = client({
         "GET /tags?per_page=100&page=1": ok([{"name": "v0.1.0"}]),
+        "GET /git/trees/main?recursive=1": ok({"tree": [{"path": "app", "type": "tree"},
+                                                        {"path": "app/a.ts", "type": "blob"}], "truncated": False}),
         "POST /releases": ok({"html_url": "https://github.com/r/releases/tag/v0.2.0"}, 201),
         "POST /actions/workflows/pages.yml/dispatches": HttpResponse(204, {}, b""),
     })
     assert gh.list_tags() == ["v0.1.0"]
+    assert gh.list_tree("main") == ["app/a.ts"]
     assert gh.create_release(tag="v0.2.0", target_sha="m", name="n", body="b").endswith("v0.2.0")
     gh.dispatch_workflow("pages.yml", ref="main")
     assert json.loads(transport.requests[-1].body) == {"ref": "main"}

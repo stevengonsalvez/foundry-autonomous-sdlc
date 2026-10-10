@@ -26,8 +26,10 @@ from sdlc_agents.foundry import (
     AgentOutputError,
     AgentRunError,
     FoundryClient,
+    RetryPolicy,
     Section,
     build_input,
+    call_with_retry,
     run_agent,
 )
 from sdlc_agents.keyvault import KeyVaultSecrets, SecretError
@@ -91,7 +93,7 @@ def test_prompt_agent_call_uses_an_agent_reference_by_name_and_returns_usage() -
     kwargs = project.get_openai_client.return_value.responses.create.call_args.kwargs
     assert kwargs["extra_body"] == {"agent_reference": {"type": "agent_reference", "name": "sdlc-triage"}}
     assert kwargs["max_output_tokens"] == 32_000 and kwargs["input"] == "input"
-    project.get_openai_client.assert_called_with(max_retries=1, timeout=120.0)
+    project.get_openai_client.assert_called_with(max_retries=0, timeout=120.0)
 
 
 @pytest.mark.parametrize("result, message", [
@@ -193,12 +195,14 @@ def test_run_agent_validates_json_and_sanitises_markdown() -> None:
 
 
 @pytest.mark.parametrize("text", ['{"severity": "s1", "severity": "s2"}', "not json", '{"severity": "s9"}'])
-def test_run_agent_rejects_bad_json_but_reports_the_usage(text: str) -> None:
+def test_run_agent_rejects_bad_json_after_one_repair_and_bills_both_answers(text: str) -> None:
     foundry = FakeFoundry()
-    foundry.script("sdlc-triage", text)
-    with pytest.raises(AgentOutputError) as exc:
-        run_agent(foundry, "sdlc-triage", [Section("issue", "x")])
-    assert (exc.value.input_tokens, exc.value.output_tokens) == (1000, 400)
+    foundry.script("sdlc-triage", text, text)
+    billed: list[tuple[str, int, int]] = []
+    with pytest.raises(AgentOutputError, match="after a repair retry"):
+        run_agent(foundry, "sdlc-triage", [Section("issue", "x")], bill=lambda *a: billed.append(a))
+    assert billed == [("sdlc-triage", 1000, 400)] * 2
+    assert "## repair\nYour previous answer was rejected" in foundry.calls[1][1]
 
 
 # ---------------------------------------------------------------------------
@@ -414,3 +418,105 @@ def test_zip_is_deterministic_and_vendors_the_package_at_the_root(tmp_path: Path
     assert "sdlc_agents/tick.py" in names and "sdlc_agents/ports.py" in names
     assert not [n for n in names if "__pycache__" in n or n.startswith("sdlc_agents/coder/")]
     assert build_zip.main(["--out", str(tmp_path / "c.zip")]) == 0
+
+
+# ---------------------------------------------------------------------------
+# Transient classification and retry
+# ---------------------------------------------------------------------------
+
+def _status_error(status: int, headers: dict[str, str] | None = None, body: Any = None) -> Exception:
+    response = MagicMock(status_code=status, request=MagicMock(), headers=headers or {})
+    return openai.APIStatusError("boom", response=response, body=body)
+
+
+@pytest.mark.parametrize("error, transient, retry_after", [
+    (_status_error(429, {"retry-after": "7"}), True, 7.0),
+    (_status_error(408), True, None),
+    (_status_error(503, {"retry-after": "soon"}), True, None),
+    (_status_error(400, body={"code": "rate_limit_exceeded"}), True, None),
+    (_status_error(400, body={"code": "invalid_prompt"}), False, None),
+    (openai.APIConnectionError(request=MagicMock()), True, None),
+])
+def test_prompt_call_errors_are_classified(error: Exception, transient: bool, retry_after: float | None) -> None:
+    client = FoundryClient(ENDPOINT, Token(), project_factory=lambda e, c: project_returning(error))
+    with pytest.raises(AgentRunError) as exc:
+        client.call_prompt_agent("sdlc-triage", "x")
+    assert (exc.value.transient, exc.value.retry_after) == (transient, retry_after)
+
+
+def test_failed_response_with_a_rate_limit_code_is_transient_and_a_refusal_is_not() -> None:
+    failed = response(status="failed")
+    failed.error = types.SimpleNamespace(code="rate_limit_exceeded")
+    client = FoundryClient(ENDPOINT, Token(), project_factory=lambda e, c: project_returning(failed))
+    with pytest.raises(AgentRunError) as exc:
+        client.call_prompt_agent("sdlc-triage", "x")
+    assert exc.value.transient
+    refused = response(status="incomplete")
+    refused.incomplete_details = types.SimpleNamespace(reason="content_filter")
+    client = FoundryClient(ENDPOINT, Token(), project_factory=lambda e, c: project_returning(refused))
+    with pytest.raises(AgentRunError, match="content_filter") as exc:
+        client.call_prompt_agent("sdlc-triage", "x")
+    assert not exc.value.transient and exc.value.output_tokens == 20
+
+
+def test_invoke_hosted_marks_throttling_outages_and_dropped_connections_transient() -> None:
+    client = FoundryClient(ENDPOINT, Token(), transport=Transport(HttpResponse(429, {"retry-after": "3"}, b"")))
+    with pytest.raises(AgentRunError) as exc:
+        client.invoke_hosted("sdlc-coder", {})
+    assert exc.value.transient and exc.value.retry_after == 3.0
+
+    def drop(_request: HttpRequest) -> HttpResponse:
+        raise urllib.error.URLError("connection reset")
+
+    with pytest.raises(AgentRunError) as exc:
+        FoundryClient(ENDPOINT, Token(), transport=drop).invoke_hosted("sdlc-coder", {})
+    assert exc.value.transient
+    with pytest.raises(AgentRunError) as exc:
+        FoundryClient(ENDPOINT, Token(), transport=Transport(HttpResponse(404, {}, b""))).invoke_hosted("x", {})
+    assert not exc.value.transient
+
+
+class _Clock:
+    def __init__(self) -> None:
+        self.now = 0.0
+        self.waits: list[float] = []
+
+    def sleep(self, seconds: float) -> None:
+        self.waits.append(seconds)
+        self.now += seconds
+
+
+def _policy(clock: _Clock, deadline: float = 1000.0, jitter: float = 0.0) -> RetryPolicy:
+    return RetryPolicy(sleep=clock.sleep, monotonic=lambda: clock.now, deadline=deadline, jitter=lambda: jitter)
+
+
+def test_call_with_retry_backs_off_exponentially_and_gives_up_after_max_attempts() -> None:
+    clock = _Clock()
+    calls: list[int] = []
+
+    def always_throttled() -> None:
+        calls.append(1)
+        raise AgentRunError("429", transient=True)
+
+    with pytest.raises(AgentRunError):
+        call_with_retry(always_throttled, _policy(clock))
+    assert len(calls) == 4 and clock.waits == [1.0, 2.0, 4.0]      # base 2 s x 2^n, jitter at its low end
+
+
+def test_call_with_retry_stops_before_the_deadline_and_never_retries_real_failures() -> None:
+    clock = _Clock()
+    with pytest.raises(AgentRunError):
+        call_with_retry(lambda: (_ for _ in ()).throw(AgentRunError("429", transient=True, retry_after=50)),
+                        _policy(clock, deadline=40))
+    assert clock.waits == []
+    attempts: list[int] = []
+
+    def refused() -> None:
+        attempts.append(1)
+        raise AgentRunError("content_filter")
+
+    with pytest.raises(AgentRunError):
+        call_with_retry(refused, _policy(clock))
+    assert attempts == [1]
+    assert call_with_retry(lambda: "ok", None) == "ok"
+    assert RetryPolicy(sleep=clock.sleep, monotonic=lambda: 0, deadline=1, jitter=lambda: 1.0).delay(9, None) == 30.0

@@ -278,6 +278,10 @@ class GitHubClient:
             return None
         return base64.b64decode(data.get("content", "")).decode("utf-8")
 
+    def list_tree(self, ref: str) -> list[str]:
+        data = self._call("GET", f"/git/trees/{urllib.parse.quote(ref, safe='')}", params={"recursive": "1"})
+        return [item["path"] for item in data.get("tree") or [] if item.get("type") == "blob"]
+
     def put_file(self, path: str, content: str, *, branch: str, message: str) -> None:
         resp = self._send("GET", f"/contents/{urllib.parse.quote(path)}", params={"ref": branch})
         body: dict[str, Any] = {

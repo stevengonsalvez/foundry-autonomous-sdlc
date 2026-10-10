@@ -293,6 +293,10 @@ class FakeGitHub:
         self._record("get_file")
         return self.files.get((ref, path))
 
+    def list_tree(self, ref: str) -> list[str]:
+        self._record("list_tree")
+        return sorted(path for branch, path in self.files if branch == ref)
+
     def put_file(self, path: str, content: str, *, branch: str, message: str) -> None:
         self._record("put_file")
         if branch not in self.branches:
@@ -478,7 +482,9 @@ class FakeFoundry:
         self.scripts: dict[str, list[Responder]] = {}
         self.defaults = default_responses()
         self.usage = (1000, 400)
-        self.errors: dict[str, Exception] = {}
+        self.errors: dict[str, Exception] = {}              # raised on every call to the agent
+        self.fail_next: dict[str, list[Exception]] = {}     # raised once each, in order
+        self.hosted_fail_next: list[Exception] = []
 
     def script(self, agent: str, *responses: Responder) -> None:
         self.scripts.setdefault(agent, []).extend(responses)
@@ -492,6 +498,8 @@ class FakeFoundry:
             self.clock.advance(self.latency_s)
         if agent in self.errors:
             raise self.errors[agent]
+        if self.fail_next.get(agent):
+            raise self.fail_next[agent].pop(0)
         queue = self.scripts.get(agent)
         responder = queue.pop(0) if queue else self.defaults[agent]
         value = responder(input_text) if callable(responder) else responder
@@ -501,6 +509,8 @@ class FakeFoundry:
     def invoke_hosted(self, agent: str, body: dict[str, Any], *, session_id: str | None = None,
                       timeout_s: int = 240) -> tuple[dict[str, Any], str]:
         self.hosted.append((agent, body, session_id))
+        if self.hosted_fail_next:
+            raise self.hosted_fail_next.pop(0)
         assert self.coder is not None, "no coder configured"
         return self.coder.handle(body, session_id)
 

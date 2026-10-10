@@ -102,6 +102,7 @@ class GitHubPort(Protocol):
     def get_check_log(self, sha: str, name: str) -> str: ...                        # log tail, "" if unavailable
 
     def get_file(self, path: str, *, ref: str) -> str | None: ...                   # None if absent
+    def list_tree(self, ref: str) -> list[str]: ...                                  # every file path at ref
     def put_file(self, path: str, content: str, *, branch: str, message: str) -> None: ...  # create or update
     def get_branch_sha(self, branch: str) -> str | None: ...
     def create_branch(self, branch: str, *, from_sha: str) -> None: ...             # GitHubError(422) if it exists
