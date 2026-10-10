@@ -37,7 +37,7 @@
       "pass": 0
     }
   },
-  "generated_at": "2026-10-10T13:16:16Z",
+  "generated_at": "2026-10-10T13:16:45Z",
   "issues": [
     {
       "closed_at": "2026-10-10T12:28:43Z",
@@ -298,11 +298,11 @@
       "closed_at": null,
       "coder_engine": null,
       "cost": {
-        "calls": 1,
+        "calls": 2,
         "coder_model_usd": 0.0,
         "coder_usd": 0.0,
-        "model_usd": 0.001401,
-        "usd": 0.001401
+        "model_usd": 0.002535,
+        "usd": 0.002535
       },
       "deferred": null,
       "escalation": null,
@@ -322,9 +322,14 @@
       "stages": [
         {
           "entered_at": "2026-10-10T13:16:09Z",
+          "seconds": 26,
+          "stage": "stage:ready"
+        },
+        {
+          "entered_at": "2026-10-10T13:16:35Z",
           "in_progress": true,
           "seconds": 0,
-          "stage": "stage:ready"
+          "stage": "stage:feasible"
         }
       ],
       "title": "Show the estimated delivery date on the parcel page",
@@ -334,11 +339,11 @@
       "closed_at": null,
       "coder_engine": null,
       "cost": {
-        "calls": 1,
+        "calls": 2,
         "coder_model_usd": 0.0,
         "coder_usd": 0.0,
-        "model_usd": 0.000793,
-        "usd": 0.000793
+        "model_usd": 0.002353,
+        "usd": 0.002353
       },
       "deferred": null,
       "escalation": null,
@@ -350,12 +355,19 @@
       "outcome": "open",
       "owner": "api",
       "pr": null,
-      "quality_score": null,
+      "quality_score": 78,
       "release": null,
       "resolution_seconds": null,
       "scenario": "d",
       "severity": "s3",
-      "stages": [],
+      "stages": [
+        {
+          "entered_at": "2026-10-10T13:16:43Z",
+          "in_progress": true,
+          "seconds": 0,
+          "stage": "stage:needs-refinement"
+        }
+      ],
       "title": "Lowercase tracking numbers are rejected as invalid",
       "type": "bug"
     }
@@ -365,9 +377,9 @@
     "deferred": 0,
     "escalated": 5,
     "issues": 7,
-    "orchestrator_usd": 0.079565,
+    "orchestrator_usd": 0.084721,
     "released": 0,
-    "usd": 0.151612
+    "usd": 0.159463
   },
   "version": 1
 }
