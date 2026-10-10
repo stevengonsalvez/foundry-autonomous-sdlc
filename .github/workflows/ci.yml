@@ -260,7 +260,6 @@ jobs:
           --head "$HEAD_SHA"
           --branch "$BRANCH"
           --setup-cmd "npm ci --prefix app"
-          --test-cmd "npm test --prefix app"
 
   agent-scope:
     name: agent-scope

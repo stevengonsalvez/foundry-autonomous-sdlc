@@ -52,7 +52,51 @@ print(summary("      Tests", tests_failed, tests_passed))
 sys.exit(1 if files_failed else 0)
 """
 
+# Stands in for `vitest run --reporter=json`: same report shape, driven by test file lines
+# `it pass NAME`, `it fail NAME`, `it error NAME MESSAGE...` (throws MESSAGE instead of failing
+# an assertion) and `needs PATH` (a missing PATH is a file level load error).
+FAKE_VITEST = r"""
+import json
+import pathlib
+import sys
+
+out = next(a.split("=", 1)[1] for a in sys.argv[1:] if a.startswith("--outputFile.json="))
+if pathlib.Path("app/e2e/crash").exists():
+    sys.exit(2)
+results = []
+for path in sorted(pathlib.Path("app").rglob("*.test.ts")):
+    entry = {"name": str(path.resolve()), "status": "passed", "message": "", "assertionResults": []}
+    lines = path.read_text().splitlines()
+    for line in lines:
+        if line.startswith("needs ") and not pathlib.Path(line.split(None, 1)[1]).exists():
+            target = line.split(None, 1)[1]
+            entry["status"] = "failed"
+            entry["message"] = f'Error: Failed to resolve import "{target}" from "{path}".\n at x'
+    if not entry["message"]:
+        for line in lines:
+            if not line.startswith("it "):
+                continue
+            parts = line.split(None, 3)
+            kind, name = parts[1], parts[2]
+            if kind == "pass":
+                messages = []
+            elif kind == "fail":
+                messages = ["AssertionError: expected 1 to be 2\n    at x"]
+            else:
+                messages = [parts[3] + "\n    at x"]
+            status = "failed" if messages else "passed"
+            entry["status"] = "failed" if messages else entry["status"]
+            entry["assertionResults"].append(
+                {"fullName": name, "title": name, "status": status, "failureMessages": messages}
+            )
+    results.append(entry)
+pathlib.Path(out).write_text(json.dumps({"testResults": results}))
+failed = sum(a["status"] == "failed" for r in results for a in r["assertionResults"])
+print(f"      Tests  {failed} failed")
+sys.exit(1 if any(r["status"] == "failed" for r in results) else 0)
+"""
 RUNNER_CMD = f"{shlex.quote(sys.executable)} app/runner.py"
+JSON_CMD = f"{shlex.quote(sys.executable)} app/vitest_fake.py --outputFile.json={{report}}"
 
 
 class Repo:
@@ -134,6 +178,7 @@ def make_repo(tmp_path: Path) -> Iterator[Callable[[], Repo]]:
             {
                 "README.md": "demo\n",
                 "app/runner.py": FAKE_RUNNER,
+                "app/vitest_fake.py": FAKE_VITEST,
                 "app/core/src/existing.ts": "export const one = 1\n",
                 "app/core/existing.test.ts": "it pass existing\n",
             },
