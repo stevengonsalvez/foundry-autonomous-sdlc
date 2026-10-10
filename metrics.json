@@ -37,7 +37,7 @@
       "pass": 0
     }
   },
-  "generated_at": "2026-10-10T12:55:24Z",
+  "generated_at": "2026-10-10T12:59:44Z",
   "issues": [
     {
       "closed_at": "2026-10-10T12:28:43Z",
@@ -81,22 +81,22 @@
     },
     {
       "closed_at": null,
-      "coder_engine": null,
+      "coder_engine": "agy",
       "cost": {
         "calls": 3,
         "coder_model_usd": 0.0,
-        "coder_usd": 0.0,
+        "coder_usd": 0.009772,
         "model_usd": 0.007515,
-        "usd": 0.007515
+        "usd": 0.017287
       },
       "deferred": null,
-      "escalation": null,
+      "escalation": "escalated:build-failed",
       "gate_attempts": {},
       "gates": {},
       "kind": "issue",
       "number": 4,
       "opened_at": "2026-10-10T12:28:45Z",
-      "outcome": "open",
+      "outcome": "escalated",
       "owner": null,
       "pr": null,
       "quality_score": 100,
@@ -122,9 +122,13 @@
         },
         {
           "entered_at": "2026-10-10T12:54:39Z",
-          "in_progress": true,
-          "seconds": 0,
+          "seconds": 294,
           "stage": "stage:building"
+        },
+        {
+          "entered_at": "2026-10-10T12:59:33Z",
+          "seconds": 0,
+          "stage": "escalated:build-failed"
         }
       ],
       "title": "Show the estimated delivery date on the parcel page",
@@ -173,9 +177,14 @@
         },
         {
           "entered_at": "2026-10-10T12:55:16Z",
+          "seconds": 266,
+          "stage": "stage:tests-written"
+        },
+        {
+          "entered_at": "2026-10-10T12:59:42Z",
           "in_progress": true,
           "seconds": 0,
-          "stage": "stage:tests-written"
+          "stage": "stage:building"
         }
       ],
       "title": "Make the parcel tracker better",
@@ -228,22 +237,22 @@
     },
     {
       "closed_at": null,
-      "coder_engine": null,
+      "coder_engine": "agy",
       "cost": {
         "calls": 4,
         "coder_model_usd": 0.0,
-        "coder_usd": 0.0,
+        "coder_usd": 0.009246,
         "model_usd": 0.007874,
-        "usd": 0.007874
+        "usd": 0.01712
       },
       "deferred": null,
-      "escalation": null,
+      "escalation": "escalated:build-failed",
       "gate_attempts": {},
       "gates": {},
       "kind": "issue",
       "number": 7,
       "opened_at": "2026-10-10T12:28:46Z",
-      "outcome": "open",
+      "outcome": "escalated",
       "owner": "api",
       "pr": null,
       "quality_score": 80,
@@ -269,9 +278,13 @@
         },
         {
           "entered_at": "2026-10-10T12:55:22Z",
-          "in_progress": true,
-          "seconds": 0,
+          "seconds": 254,
           "stage": "stage:building"
+        },
+        {
+          "entered_at": "2026-10-10T12:59:36Z",
+          "seconds": 0,
+          "stage": "escalated:build-failed"
         }
       ],
       "title": "Lowercase tracking numbers are rejected as invalid",
@@ -281,11 +294,11 @@
   "repo": "stevengonsalvez/foundry-autonomous-sdlc",
   "totals": {
     "deferred": 0,
-    "escalated": 2,
+    "escalated": 4,
     "issues": 5,
-    "orchestrator_usd": 0.069355,
+    "orchestrator_usd": 0.074358,
     "released": 0,
-    "usd": 0.107864
+    "usd": 0.131884
   },
   "version": 1
 }
