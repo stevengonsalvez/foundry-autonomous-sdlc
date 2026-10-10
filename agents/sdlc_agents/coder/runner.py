@@ -4,12 +4,14 @@ The coder job runner and the Invocations-level service (ops start, status, cance
 Steps (docs/architecture.md, Coder contract), all in code; engines only edit files:
 
   setup ─▶ tests (feature/bugfix: commit tests alone, typecheck and lint them, prove red, push)
-        ─▶ implement (engine edit ─▶ post-run scan + scope check ─▶ commit+push ─▶ run tests, until green:
-                      tests pass, then typecheck and lint pass, as in CI)
+        ─▶ implement (engine edit ─▶ post-run scan + scope check ─▶ commit (+push for feature/bugfix)
+                      ─▶ run tests, until green: tests pass, then typecheck and lint pass, as in CI;
+                      a model-loop round is kept only if strictly better, else reverted)
         ─▶ push ─▶ pr (feature/bugfix: open or reuse the PR, label agent:pr; revise and
                        maintenance push to the existing PR's branch)
 
-Every push is a checkpoint: a job restarted after the sandbox was evicted re-clones, finds
+revise and maintenance push once, squashed, when green (the branch belongs to a PR someone owns).
+For feature and bugfix every push is a checkpoint: a job restarted after the sandbox was evicted re-clones, finds
 the branch and continues from it instead of redoing finished steps.
 """
 
@@ -18,13 +20,13 @@ from __future__ import annotations
 import dataclasses
 import hashlib
 import json
+import math
 import os
 import re
 import secrets
 import shutil
 import stat
 import threading
-import traceback
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
@@ -32,7 +34,7 @@ from typing import Any, Protocol
 
 from sdlc_agents.coder import checks, sandbox, scope, shell
 from sdlc_agents.coder.git_adapter import resolve_author
-from sdlc_agents.coder.job import JobSpec, JobSpecError, JobState, JobStore, Mode, Phase, Status
+from sdlc_agents.coder.job import JobSpec, JobSpecError, JobState, JobStore, Mode, Phase, Redactor, Status
 from sdlc_agents.coder.testrun import TestOutcome, TestRunner
 from sdlc_agents.coder.toolchain import AGY_COMMANDS_HELP, AGY_SETTINGS_BYTES
 from sdlc_agents.cost import HOSTED_GIB_USD_PER_HOUR, HOSTED_VCPU_USD_PER_HOUR, token_usd
@@ -68,6 +70,9 @@ AGY_LOG_LINES = re.compile(
 NO_PROGRESS_ROUNDS = 2
 # Rounds an engine gets before the next one takes over, progress or not; others run until no progress.
 ENGINE_MAX_ROUNDS = {"agy": 1, "agy-unrestricted": 2}
+# Engines whose every round is re-checked (tests, typecheck, lint) and kept only if strictly better.
+GUARDED_ENGINES = frozenset({"loop"})
+AGY_SETUP_ATTEMPTS = 2
 ENGINE_LABELS = {
     "agy": "agy (agyuser, allow-list)",
     "agy-unrestricted": "agy-unrestricted (agyuser, skip-permissions after allow-list denial)",
@@ -118,6 +123,7 @@ class EngineContext:
     refresh_agy_settings: Callable[[], None] = lambda: None   # root rewrites agy's allow-list (each call)
     agy_log_dir: Path = Path("/nonexistent")   # where agy writes --log-file (engine-user owned when isolated)
     round_no: Callable[[], int] = lambda: 0    # the iteration number about to run
+    failing: Callable[[], tuple[str, ...]] = lambda: ()   # test files failing in the latest run
 
 
 @dataclass
@@ -170,6 +176,8 @@ class JobRunner:
         self._last_sha = ""
         self._red_output = ""
         self._watchdog_fired = False
+        self._failing: tuple[str, ...] = ()
+        self._start_sha = ""
 
     # -- lifecycle -------------------------------------------------------------------------
 
@@ -201,14 +209,14 @@ class JobRunner:
             self._log_cgroup("end")
 
     def _internal_error(self, exc: BaseException) -> None:
-        text = self.store.redact(traceback.format_exc())
-        print(f"coder job {self.spec.job_id}: unhandled {type(exc).__name__}\n{text}", flush=True)
-        header, *frames = text.rstrip().splitlines() or [""]
-        tail = "\n".join(frames)[-TRACEBACK_CHARS:]
+        # Redacted and without local variables everywhere it goes: stdout (the platform logstream), log, state.
+        print(f"coder job {self.spec.job_id}: unhandled {type(exc).__name__}\n{self.store.redact.traceback(exc)}",
+              flush=True)
         try:
-            self._finish(Status.FAILED, "internal-error", f"{header}\n...\n{tail}")
-        except Exception:
-            print(f"coder job {self.spec.job_id}: could not record the failure\n{traceback.format_exc()}", flush=True)
+            self._finish(Status.FAILED, "internal-error", self.store.redact.traceback(exc, limit=TRACEBACK_CHARS))
+        except Exception as failure:
+            print(f"coder job {self.spec.job_id}: could not record the failure\n"
+                  f"{self.store.redact.traceback(failure)}", flush=True)
         self._release_lease()
 
     def _release_lease(self) -> None:
@@ -238,8 +246,8 @@ class JobRunner:
                     self.cancel.set()   # every shell.run polls it and kills its process group
                     if self._run_as is not None:
                         self.deps.reap(self._run_as)
-            except Exception:
-                print(f"coder job {self.spec.job_id}: heartbeat failed\n{traceback.format_exc()}", flush=True)
+            except Exception as exc:
+                print(f"coder job {self.spec.job_id}: heartbeat failed\n{self.store.redact.traceback(exc)}", flush=True)
 
     def _log_cgroup(self, when: str) -> None:
         memory = shell.cgroup_memory()
@@ -316,7 +324,7 @@ class JobRunner:
         if self.git.remote_has_branch(self.spec.branch):
             self._log(f"branch {self.spec.branch} exists, continuing from it")
             self.git.checkout_existing_branch(self.spec.branch)
-            self._last_sha = self.git.head_sha()
+            self._last_sha = self._start_sha = self.git.head_sha()
         elif not self.spec.mode.writes_red_tests:
             raise JobStop(Status.FAILED, "branch-missing", f"{self.spec.branch} does not exist")
         else:
@@ -339,19 +347,30 @@ class JobRunner:
         self._log(f"ignoring allowed_paths that match no file at the branch head: {', '.join(missing)}")
         self.spec = dataclasses.replace(self.spec, allowed_paths=kept)
 
-    def _prepare_agy(self) -> Path | None:
-        try:
-            token = self.deps.secrets.get_secret("agy-cli-token")
-            self.store.redact.add(token)
-            binary = self.deps.toolchain.ensure_agy()
-            # Token and allow-list live in the engine user's home; the Key Vault read stayed in this process.
-            owner = (self.user.uid, self.user.gid)
-            self.deps.toolchain.write_agy_token(token, home=self.user.home, owner=owner)
-            self._log_settings(self.deps.toolchain.write_agy_settings(home=self.user.home, owner=owner))
-            return self.deps.agy_installer(binary)
-        except Exception as exc:
-            self._log(f"agy unavailable, using the fallback engines: {type(exc).__name__}: {exc}")
-            return None
+    def _prepare_agy(self) -> Path:
+        """agy ready to run as the engine user, retried once. Without it the job stops: the model loop
+        alone repaired tests blind (job j-pr33-1), so a new attempt is better than a weaker engine."""
+        reason = ""
+        for attempt in range(1, AGY_SETUP_ATTEMPTS + 1):
+            step = "read the agy-cli-token secret"
+            try:
+                token = self.deps.secrets.get_secret("agy-cli-token")
+                self.store.redact.add(token)
+                step = "install agy"
+                binary = self.deps.toolchain.ensure_agy()
+                # Token and allow-list live in the engine user's home; the Key Vault read stayed in this process.
+                owner = (self.user.uid, self.user.gid)
+                step = "write the agy token"
+                self.deps.toolchain.write_agy_token(token, home=self.user.home, owner=owner)
+                step = "write the agy settings"
+                self._log_settings(self.deps.toolchain.write_agy_settings(home=self.user.home, owner=owner))
+                step = "copy agy to /opt/agy"
+                return self.deps.agy_installer(binary)
+            except Exception as exc:
+                reason = self.store.redact(f"{step}: {type(exc).__name__}: {exc}")[-1500:]
+                self._log(f"agy unavailable (attempt {attempt} of {AGY_SETUP_ATTEMPTS}): {reason}")
+        self._engine_event("agy", "agy-unavailable", detail=reason)
+        raise JobStop(Status.FAILED, "engine-unavailable", reason)
 
     # -- running untrusted code (agy, install, tests): always as the engine user --------------
 
@@ -485,6 +504,7 @@ class JobRunner:
                             report_path=self._report_path(), env=self._work_env(), cancel=self.cancel,
                             run_as=self._as_user())
         outcome = runner.run(timeout_s=self._timeout(TEST_TIMEOUT_S))
+        self._failing = tuple(outcome.report.failing_paths(str(self.checkout)))
         self._log_memory("tests")
         self._quiesce()
         self._scan(before, "tests")
@@ -505,9 +525,12 @@ class JobRunner:
                                                   dirty=lambda: bool(self.git.changed_paths()),
                                                   refresh_agy_settings=self._refresh_agy_settings,
                                                   agy_log_dir=self._agy_log_dir(),
-                                                  round_no=lambda: self.state.iterations + 1))
+                                                  round_no=lambda: self.state.iterations + 1,
+                                                  failing=lambda: self._failing))
+        self._protected, self._tests_only = protected, tests_only
         current = 0
-        idle_rounds = 0   # consecutive rounds in which the current engine changed nothing
+        rejected: tuple[TestOutcome, list[checks.CheckResult]] | None = None   # a reverted round's results
+        idle_rounds = 0   # consecutive rounds in which the current engine changed nothing (or was reverted)
         rounds = 0        # rounds the current engine has had
         outcome = self._run_tests()
         # The suites that define done: the new tests, or in maintenance the ones failing at the start.
@@ -531,10 +554,13 @@ class JobRunner:
             if current >= len(engines):
                 raise JobStop(Status.FAILED, "engines-exhausted", "every engine in the chain failed")
             engine = engines[current]
+            if engine.name in GUARDED_ENGINES and not found:
+                found = self._run_checks()   # the baseline its rounds are judged against
             pre = self.git.head_sha()
             before = self._snapshot()
             started = self.deps.clock.monotonic()
-            result = self._edit(engine, outcome, red_files, found)
+            shown, rejected = rejected, None
+            result = self._edit(engine, *(shown or (outcome, found)), red_files, reverted=shown is not None)
             self._engine_event(engine.name, "round", iteration=self.state.iterations + 1,
                                seconds=round(self.deps.clock.monotonic() - started),
                                timed_out=bool(getattr(engine, "last_timed_out", False)),
@@ -564,10 +590,28 @@ class JobRunner:
                     current, idle_rounds, rounds = current + 1, 0, 0
                 self._checkpoint()
                 continue
+            self._enforce_scope(changed, pre, protected, tests_only)
+            if engine.name in GUARDED_ENGINES:
+                candidate, tried = self._run_tests(), self._run_checks()
+                if not _better(_score(candidate, tried), _score(outcome, found)):
+                    self.git.revert_paths(self.git.changed_since(pre))
+                    self._engine_event(engine.name, "reverted", tests=candidate.report.summary(),
+                                       checks=", ".join(r.summary() for r in tried))
+                    rejected = (candidate, tried)
+                    idle_rounds += 1
+                    if idle_rounds >= NO_PROGRESS_ROUNDS:
+                        self._engine_event(engine.name, "engine-no-progress")
+                        current, idle_rounds, rounds = current + 1, 0, 0
+                    self._checkpoint()
+                    continue
+                idle_rounds = 0
+                committed = self._commit_iteration(changed, protected, tests_only) or committed
+                outcome, found = candidate, tried
+                self._checkpoint()
+                continue
             idle_rounds = 0
             if used_up:
                 current, rounds = current + 1, 0   # agy: one round, agy-unrestricted: two, then the loop
-            self._enforce_scope(changed, pre, protected, tests_only)
             committed = self._commit_iteration(changed, protected, tests_only) or committed
             outcome = self._run_tests()
             found = self._checks_if_green(outcome, must_pass)
@@ -624,11 +668,15 @@ class JobRunner:
             self.git.reset_soft(pre)
         return self.git.changed_since(pre)
 
-    def _edit(self, engine: CodingEnginePort, outcome: TestOutcome, red_files: tuple[str, ...],
-              found: list[checks.CheckResult]) -> CommandResult:
+    def _edit(self, engine: CodingEnginePort, outcome: TestOutcome, found: list[checks.CheckResult],
+              red_files: tuple[str, ...], *, reverted: bool = False) -> CommandResult:
         iteration = self.state.iterations + 1
         self._log(f"iteration {iteration} with engine {engine.name}")
-        result = engine.edit(self._prompt(outcome, red_files, found), workdir=str(self.checkout),
+        prompt = self._prompt(outcome, red_files, found)
+        if reverted:
+            prompt = ("Your previous change was reverted: it did not reduce the failures without adding new "
+                      "errors. Its test, typecheck and lint results are below; try a different change.\n\n" + prompt)
+        result = engine.edit(prompt, workdir=str(self.checkout),
                              timeout_s=self._timeout(EDIT_TIMEOUT_S))
         self._log_memory(f"engine {engine.name}")
         self._log(f"{engine.name} output (iteration {iteration}) exit {result.returncode}:\n{result.output[-4000:]}")
@@ -708,16 +756,30 @@ class JobRunner:
             message = (f"{prefix}: address failing tests for #{n} (iteration {i})" if self.spec.mode.writes_red_tests
                        else f"{message} (iteration {i})")
         sha = self.git.commit_all(message)
-        # Re-check what the commit actually contains, then push exactly that commit.
+        self._verify_commit(sha)   # what the commit actually contains; only that exact commit is ever pushed
+        self._last_sha = sha
+        self._engine_event(self.state.engine or "", "committed", sha=sha)
+        if self.spec.mode.writes_red_tests:
+            self._push(sha)   # our own branch: every commit is a checkpoint a resumed job continues from
+        return True
+
+    def _verify_commit(self, sha: str) -> None:
         bad = scope.violations(self.git.files_in_commit(sha), allowed_paths=self.spec.allowed_paths,
-                               protected=protected, tests_only=tests_only)
+                               protected=self._protected, tests_only=self._tests_only)
         bad += self.git.special_paths_in_commit(sha)
         if bad:
             raise JobStop(Status.FAILED, "scope-violation", "commit contained out-of-scope paths: " + ", ".join(bad))
-        self._last_sha = sha
-        self._engine_event(self.state.engine or "", "committed", sha=sha)
-        self._push(sha)
-        return True
+
+    def _squash(self) -> str:
+        """revise and maintenance push to a branch a person owns: one commit, made only once green."""
+        n = self.spec.issue_number
+        message = (f"test: repair stale tests for #{n}" if self.spec.mode is Mode.MAINTENANCE
+                   else f"fix: address review findings for #{n}")
+        self.git.reset_soft(self._start_sha)
+        sha = self.git.commit_all(message)
+        self._verify_commit(sha)
+        self._engine_event(self.state.engine or "", "squashed", sha=sha)
+        return sha
 
     def _title(self) -> str:
         return " ".join(self.spec.issue_title.split())[:72] or f"issue {self.spec.issue_number}"
@@ -757,15 +819,18 @@ class JobRunner:
         if not lines:
             return ""
         commands = " and ".join(f"`{c}`" for c in checks.CHECK_COMMANDS)
-        return (f"\nThe tests pass, but CI also runs {commands} in `{self.spec.workdir}` and they fail. "
-                f"Fix these without editing any test file. Typecheck and lint errors:\n"
+        return (f"\nCI also runs {commands} in `{self.spec.workdir}` and they fail. "
+                f"Fix these within the rules above. Typecheck and lint errors:\n"
                 f"{_untrusted(chr(10).join(lines))}\n")
 
     # -- step 4: push and PR ---------------------------------------------------------------
 
     def _publish(self) -> None:
         self._checkpoint(Phase.PUSH)
-        self._push(self._last_sha)
+        if self.spec.mode.writes_red_tests:
+            self._push(self._last_sha)
+        elif self.git.head_sha() != self._start_sha:
+            self._push(self._squash())
         if not self.spec.mode.writes_red_tests:
             # revise and maintenance update the PR they were given; they never open one.
             number = self.spec.pr_number
@@ -799,6 +864,20 @@ class JobRunner:
         )
 
 
+def _score(outcome: TestOutcome, found: list[checks.CheckResult]) -> tuple[float, float, float]:
+    """(files that fail to load, failing assertions, typecheck and lint errors); lower is better."""
+    report = outcome.report
+    if not report.parsed:
+        return math.inf, math.inf, math.inf
+    errors = sum(len(r.errors) or (0 if r.passed else 1) for r in found)
+    return len(report.load_errors), report.failed, errors
+
+
+def _better(new: tuple[float, ...], old: tuple[float, ...]) -> bool:
+    """Strictly better: nothing got worse and something got better."""
+    return all(n <= o for n, o in zip(new, old, strict=True)) and new != old
+
+
 class CoderService:
     """Maps Invocations request bodies to jobs. One background thread per running job."""
 
@@ -808,6 +887,10 @@ class CoderService:
         self._threads: dict[str, tuple[threading.Thread, threading.Event]] = {}
         self._lock = threading.Lock()
         self._sweep()
+
+    @property
+    def redact(self) -> Redactor:
+        return self._store.redact
 
     def _sweep(self) -> None:
         """A (re)started server has no job threads: whatever was left running died with the last process."""
@@ -819,8 +902,8 @@ class CoderService:
                         self._settle(state)
                     print(f"coder: job {job_id} was running when the server restarted; marked interrupted",
                           flush=True)
-            except Exception:
-                print(f"coder: could not read job {job_id}\n{traceback.format_exc()}", flush=True)
+            except Exception as exc:
+                print(f"coder: could not read job {job_id}\n{self._store.redact.traceback(exc)}", flush=True)
 
     def handle_raw(self, raw: bytes, *, session_id: str = "") -> tuple[int, dict[str, Any]]:
         """Never raises: a bug in one request is a 500 and a logged traceback, not a dead server."""
@@ -830,8 +913,8 @@ class CoderService:
             except ValueError:
                 return 400, {"error": "invalid_json"}
             return self.handle(body, session_id=session_id)
-        except Exception:
-            print(f"coder: request failed\n{self._store.redact(traceback.format_exc())}", flush=True)
+        except Exception as exc:
+            print(f"coder: request failed\n{self._store.redact.traceback(exc)}", flush=True)
             return 500, {"error": "internal_error"}
 
     def handle(self, body: Any, *, session_id: str = "") -> tuple[int, dict[str, Any]]:

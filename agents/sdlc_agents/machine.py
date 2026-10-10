@@ -49,6 +49,9 @@ CODER_DEADLINE_S = 7_200           # sent in every job; the coder stops itself a
 MAX_CODER_RESUMES = 3              # restarts of an interrupted job before giving up
 CODER_GRACE_S = 1_800              # past the deadline by this much a job is lost, whatever its polls say
 MAX_LOST_RESTARTS = 1              # a lost job (session gone, or past deadline + grace) restarts once
+# New jobs after a failure that pushed nothing, per reason (the attempt limit applies on top).
+RETRY_LIMITS = {"engine-unavailable": MAX_CODER_ATTEMPTS, "internal-error": 1}
+RESTART_STATUSES = ("lost", "retry")   # the next tick starts a new job under a new id
 FAILURE_LIMIT = 3
 POLL_FAILURE_LIMIT = 6             # coder status errors tolerated (30 minutes of ticks)
 CHECKS_TIMEOUT_S = 3 * 3600        # required checks missing or pending this long: the run never came
@@ -289,7 +292,7 @@ def _poll_coder(ctx: Context) -> Action:
         if int(coder.get("resumes", 0)) > MAX_CODER_RESUMES:
             return Action(Kind.ESCALATE, f"coder interrupted {coder['resumes']} times", label=ESC_BUILD_FAILED)
         return Action(Kind.START_CODER, "resume", mode=str(coder.get("mode")))
-    if coder.get("status") == "lost":
+    if coder.get("status") in RESTART_STATUSES:
         return _start_coder(ctx.state, str(coder.get("mode")))
     started = coder.get("started_at")
     if started and seconds_between(started, ctx.now) > CODER_DEADLINE_S + CODER_GRACE_S:
@@ -346,6 +349,8 @@ class Outcome:
     reason: str = ""
     resume: bool = False              # restart the same coder job
     repair_tests: bool = False        # the designed tests were invalid: back to the test designer
+    retry: bool = False               # nothing was pushed: a new job (new id and session), bounded by reason
+    fix_paths: bool = False           # allowed_paths matched nothing: revalidate them, then one new job
 
 
 def after_score(score: int, rounds: int) -> Outcome:
@@ -370,6 +375,10 @@ def after_coder(status: str, reason: str = "") -> Outcome:
         return Outcome(resume=True)
     if status == "failed" and reason == "tests-invalid":
         return Outcome(repair_tests=True)
+    if status == "failed" and reason in RETRY_LIMITS:
+        return Outcome(retry=True, escalate=ESC_BUILD_FAILED, reason=f"coder failed ({reason})")
+    if status == "failed" and reason == "invalid-allowed-paths":
+        return Outcome(fix_paths=True, escalate=ESC_AGENT_ERROR, reason=f"coder failed ({reason})")
     if status in ("failed", "timeout", "cancelled"):
         return Outcome(escalate=ESC_BUILD_FAILED, reason=f"coder {status}" + (f" ({reason})" if reason else ""))
     return Outcome()

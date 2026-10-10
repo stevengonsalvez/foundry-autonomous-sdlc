@@ -492,6 +492,10 @@ class FakeCoder:
             response["pr"] = {"number": record["pr"], "url": "https://example.invalid/pr"}
         return response, session
 
+    def wipe_session(self, session: str) -> None:
+        """The platform replaced the sandbox: the session's jobs are gone (leases stay on GitHub)."""
+        self.by_session = {k: v for k, v in self.by_session.items() if k[0] != session}
+
     def run_orphans(self) -> None:
         """Finish every running job, as their background threads would without anyone polling."""
         for record in list(self.by_session.values()):

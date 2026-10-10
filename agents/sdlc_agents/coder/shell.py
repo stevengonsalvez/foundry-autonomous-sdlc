@@ -111,7 +111,9 @@ def run(cmd: list[str] | str, *, cwd: Path | str, timeout_s: float, env: dict[st
             stdout=subprocess.PIPE, stderr=subprocess.STDOUT, start_new_session=True, **drop,
         )
     except (FileNotFoundError, PermissionError) as exc:
-        return CommandResult(NOT_FOUND_RC, f"cannot run {cmd!r}: {exc}")
+        # Only the program name: the rest of a command line can carry tokens.
+        name = (cmd.split() or [""])[0] if isinstance(cmd, str) else (cmd[0] if cmd else "")
+        return CommandResult(NOT_FOUND_RC, f"cannot run {name}: {type(exc).__name__}")
 
     buffer = bytearray()
     lock = threading.Lock()

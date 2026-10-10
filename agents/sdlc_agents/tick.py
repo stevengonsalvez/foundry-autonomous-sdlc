@@ -82,7 +82,8 @@ CODER_ENGINES = frozenset({"agy", "agy-unrestricted", "loop"})
 CODER_REASONS = frozenset({
     "tests-not-red", "scope-violation", "max-iterations", "engines-exhausted", "cost-cap", "install-failed",
     "branch-missing", "branch-conflict", "interrupted", "deadline", "cancelled", "error", "tests-invalid",
-    "sandbox-unavailable", "lease-held", "lease-error",
+    "sandbox-unavailable", "lease-held", "lease-error", "engine-unavailable", "internal-error",
+    "invalid-allowed-paths",
 })
 UNREPORTED_CODER_SLACK_S = 900    # one missed poll is normal; longer gaps are billed as estimated time
 UNREPORTED_STATUSES = ("running", "starting", "start-unconfirmed", "lease-held")
@@ -810,6 +811,13 @@ class _Tick:
             coder.update(status="start-unconfirmed", unconfirmed_at=coder.get("unconfirmed_at") or now)
             self._save(obj)
             return f"start of {job['job_id']} unconfirmed: {one_line(str(exc), 120)}"
+        if resp.get("status") == "failed" and resp.get("reason") == "lease-held" and int(coder.get("resumes", 0)):
+            # Resuming an interrupted job in a sandbox that never saw it: the lease is the interrupted
+            # job's own, and nothing runs it any more. Free it and start a new attempt instead.
+            self._release_lease(obj)
+            coder.update(status="retry")
+            self._save(obj)
+            return f"{job['job_id']} cannot be resumed in this session: a new attempt follows"
         if resp.get("status") == "failed" and resp.get("reason") == "lease-held":
             coder.update(status="lease-held", unconfirmed_at=coder.get("unconfirmed_at") or now)
             self._save(obj)
@@ -934,6 +942,9 @@ class _Tick:
             # The coder lost its process (sandbox restart): starting the same job id resumes it.
             coder["resumes"] = int(coder.get("resumes", 0)) + 1
             coder["status"] = "starting"
+        elif (outcome.retry and self._may_retry(obj, reason, machine.RETRY_LIMITS[reason])) or (
+                outcome.fix_paths and self._fixed_paths(obj, ctx)):
+            coder["status"] = "retry"     # nothing was pushed: the next tick starts a new job
         elif outcome.stage == state.IN_REVIEW:
             pr = self._coder_pull(obj, coder, resp)
             st.data["pr"] = {"number": pr.number, "branch": pr.head_ref, "head": pr.head_sha}
@@ -949,6 +960,34 @@ class _Tick:
         if json.dumps(st.data, sort_keys=True) != before:
             self._save(obj)
         return f"coder {status}"
+
+    def _may_retry(self, obj: _Object, reason: str, limit: int) -> bool:
+        """Count one more new job for `reason`, if its limit and the attempt limit allow it."""
+        retries = obj.st.data.setdefault("coder_retries", {})
+        if int(retries.get(reason, 0)) >= limit or int(obj.st.data["coder"].get("attempts", 0)) >= \
+                machine.MAX_CODER_ATTEMPTS:
+            return False
+        retries[reason] = int(retries.get(reason, 0)) + 1
+        return True
+
+    def _fixed_paths(self, obj: _Object, ctx: Context) -> bool:
+        """A maintenance job's allowed_paths matched nothing at the branch head: run the ci-triage file
+        validation again on the current head; True when it yields other real paths for one new job."""
+        ci = obj.st.get("ci_triage") or {}
+        if obj.st.data["coder"].get("mode") != "maintenance" or not ci:
+            return False
+        head = ctx.pr.head_sha if ctx.pr else self.github.get_pull(obj.item.number).head_sha
+        real = self._repo_test_files(head)
+        fixed = paths.resolve_test_files([*ci.get("claimed", []), *ci.get("test_files", [])], real,
+                                         self.github.get_check_log(str(ci["head"]), "test"))
+        if not fixed or fixed == ci.get("test_files") or not self._may_retry(obj, "invalid-allowed-paths", 1):
+            return False
+        ci["test_files"] = fixed
+        return True
+
+    def _repo_test_files(self, ref: str) -> list[str]:
+        return [p for p in self.github.list_tree(ref)
+                if p.startswith(paths.APP_ROOT) and p.endswith(paths.TEST_FILE_SUFFIXES)]
 
     def _do_coder_lost(self, obj: _Object, ctx: Context, action: Action) -> str:
         self._cancel_coder(obj)
@@ -1101,8 +1140,7 @@ class _Tick:
         log = self.github.get_check_log(pr.head_sha, "test")
         diff = self.github.get_pull_diff(pr.number)
         files = sorted({f for c in self.github.list_pull_commits(pr.number) for f in c.files})
-        repo_tests = [p for p in self.github.list_tree(pr.head_sha)
-                      if p.startswith(paths.APP_ROOT) and p.endswith(paths.TEST_FILE_SUFFIXES)]
+        repo_tests = self._repo_test_files(pr.head_sha)
         data = self._call(obj, "sdlc-ci-triage", [
             Section("pr", f"{pr.title}\n\n{pr.body}"),
             Section("changed_files", "\n".join(files) + "\n\ntest files changed: no"),

@@ -96,3 +96,13 @@ def test_owner_user_id_reads_the_numeric_id_or_gives_none() -> None:
         raise OSError("network unreachable")
 
     assert owner_user_id("pat", transport=down) is None
+
+
+def test_the_model_loop_is_wired_to_the_failing_tests_and_the_workdir(tmp_path: Path) -> None:
+    service = build_service({**ENV, "HOME": str(tmp_path)}, credential=Credential())
+    failing = lambda: ("app/web/tests/home-page.test.tsx",)  # noqa: E731
+    ctx = EngineContext(_spec(), (), True, threading.Event(), {}, agy_binary=None, agy_home=tmp_path, failing=failing)
+    loop = service._deps.engines(ctx)[-1]
+    assert isinstance(loop, ModelLoopEngine)
+    assert loop._failing is failing
+    assert loop._workdir == "app"

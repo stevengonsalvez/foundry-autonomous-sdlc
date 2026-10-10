@@ -73,7 +73,7 @@ def build_service(env: Mapping[str, str] = os.environ, *, credential: Any = None
             if run_as is not None and run_as.uid != 0:
                 chain.append(AgyEngine(ctx.agy_binary, unrestricted=True, **agy))
         chain.append(ModelLoopEngine(responses, allowed_paths=ctx.spec.allowed_paths, protected=ctx.protected,
-                                     tests_only=ctx.tests_only))
+                                     tests_only=ctx.tests_only, failing=ctx.failing, workdir=ctx.spec.workdir))
         return chain
 
     deps = CoderDeps(
@@ -88,4 +88,4 @@ def build_service(env: Mapping[str, str] = os.environ, *, credential: Any = None
         engine_user=sandbox.ensure_agy_user,
         compute_usd_per_hour=compute_usd_per_hour(env),
     )
-    return CoderService(JobStore(home / "jobs", Redactor()), deps)
+    return CoderService(JobStore(home / "jobs", Redactor(env=env)), deps)
