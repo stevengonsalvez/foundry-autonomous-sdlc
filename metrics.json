@@ -38,7 +38,7 @@
       "pass": 6
     }
   },
-  "generated_at": "2026-10-10T20:55:19Z",
+  "generated_at": "2026-10-10T21:00:27Z",
   "issues": [
     {
       "closed_at": "2026-10-10T12:28:43Z",
@@ -1495,9 +1495,14 @@
         },
         {
           "entered_at": "2026-10-10T20:55:16Z",
+          "seconds": 304,
+          "stage": "stage:in-review"
+        },
+        {
+          "entered_at": "2026-10-10T21:00:20Z",
           "in_progress": true,
           "seconds": 0,
-          "stage": "stage:in-review"
+          "stage": "stage:building"
         }
       ],
       "title": "Update the home page heading copy",
@@ -1509,9 +1514,9 @@
     "deferred": 0,
     "escalated": 16,
     "issues": 21,
-    "orchestrator_usd": 0.696134,
+    "orchestrator_usd": 0.701255,
     "released": 4,
-    "usd": 1.742217
+    "usd": 1.747338
   },
   "version": 1
 }
