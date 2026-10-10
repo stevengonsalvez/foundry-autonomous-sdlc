@@ -36,7 +36,8 @@ def build_zip() -> bytes:
         for arcname, path in _entries():
             info = zipfile.ZipInfo(arcname, date_time=_EPOCH)
             info.compress_type = zipfile.ZIP_DEFLATED
-            info.external_attr = 0o100644 << 16  # regular file bit; without it the service reports "No Python dependency manifest found"
+            # Regular-file bit: without it the service reports "No Python dependency manifest found".
+            info.external_attr = 0o100644 << 16
             zf.writestr(info, path.read_bytes())
     return buf.getvalue()
 
