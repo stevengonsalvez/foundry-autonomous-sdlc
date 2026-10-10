@@ -38,7 +38,7 @@
       "pass": 1
     }
   },
-  "generated_at": "2026-10-10T15:30:45Z",
+  "generated_at": "2026-10-10T15:36:21Z",
   "issues": [
     {
       "closed_at": "2026-10-10T12:28:43Z",
@@ -615,11 +615,11 @@
       "closed_at": null,
       "coder_engine": null,
       "cost": {
-        "calls": 2,
+        "calls": 3,
         "coder_model_usd": 0.0,
         "coder_usd": 0.0,
-        "model_usd": 0.002517,
-        "usd": 0.002517
+        "model_usd": 0.00853,
+        "usd": 0.00853
       },
       "deferred": null,
       "escalation": null,
@@ -644,9 +644,14 @@
         },
         {
           "entered_at": "2026-10-10T15:30:18Z",
+          "seconds": 316,
+          "stage": "stage:feasible"
+        },
+        {
+          "entered_at": "2026-10-10T15:35:34Z",
           "in_progress": true,
           "seconds": 0,
-          "stage": "stage:feasible"
+          "stage": "stage:tests-written"
         }
       ],
       "title": "Show when the parcel was last updated on the parcel page",
@@ -656,11 +661,11 @@
       "closed_at": null,
       "coder_engine": null,
       "cost": {
-        "calls": 2,
+        "calls": 3,
         "coder_model_usd": 0.0,
         "coder_usd": 0.0,
-        "model_usd": 0.003136,
-        "usd": 0.003136
+        "model_usd": 0.004773,
+        "usd": 0.004773
       },
       "deferred": null,
       "escalation": null,
@@ -672,7 +677,7 @@
       "outcome": "open",
       "owner": null,
       "pr": null,
-      "quality_score": 5,
+      "quality_score": 95,
       "release": null,
       "resolution_seconds": null,
       "scenario": "b",
@@ -680,9 +685,14 @@
       "stages": [
         {
           "entered_at": "2026-10-10T15:25:24Z",
+          "seconds": 618,
+          "stage": "stage:needs-refinement"
+        },
+        {
+          "entered_at": "2026-10-10T15:35:42Z",
           "in_progress": true,
           "seconds": 0,
-          "stage": "stage:needs-refinement"
+          "stage": "stage:ready"
         }
       ],
       "title": "Make the parcel tracker better",
@@ -692,11 +702,11 @@
       "closed_at": null,
       "coder_engine": null,
       "cost": {
-        "calls": 2,
+        "calls": 3,
         "coder_model_usd": 0.0,
         "coder_usd": 0.0,
-        "model_usd": 0.004231,
-        "usd": 0.004231
+        "model_usd": 0.012683,
+        "usd": 0.012683
       },
       "deferred": null,
       "escalation": null,
@@ -728,11 +738,11 @@
       "closed_at": null,
       "coder_engine": null,
       "cost": {
-        "calls": 2,
+        "calls": 3,
         "coder_model_usd": 0.0,
         "coder_usd": 0.0,
-        "model_usd": 0.002485,
-        "usd": 0.002485
+        "model_usd": 0.004499,
+        "usd": 0.004499
       },
       "deferred": null,
       "escalation": null,
@@ -766,9 +776,9 @@
     "deferred": 0,
     "escalated": 9,
     "issues": 14,
-    "orchestrator_usd": 0.398526,
+    "orchestrator_usd": 0.405778,
     "released": 1,
-    "usd": 0.714143
+    "usd": 0.739511
   },
   "version": 1
 }
