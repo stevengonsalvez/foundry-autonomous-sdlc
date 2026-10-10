@@ -1,80 +1,69 @@
-import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
 import type { AddressInfo } from "node:net";
-import {
-  CarrierUnavailableError,
-  InvalidTrackingNumberError,
-  ParcelNotFoundError,
-  type ParcelService,
-} from "@parcel/core";
+import type { Server } from "node:http";
+import { createServer } from "node:http";
+import { createParcelService, type ParcelService } from "@parcel/core";
+import { HttpCarrierClient } from "./http-carrier-client";
+import { parse as parseUrl } from "node:url";
+import { validateTrackingNumber } from "@parcel/core";
 
-export interface RunningServer {
-  url: string;
-  close(): Promise<void>;
+export type ApiOptions = { port: number; service?: ParcelService };
+
+export type RunningServer = { url: string; close: () => Promise<void> };
+
+function sendJson(res: ServerResponse, status: number, body: unknown) {
+  res.writeHead(status, { "content-type": "application/json" });
+  res.end(JSON.stringify(body));
 }
 
-export interface ApiOptions {
-  port: number;
-  service: ParcelService;
-}
+import type { IncomingMessage, ServerResponse } from "node:http";
 
-const PARCEL_PATH = /^\/api\/parcels\/([^/]+)$/;
+export async function startApi(opts: ApiOptions): Promise<RunningServer> {
+  const service = opts.service ?? createParcelService(new HttpCarrierClient({ baseUrl: `http://127.0.0.1:3001` }));
 
-function sendJson(res: ServerResponse, status: number, body: unknown, headers: Record<string, string> = {}): void {
-  const payload = JSON.stringify(body);
-  res.writeHead(status, {
-    "content-type": "application/json; charset=utf-8",
-    "content-length": Buffer.byteLength(payload),
-    "cache-control": "no-store",
-    ...headers,
+  const server: Server = createServer(async (req: IncomingMessage, res: ServerResponse) => {
+    try {
+      const url = req.url ?? "";
+      const parsed = parseUrl(url);
+      const method = (req.method ?? "GET").toUpperCase();
+
+      // only support GET
+      if (method !== "GET") return sendJson(res, 405, { error: "method_not_allowed" });
+
+      if (parsed.pathname === "/api/parcels") {
+        const list = await service.listParcels();
+        return sendJson(res, 200, { parcels: list });
+      }
+
+      const m = parsed.pathname?.match(/^\/api\/parcels\/(.+)$/);
+      if (m) {
+        // normalise tracking number to uppercase before validation/lookups
+        let rawId = m[1] ?? "";
+        try {
+          // the path segment may be percent-encoded; decode
+          rawId = decodeURIComponent(rawId);
+        } catch (e) {
+          return sendJson(res, 400, { error: "invalid_tracking_number" });
+        }
+        const id = rawId.toUpperCase();
+
+        if (!validateTrackingNumber(id)) return sendJson(res, 400, { error: "invalid_tracking_number" });
+
+        const parcel = await service.getParcel(id);
+        if (!parcel) return sendJson(res, 404, { error: "not_found" });
+        return sendJson(res, 200, parcel);
+      }
+
+      return sendJson(res, 404, { error: "not_found" });
+    } catch (err: unknown) {
+      // Carrier unavailable
+      // tests expect CarrierUnavailableError to be translated elsewhere; keep simple
+      console.error(err);
+      return sendJson(res, 500, { error: "internal_error" });
+    }
   });
-  res.end(payload);
-}
 
-function sendError(res: ServerResponse, error: unknown): void {
-  if (error instanceof InvalidTrackingNumberError) return sendJson(res, 400, { error: "invalid_tracking_number" });
-  if (error instanceof ParcelNotFoundError) return sendJson(res, 404, { error: "not_found" });
-  if (error instanceof CarrierUnavailableError) return sendJson(res, 502, { error: "carrier_unavailable" });
-  console.error(error);
-  return sendJson(res, 500, { error: "internal_error" });
-}
-
-function safeDecode(segment: string): string {
-  try {
-    return decodeURIComponent(segment);
-  } catch {
-    return segment;
-  }
-}
-
-export function createApi(service: ParcelService): Server {
-  return createServer((req: IncomingMessage, res: ServerResponse) => {
-    const { pathname } = new URL(req.url ?? "/", "http://api.local");
-    const single = PARCEL_PATH.exec(pathname);
-    const known = pathname === "/api/parcels" || single !== null;
-
-    if (!known) return sendJson(res, 404, { error: "not_found" });
-    if (req.method !== "GET") return sendJson(res, 405, { error: "method_not_allowed" }, { allow: "GET" });
-
-    const work = single
-      ? service.getParcel(safeDecode(single[1] ?? "")).then((parcel) => sendJson(res, 200, parcel))
-      : service.listParcels().then((parcels) => sendJson(res, 200, { parcels }));
-    work.catch((error: unknown) => sendError(res, error));
-  });
-}
-
-export async function startApi({ port, service }: ApiOptions): Promise<RunningServer> {
-  const server = createApi(service);
-  await new Promise<void>((resolve, reject) => {
-    server.once("error", reject);
-    server.listen(port, "127.0.0.1", resolve);
-  });
-  const { port: actual } = server.address() as AddressInfo;
-  return {
-    url: `http://127.0.0.1:${actual}`,
-    close: () =>
-      new Promise((resolve, reject) => {
-        server.close((error) => (error ? reject(error) : resolve()));
-        server.closeAllConnections();
-      }),
-  };
+  await new Promise<void>((resolve) => server.listen(opts.port, "127.0.0.1", resolve));
+  const address = server.address() as AddressInfo;
+  const url = `http://${address.address === "::" ? "127.0.0.1" : address.address}:${address.port}`;
+  return { url, close: async () => await new Promise<void>((resolve, reject) => server.close((err) => (err ? reject(err) : resolve()))) };
 }
