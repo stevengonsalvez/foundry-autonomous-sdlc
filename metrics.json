@@ -38,7 +38,7 @@
       "pass": 6
     }
   },
-  "generated_at": "2026-10-10T20:25:27Z",
+  "generated_at": "2026-10-10T20:30:24Z",
   "issues": [
     {
       "closed_at": "2026-10-10T12:28:43Z",
@@ -1401,7 +1401,7 @@
     },
     {
       "closed_at": null,
-      "coder_engine": "agy-unrestricted",
+      "coder_engine": null,
       "coder_sessions_lost": 0,
       "cost": {
         "calls": 2,
@@ -1465,9 +1465,14 @@
         },
         {
           "entered_at": "2026-10-10T20:20:16Z",
+          "seconds": 602,
+          "stage": "stage:in-review"
+        },
+        {
+          "entered_at": "2026-10-10T20:30:18Z",
           "in_progress": true,
           "seconds": 0,
-          "stage": "stage:in-review"
+          "stage": "stage:building"
         }
       ],
       "title": "Update the home page heading copy",
@@ -1479,9 +1484,9 @@
     "deferred": 0,
     "escalated": 16,
     "issues": 21,
-    "orchestrator_usd": 0.666133,
+    "orchestrator_usd": 0.671219,
     "released": 4,
-    "usd": 1.697709
+    "usd": 1.702795
   },
   "version": 1
 }
