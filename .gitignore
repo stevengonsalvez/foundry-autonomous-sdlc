@@ -27,3 +27,6 @@ backend.tf
 .agents/
 *secret*
 *token*
+
+# hook/agent session logs
+logs/
