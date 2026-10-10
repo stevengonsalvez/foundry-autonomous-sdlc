@@ -297,8 +297,15 @@ def open_stale_test_pr(world: World) -> int:
                     [("feat(web): update home page heading copy", ("app/web/src/pages/Home.tsx",))],
                     labels=("maintenance:test-repair",))
     head = gh.branches["chore/update-home-heading"]
-    gh.logs[(head, "test")] = "FAIL app/web/src/pages/Home.test.tsx\nexpected 'Track your parcel' to be in the document"
+    for path in REPO_TEST_FILES:
+        gh.files[("chore/update-home-heading", path)] = "test"
+    gh.logs[(head, "test")] = (" FAIL  |web| tests/home-page.test.tsx > Home > shows the heading\n"
+                               "expected 'Track your parcel' to be in the document")
     return pr
+
+
+REPO_TEST_FILES = ("app/web/tests/home-page.test.tsx", "app/web/tests/parcel-page.test.tsx",
+                   "app/core/tests/tracking-number.test.ts", "app/e2e/home.spec.ts")
 
 
 def test_scenario_d_maintenance_repairs_a_stale_test_on_the_owner_pr_then_merges_and_releases(world: World) -> None:
@@ -311,10 +318,10 @@ def test_scenario_d_maintenance_repairs_a_stale_test_on_the_owner_pr_then_merges
     assert "expected 'Track your parcel'" in ci_input and "test files changed: no" in ci_input
     job = next(body["job"] for _, body, _ in foundry.hosted if body["op"] == "start")
     assert job["mode"] == "maintenance" and job["branch"] == "chore/update-home-heading"
-    assert job["allowed_paths"] == ["app/web/src/pages/Home.test.tsx"] and job["pr"] == {"number": pr}
+    assert job["allowed_paths"] == ["app/web/tests/home-page.test.tsx"] and job["pr"] == {"number": pr}
     messages = [gh.commits[sha]["message"] for sha in gh.pr_commits(pr)]
     assert messages == ["feat(web): update home page heading copy", "test: repair stale test"]
-    assert gh.commits[gh.pr_commits(pr)[-1]]["files"] == ("app/web/src/pages/Home.test.tsx",)
+    assert gh.commits[gh.pr_commits(pr)[-1]]["files"] == ("app/web/tests/home-page.test.tsx",)
     assert gh.pulls[pr]["merged"] and gh.merges[0][2] == "merge"
     assert gh.tags == ["v0.1.0"]
     st = gh.state_of(pr)
@@ -627,16 +634,19 @@ def test_coder_failure_escalates_build_failed(world: World) -> None:
     assert "coder failed" in gh.state_of(n)["escalation"]["reasons"][0]
 
 
-def test_coder_past_its_deadline_is_cancelled_and_escalated(world: World) -> None:
+def test_coder_past_its_deadline_is_cancelled_charged_and_not_restarted_past_the_cap(world: World) -> None:
     gh, foundry = world.gh, world.foundry
     world.coder.polls_to_finish = 10_000
     n = gh.open_issue("Show the estimated delivery date", A_BODY)
     world.drive(lambda: state.BUILDING in gh.labels(n))
     world.clock.advance(7 * 3600)
     world.tick()
-    assert state.ESC_BUILD_FAILED in gh.labels(n)
     assert foundry.hosted[-1][1]["op"] == "cancel"
-    assert gh.state_of(n)["coder"]["status"] == "cancelled"
+    st = gh.state_of(n)
+    assert st["coder"]["status"] == "lost" and st["coder_sessions_lost"] == 1
+    # seven unreported hours are charged, so the restart would pass the issue cap
+    world.tick()
+    assert state.ESC_COST_CAP in gh.labels(n)
 
 
 def test_coder_hours_count_towards_the_issue_cap(world: World) -> None:

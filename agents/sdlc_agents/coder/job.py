@@ -272,9 +272,11 @@ class JobState:
     def terminal(self) -> bool:
         return self.status is not Status.RUNNING
 
-    def view(self, log_tail: str, *, usd_per_hour: float = 0.0) -> dict[str, Any]:
-        """The Coder contract status response. `usd_per_hour` prices this agent's hosted compute."""
+    def view(self, log_tail: str, *, usd_per_hour: float = 0.0, now: str = "") -> dict[str, Any]:
+        """The Coder contract status response. `usd_per_hour` prices this agent's hosted compute;
+        `stale_s` is how long ago the job last wrote its state (a running job heartbeats every 30 s)."""
         return {
+            "updated_at": self.updated_at, "stale_s": _seconds_between(self.updated_at, now),
             "job_id": self.job_id, "status": self.status.value, "phase": self.phase.value, "reason": self.reason,
             "detail": self.detail, "iterations": self.iterations, "engine": self.engine,
             "session_id": self.session_id, "agy_user": self.agy_user, "tests_user": self.tests_user,
@@ -288,6 +290,13 @@ class JobState:
                      "note": "agy usage is billed to its plan and not metered here"},
             "log_tail": log_tail,
         }
+
+
+def _seconds_between(earlier: str, later: str) -> int | None:
+    try:
+        return round((datetime.fromisoformat(later) - datetime.fromisoformat(earlier)).total_seconds())
+    except ValueError:
+        return None
 
 
 class Redactor:
@@ -336,6 +345,7 @@ class JobStore:
         self.root = root
         self.redact = redactor
         self._lock = threading.Lock()
+        self._save_lock = threading.Lock()
 
     def job_dir(self, job_id: str) -> Path:
         if not _JOB_ID.fullmatch(job_id):
@@ -353,8 +363,12 @@ class JobStore:
     def save(self, state: JobState) -> None:
         path = self.job_dir(state.job_id) / "state.json"
         tmp = path.with_suffix(".tmp")
-        tmp.write_text(json.dumps(state.to_dict(), indent=1))
-        os.replace(tmp, path)
+        with self._save_lock:   # the job thread and its heartbeat both save
+            tmp.write_text(json.dumps(state.to_dict(), indent=1))
+            os.replace(tmp, path)
+
+    def job_ids(self) -> list[str]:
+        return sorted(p.name for p in self.root.glob("*") if (p / "state.json").is_file()) if self.root.is_dir() else []
 
     def log(self, job_id: str, text: str) -> None:
         stamp = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")

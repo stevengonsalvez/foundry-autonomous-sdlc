@@ -21,6 +21,8 @@ from typing import Any
 
 import pytest
 
+from sdlc_agents.coder import runner as runner_mod
+from sdlc_agents.coder import shell
 from sdlc_agents.coder.engines import Usage
 from sdlc_agents.coder.git_adapter import SubprocessGit
 from sdlc_agents.coder.job import JobSpec, JobState, JobStore, Redactor
@@ -156,6 +158,9 @@ class FakeGitHub:
             raise GitHubError(422, "Reference already exists")
         self.branches[branch] = from_sha
 
+    def delete_branch(self, branch: str) -> None:
+        self.branches.pop(branch, None)
+
     def list_pulls(self, *, state: str = "open") -> list[PullRequest]:
         return list(self.pulls)
 
@@ -239,10 +244,6 @@ class ScriptedEngine:
         self.usage.input_tokens += 1000
         self.usage.output_tokens += 100
         return CommandResult(0, f"edited {list(step)} using {PAT} and {AGY_TOKEN}")
-
-
-class Crash(BaseException):
-    """Simulates the sandbox being torn down mid-job: escapes the runner's error handling."""
 
 
 @dataclass
@@ -543,17 +544,17 @@ def test_cancel_stops_a_running_job(world: World) -> None:
     assert service.handle({"op": "cancel", "job_id": "j-12-1"})[1]["status"] == "cancelled"
 
 
-@pytest.mark.filterwarnings("ignore::pytest.PytestUnhandledThreadExceptionWarning")
 def test_interrupted_job_reports_interrupted_and_resumes_from_the_pushed_branch(world: World) -> None:
-    def crash(root: Path) -> None:
-        raise Crash()
+    entered, never = threading.Event(), threading.Event()
 
-    world.engines = [ScriptedEngine("agy", [crash])]
+    def evicted(root: Path) -> None:   # the process vanishes mid-step: this thread never comes back
+        entered.set()
+        never.wait()
+
+    world.engines = [ScriptedEngine("agy", [evicted])]
     first = world.service()
     start(first, job())
-    deadline = time.monotonic() + 30
-    while first._alive("j-12-1") and time.monotonic() < deadline:   # the thread dies without finishing
-        time.sleep(0.05)
+    assert entered.wait(30)
     assert remote_log(world.remote_root, "agent/issue-12") == ["test: add failing tests for #12"]
 
     restarted = world.service()            # the sandbox came back: a new process, same $HOME
@@ -653,18 +654,27 @@ def test_agy_without_a_token_is_left_out_of_the_chain(world: World) -> None:
     assert "agy unavailable" in status["log_tail"]
 
 
-def test_unexpected_errors_fail_the_job_with_a_redacted_reason(world: World) -> None:
+@pytest.mark.parametrize("error", [RuntimeError, SystemExit, KeyboardInterrupt])
+def test_any_unexpected_exception_fails_the_job_as_internal_error_and_releases_the_lease(
+        world: World, capsys: pytest.CaptureFixture[str], error: type[BaseException]) -> None:
     def boom(root: Path) -> None:
-        raise RuntimeError(f"disk full while using {PAT}")
+        raise error(f"disk full while using {PAT}")
 
     world.engines = [ScriptedEngine("agy", [boom])]
     service = world.service()
     start(service, job())
+    assert "agent-lease/12" in world.github.branches
     status = wait(service, "j-12-1")
-    assert status["status"] == "failed"
-    assert status["reason"] == "error"
-    assert "disk full" in status["detail"]
+    assert (status["status"], status["reason"]) == ("failed", "internal-error"), status
+    assert "Traceback" in status["detail"] and f"{error.__name__}: disk full" in status["detail"]
+    assert "in boom" in status["detail"]
     assert PAT not in status["detail"]
+    assert "agent-lease/12" not in world.github.branches            # released for the next attempt
+    log = (world.tmp / "home/jobs/j-12-1/log").read_text()
+    assert "Traceback" in log and PAT not in log
+    printed = capsys.readouterr().out                                # the platform logstream
+    assert "j-12-1" in printed and "Traceback" in printed and PAT not in printed
+    assert service.handle({"op": "status", "job_id": "j-12-1"})[0] == 200    # the server still answers
 
 
 def test_start_is_idempotent_and_terminal_jobs_are_final(world: World) -> None:
@@ -1291,3 +1301,116 @@ def test_each_round_records_its_wall_seconds_and_whether_it_timed_out(world: Wor
     rounds = [e for e in status["engine_events"] if e["reason"] == "round"]
     assert rounds == [{"iteration": 1, "engine": "agy-unrestricted", "reason": "round", "seconds": 900,
                        "timed_out": True, "returncode": 0}]
+
+
+def maintenance(**overrides: Any) -> dict[str, Any]:
+    return job(**{"job_id": "j-30-1", "mode": "maintenance", "branch": "agent/issue-30", "tests": [],
+                  "pr": {"number": 31}, "issue": {"number": 30, "title": "Heading changed", "body": "stale"},
+                  **overrides})
+
+
+def test_maintenance_with_allowed_paths_that_match_nothing_fails_cleanly_at_setup(world: World) -> None:
+    world.engines = [ScriptedEngine("agy", [{"app/web/tests/title.test.ts": "x\n"}])]
+    service = world.service()
+    start(service, maintenance(allowed_paths=["app/tests/parcel-page.test.tsx"]))
+    status = wait(service, "j-30-1")
+    assert (status["status"], status["phase"], status["reason"]) == ("failed", "setup", "invalid-allowed-paths")
+    assert "app/tests/parcel-page.test.tsx" in status["detail"]
+    assert world.engines[0].prompts == []
+
+
+def test_maintenance_keeps_only_allowed_paths_that_exist_at_the_branch_head(world: World) -> None:
+    repaired = "expect web/src/title.txt == Where is my parcel\n"
+    world.engines = [ScriptedEngine("agy", [{"app/web/tests/title.test.ts": repaired}])]
+    service = world.service()
+    start(service, maintenance(allowed_paths=["app/web/tests/title.test.ts", "app/tests/gone.test.tsx"]))
+    status = wait(service, "j-30-1")
+    assert status["status"] == "succeeded", status
+    assert "ignoring allowed_paths that match no file at the branch head: app/tests/gone.test.tsx" \
+        in (world.tmp / "home/jobs/j-30-1/log").read_text()
+
+
+def test_revise_with_allowed_paths_that_match_nothing_fails_cleanly(world: World) -> None:
+    world.engines = [ScriptedEngine("agy", [])]
+    service = world.service()
+    start(service, job(job_id="j-40-2", mode="revise", branch="agent/issue-40", tests=[], pr={"number": 41},
+                       issue={"number": 40, "title": "ETA", "body": "x"}, allowed_paths=["app/nowhere/"]))
+    status = wait(service, "j-40-2")
+    assert (status["status"], status["reason"]) == ("failed", "invalid-allowed-paths"), status
+    assert "app/nowhere/" in status["detail"]
+
+
+def test_the_server_answers_500_and_keeps_serving_when_a_request_blows_up(
+        world: World, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch) -> None:
+    service = world.service()
+    monkeypatch.setattr(service, "status", lambda job_id: 1 / 0)
+    assert service.handle_raw(b'{"op": "status", "job_id": "j-1"}') == (500, {"error": "internal_error"})
+    assert "ZeroDivisionError" in capsys.readouterr().out
+    monkeypatch.undo()
+    assert service.handle_raw(b'{"op": "status", "job_id": "j-1"}')[0] == 404
+
+
+def test_a_running_job_heartbeats_its_state_and_status_says_how_stale_it_is(
+        world: World, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(runner_mod, "HEARTBEAT_S", 0.05)
+    release = threading.Event()
+    state_file = world.tmp / "home/jobs/j-12-1/state.json"
+
+    def slow(root: Path) -> CommandResult:
+        world.clock.now_iso = lambda: "2026-10-10T12:07:00Z"   # type: ignore[method-assign]
+        end = time.monotonic() + 10
+        while json.loads(state_file.read_text())["updated_at"] != "2026-10-10T12:07:00Z" and time.monotonic() < end:
+            time.sleep(0.02)
+        release.set()
+        (root / "app/web/src/eta.txt").write_text("2026-10-12\n")
+        return CommandResult(0, "ok")
+
+    world.engines = [ScriptedEngine("agy", [slow])]
+    service = world.service()
+    start(service, job())
+    assert release.wait(15)
+    status = wait(service, "j-12-1")
+    assert status["status"] == "succeeded", status
+    assert status["updated_at"] == "2026-10-10T12:07:00Z"
+    world.clock.now_iso = lambda: "2026-10-10T12:08:30Z"   # type: ignore[method-assign]
+    assert service.handle({"op": "status", "job_id": "j-12-1"})[1]["stale_s"] == 90
+
+
+def test_the_watchdog_stops_a_job_stuck_past_its_deadline(world: World, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(runner_mod, "HEARTBEAT_S", 0.05)
+    seen: dict[str, Any] = {}
+
+    def stuck(root: Path) -> CommandResult:
+        world.clock.t += 3600 + runner_mod.WATCHDOG_GRACE_S + 1
+        cancel = world.contexts[-1].cancel
+        assert cancel.wait(10)                                  # the watchdog pulls the cancel cord
+        seen.update(service.handle({"op": "status", "job_id": "j-12-1"})[1])
+        return CommandResult(0, "stuck")
+
+    world.engines = [ScriptedEngine("agy", [stuck])]
+    service = world.service()
+    start(service, job(deadline_s=3600))
+    status = wait(service, "j-12-1")
+    assert (seen["status"], seen["reason"]) == ("timeout", "deadline")   # reported while still stuck
+    assert "watchdog" in seen["detail"]
+    assert (status["status"], status["reason"]) == ("timeout", "deadline"), status
+
+
+def test_a_restarted_server_marks_jobs_left_running_as_interrupted_at_once(world: World) -> None:
+    spec = JobSpec.from_request(job())
+    store = JobStore(world.tmp / "home/jobs", Redactor())
+    store.save(JobState.new(spec, started_at="2026-10-10T11:00:00Z"))
+    world.service()
+    saved = json.loads((world.tmp / "home/jobs/j-12-1/state.json").read_text())
+    assert (saved["status"], saved["reason"]) == ("failed", "interrupted")
+
+
+def test_each_child_step_logs_its_memory_peak(world: World, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(shell, "take_memory", lambda: shell.MemoryPeak(800 * 1024, 600 * 1024))
+    world.engines = [ScriptedEngine("agy", [{"app/web/src/eta.txt": "2026-10-12\n"}])]
+    service = world.service()
+    start(service, job())
+    assert wait(service, "j-12-1")["status"] == "succeeded"
+    log = (world.tmp / "home/jobs/j-12-1/log").read_text()
+    for step in ("tests", "npm run typecheck", "engine agy"):
+        assert f"memory {step}: peak group RSS 800 MiB, largest process 600 MiB" in log

@@ -26,7 +26,18 @@ from dataclasses import asdict, dataclass, field
 from pathlib import PurePosixPath
 from typing import Any
 
-from sdlc_agents import cost, designed_tests, gates, lock, machine, metrics, release, repo_context, state
+from sdlc_agents import (
+    cost,
+    designed_tests,
+    gates,
+    lock,
+    machine,
+    metrics,
+    paths,
+    release,
+    repo_context,
+    state,
+)
 from sdlc_agents.clock import seconds_between
 from sdlc_agents.definitions import PO_LABEL
 from sdlc_agents.foundry import (
@@ -79,6 +90,7 @@ CODER_STATUSES = ("running", "succeeded", "failed", "timeout", "cancelled")
 LEASE_PREFIX = "agent-lease/"     # ref the coder creates per issue; 422 there means a live job holds it
 START_RESEND_AFTER_S = 600        # two ticks before an unconfirmed start (no session) is sent again
 MAX_START_RESENDS = 1
+SESSION_GONE_POLLS = 2          # consecutive session_not_accessible polls before a job counts as lost
 CODER_LOG_CHARS = 3_000         # log tail copied onto the issue when a coder job fails
 MAX_ENGINE_EVENTS = 20
 CI_LOG_CHARS = 20_000            # tail of a failing check log handed to triage and the coder
@@ -220,6 +232,11 @@ def _object_type(item: Issue, st: State | None) -> str:
 
 
 _ERROR_LINE = re.compile(r"error|fail|expected|assert|exception|TS\d{4}|\u2717|\u00d7", re.IGNORECASE)
+
+
+def _session_gone(exc: AgentRunError) -> bool:
+    """The platform no longer has the coder's session (HTTP 400/404 session_not_accessible)."""
+    return exc.http_status in (400, 404) and "session_not_accessible" in str(exc)
 
 
 def _engine_events(events: list[Any]) -> list[dict[str, Any]]:
@@ -840,12 +857,8 @@ class _Tick:
             unreported = seconds_between(coder["unconfirmed_at"], self.clock.now_iso())
             cost.set_coder_spend(st, int(coder.get("prior_seconds", 0)) + unreported,
                                  float(st.data["cost"].get("coder_model_usd", 0.0)))
-            st.data["pr"] = {"number": pr.number, "branch": pr.head_ref, "head": pr.head_sha}
-            coder.update(status="succeeded", unconfirmed_at=None)
             self._release_lease(obj)
-            if obj.kind == "issue" and gates.AGENT_PR_LABEL not in pr.labels:
-                self.github.add_labels(pr.number, (gates.AGENT_PR_LABEL,))
-            st.enter(state.IN_REVIEW, self.clock.now_iso())
+            self._adopt(obj, pr)
             self._save(obj)
             return f"adopted #{pr.number} from the job holding the lease"
         if waited > machine.CODER_DEADLINE_S + machine.CODER_GRACE_S:
@@ -854,6 +867,14 @@ class _Tick:
             self._save(obj)
             return "orphaned job swept"
         return "waiting for the coder job that holds the lease"
+
+    def _adopt(self, obj: _Object, pr: PullRequest) -> None:
+        """Take the PR an unreachable job produced into review."""
+        obj.st.data["pr"] = {"number": pr.number, "branch": pr.head_ref, "head": pr.head_sha}
+        obj.st.data["coder"].update(status="succeeded", unconfirmed_at=None)
+        if obj.kind == "issue" and gates.AGENT_PR_LABEL not in pr.labels:
+            self.github.add_labels(pr.number, (gates.AGENT_PR_LABEL,))
+        obj.st.enter(state.IN_REVIEW, self.clock.now_iso())
 
     def _finished_by_orphan(self, obj: _Object, coder: dict[str, Any]) -> PullRequest | None:
         """The PR an unreachable job produced: a new owner PR on its branch, or a new head on the PR."""
@@ -875,7 +896,16 @@ class _Tick:
     def _do_poll_coder(self, obj: _Object, ctx: Context, action: Action) -> str:
         st = obj.st
         coder = st.section("coder")
-        resp, session = self._hosted({"op": "status", "job_id": coder["job_id"]}, coder.get("session_id"))
+        try:
+            resp, session = self._hosted({"op": "status", "job_id": coder["job_id"]}, coder.get("session_id"))
+        except AgentRunError as exc:
+            if not _session_gone(exc):
+                raise
+            coder["gone_polls"] = int(coder.get("gone_polls", 0)) + 1
+            if coder["gone_polls"] >= SESSION_GONE_POLLS:
+                return self._coder_lost(obj, f"status answered session_not_accessible {coder['gone_polls']} times")
+            self._save(obj)
+            return "coder session not accessible"
         status = str(resp.get("status", ""))
         if status not in CODER_STATUSES:
             raise StepError(f"coder status unknown: {one_line(json.dumps(resp), 200)}")
@@ -885,7 +915,7 @@ class _Tick:
             "status": status, "phase": _allowed(resp.get("phase"), CODER_PHASES),
             "engine": _allowed(resp.get("engine"), CODER_ENGINES),
             "iterations": int(resp.get("iterations") or 0), "elapsed_s": int(resp.get("elapsed_s") or 0),
-            "session_id": session or coder.get("session_id"),
+            "session_id": session or coder.get("session_id"), "gone_polls": 0,
         })
         reason = _allowed(resp.get("reason"), CODER_REASONS) or ""
         if isinstance(resp.get("engine_events"), list):
@@ -919,6 +949,45 @@ class _Tick:
         if json.dumps(st.data, sort_keys=True) != before:
             self._save(obj)
         return f"coder {status}"
+
+    def _do_coder_lost(self, obj: _Object, ctx: Context, action: Action) -> str:
+        self._cancel_coder(obj)
+        return self._coder_lost(obj, action.reason)
+
+    def _coder_lost(self, obj: _Object, detail: str) -> str:
+        """The job's session is gone or the job overran: free the lease, adopt anything it already
+        pushed, else restart it once under a new job id on the same branch (the coder continues from
+        a pushed branch); a further loss, or no attempts left, escalates build-failed."""
+        st = obj.st
+        coder = st.data["coder"]
+        wall = seconds_between(coder.get("started_at") or self.clock.now_iso(), self.clock.now_iso())
+        cost.set_coder_spend(st, int(coder.get("prior_seconds", 0)) + max(int(coder.get("elapsed_s", 0)), wall),
+                             float(st.data["cost"].get("coder_model_usd", 0.0)))
+        self._release_lease(obj)
+        lost = int(st.data.get("coder_sessions_lost", 0)) + 1
+        st.data["coder_sessions_lost"] = lost
+        pr = self._finished_by_orphan(obj, coder)
+        if pr is not None:
+            self._adopt(obj, pr)
+            self._save(obj)
+            return f"coder-session-lost: adopted #{pr.number} pushed by {coder['job_id']}"
+        if lost > machine.MAX_LOST_RESTARTS or int(coder.get("attempts", 0)) >= machine.MAX_CODER_ATTEMPTS:
+            self._escalate(obj, state.ESC_BUILD_FAILED, [f"coder-session-lost: {coder['job_id']}: {detail}"])
+            self._save(obj)
+            return "coder-session-lost: escalated"
+        coder.update(status="lost", lost_reason=one_line(detail, 200))
+        self._save(obj)
+        return f"coder-session-lost: {coder['job_id']} restarts under a new job id"
+
+    def _cancel_coder(self, obj: _Object) -> None:
+        """Best effort: the session may already be gone."""
+        coder = obj.st.data["coder"]
+        try:
+            self.foundry.invoke_hosted(CODER_AGENT, {"op": "cancel", "job_id": coder["job_id"]},
+                                       session_id=coder.get("session_id"))
+            coder["status"] = "cancelled"
+        except Exception as exc:
+            self.report.errors.append(f"#{obj.item.number}: cancel failed: {type(exc).__name__}: {exc}")
 
     def _post_coder_log(self, obj: _Object, coder: dict[str, Any], reason: str, resp: dict[str, Any]) -> None:
         """Copy a failed job's evidence onto the issue: the sandbox log does not outlive its session.
@@ -1032,21 +1101,34 @@ class _Tick:
         log = self.github.get_check_log(pr.head_sha, "test")
         diff = self.github.get_pull_diff(pr.number)
         files = sorted({f for c in self.github.list_pull_commits(pr.number) for f in c.files})
+        repo_tests = [p for p in self.github.list_tree(pr.head_sha)
+                      if p.startswith(paths.APP_ROOT) and p.endswith(paths.TEST_FILE_SUFFIXES)]
         data = self._call(obj, "sdlc-ci-triage", [
             Section("pr", f"{pr.title}\n\n{pr.body}"),
             Section("changed_files", "\n".join(files) + "\n\ntest files changed: no"),
+            Section("repo_test_files", "\n".join(repo_tests)),
             Section("diff", diff),
             Section("log", log, keep_tail=True),
         ]).data or {}
-        st.data["ci_triage"] = {**{k: data[k] for k in ("cause", "explanation", "test_files")}, "head": pr.head_sha}
+        # The agent's paths are a hint: only real test files, matched or seen failing in the log, are kept.
+        test_files = paths.resolve_test_files(data["test_files"], repo_tests, log) \
+            if data["cause"] == "stale-test" else []
+        st.data["ci_triage"] = {"cause": data["cause"], "explanation": data["explanation"], "test_files": test_files,
+                                "claimed": [one_line(str(p), 200) for p in data["test_files"][:20]],
+                                "head": pr.head_sha}
         self._record_gates(st, pr.head_sha, ctx.checks)
+        if data["cause"] == "stale-test" and not test_files:
+            self._escalate(obj, state.ESC_AGENT_ERROR, [
+                f"ci-triage named no test file that exists at {pr.head_sha[:7]} and the failing log names none"])
+            self._save(obj)
+            return "stale-test without a real test file"
         self._upsert(pr.number, obj.comments, "<!-- sdlc-ci-triage:v1 -->", "\n".join([
             "<!-- sdlc-ci-triage:v1 -->",
             f"**CI triage** (sdlc-ci-triage) for `{pr.head_sha[:7]}`: `{data['cause']}`.",
             "",
             sanitise_markdown(one_line(data["explanation"], 600)),
             "",
-            *(f"- `{p}`" for p in data["test_files"]),
+            *(f"- `{p}`" for p in test_files),
         ]))
         st.data["failures"] = None
         self._save(obj)
@@ -1191,13 +1273,7 @@ class _Tick:
         if action.label is None:
             raise StepError("escalation without a label")
         if action.cancel_coder and (st.get("coder") or {}).get("job_id"):
-            coder = st.data["coder"]
-            try:
-                self.foundry.invoke_hosted(CODER_AGENT, {"op": "cancel", "job_id": coder["job_id"]},
-                                           session_id=coder.get("session_id"))
-                coder["status"] = "cancelled"
-            except Exception as exc:
-                self.report.errors.append(f"#{obj.item.number}: cancel failed: {type(exc).__name__}: {exc}")
+            self._cancel_coder(obj)
         if ctx.pr is not None:
             self._record_gates(st, ctx.pr.head_sha, ctx.checks)
         self._escalate(obj, action.label, [action.reason])

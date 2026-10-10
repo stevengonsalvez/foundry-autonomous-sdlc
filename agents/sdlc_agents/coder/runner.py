@@ -15,6 +15,7 @@ the branch and continues from it instead of redoing finished steps.
 
 from __future__ import annotations
 
+import dataclasses
 import hashlib
 import json
 import os
@@ -23,6 +24,7 @@ import secrets
 import shutil
 import stat
 import threading
+import traceback
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
@@ -52,6 +54,9 @@ INSTALL_TIMEOUT_S = 1800
 TEST_TIMEOUT_S = 1800
 CHECK_TIMEOUT_S = 900   # each of checks.CHECK_COMMANDS
 EDIT_TIMEOUT_S = 3600
+HEARTBEAT_S = 30          # a running job rewrites state.json (updated_at) at least this often
+WATCHDOG_GRACE_S = 60     # past deadline_s + this, the heartbeat cancels the job and records the timeout
+TRACEBACK_CHARS = 1800
 ISSUE_BODY_CHARS = 6000
 FEEDBACK_CHARS = 6000
 MAX_FAILING_LISTED = 40
@@ -164,16 +169,21 @@ class JobRunner:
         self._red_sha = ""
         self._last_sha = ""
         self._red_output = ""
+        self._watchdog_fired = False
 
     # -- lifecycle -------------------------------------------------------------------------
 
     def run(self) -> None:
+        """The job thread. It never dies silently: anything unexpected ends as `internal-error`."""
         self._t0 = self.deps.clock.monotonic()
-        self._log(f"start job {self.spec.job_id} mode={self.spec.mode} branch={self.spec.branch}")
-        self._log(f"cost note: hosted compute {HOSTED_VCPU_USD_PER_HOUR} USD per vCPU-hour and "
-                  f"{HOSTED_GIB_USD_PER_HOUR} USD per GiB-hour (UK South list price), this agent "
-                  f"{self.deps.compute_usd_per_hour:.5f} USD per active hour; agy is billed to its plan")
+        done = threading.Event()
+        threading.Thread(target=self._heartbeat, args=(done,), name=f"beat-{self.spec.job_id}", daemon=True).start()
         try:
+            self._log(f"start job {self.spec.job_id} mode={self.spec.mode} branch={self.spec.branch}")
+            self._log(f"cost note: hosted compute {HOSTED_VCPU_USD_PER_HOUR} USD per vCPU-hour and "
+                      f"{HOSTED_GIB_USD_PER_HOUR} USD per GiB-hour (UK South list price), this agent "
+                      f"{self.deps.compute_usd_per_hour:.5f} USD per active hour; agy is billed to its plan")
+            self._log_cgroup("start")
             self._setup()
             if self.spec.mode.writes_red_tests:
                 self._red()
@@ -184,8 +194,62 @@ class JobRunner:
             self._finish(Status.SUCCEEDED, None)
         except JobStop as stop:
             self._finish(stop.status, stop.reason, stop.detail)
+        except BaseException as exc:   # also SystemExit, KeyboardInterrupt: they would end the thread unseen
+            self._internal_error(exc)
+        finally:
+            done.set()
+            self._log_cgroup("end")
+
+    def _internal_error(self, exc: BaseException) -> None:
+        text = self.store.redact(traceback.format_exc())
+        print(f"coder job {self.spec.job_id}: unhandled {type(exc).__name__}\n{text}", flush=True)
+        header, *frames = text.rstrip().splitlines() or [""]
+        tail = "\n".join(frames)[-TRACEBACK_CHARS:]
+        try:
+            self._finish(Status.FAILED, "internal-error", f"{header}\n...\n{tail}")
+        except Exception:
+            print(f"coder job {self.spec.job_id}: could not record the failure\n{traceback.format_exc()}", flush=True)
+        self._release_lease()
+
+    def _release_lease(self) -> None:
+        """After a crash the orchestrator may never see a clean end, so free the issue for the next attempt."""
+        try:
+            pat = self._pat or self.deps.secrets.get_secret("github-pat")
+            self.deps.github(pat).delete_branch(f"{LEASE_PREFIX}{self.spec.issue_number}")
+            self._log(f"released lease {LEASE_PREFIX}{self.spec.issue_number}")
         except Exception as exc:
-            self._finish(Status.FAILED, "error", f"{type(exc).__name__}: {exc}")
+            self._log(f"could not release lease {LEASE_PREFIX}{self.spec.issue_number}: {type(exc).__name__}: {exc}")
+
+    def _heartbeat(self, done: threading.Event) -> None:
+        """Save state every HEARTBEAT_S (status shows how stale it is) and stop a job stuck past its deadline."""
+        while not done.wait(HEARTBEAT_S):
+            try:
+                self._checkpoint()
+                over = self._elapsed() - self.spec.deadline_s
+                if over > WATCHDOG_GRACE_S and not self._watchdog_fired:
+                    self._watchdog_fired = True
+                    # Recorded before cancelling, so status reports it even if the step never returns.
+                    self.state.status, self.state.reason = Status.TIMEOUT, "deadline"
+                    self.state.detail = (f"watchdog: still in phase {self.state.phase} {over:.0f}s past "
+                                         f"deadline_s={self.spec.deadline_s}; cancelled")
+                    self._checkpoint()
+                    self._log(self.state.detail)
+                    print(f"coder job {self.spec.job_id}: {self.state.detail}", flush=True)
+                    self.cancel.set()   # every shell.run polls it and kills its process group
+                    if self._run_as is not None:
+                        self.deps.reap(self._run_as)
+            except Exception:
+                print(f"coder job {self.spec.job_id}: heartbeat failed\n{traceback.format_exc()}", flush=True)
+
+    def _log_cgroup(self, when: str) -> None:
+        memory = shell.cgroup_memory()
+        if memory:
+            self._log(f"{when}: {memory}")
+
+    def _log_memory(self, step: str) -> None:
+        peak = shell.take_memory()
+        if peak is not None:
+            self._log(f"memory {step}: {peak.describe()}")
 
     def _finish(self, status: Status, reason: str | None, detail: str = "") -> None:
         self.state.status = status
@@ -213,10 +277,11 @@ class JobRunner:
         self.store.save(self.state)
 
     def _check_stops(self) -> None:
-        if self.cancel.is_set():
-            raise JobStop(Status.CANCELLED, "cancelled")
+        # Deadline first: the watchdog cancels a job that overran, and that is a timeout, not a cancel.
         if self._elapsed() >= self.spec.deadline_s:
             raise JobStop(Status.TIMEOUT, "deadline", f"deadline_s={self.spec.deadline_s} reached")
+        if self.cancel.is_set():
+            raise JobStop(Status.CANCELLED, "cancelled")
 
     def _timeout(self, cap: int) -> int:
         return max(1, int(min(cap, self.spec.deadline_s - self._elapsed())))
@@ -257,7 +322,22 @@ class JobRunner:
         else:
             self.git.checkout_new_branch(self.spec.branch, base=self.spec.base)
             self._last_sha = self.git.head_sha()
+        if not self.spec.mode.writes_red_tests:
+            self._check_allowed_paths()
         self._install()
+
+    def _check_allowed_paths(self) -> None:
+        """revise and maintenance work on an existing branch: allowed_paths must name something there."""
+        tracked = self.git.tracked_files()
+        missing = [a for a in self.spec.allowed_paths if not any(scope.within_allowed(t, (a,)) for t in tracked)]
+        if not missing:
+            return
+        kept = tuple(a for a in self.spec.allowed_paths if a not in missing)
+        if not kept:
+            raise JobStop(Status.FAILED, "invalid-allowed-paths",
+                          f"allowed_paths match no file at the head of {self.spec.branch}: {', '.join(missing)}")
+        self._log(f"ignoring allowed_paths that match no file at the branch head: {', '.join(missing)}")
+        self.spec = dataclasses.replace(self.spec, allowed_paths=kept)
 
     def _prepare_agy(self) -> Path | None:
         try:
@@ -332,6 +412,7 @@ class JobRunner:
         before = self._snapshot()
         result = shell.run(cmd, cwd=self.checkout / self.spec.workdir, env=self._work_env(),
                            timeout_s=self._timeout(cap), cancel=self.cancel, **self._as_user())
+        self._log_memory(step)
         self._quiesce()
         self._scan(before, step)
         return result
@@ -404,6 +485,7 @@ class JobRunner:
                             report_path=self._report_path(), env=self._work_env(), cancel=self.cancel,
                             run_as=self._as_user())
         outcome = runner.run(timeout_s=self._timeout(TEST_TIMEOUT_S))
+        self._log_memory("tests")
         self._quiesce()
         self._scan(before, "tests")
         self._log(f"tests ({outcome.returncode}): {outcome.report.summary()}\n{outcome.output[-3000:]}")
@@ -548,6 +630,7 @@ class JobRunner:
         self._log(f"iteration {iteration} with engine {engine.name}")
         result = engine.edit(self._prompt(outcome, red_files, found), workdir=str(self.checkout),
                              timeout_s=self._timeout(EDIT_TIMEOUT_S))
+        self._log_memory(f"engine {engine.name}")
         self._log(f"{engine.name} output (iteration {iteration}) exit {result.returncode}:\n{result.output[-4000:]}")
         self._quiesce()
         self._log_agy_debug(engine, iteration)
@@ -724,13 +807,32 @@ class CoderService:
         self._deps = deps
         self._threads: dict[str, tuple[threading.Thread, threading.Event]] = {}
         self._lock = threading.Lock()
+        self._sweep()
+
+    def _sweep(self) -> None:
+        """A (re)started server has no job threads: whatever was left running died with the last process."""
+        for job_id in self._store.job_ids():
+            try:
+                state = self._store.load(job_id)
+                if state is not None and state.status is Status.RUNNING:
+                    with self._lock:
+                        self._settle(state)
+                    print(f"coder: job {job_id} was running when the server restarted; marked interrupted",
+                          flush=True)
+            except Exception:
+                print(f"coder: could not read job {job_id}\n{traceback.format_exc()}", flush=True)
 
     def handle_raw(self, raw: bytes, *, session_id: str = "") -> tuple[int, dict[str, Any]]:
+        """Never raises: a bug in one request is a 500 and a logged traceback, not a dead server."""
         try:
-            body = json.loads(raw or b"{}")
-        except ValueError:
-            return 400, {"error": "invalid_json"}
-        return self.handle(body, session_id=session_id)
+            try:
+                body = json.loads(raw or b"{}")
+            except ValueError:
+                return 400, {"error": "invalid_json"}
+            return self.handle(body, session_id=session_id)
+        except Exception:
+            print(f"coder: request failed\n{self._store.redact(traceback.format_exc())}", flush=True)
+            return 500, {"error": "internal_error"}
 
     def handle(self, body: Any, *, session_id: str = "") -> tuple[int, dict[str, Any]]:
         if not isinstance(body, dict):
@@ -757,7 +859,7 @@ class CoderService:
                              "session_id": existing.session_id if existing else session_id}
             state = self._settle(self._store.load(spec.job_id))
             if state is not None and state.reason != "interrupted":
-                return 200, state.view(self._store.tail(spec.job_id), usd_per_hour=self._usd_per_hour)
+                return 200, self._view(state)
             if state is None:
                 refused = self._take_lease(spec)
                 if refused is not None:
@@ -803,7 +905,11 @@ class CoderService:
             state = self._settle(self._store.load(job_id))
         if state is None:
             return 404, {"error": "unknown_job", "job_id": job_id}
-        return 200, state.view(self._store.tail(job_id), usd_per_hour=self._usd_per_hour)
+        return 200, self._view(state)
+
+    def _view(self, state: JobState) -> dict[str, Any]:
+        return state.view(self._store.tail(state.job_id), usd_per_hour=self._usd_per_hour,
+                          now=self._deps.clock.now_iso())
 
     @property
     def _usd_per_hour(self) -> float:

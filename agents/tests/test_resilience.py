@@ -284,8 +284,8 @@ def test_cancel_failure_is_reported_and_the_escalation_still_lands(world: World)
     world.drive(lambda: state.BUILDING in gh.labels(n))
     world.clock.advance(7 * 3600)
     report = world.tick()[0]
-    assert state.ESC_BUILD_FAILED in gh.labels(n)
     assert any("cancel failed" in e for e in report.errors)
+    assert gh.state_of(n)["coder"]["status"] == "lost"       # a failed cancel does not block the loss
 
 
 # ---------------------------------------------------------------------------
@@ -364,4 +364,4 @@ def test_maintenance_pr_that_also_edits_ci_is_refused_at_the_merge_gate(world: W
 def test_app_only_pr_passes_the_file_scope_rule(world: World) -> None:
     pr = open_stale_test_pr(world)
     world.drive(lambda: state.RELEASED in world.gh.labels(pr))
-    assert world.gh.list_pull_files(pr) == ["app/web/src/pages/Home.test.tsx", "app/web/src/pages/Home.tsx"]
+    assert world.gh.list_pull_files(pr) == ["app/web/src/pages/Home.tsx", "app/web/tests/home-page.test.tsx"]

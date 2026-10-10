@@ -278,3 +278,51 @@ def test_report_paths_are_never_resolved_on_the_filesystem(tmp_path: Path) -> No
     outside = parse_vitest_json(_report({"name": "/etc/x.test.ts", "status": "failed", "message": "",
                                          "assertionResults": [_assertion("t", "failed", "AssertionError: x")]}))
     assert outside.failing_paths(str(checkout)) == ["/etc/x.test.ts"]
+
+
+def test_captured_commands_time_out_even_when_a_grandchild_holds_the_pipes(tmp_path: Path) -> None:
+    # subprocess.run(timeout=...) kills only the child, then waits for EOF the grandchild never sends.
+    started = time.monotonic()
+    code, out, _err = shell.capture(["sh", "-c", "sleep 30 & echo started; sleep 30"], cwd=tmp_path, env=None,
+                                    timeout_s=1)
+    assert code == shell.TIMEOUT_RC
+    assert "started" in out
+    assert time.monotonic() - started < 10
+    assert shell.capture(["sh", "-c", "echo ok; echo warn >&2"], cwd=tmp_path, env=None, timeout_s=10) == (
+        0, "ok\n", "warn\n")
+
+
+def _proc(root: Path, pid: int, pgrp: int, rss_kb: int, hwm_kb: int, comm: str = "node") -> None:
+    d = root / str(pid)
+    d.mkdir()
+    (d / "stat").write_text(f"{pid} ({comm} worker) S 1 {pgrp} {pgrp} 0 -1 4194560 0 0\n")
+    (d / "status").write_text(f"Name:\t{comm}\nVmHWM:\t  {hwm_kb} kB\nVmRSS:\t  {rss_kb} kB\n")
+
+
+def test_group_memory_sums_current_rss_and_keeps_the_largest_peak(tmp_path: Path) -> None:
+    _proc(tmp_path, 100, 100, rss_kb=50_000, hwm_kb=60_000, comm="npm")
+    _proc(tmp_path, 101, 100, rss_kb=700_000, hwm_kb=900_000)
+    _proc(tmp_path, 102, 555, rss_kb=9_999_999, hwm_kb=9_999_999)   # another group: not ours
+    (tmp_path / "self").mkdir()
+    assert shell.group_memory_kib(100, proc_root=tmp_path) == (750_000, 900_000)
+    assert shell.group_memory_kib(100, proc_root=tmp_path / "missing") == (0, 0)
+
+
+def test_the_last_run_reports_its_memory_peak_where_proc_exists(tmp_path: Path) -> None:
+    shell.run([sys.executable, "-c", "x = bytearray(30_000_000); import time; time.sleep(1.5)"], cwd=tmp_path,
+              timeout_s=30)
+    peak = shell.take_memory()
+    if Path("/proc/self/status").exists():
+        assert peak is not None and peak.largest_kib >= 30_000
+    else:
+        assert peak is None
+    assert shell.take_memory() is None          # taken once: a later step never reports a stale peak
+
+
+def test_cgroup_memory_reports_limit_and_peak_when_present(tmp_path: Path) -> None:
+    (tmp_path / "memory.max").write_text("4294967296\n")
+    (tmp_path / "memory.peak").write_text("1073741824\n")
+    assert shell.cgroup_memory(tmp_path) == "cgroup memory.max 4096 MiB, memory.peak 1024 MiB"
+    (tmp_path / "memory.max").write_text("max\n")
+    assert shell.cgroup_memory(tmp_path) == "cgroup memory.max max, memory.peak 1024 MiB"
+    assert shell.cgroup_memory(tmp_path / "none") == ""
