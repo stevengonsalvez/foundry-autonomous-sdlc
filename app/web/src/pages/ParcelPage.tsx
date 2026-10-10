@@ -1,5 +1,5 @@
 import { useCallback } from "react";
-import { InvalidTrackingNumberError, ParcelNotFoundError } from "@parcel/core";
+import { InvalidTrackingNumberError, ParcelNotFoundError, type ParcelEvent } from "@parcel/core";
 import { ArrowLeftIcon } from "../components/Icons";
 import { ErrorNotice, Loading } from "../components/Feedback";
 import { StatusBadge } from "../components/StatusBadge";
@@ -8,7 +8,7 @@ import { HOME_HREF } from "../router";
 import { useParcelService } from "../service-context";
 import { useDocumentTitle } from "../useDocumentTitle";
 import { useRemote } from "../useRemote";
-import { formatEstimatedDelivery } from "../format";
+import { formatDateTime, formatEstimatedDelivery } from "../format";
 
 function ParcelError({ error, trackingNumber, onRetry }: { error: unknown; trackingNumber: string; onRetry: () => void }) {
   if (error instanceof InvalidTrackingNumberError) {
@@ -33,11 +33,30 @@ function ParcelError({ error, trackingNumber, onRetry }: { error: unknown; track
   );
 }
 
+function getNewestEvent(events: ParcelEvent[]): ParcelEvent | undefined {
+  if (!events || events.length === 0) return undefined;
+  let newest: ParcelEvent | undefined = undefined;
+  let maxTime = -Infinity;
+  for (const event of events) {
+    const time = Date.parse(event.timestamp);
+    if (!Number.isNaN(time) && time > maxTime) {
+      maxTime = time;
+      newest = event;
+    }
+  }
+  return newest;
+}
+
 export function ParcelPage({ trackingNumber }: { trackingNumber: string }) {
   const service = useParcelService();
   const load = useCallback(() => service.getParcel(trackingNumber), [service, trackingNumber]);
   const { state, retry } = useRemote(load);
   useDocumentTitle(trackingNumber);
+
+  const newestEvent =
+    state.status === "success" && Array.isArray(state.data.events)
+      ? getNewestEvent(state.data.events)
+      : undefined;
 
   return (
     <>
@@ -54,6 +73,11 @@ export function ParcelPage({ trackingNumber }: { trackingNumber: string }) {
           </h1>
           {state.status === "success" && <StatusBadge status={state.data.status} />}
         </div>
+        {newestEvent && (
+          <p className="parcel-header__updated">
+            {`Last updated: ${formatDateTime(newestEvent.timestamp)}`}
+          </p>
+        )}
         {state.status === "success" &&
           (state.data.status === "label_created" ||
             state.data.status === "in_transit" ||
