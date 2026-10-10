@@ -352,7 +352,9 @@ class Deployer:
             .get_secret("github-pat")
         self.console.secret(pat)
         body = {"properties": {"category": "RemoteTool", "authType": "CustomKeys", "target": MCP_TARGET,
-                               "isSharedToAll": False, "credentials": {"keys": {"Authorization": f"Bearer {pat}"}}}}
+                               "isSharedToAll": False,
+                               # Read-only mode of the GitHub MCP server: the PAT behind it can write.
+                               "credentials": {"keys": {"Authorization": f"Bearer {pat}", "X-MCP-Readonly": "true"}}}}
         resp = self.http(HttpRequest("PUT", url, {"Authorization": f"Bearer {self.token(ARM_SCOPE)}",
                                                   "Content-Type": "application/json"},
                                      json.dumps(body).encode(), 60.0))

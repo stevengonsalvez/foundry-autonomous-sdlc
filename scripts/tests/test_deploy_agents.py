@@ -186,7 +186,7 @@ def test_connection_puts_custom_keys_with_the_pat_from_key_vault_and_never_print
     assert props["category"] == "RemoteTool"
     assert props["authType"] == "CustomKeys"
     assert props["target"] == "https://api.githubcopilot.com/mcp/"
-    assert props["credentials"] == {"keys": {"Authorization": f"Bearer {PAT}"}}
+    assert props["credentials"] == {"keys": {"Authorization": f"Bearer {PAT}", "X-MCP-Readonly": "true"}}
     assert PAT not in out.getvalue()
     assert "github-mcp" in out.getvalue()
     assert PAT not in repr(arm)
