@@ -1,0 +1,518 @@
+{
+  "version": 1,
+  "generated_at": "2026-10-11T00:00:00Z",
+  "repo": "stevengonsalvez/foundry-autonomous-sdlc",
+  "totals": {
+    "usd": 1.8515,
+    "issues": 7,
+    "released": 4
+  },
+  "issues": [
+    {
+      "number": 1,
+      "title": "Show the estimated delivery date on the parcel page",
+      "scenario": "a",
+      "type": "feature",
+      "outcome": "released",
+      "opened_at": "2026-10-10T09:00:00Z",
+      "stages": [
+        {
+          "stage": "stage:needs-refinement",
+          "entered_at": "2026-10-10T09:00:00Z",
+          "seconds": 412
+        },
+        {
+          "stage": "stage:ready",
+          "entered_at": "2026-10-10T09:06:52Z",
+          "seconds": 38
+        },
+        {
+          "stage": "stage:feasible",
+          "entered_at": "2026-10-10T09:07:30Z",
+          "seconds": 96
+        },
+        {
+          "stage": "stage:tests-written",
+          "entered_at": "2026-10-10T09:09:06Z",
+          "seconds": 144
+        },
+        {
+          "stage": "stage:building",
+          "entered_at": "2026-10-10T09:11:30Z",
+          "seconds": 3120
+        },
+        {
+          "stage": "stage:in-review",
+          "entered_at": "2026-10-10T10:03:30Z",
+          "seconds": 780
+        },
+        {
+          "stage": "stage:merged",
+          "entered_at": "2026-10-10T10:16:30Z",
+          "seconds": 42
+        },
+        {
+          "stage": "stage:released",
+          "entered_at": "2026-10-10T10:17:12Z"
+        }
+      ],
+      "closed_at": "2026-10-10T10:17:12Z",
+      "pr": 2,
+      "release": "v0.1.0",
+      "quality_score": 86,
+      "coder_engine": "agy",
+      "cost": {
+        "usd": 0.1862,
+        "model_usd": 0.1862,
+        "coder_usd": 0.0,
+        "calls": 9
+      },
+      "gates": {
+        "test": "success",
+        "coverage": "success",
+        "e2e": "success",
+        "gitleaks": "success",
+        "tdd-order": "success",
+        "agent-scope": "success"
+      },
+      "gate_attempts": {
+        "test": [
+          "success"
+        ],
+        "coverage": [
+          "success"
+        ],
+        "e2e": [
+          "success"
+        ],
+        "gitleaks": [
+          "success"
+        ],
+        "tdd-order": [
+          "success"
+        ],
+        "agent-scope": [
+          "success"
+        ]
+      }
+    },
+    {
+      "number": 3,
+      "title": "Filter the parcel list by status",
+      "scenario": "b",
+      "type": "feature",
+      "outcome": "released",
+      "opened_at": "2026-10-10T11:00:00Z",
+      "stages": [
+        {
+          "stage": "stage:needs-refinement",
+          "entered_at": "2026-10-10T11:00:00Z",
+          "seconds": 655
+        },
+        {
+          "stage": "stage:ready",
+          "entered_at": "2026-10-10T11:10:55Z",
+          "seconds": 41
+        },
+        {
+          "stage": "stage:feasible",
+          "entered_at": "2026-10-10T11:11:36Z",
+          "seconds": 88
+        },
+        {
+          "stage": "stage:tests-written",
+          "entered_at": "2026-10-10T11:13:04Z",
+          "seconds": 171
+        },
+        {
+          "stage": "stage:building",
+          "entered_at": "2026-10-10T11:15:55Z",
+          "seconds": 5280
+        },
+        {
+          "stage": "stage:in-review",
+          "entered_at": "2026-10-10T12:43:55Z",
+          "seconds": 1260
+        },
+        {
+          "stage": "stage:merged",
+          "entered_at": "2026-10-10T13:04:55Z",
+          "seconds": 39
+        },
+        {
+          "stage": "stage:released",
+          "entered_at": "2026-10-10T13:05:34Z"
+        }
+      ],
+      "closed_at": "2026-10-10T13:05:34Z",
+      "pr": 4,
+      "release": "v0.2.0",
+      "quality_score": 82,
+      "coder_engine": "agy",
+      "cost": {
+        "usd": 0.3174,
+        "model_usd": 0.3174,
+        "coder_usd": 0.0,
+        "calls": 12
+      },
+      "gates": {
+        "test": "success",
+        "coverage": "success",
+        "e2e": "success",
+        "gitleaks": "success",
+        "tdd-order": "success",
+        "agent-scope": "success"
+      },
+      "gate_attempts": {
+        "test": [
+          "success"
+        ],
+        "coverage": [
+          "failure",
+          "success"
+        ],
+        "e2e": [
+          "failure",
+          "success"
+        ],
+        "gitleaks": [
+          "success"
+        ],
+        "tdd-order": [
+          "success"
+        ],
+        "agent-scope": [
+          "success"
+        ]
+      }
+    },
+    {
+      "number": 5,
+      "title": "Push live carrier webhooks to open browser tabs",
+      "scenario": "c",
+      "type": "feature",
+      "outcome": "escalated",
+      "opened_at": "2026-10-10T14:00:00Z",
+      "stages": [
+        {
+          "stage": "stage:needs-refinement",
+          "entered_at": "2026-10-10T14:00:00Z",
+          "seconds": 301
+        },
+        {
+          "stage": "stage:ready",
+          "entered_at": "2026-10-10T14:05:01Z",
+          "seconds": 44
+        }
+      ],
+      "closed_at": "2026-10-10T14:05:45Z",
+      "quality_score": 84,
+      "cost": {
+        "usd": 0.0412,
+        "model_usd": 0.0412,
+        "coder_usd": 0.0,
+        "calls": 4
+      },
+      "gates": {}
+    },
+    {
+      "number": 6,
+      "title": "Lowercase tracking numbers are rejected",
+      "scenario": "d",
+      "type": "bug",
+      "outcome": "released",
+      "opened_at": "2026-10-10T16:00:00Z",
+      "stages": [
+        {
+          "stage": "stage:needs-refinement",
+          "entered_at": "2026-10-10T16:00:00Z",
+          "seconds": 188
+        },
+        {
+          "stage": "stage:ready",
+          "entered_at": "2026-10-10T16:03:08Z",
+          "seconds": 35
+        },
+        {
+          "stage": "stage:feasible",
+          "entered_at": "2026-10-10T16:03:43Z",
+          "seconds": 72
+        },
+        {
+          "stage": "stage:tests-written",
+          "entered_at": "2026-10-10T16:04:55Z",
+          "seconds": 120
+        },
+        {
+          "stage": "stage:building",
+          "entered_at": "2026-10-10T16:06:55Z",
+          "seconds": 2160
+        },
+        {
+          "stage": "stage:in-review",
+          "entered_at": "2026-10-10T16:42:55Z",
+          "seconds": 540
+        },
+        {
+          "stage": "stage:merged",
+          "entered_at": "2026-10-10T16:51:55Z",
+          "seconds": 40
+        },
+        {
+          "stage": "stage:released",
+          "entered_at": "2026-10-10T16:52:35Z"
+        }
+      ],
+      "closed_at": "2026-10-10T16:52:35Z",
+      "severity": "s2",
+      "owner": "api",
+      "resolution_seconds": 3155,
+      "pr": 7,
+      "release": "v0.2.1",
+      "quality_score": 88,
+      "coder_engine": "agy",
+      "cost": {
+        "usd": 0.1348,
+        "model_usd": 0.1348,
+        "coder_usd": 0.0,
+        "calls": 8
+      },
+      "gates": {
+        "test": "success",
+        "coverage": "success",
+        "e2e": "success",
+        "gitleaks": "success",
+        "tdd-order": "success",
+        "agent-scope": "success"
+      },
+      "gate_attempts": {
+        "test": [
+          "success"
+        ],
+        "coverage": [
+          "success"
+        ],
+        "e2e": [
+          "success"
+        ],
+        "gitleaks": [
+          "success"
+        ],
+        "tdd-order": [
+          "success"
+        ],
+        "agent-scope": [
+          "success"
+        ]
+      }
+    },
+    {
+      "number": 8,
+      "title": "Parcel page heading test is stale after copy change",
+      "scenario": "d",
+      "type": "maintenance",
+      "outcome": "released",
+      "opened_at": "2026-10-10T18:00:00Z",
+      "stages": [
+        {
+          "stage": "stage:tests-written",
+          "entered_at": "2026-10-10T18:00:00Z",
+          "seconds": 96
+        },
+        {
+          "stage": "stage:in-review",
+          "entered_at": "2026-10-10T18:01:36Z",
+          "seconds": 420
+        },
+        {
+          "stage": "stage:merged",
+          "entered_at": "2026-10-10T18:08:36Z",
+          "seconds": 38
+        },
+        {
+          "stage": "stage:released",
+          "entered_at": "2026-10-10T18:09:14Z"
+        }
+      ],
+      "closed_at": "2026-10-10T18:09:14Z",
+      "pr": 9,
+      "release": "v0.2.2",
+      "coder_engine": "loop",
+      "cost": {
+        "usd": 0.0576,
+        "model_usd": 0.0576,
+        "coder_usd": 0.0,
+        "calls": 5
+      },
+      "gates": {
+        "test": "success",
+        "coverage": "success",
+        "e2e": "success",
+        "gitleaks": "success",
+        "tdd-order": "success",
+        "agent-scope": "success"
+      },
+      "gate_attempts": {
+        "test": [
+          "success"
+        ],
+        "coverage": [
+          "success"
+        ],
+        "e2e": [
+          "success"
+        ],
+        "gitleaks": [
+          "success"
+        ],
+        "tdd-order": [
+          "success"
+        ],
+        "agent-scope": [
+          "success"
+        ]
+      }
+    },
+    {
+      "number": 10,
+      "title": "Export the parcel list as CSV",
+      "scenario": "b",
+      "type": "feature",
+      "outcome": "escalated",
+      "opened_at": "2026-10-10T20:00:00Z",
+      "stages": [
+        {
+          "stage": "stage:needs-refinement",
+          "entered_at": "2026-10-10T20:00:00Z",
+          "seconds": 350
+        },
+        {
+          "stage": "stage:ready",
+          "entered_at": "2026-10-10T20:05:50Z",
+          "seconds": 40
+        },
+        {
+          "stage": "stage:feasible",
+          "entered_at": "2026-10-10T20:06:30Z",
+          "seconds": 90
+        },
+        {
+          "stage": "stage:tests-written",
+          "entered_at": "2026-10-10T20:08:00Z",
+          "seconds": 150
+        },
+        {
+          "stage": "stage:building",
+          "entered_at": "2026-10-10T20:10:30Z",
+          "seconds": 8640
+        }
+      ],
+      "closed_at": "2026-10-10T22:34:30Z",
+      "pr": 11,
+      "quality_score": 81,
+      "coder_engine": "loop",
+      "cost": {
+        "usd": 1.0412,
+        "model_usd": 0.9112,
+        "coder_usd": 0.13,
+        "calls": 31
+      },
+      "gates": {
+        "test": "failure",
+        "coverage": "success",
+        "e2e": "failure",
+        "gitleaks": "success",
+        "tdd-order": "success",
+        "agent-scope": "success"
+      },
+      "gate_attempts": {
+        "test": [
+          "failure",
+          "failure"
+        ],
+        "coverage": [
+          "success",
+          "success"
+        ],
+        "e2e": [
+          "failure",
+          "failure"
+        ],
+        "gitleaks": [
+          "success"
+        ],
+        "tdd-order": [
+          "success"
+        ],
+        "agent-scope": [
+          "success"
+        ]
+      }
+    },
+    {
+      "number": 13,
+      "title": "Timeline shows events in the wrong order for two parcels",
+      "scenario": "d",
+      "type": "bug",
+      "outcome": "open",
+      "opened_at": "2026-10-10T23:00:00Z",
+      "stages": [
+        {
+          "stage": "stage:needs-refinement",
+          "entered_at": "2026-10-10T23:00:00Z",
+          "seconds": 240
+        },
+        {
+          "stage": "stage:ready",
+          "entered_at": "2026-10-10T23:04:00Z",
+          "seconds": 30
+        },
+        {
+          "stage": "stage:feasible",
+          "entered_at": "2026-10-10T23:04:30Z",
+          "seconds": 80
+        },
+        {
+          "stage": "stage:tests-written",
+          "entered_at": "2026-10-10T23:05:50Z"
+        }
+      ],
+      "severity": "s3",
+      "owner": "web",
+      "quality_score": 83,
+      "cost": {
+        "usd": 0.0731,
+        "model_usd": 0.0731,
+        "coder_usd": 0.0,
+        "calls": 6
+      },
+      "gates": {}
+    }
+  ],
+  "gate_pass_rates": {
+    "test": {
+      "pass": 5,
+      "fail": 2
+    },
+    "coverage": {
+      "pass": 6,
+      "fail": 1
+    },
+    "e2e": {
+      "pass": 5,
+      "fail": 3
+    },
+    "gitleaks": {
+      "pass": 6,
+      "fail": 0
+    },
+    "tdd-order": {
+      "pass": 6,
+      "fail": 0
+    },
+    "agent-scope": {
+      "pass": 6,
+      "fail": 0
+    }
+  }
+}

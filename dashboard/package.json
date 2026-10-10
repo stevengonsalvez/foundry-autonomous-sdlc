@@ -1,0 +1,12 @@
+{
+  "name": "sdlc-dashboard",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Static metrics dashboard for the autonomous SDLC. No build step, no runtime dependencies.",
+  "type": "module",
+  "engines": { "node": ">=22" },
+  "scripts": {
+    "test": "node --test \"test/*.test.mjs\"",
+    "dev": "node test/dev-server.mjs"
+  }
+}
