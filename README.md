@@ -34,6 +34,7 @@ CI is plain tests and gates. It never drives an agent.
 - App: <https://stevengonsalvez.github.io/foundry-autonomous-sdlc/>
 - Metrics dashboard (cycle time per stage, defect owner and resolution time, cost per issue, gate pass rates): <https://stevengonsalvez.github.io/foundry-autonomous-sdlc/dashboard/>
 - Traces of every scenario, from issue to release: [`docs/evidence.md`](docs/evidence.md)
+- Final report with the success criteria and their evidence: [`docs/final-report.md`](docs/final-report.md)
 
 ## The gates
 
