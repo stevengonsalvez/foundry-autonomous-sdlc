@@ -78,9 +78,11 @@ Label set (created by `scripts/setup_repo.py`; names are exact):
 
 An issue is acted on only if its author is the repo owner. Anything else is ignored with no spend.
 
+The object type comes from the `type:*` label (default `type:feature`); the scenario letter from the body marker `<!-- scenario: a|b|c|d|d-maintenance -->` (when absent, metrics infer it). A bug is triaged before its requirement is scored. The stale-test PR (owner-authored, labelled `maintenance:test-repair`) is its own object: its state comment lives on the PR, its type is `maintenance`, and it only enters the pipeline after its `test` check failed with no test file in the diff.
+
 ### State comment
 
-Each issue has exactly one bot comment starting with `<!-- sdlc-state:v1` followed by JSON and `-->`, then a human readable summary. The orchestrator edits it in place.
+Each issue (or maintenance PR) has exactly one bot comment starting with `<!-- sdlc-state:v1` followed by JSON and `-->`, then a human readable summary. The orchestrator edits it in place. The JSON is the source of truth for the stage; labels are a projection the orchestrator keeps in sync. Only comments authored by the owner identity count. Characters `<`, `>` and `&` in the JSON are written as `<`, `>`, `&`, so text inside can never close the comment. Unknown keys are preserved; a version above 1 is refused, never overwritten. Beyond the example below the orchestrator records `quality.history`, `ci_triage`, `tests` (file list; contents live in the `<!-- sdlc-tests:v1` comment), `gate_history` (results per evaluated head), `release.pending` (a reserved tag), `escalation`, `failures` (consecutive failures of one step; 3, or 6 for coder polls, escalate) and `cost.coder_model_usd`. A failing step rolls the state back to its last saved version, keeping only its spend and the failure count.
 
 ```json
 {
@@ -107,11 +109,13 @@ A routine fires `sdlc-orchestrator` every five minutes (cron `*/5 * * * *`, the 
 3. Calls the coder (`start` or `status`) when an object is `stage:building`. The status call also keeps the coder session alive (sandbox idle timeout is at most 60 minutes).
 4. Writes `metrics.json` to branch `metrics` and dispatches `pages.yml`.
 
-Every LLM call is made with the cumulative issue cost checked first. Cost over 1 USD per issue puts the object in `escalated:cost-cap`. Total spend is tracked in `metrics.json` (`totals.usd`) and the loop halts new work at 4.50 USD.
+Every LLM call is made with the cumulative issue cost checked first. Cost over 1 USD per issue puts the object in `escalated:cost-cap`. Total spend is tracked in `metrics.json` (`totals.usd`, which never decreases) and the loop halts new work at 4.50 USD. Issue cost counts prompt agent tokens, coder compute (2 vCPU, 4 GiB: 0.2706 USD per hour of reported job time) and the coder's own model spend; each tick also adds the orchestrator's compute (1 vCPU, 2 GiB, tick seconds plus the 2 minute idle timeout) to `totals.orchestrator_usd` and `totals.usd`. Merged work is always released: past a cap the notes are written without a model call. Every coder job carries `deadline_s` 7200 and `max_model_usd` = what is left under the issue cap (at most 0.50); a job reported `interrupted` is started again with the same job id (at most three times).
+
+GitHub port additions used by the orchestrator: `create_commit(message, *, parent_sha)` (the lock ref points at a fresh empty commit, so its tip time is the lock time), `get_check_log(sha, name)` (ci-triage input), `list_pull_files(number)` (merge gate), and `CheckRun.pull_requests` (runs GitHub ties to a PR).
 
 ## Coder contract (Invocations protocol)
 
-Request bodies (JSON). The platform issues the session id on the first call; callers store it and send `agent_session_id` on later calls.
+Request bodies (JSON). The platform issues the session id in the `x-agent-session-id` response header of the first call; callers store it and pass it back as the query parameter `agent_session_id=<id>` on later calls. Replies are plain JSON.
 
 ```json
 {"op": "start", "job": {
@@ -120,25 +124,40 @@ Request bodies (JSON). The platform issues the session id on the first call; cal
   "issue": {"number": 12, "title": "...", "body": "..."},
   "spec": {"acceptance_criteria": ["..."], "notes": "..."},
   "tests": [{"path": "app/api/tests/parcel.test.ts", "content": "..."}],
-  "test_cmd": "npm test", "max_iterations": 5, "deadline_s": 21600, "allowed_paths": ["app/"]}}
+  "test_cmd": "npm test", "max_iterations": 5, "deadline_s": 7200, "allowed_paths": ["app/"]}}
 {"op": "status", "job_id": "j-12-1"}
 {"op": "cancel", "job_id": "j-12-1"}
 ```
 
-Response to `start`: `{"job_id", "status": "running"}` immediately; the work continues in a background thread in the same session. Response to `status`:
+Modes:
+
+| Mode | Branch | Extra fields | Result |
+|------|--------|--------------|--------|
+| `feature`, `bugfix` | `agent/issue-N`, created from `base` | `tests` (non-empty) | red commit, implementation, new PR with `agent:pr` |
+| `revise` | `agent/issue-N`, must exist | `pr: {"number": 13}`, `tests: []`, reviewer findings in `spec.notes` | at least one new commit (`fix: address review findings for #N`) on the existing PR; tests from the red commit untouched; no new PR |
+| `maintenance` | the PR head ref (any branch except `base`, for example `chore/update-home-heading`) | `pr: {"number": 14}`, `tests: []`, `allowed_paths` = the test files named by ci-triage; `issue` optional | only those test files change (`test: repair stale tests for #N`), pushed to the existing PR |
+
+`start` is idempotent per `job_id`: a retried start returns the existing job and its `session_id`. Optional fields: `workdir` (default `app`), `install_cmd` (default `npm ci`), `max_model_usd` (default 0.50, at most 1.00). Job ids match `[A-Za-z0-9][A-Za-z0-9._-]{0,63}` (`j-<issue>-<attempt>`, `j-pr<N>-<attempt>`).
+
+Response to `start`: `{"job_id", "status": "running"}` immediately; the work continues in a background thread in the same session. `start` with the id of a job reported `interrupted` resumes it from the pushed branch; any other existing id returns its status unchanged. Response to `status`:
 
 ```json
 {"job_id": "j-12-1", "status": "running|succeeded|failed|timeout|cancelled", "phase": "setup|tests|implement|push|pr",
- "iterations": 2, "engine": "agy|loop", "elapsed_s": 312, "pr": {"number": 13, "url": "..."}, "log_tail": "..."}
+ "reason": "tests-not-red|scope-violation|max-iterations|engines-exhausted|cost-cap|install-failed|branch-missing|branch-conflict|interrupted|deadline|cancelled|error",
+ "detail": "...", "iterations": 2, "engine": "agy|loop", "elapsed_s": 312, "pr": {"number": 13, "url": "..."},
+ "red": "...", "green": "...",
+ "cost": {"model_usd": 0.0, "input_tokens": 0, "output_tokens": 0, "coder_seconds": 312, "coder_usd": 0.0,
+          "hosted_vcpu_usd_per_hour": 0.10934, "hosted_gib_usd_per_hour": 0.01298},
+ "log_tail": "..."}
 ```
 
 Coder steps, all in code (the CLI only edits files):
 
-1. Install node and `agy` into `$HOME` if missing, read both secrets from Key Vault, clone the repo with the PAT (never written to disk in the remote URL), create the branch from `base`.
-2. `feature` and `bugfix`: write `tests` and commit them alone with message `test: ...` first. Run `test_cmd`; at least one test must fail and every test file must load (no collection errors), else return `failed` with reason `tests-not-red`. `maintenance`: the branch already exists, only files matching test globs may change, no new red commit.
-3. Loop up to `max_iterations`: run `agy -p` with the issue, spec, failing output and the rule "make the committed tests pass, never edit the test files, touch only `allowed_paths`"; run `test_cmd`; commit implementation changes with `feat:` or `fix:`. Stop on green.
-4. Reject any diff outside `allowed_paths` (revert and fail). Push, open the PR with label `agent:pr`, body containing `Closes #N`, the red and green test output, and iteration count. For `maintenance`, push to the existing branch instead.
-5. Hard stops: `deadline_s` (default 21600, six hours), `max_iterations`, and the engine fallback chain `agy`, then an Agent Framework style loop on the project model deployment (`sdlc-default`), recording which engine produced the result.
+1. Install node into `/opt/node` (once per session, sha256-checked) and `agy` for `agyuser` if missing, read both secrets from Key Vault, clone the repo, check out or create the branch. The PAT reaches git only through `GIT_ASKPASS` on clone, fetch and push (token-free script in a root-only directory, deleted after each call); it is never in `.git/config`, the remote URL, a log, or any environment agy or the tests see.
+2. `feature` and `bugfix`: write `tests` and commit them alone with message `test: ...` first. Run `test_cmd` with the vitest JSON reporter; at least one assertion in the new tests must fail and every new test file must load, else `failed` with reason `tests-not-red`. `revise` finds the existing red commit; `maintenance` has none.
+3. Loop up to `max_iterations`: run the engine with the issue, spec, failing output and the scope rules; run `test_cmd`; commit and push each round. Done when green: tests pass, the red suites (or, for maintenance, the suites failing at the start) ran with every assertion passing, and the result holds after `git clean -X` and a fresh `install_cmd`. A `revise` job is not done until it has committed.
+4. After every engine run: any new symlink, any change to `.git/config` or `.git/hooks`, the branch switched, or a change outside `allowed_paths`, to an existing test file (feature, bugfix, revise), to vitest config, or (maintenance) to a non-test file is a `scope-violation`: reverted, job failed, nothing further pushed. Engine-made commits are undone first so their content is checked too. Then for `feature` and `bugfix` open (or reuse) the PR with label `agent:pr` and a body with `Closes #N`, the red and green summaries, iteration count and engine.
+5. Engines: `agy -p "<prompt>" --mode accept-edits --sandbox` (edits only; shell commands are denied, so code runs the tests), killed early when it prints "Authentication required" or a quota message before editing (it blocks instead of exiting), 600 seconds per call, a timeout without edits retried once. agy, `install_cmd` and `test_cmd` run as the unprivileged user `agyuser` with an environment built from nothing when the sandbox allows `useradd` (else as root with the same environment); `agy_user` and `tests_user` are reported in status and the PR body, node is installed in `/opt/node` (root-owned, read-only for `agyuser`), leftover `agyuser` processes are killed after each agy run. Fallback: a model loop on the project deployment `sdlc-default` returning whole-file edits as JSON, written only to safe relative paths inside the checkout that pass through no symlink and are within `allowed_paths`. Hard stops: `deadline_s` (default and maximum 7200), `max_iterations`, `max_model_usd`, cancel.
 
 ## Gates
 
@@ -157,7 +176,7 @@ CI jobs, all run on every pull request with no path filters so the names always 
 
 Test globs: `**/*.test.ts`, `**/*.test.tsx`, `**/*.spec.ts`, `app/e2e/**`, `**/tests/**`, `**/__fixtures__/**`.
 
-The orchestrator merges a PR only when all of the following hold on the PR head sha: all six checks `success`, a review marker `<!-- sdlc-review:v1 {"verdict":"approve","head":"<sha>"} -->` from the reviewer agent for exactly that sha, the PR and its issue are owner-authored, and cost is under the cap. Merge method is a merge commit (keeps commit order visible on `main`). The ruleset enforces the six checks again server-side with no bypass actors, so the orchestrator cannot merge around them.
+The orchestrator merges a PR only when all of the following hold on the PR head sha: all six checks `success`, a review marker `<!-- sdlc-review:v1 {"verdict":"approve","head":"<sha>"} -->` from the reviewer agent for exactly that sha, the PR and its issue are owner-authored, cost is under the cap, the branch is `agent/*` or the PR is labelled `maintenance:test-repair`, and every file the PR changes (including rename sources) is under `app/`. The last rule applies to every PR the orchestrator merges, because for `pull_request` events GitHub runs the workflow files from the PR head, so a PR touching `.github/` could weaken its own checks; a violation escalates `escalated:build-failed` at once. Check runs GitHub ties to the PR win over other runs on the same sha (a fork PR cannot override them). Merge method is a merge commit (keeps commit order visible on `main`). The ruleset enforces the six checks again server-side with no bypass actors, so the orchestrator cannot merge around them.
 
 ## Release
 
@@ -182,6 +201,8 @@ After a merge: the release-notes agent writes notes from the PR title, body and 
   "gate_pass_rates": {"test": {"pass": 3, "fail": 1}}
 }
 ```
+
+Additions to schema version 1 (all optional for readers): `totals.escalated`, `totals.orchestrator_usd`; per entry `kind` (`issue` or `pr`; the maintenance PR has `number: null`, `pr` set and scenario `d-maintenance`), `escalation`, `cost.coder_model_usd`, `gate_attempts` (each gate's conclusions per evaluated head sha, oldest first: first element is the first attempt, last is the eventual result); per gate in `gate_pass_rates`, `first_pass` and `first_fail`. The stage the object is in now has `seconds: 0` and `in_progress: true`.
 
 Dashboard panels: cycle time per stage (median and per issue), defect owner and resolution time, cost per issue (table plus total against the 5 USD cap), gate pass rates (first-attempt and eventual).
 
