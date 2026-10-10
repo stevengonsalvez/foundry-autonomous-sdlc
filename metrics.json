@@ -4,41 +4,41 @@
     "agent-scope": {
       "fail": 0,
       "first_fail": 0,
-      "first_pass": 1,
-      "pass": 1
+      "first_pass": 2,
+      "pass": 2
     },
     "coverage": {
       "fail": 0,
       "first_fail": 0,
-      "first_pass": 1,
-      "pass": 1
+      "first_pass": 2,
+      "pass": 2
     },
     "e2e": {
-      "fail": 0,
-      "first_fail": 0,
+      "fail": 1,
+      "first_fail": 1,
       "first_pass": 1,
       "pass": 1
     },
     "gitleaks": {
       "fail": 0,
       "first_fail": 0,
-      "first_pass": 1,
-      "pass": 1
+      "first_pass": 2,
+      "pass": 2
     },
     "tdd-order": {
       "fail": 0,
       "first_fail": 0,
-      "first_pass": 1,
-      "pass": 1
+      "first_pass": 2,
+      "pass": 2
     },
     "test": {
-      "fail": 0,
-      "first_fail": 0,
+      "fail": 1,
+      "first_fail": 1,
       "first_pass": 1,
       "pass": 1
     }
   },
-  "generated_at": "2026-10-10T15:50:58Z",
+  "generated_at": "2026-10-10T15:55:26Z",
   "issues": [
     {
       "closed_at": "2026-10-10T12:28:43Z",
@@ -622,13 +622,39 @@
         "usd": 0.045963
       },
       "deferred": null,
-      "escalation": null,
-      "gate_attempts": {},
-      "gates": {},
+      "escalation": "escalated:build-failed",
+      "gate_attempts": {
+        "agent-scope": [
+          "success"
+        ],
+        "coverage": [
+          "success"
+        ],
+        "e2e": [
+          "failure"
+        ],
+        "gitleaks": [
+          "success"
+        ],
+        "tdd-order": [
+          "success"
+        ],
+        "test": [
+          "failure"
+        ]
+      },
+      "gates": {
+        "agent-scope": "success",
+        "coverage": "success",
+        "e2e": "failure",
+        "gitleaks": "success",
+        "tdd-order": "success",
+        "test": "failure"
+      },
       "kind": "issue",
       "number": 15,
       "opened_at": "2026-10-10T15:22:24Z",
-      "outcome": "open",
+      "outcome": "escalated",
       "owner": null,
       "pr": 19,
       "quality_score": 93,
@@ -659,9 +685,13 @@
         },
         {
           "entered_at": "2026-10-10T15:50:15Z",
-          "in_progress": true,
-          "seconds": 0,
+          "seconds": 301,
           "stage": "stage:in-review"
+        },
+        {
+          "entered_at": "2026-10-10T15:55:16Z",
+          "seconds": 0,
+          "stage": "escalated:build-failed"
         }
       ],
       "title": "Show when the parcel was last updated on the parcel page",
@@ -669,13 +699,13 @@
     },
     {
       "closed_at": null,
-      "coder_engine": null,
+      "coder_engine": "agy",
       "cost": {
         "calls": 5,
         "coder_model_usd": 0.0,
-        "coder_usd": 0.0,
+        "coder_usd": 0.005262,
         "model_usd": 0.014367,
-        "usd": 0.014367
+        "usd": 0.019629
       },
       "deferred": null,
       "escalation": null,
@@ -811,9 +841,14 @@
         },
         {
           "entered_at": "2026-10-10T15:50:56Z",
+          "seconds": 263,
+          "stage": "stage:tests-written"
+        },
+        {
+          "entered_at": "2026-10-10T15:55:19Z",
           "in_progress": true,
           "seconds": 0,
-          "stage": "stage:tests-written"
+          "stage": "stage:building"
         }
       ],
       "title": "Lowercase tracking numbers are rejected as invalid",
@@ -823,11 +858,11 @@
   "repo": "stevengonsalvez/foundry-autonomous-sdlc",
   "totals": {
     "deferred": 0,
-    "escalated": 10,
+    "escalated": 11,
     "issues": 14,
-    "orchestrator_usd": 0.424358,
+    "orchestrator_usd": 0.42953,
     "released": 1,
-    "usd": 0.820064
+    "usd": 0.830498
   },
   "version": 1
 }
