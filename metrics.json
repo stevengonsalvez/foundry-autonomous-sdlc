@@ -4,41 +4,41 @@
     "agent-scope": {
       "fail": 0,
       "first_fail": 0,
-      "first_pass": 2,
-      "pass": 2
+      "first_pass": 3,
+      "pass": 3
     },
     "coverage": {
       "fail": 0,
       "first_fail": 0,
-      "first_pass": 2,
-      "pass": 2
+      "first_pass": 3,
+      "pass": 3
     },
     "e2e": {
       "fail": 1,
       "first_fail": 1,
-      "first_pass": 1,
-      "pass": 1
+      "first_pass": 2,
+      "pass": 2
     },
     "gitleaks": {
       "fail": 0,
       "first_fail": 0,
-      "first_pass": 2,
-      "pass": 2
+      "first_pass": 3,
+      "pass": 3
     },
     "tdd-order": {
       "fail": 0,
       "first_fail": 0,
-      "first_pass": 2,
-      "pass": 2
+      "first_pass": 3,
+      "pass": 3
     },
     "test": {
       "fail": 1,
       "first_fail": 1,
-      "first_pass": 1,
-      "pass": 1
+      "first_pass": 2,
+      "pass": 2
     }
   },
-  "generated_at": "2026-10-10T17:00:41Z",
+  "generated_at": "2026-10-10T17:05:49Z",
   "issues": [
     {
       "closed_at": "2026-10-10T12:28:43Z",
@@ -866,11 +866,11 @@
       "closed_at": null,
       "coder_engine": null,
       "cost": {
-        "calls": 5,
+        "calls": 6,
         "coder_model_usd": 0.0,
         "coder_usd": 0.001879,
-        "model_usd": 0.01895,
-        "usd": 0.020829
+        "model_usd": 0.022689,
+        "usd": 0.024567
       },
       "deferred": null,
       "escalation": null,
@@ -910,9 +910,14 @@
         },
         {
           "entered_at": "2026-10-10T17:00:16Z",
+          "seconds": 312,
+          "stage": "stage:feasible"
+        },
+        {
+          "entered_at": "2026-10-10T17:05:28Z",
           "in_progress": true,
           "seconds": 0,
-          "stage": "stage:feasible"
+          "stage": "stage:tests-written"
         }
       ],
       "title": "Show when the parcel was last updated on the parcel page",
@@ -976,9 +981,14 @@
         },
         {
           "entered_at": "2026-10-10T17:00:39Z",
+          "seconds": 293,
+          "stage": "stage:tests-written"
+        },
+        {
+          "entered_at": "2026-10-10T17:05:32Z",
           "in_progress": true,
           "seconds": 0,
-          "stage": "stage:tests-written"
+          "stage": "stage:building"
         }
       ],
       "title": "Make the parcel tracker better",
@@ -988,16 +998,42 @@
       "closed_at": null,
       "coder_engine": "agy-unrestricted",
       "cost": {
-        "calls": 4,
+        "calls": 5,
         "coder_model_usd": 0.0,
         "coder_usd": 0.026384,
-        "model_usd": 0.007083,
-        "usd": 0.033467
+        "model_usd": 0.008776,
+        "usd": 0.03516
       },
       "deferred": null,
       "escalation": null,
-      "gate_attempts": {},
-      "gates": {},
+      "gate_attempts": {
+        "agent-scope": [
+          "success"
+        ],
+        "coverage": [
+          "success"
+        ],
+        "e2e": [
+          "success"
+        ],
+        "gitleaks": [
+          "success"
+        ],
+        "tdd-order": [
+          "success"
+        ],
+        "test": [
+          "success"
+        ]
+      },
+      "gates": {
+        "agent-scope": "success",
+        "coverage": "success",
+        "e2e": "success",
+        "gitleaks": "success",
+        "tdd-order": "success",
+        "test": "success"
+      },
       "kind": "issue",
       "number": 25,
       "opened_at": "2026-10-10T16:42:40Z",
@@ -1046,9 +1082,9 @@
     "deferred": 0,
     "escalated": 13,
     "issues": 17,
-    "orchestrator_usd": 0.499653,
+    "orchestrator_usd": 0.505749,
     "released": 1,
-    "usd": 1.151674
+    "usd": 1.163202
   },
   "version": 1
 }
