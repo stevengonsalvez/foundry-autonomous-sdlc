@@ -1,70 +1,57 @@
 import React from "react";
-import { Link, useLocation, useNavigate } from "react-router-dom";
-import { useEffect, useMemo, useState } from "react";
+import { Link, useSearchParams } from "react-router-dom";
 import { ParcelTable } from "../components/ParcelTable";
-import { useService } from "../service-context";
+import { useParcelService } from "../service-context";
 
-function useQuery() {
-  const { search } = useLocation();
-  return useMemo(() => new URLSearchParams(search), [search]);
-}
+const STATUSES = ["label_created", "in_transit", "out_for_delivery", "delivered", "exception"] as const;
+export type Status = typeof STATUSES[number];
 
-export const HomePage: React.FC = () => {
-  const service = useService();
-  const navigate = useNavigate();
-  const query = useQuery();
-  const [parcels, setParcels] = useState([] as any[]);
-  const [statusFilter, setStatusFilter] = useState<string | undefined>(() => query.get("status") ?? undefined);
+export function HomePage() {
+  const service = useParcelService();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const status = searchParams.get("status");
 
-  useEffect(() => {
-    let mounted = true;
-    service.listParcels().then((p) => {
-      if (mounted) setParcels(p);
-    });
-    return () => {
-      mounted = false;
-    };
-  }, [service]);
+  const allParcels = service.listParcels();
 
-  useEffect(() => {
-    const params = new URLSearchParams(location.search);
-    if (statusFilter) params.set("status", statusFilter);
-    else params.delete("status");
-    navigate({ search: params.toString() ? `?${params.toString()}` : "" }, { replace: true });
-  }, [statusFilter, navigate]);
+  const validStatus = STATUSES.includes(status as Status) ? (status as Status) : null;
 
-  const statuses = Array.from(new Set(parcels.map((p) => p.status))).sort();
+  const parcels = validStatus ? allParcels.filter((p) => p.status === validStatus) : allParcels;
 
-  const filtered = useMemo(() => {
-    if (!statusFilter) return parcels;
-    return parcels.filter((p) => p.status === statusFilter);
-  }, [parcels, statusFilter]);
+  function onChange(e: React.ChangeEvent<HTMLSelectElement>) {
+    const value = e.target.value;
+    if (value === "") {
+      searchParams.delete("status");
+      setSearchParams(searchParams);
+    } else {
+      searchParams.set("status", value);
+      setSearchParams(searchParams);
+    }
+  }
 
   return (
-    <div>
-      <h1>Parcel Tracker</h1>
+    <main>
+      <h1>Parcels</h1>
       <label htmlFor="status-filter">Filter by status</label>
-      <select
-        id="status-filter"
-        value={statusFilter ?? ""}
-        onChange={(e) => setStatusFilter(e.target.value || undefined)}
-        data-testid="status-select"
-      >
-        <option value="">All</option>
-        {statuses.map((s) => (
+      <select id="status-filter" value={validStatus ?? ""} onChange={onChange}>
+        <option value="">(all)</option>
+        {STATUSES.map((s) => (
           <option key={s} value={s}>
             {s}
           </option>
         ))}
       </select>
-      {filtered.length === 0 ? (
+
+      {parcels.length === 0 ? (
         <p>No parcels match this status.</p>
       ) : (
-        <ParcelTable parcels={filtered} />
+        <ParcelTable parcels={parcels} />
       )}
+
       <p>
-        <Link to="/parcel/PK1000000001">Example parcel</Link>
+        <Link to="/">Refresh</Link>
       </p>
-    </div>
+    </main>
   );
-};
+}
+
+export default HomePage;
