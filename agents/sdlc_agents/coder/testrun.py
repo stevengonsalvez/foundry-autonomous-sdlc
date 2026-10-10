@@ -39,6 +39,7 @@ class FileResult:
     message: str
     failed: tuple[str, ...]   # failure messages of failed assertions
     statuses: tuple[str, ...] = ()   # status of every assertion: passed, failed, skipped, pending, todo
+    failed_names: tuple[str, ...] = ()   # full names of the failed assertions, same order as `failed`
 
     def is_for(self, repo_path: str) -> bool:
         return self.name == repo_path or self.name.endswith("/" + repo_path)
@@ -85,6 +86,19 @@ class TestReport:
                 return False
         return True
 
+    def failing_tests(self, root: str) -> list[tuple[str, str, str]]:
+        """(repo-relative file, test name, first assertion line) for every failure, load errors included."""
+        real_root = os.path.realpath(root)
+        found: list[tuple[str, str, str]] = []
+        for f in self.files:
+            path = os.path.relpath(os.path.realpath(f.name), real_root)
+            if f.load_error:
+                found.append((path, "(file failed to load)", f.message.strip().splitlines()[0] if f.message else ""))
+            for name, message in zip(f.failed_names, f.failed, strict=False):
+                first = next((line.strip() for line in message.splitlines() if line.strip()), "")
+                found.append((path, name, first))
+        return found
+
     def failing_paths(self, root: str) -> list[str]:
         real_root = os.path.realpath(root)
         return [os.path.relpath(os.path.realpath(f.name), real_root) for f in self.files if f.status == "failed"]
@@ -120,8 +134,9 @@ def _file_result(raw: dict[str, Any]) -> FileResult:
     assertions = raw.get("assertionResults", [])
     failed = tuple("\n".join(a.get("failureMessages") or [a.get("fullName", "")])
                    for a in assertions if a["status"] == "failed")
+    names = tuple(str(a.get("fullName") or a.get("title") or "") for a in assertions if a["status"] == "failed")
     return FileResult(name=str(raw["name"]), status=str(raw["status"]), message=str(raw.get("message") or ""),
-                      failed=failed, statuses=tuple(str(a["status"]) for a in assertions))
+                      failed=failed, statuses=tuple(str(a["status"]) for a in assertions), failed_names=names)
 
 
 @dataclass(frozen=True)

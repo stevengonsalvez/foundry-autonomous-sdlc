@@ -117,6 +117,7 @@ class FakeToolchain:
         self.agy_path = home / ".local/bin/agy"
         self.tokens: list[str] = []
         self.token_writes: list[tuple[Path | None, tuple[int, int] | None]] = []
+        self.settings_writes: list[tuple[Path | None, tuple[int, int] | None]] = []
 
     def env(self) -> dict[str, str]:
         return {"PATH": os.environ["PATH"], "HOME": str(self.home), "CI": "1"}
@@ -128,6 +129,10 @@ class FakeToolchain:
 
     def node_bin(self) -> Path:
         return self.home.parent / "shared-node/bin"
+
+    def write_agy_settings(self, *, home: Path | None = None, owner: tuple[int, int] | None = None) -> Path:
+        self.settings_writes.append((home, owner))
+        return (home or self.home) / "settings.json"
 
     def write_agy_token(self, token: str, *, home: Path | None = None,
                         owner: tuple[int, int] | None = None) -> Path:
@@ -654,7 +659,8 @@ def test_test_runner_config_edits_are_rejected(world: World) -> None:
 
 
 def test_green_faked_through_ignored_files_does_not_survive_a_clean_install(world: World) -> None:
-    world.engines = [ScriptedEngine("agy", [{"app/node_modules/FORCE_GREEN": "1"}])]
+    # A real edit (wrong value) plus a hidden one in an ignored dir that fakes every test green.
+    world.engines = [ScriptedEngine("agy", [{"app/node_modules/FORCE_GREEN": "1", "app/web/src/eta.txt": "wrong\n"}])]
     service = world.service()
     start(service, job(max_iterations=1, install_cmd=f"{sys.executable} ../tools/noop.py"))
     status = wait(service, "j-12-1")
@@ -800,6 +806,7 @@ def test_with_an_engine_user_agy_install_and_tests_run_as_that_user(world: World
     assert reaped
     assert set(reaped) == {user}
     assert service._deps.toolchain.token_writes == [(user.home, (user.uid, user.gid))]
+    assert service._deps.toolchain.settings_writes == [(user.home, (user.uid, user.gid))]
     assert (world.tmp / "srv/j-12-1/checkout/.git").is_dir()
     env = json.loads(marker.read_text())
     assert env["HOME"] == str(user.home)
@@ -868,3 +875,51 @@ def test_surviving_engine_user_processes_stop_the_job_before_root_touches_the_tr
     assert status["status"] == "failed"
     assert "survived SIGKILL" in status["detail"]
     assert git(world.remote_root / f"{REPO}.git", "branch", "--list", "agent/issue-12").strip() == ""
+
+
+SOFT_DENY = ('jetski: no output produced - a tool required the "command" permission that headless mode '
+             'cannot prompt for, so it was auto-denied. Add an allow-rule under permissions.allow in settings.json')
+
+
+def test_soft_denied_agy_runs_are_recorded_and_hand_over_to_the_fallback(world: World) -> None:
+    denied = lambda root: CommandResult(0, SOFT_DENY)  # noqa: E731
+    world.engines = [ScriptedEngine("agy", [denied, denied]),
+                     ScriptedEngine("loop", [{"app/web/src/eta.txt": "2026-10-12\n"}])]
+    service = world.service()
+    start(service, job(max_iterations=5))
+    status = wait(service, "j-12-1")
+    assert status["status"] == "succeeded", status
+    assert status["engine"] == "loop"
+    assert status["iterations"] == 3
+    reasons = [(e["iteration"], e["engine"], e["reason"]) for e in status["engine_events"]]
+    assert reasons == [(1, "agy", "engine-permission-denied"), (2, "agy", "engine-permission-denied"),
+                       (2, "agy", "engine-no-progress")]
+    log = (world.tmp / "home/jobs/j-12-1/log").read_text()
+    assert "engine-permission-denied" in log
+    assert "agy output (iteration 1)" in log
+    assert len(world.engines[0].prompts) == 2
+
+
+def test_an_engine_that_twice_changes_nothing_gives_way(world: World) -> None:
+    world.engines = [ScriptedEngine("agy", [{}, {}]),
+                     ScriptedEngine("loop", [{"app/web/src/eta.txt": "2026-10-12\n"}])]
+    service = world.service()
+    start(service, job(max_iterations=5))
+    status = wait(service, "j-12-1")
+    assert status["engine"] == "loop"
+    assert [e["reason"] for e in status["engine_events"]] == ["engine-no-progress"]
+
+
+def test_prompt_names_the_failing_tests_their_assertions_and_the_allowed_commands(world: World) -> None:
+    world.engines = [ScriptedEngine("agy", [{"app/web/src/eta.txt": "2026-10-12\n"}])]
+    service = world.service()
+    start(service, job())
+    wait(service, "j-12-1")
+    prompt = world.engines[0].prompts[0]
+    assert "Failing tests:" in prompt
+    assert f"{ETA_TEST} > expect web/src/eta.txt == 2026-10-12" in prompt
+    assert "expected '2026-10-12' got 'none'" in prompt
+    rule = "read the failing test first, make the smallest change that satisfies it, do not edit any test file"
+    assert rule in prompt
+    assert "npx vitest" in prompt
+    assert "git status" in prompt

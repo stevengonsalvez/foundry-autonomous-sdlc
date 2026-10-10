@@ -252,6 +252,7 @@ class JobState:
     session_id: str = ""      # platform session the job runs in (x-agent-session-id)
     agy_user: str = ""        # who ran agy: agyuser, or root when the sandbox could not create the user
     tests_user: str = ""      # who ran install_cmd and test_cmd (same rule)
+    engine_events: list[dict[str, Any]] = field(default_factory=list)   # per-iteration engine trouble
 
     @classmethod
     def new(cls, spec: JobSpec, *, started_at: str) -> JobState:
@@ -277,6 +278,7 @@ class JobState:
             "job_id": self.job_id, "status": self.status.value, "phase": self.phase.value, "reason": self.reason,
             "detail": self.detail, "iterations": self.iterations, "engine": self.engine,
             "session_id": self.session_id, "agy_user": self.agy_user, "tests_user": self.tests_user,
+            "engine_events": self.engine_events,
             "elapsed_s": round(self.elapsed_s), "pr": self.pr, "red": self.red_summary, "green": self.green_summary,
             "cost": {"model_usd": round(self.model_usd, 6), "input_tokens": self.input_tokens,
                      "output_tokens": self.output_tokens, "coder_seconds": round(self.elapsed_s),

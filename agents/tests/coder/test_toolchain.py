@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import io
+import json
 import os
 import stat
 import tarfile
@@ -163,3 +164,30 @@ def test_node_installs_once_into_a_root_owned_world_readable_dir(tmp_path: Path)
     assert tools.env()["PATH"].startswith(f"{tmp_path}/opt/node/bin:")
     assert tools.node_bin() == tmp_path / "opt/node/bin"
     assert len(fetch.calls) == 2
+
+
+EXPECTED_AGY_SETTINGS = {"permissions": {"allow": [
+    "command(ls)", "command(cat)", "command(head)", "command(tail)", "command(wc)", "command(grep)",
+    "command(find)", "command(regex:git (status|diff|log|show|ls-files)( .*)?)",
+    "command(regex:npm (test|run (lint|typecheck|test|test:coverage))( .*)?)", "command(regex:npx vitest( .*)?)",
+]}}
+
+
+def test_agy_settings_allow_exactly_the_read_and_test_commands(tmp_path: Path) -> None:
+    tools = Toolchain(tmp_path / "coder", fetch=FakeFetch({}))
+    (tmp_path / "agyuser").mkdir()
+    owner = (os.getuid(), os.getgid())
+    path = tools.write_agy_settings(home=tmp_path / "agyuser", owner=owner)
+    assert path == tmp_path / "agyuser/.gemini/antigravity-cli/settings.json"
+    assert json.loads(path.read_text()) == EXPECTED_AGY_SETTINGS
+    assert stat.S_IMODE(path.stat().st_mode) == 0o600
+    allow = " ".join(EXPECTED_AGY_SETTINGS["permissions"]["allow"])
+    for forbidden in ("curl", "wget", "ssh", "command(bash", "command(sh", "python", "command(node", "printenv",
+                      "push", "remote", "config", "rm"):
+        assert forbidden not in allow, forbidden
+
+
+def test_agy_settings_in_the_coder_home_when_there_is_no_engine_user(tmp_path: Path) -> None:
+    path = Toolchain(tmp_path, fetch=FakeFetch({})).write_agy_settings()
+    assert json.loads(path.read_text()) == EXPECTED_AGY_SETTINGS
+    assert stat.S_IMODE(path.stat().st_mode) == 0o600

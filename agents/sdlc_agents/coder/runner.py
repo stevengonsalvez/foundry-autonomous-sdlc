@@ -17,6 +17,7 @@ from __future__ import annotations
 import json
 import os
 import pwd
+import re
 import secrets
 import shutil
 import threading
@@ -29,6 +30,7 @@ from sdlc_agents.coder import sandbox, scope, shell
 from sdlc_agents.coder.git_adapter import resolve_author
 from sdlc_agents.coder.job import JobSpec, JobSpecError, JobState, JobStore, Mode, Phase, Status
 from sdlc_agents.coder.testrun import TestOutcome, TestRunner
+from sdlc_agents.coder.toolchain import AGY_COMMANDS_HELP
 from sdlc_agents.cost import HOSTED_GIB_USD_PER_HOUR, HOSTED_VCPU_USD_PER_HOUR, token_usd
 from sdlc_agents.ports import REPO, ClockPort, CodingEnginePort, CommandResult, GitHubPort, GitPort, SecretsPort
 
@@ -38,6 +40,10 @@ TEST_TIMEOUT_S = 1800
 EDIT_TIMEOUT_S = 3600
 ISSUE_BODY_CHARS = 6000
 FEEDBACK_CHARS = 6000
+MAX_FAILING_LISTED = 40
+NO_PROGRESS_ROUNDS = 2   # rounds without any change before the next engine takes over
+# agy exits 0 without editing when a tool it wanted was refused by the headless permission rules.
+SOFT_DENY = re.compile(r'permission that headless mode cannot prompt for|no output produced', re.IGNORECASE)
 
 
 class CoderGit(GitPort, Protocol):
@@ -61,6 +67,7 @@ class Toolchain(Protocol):
     def ensure_agy(self) -> Path: ...
     def write_agy_token(self, token: str, *, home: Path | None = None,
                         owner: tuple[int, int] | None = None) -> Path: ...
+    def write_agy_settings(self, *, home: Path | None = None, owner: tuple[int, int] | None = None) -> Path: ...
     def node_bin(self) -> Path: ...
 
 
@@ -225,10 +232,12 @@ class JobRunner:
             binary = self.deps.toolchain.ensure_agy()
             if self._run_as is None:
                 self.deps.toolchain.write_agy_token(token)
+                self.deps.toolchain.write_agy_settings()
                 return binary
-            # The token lives in the engine user's home; the Key Vault read stayed in this process.
-            self.deps.toolchain.write_agy_token(token, home=self._run_as.home,
-                                                owner=(self._run_as.uid, self._run_as.gid))
+            # Token and allow-list live in the engine user's home; the Key Vault read stayed in this process.
+            owner = (self._run_as.uid, self._run_as.gid)
+            self.deps.toolchain.write_agy_token(token, home=self._run_as.home, owner=owner)
+            self.deps.toolchain.write_agy_settings(home=self._run_as.home, owner=owner)
             return self.deps.agy_installer(binary)
         except Exception as exc:
             self._log(f"agy unavailable, using the fallback engines: {type(exc).__name__}: {exc}")
@@ -347,6 +356,7 @@ class JobRunner:
                                                   self.deps.toolchain.env(), self._agy, agy_home, self._run_as,
                                                   dirty=lambda: bool(self.git.changed_paths())))
         current = 0
+        idle_rounds = 0   # consecutive rounds in which the current engine changed nothing
         outcome = self._run_tests()
         # The suites that define done: the new tests, or in maintenance the ones failing at the start.
         must_pass = red_files or tuple(outcome.report.failing_paths(str(self.checkout)))
@@ -382,6 +392,17 @@ class JobRunner:
             self.state.iterations += 1
             self.state.engine = engine.name
             self._check_stops()
+            if not changed:
+                if SOFT_DENY.search(result.output):
+                    self._engine_event(engine.name, "engine-permission-denied")
+                idle_rounds += 1
+                if idle_rounds >= NO_PROGRESS_ROUNDS:
+                    self._engine_event(engine.name, "engine-no-progress")
+                    current += 1
+                    idle_rounds = 0
+                self._checkpoint()
+                continue
+            idle_rounds = 0
             self._enforce_scope(changed, protected, tests_only)
             committed = self._commit_iteration(changed, protected, tests_only) or committed
             outcome = self._run_tests()
@@ -421,11 +442,16 @@ class JobRunner:
         return self.git.changed_since(pre)
 
     def _edit(self, engine: CodingEnginePort, outcome: TestOutcome, red_files: tuple[str, ...]) -> CommandResult:
-        self._log(f"iteration {self.state.iterations + 1} with engine {engine.name}")
+        iteration = self.state.iterations + 1
+        self._log(f"iteration {iteration} with engine {engine.name}")
         result = engine.edit(self._prompt(outcome, red_files), workdir=str(self.checkout),
                              timeout_s=self._timeout(EDIT_TIMEOUT_S))
-        self._log(f"engine {engine.name} ({result.returncode}): {result.output[-3000:]}")
+        self._log(f"{engine.name} output (iteration {iteration}) exit {result.returncode}:\n{result.output[-4000:]}")
         return result
+
+    def _engine_event(self, engine: str, reason: str) -> None:
+        self.state.engine_events.append({"iteration": self.state.iterations, "engine": engine, "reason": reason})
+        self._log(f"iteration {self.state.iterations}: {engine} {reason}")
 
     def _account(self, engines: list[CodingEnginePort]) -> None:
         used_in = sum(e.usage.input_tokens for e in engines if hasattr(e, "usage"))
@@ -487,8 +513,15 @@ class JobRunner:
                     f"or any other existing test file or vitest config; touch only paths under {allowed}; "
                     "do not run git; keep the change small and typed.")
         criteria = "\n".join(f"- {c}" for c in s.acceptance_criteria) or "- (none given)"
+        failing = "\n".join(f"- {path} > {name}: {line}" for path, name, line
+                            in outcome.report.failing_tests(str(self.checkout))[:MAX_FAILING_LISTED])
+        how = ("How to work: read the failing test first, make the smallest change that satisfies it, "
+               "do not edit any test file. "
+               f"The only shell commands you may run are: {AGY_COMMANDS_HELP}. Anything else is denied.")
         return (
-            f"{task}\n\nRepository checkout: the current directory. Tests run with `{s.test_cmd}` in `{s.workdir}`.\n\n"
+            f"{task}\n\n{how}\n\n"
+            f"Repository checkout: the current directory. Tests run with `{s.test_cmd}` in `{s.workdir}`.\n\n"
+            f"Failing tests:\n{_untrusted(failing or '(none reported)')}\n\n"
             f"Issue #{s.issue_number}:\n{_untrusted(s.issue_title + chr(10) + s.issue_body[:ISSUE_BODY_CHARS])}\n\n"
             f"Acceptance criteria:\n{_untrusted(criteria)}\n\nNotes:\n{_untrusted(s.notes or '(none)')}\n\n"
             f"Current failing test output:\n{_untrusted(outcome.feedback(FEEDBACK_CHARS))}\n"

@@ -8,6 +8,7 @@ session finds the tools already there.
 from __future__ import annotations
 
 import hashlib
+import json
 import os
 import platform
 import re
@@ -26,6 +27,16 @@ NODE_INDEX = "https://nodejs.org/dist/latest-v22.x/"
 AGY_INSTALLER = "https://antigravity.google/cli/install.sh"
 NODE_DIR = Path("/opt/node")   # outside $HOME: the engine user cannot traverse the coder's home
 AGY_AUTH_FILE = ".gemini/antigravity-cli/antigravity-oauth-token"
+AGY_SETTINGS_FILE = ".gemini/antigravity-cli/settings.json"
+# Headless agy denies every shell command not allowed here (antigravity.google/docs/cli/headless). Reading
+# and running the tests only: no network tools, shells, interpreters, env dumps, git writes or rm.
+AGY_ALLOWED_COMMANDS = (
+    "command(ls)", "command(cat)", "command(head)", "command(tail)", "command(wc)", "command(grep)",
+    "command(find)", "command(regex:git (status|diff|log|show|ls-files)( .*)?)",
+    "command(regex:npm (test|run (lint|typecheck|test|test:coverage))( .*)?)", "command(regex:npx vitest( .*)?)",
+)
+AGY_COMMANDS_HELP = ("ls, cat, head, tail, wc, grep, find; git status, diff, log, show, ls-files; npm test, "
+                     "npm run lint, typecheck, test, test:coverage; npx vitest")
 _NODE_ARCH = {"x86_64": "x64", "amd64": "x64", "aarch64": "arm64", "arm64": "arm64"}
 # Environment passed to engines and test commands. Anything else (managed identity endpoints,
 # Azure settings, git auth) stays out of reach of code the engine writes or runs.
@@ -138,6 +149,19 @@ class Toolchain:
         if not self.agy_path.exists():
             raise ToolchainError(f"agy installer did not produce {self.agy_path}: {result.output[-1000:]}")
         return self.agy_path
+
+    def write_agy_settings(self, *, home: Path | None = None, owner: tuple[int, int] | None = None) -> Path:
+        """agy's permission allow-list, 0600 in agy's home (link-safe when that home belongs to another user)."""
+        data = json.dumps({"permissions": {"allow": list(AGY_ALLOWED_COMMANDS)}}, indent=2).encode()
+        if owner is not None:
+            return sandbox.write_private_file(home or self.home, AGY_SETTINGS_FILE, data, owner=owner)
+        path = (home or self.home) / AGY_SETTINGS_FILE
+        path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+        fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC | os.O_NOFOLLOW, 0o600)
+        with os.fdopen(fd, "wb") as fh:
+            os.fchmod(fh.fileno(), 0o600)
+            fh.write(data)
+        return path
 
     def write_agy_token(self, token: str, *, home: Path | None = None,
                         owner: tuple[int, int] | None = None) -> Path:
