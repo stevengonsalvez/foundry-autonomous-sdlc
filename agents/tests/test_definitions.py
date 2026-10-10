@@ -1,149 +1,261 @@
-"""AgentDef is the single source for schema, output kind, checks and the triage label list."""
+"""Prompt agent definitions: schemas, output checks, instructions, schema_check, sanitise and paths."""
 
 from __future__ import annotations
 
-import os
-from unittest.mock import MagicMock, patch
+import copy
+import json
+from typing import Any
 
+import jsonschema
 import pytest
-from azure.core.exceptions import HttpResponseError, ResourceNotFoundError
 
-from sdlc_agents import codegen_policy, schema_check
-from sdlc_agents.definitions import AGENT_BY_NAME, AGENTS, ALLOWED_LABELS, TRIAGE_SCHEMA
+from sdlc_agents import paths, schema_check
+from sdlc_agents.definitions import (
+    AGENT_BY_NAME,
+    AGENT_NAMES,
+    AGENTS,
+    CRITERIA,
+    MCP_READ_ONLY_TOOLS,
+    PO_LABEL,
+)
+from sdlc_agents.sanitise import (
+    INPUT_CHAR_LIMIT,
+    encode_marker_json,
+    parse_json_strict,
+    sanitise_markdown,
+    wrap_untrusted,
+)
+
+VALID: dict[str, dict[str, Any]] = {
+    "sdlc-req-gate": {"criteria": dict.fromkeys(CRITERIA, 20), "score": 80, "summary": "s",
+                      "acceptance_criteria": ["a"], "questions": []},
+    "sdlc-product-owner": {"answers": [{"question": "q", "answer": f"{PO_LABEL} a"}]},
+    "sdlc-feasibility": {"suitable": True, "reasons": ["r"], "risk": "low", "affected_paths": []},
+    "sdlc-test-designer": {"tests": [{"path": "app/web/src/a.test.tsx", "content": "import { it } from 'vitest'"}],
+                           "rationale": "r"},
+    "sdlc-reviewer": {"verdict": "approve", "head": "abcdef1", "findings": [], "summary": "s"},
+    "sdlc-triage": {"severity": "s2", "owner": "web", "summary": "s", "suspected_area": "a", "rationale": "r"},
+    "sdlc-ci-triage": {"cause": "stale-test", "explanation": "e", "test_files": ["app/web/src/Home.test.tsx"]},
+}
 
 
-def test_json_agents_carry_schema_and_check_markdown_agents_carry_neither() -> None:
-    kinds = {a.name: a.output_kind for a in AGENTS}
-    assert kinds == {
-        "sdlc-triage": "json", "sdlc-codegen": "json", "sdlc-review": "markdown",
-        "sdlc-ci-triage": "markdown", "sdlc-release-notes": "markdown",
-    }
-    for a in AGENTS:
-        assert (a.schema is not None) == (a.output_kind == "json"), a.name
-        assert (a.check is not None) == (a.output_kind == "json"), a.name
+def test_the_eight_agents_from_the_architecture_table_exist() -> None:
+    assert AGENT_NAMES == ["sdlc-req-gate", "sdlc-product-owner", "sdlc-feasibility", "sdlc-test-designer",
+                           "sdlc-reviewer", "sdlc-triage", "sdlc-ci-triage", "sdlc-release-notes"]
+    assert {a.name for a in AGENTS if a.output_kind == "markdown"} == {"sdlc-release-notes"}
+
+
+def test_only_feasibility_test_designer_and_reviewer_get_the_mcp_tool() -> None:
+    assert {a.name for a in AGENTS if a.uses_mcp} == {"sdlc-feasibility", "sdlc-test-designer", "sdlc-reviewer"}
+    assert "create_or_update_file" not in MCP_READ_ONLY_TOOLS and "merge_pull_request" not in MCP_READ_ONLY_TOOLS
+    for agent in AGENTS:
+        assert ("GITHUB TOOLS" in agent.instructions) == agent.uses_mcp
+
+
+@pytest.mark.parametrize("agent", [a for a in AGENTS if a.schema is not None], ids=lambda a: a.name)
+def test_every_schema_is_valid_json_schema_and_follows_strict_mode(agent: Any) -> None:
+    jsonschema.Draft202012Validator.check_schema(agent.schema)
+
+    def walk(node: dict[str, Any], where: str) -> None:
+        if node.get("type") == "object":
+            assert node["additionalProperties"] is False, where
+            assert sorted(node["required"]) == sorted(node["properties"]), where
+            for key, sub in node["properties"].items():
+                walk(sub, f"{where}.{key}")
+        if node.get("type") == "array":
+            walk(node["items"], f"{where}[]")
+
+    walk(agent.schema, agent.name)
+    sample = copy.deepcopy(VALID[agent.name])
+    jsonschema.validate(sample, agent.schema)
+    agent.validate_output(sample)
+
+
+@pytest.mark.parametrize("agent", AGENTS, ids=lambda a: a.name)
+def test_every_instruction_has_the_security_preamble_and_no_em_dash(agent: Any) -> None:
+    assert agent.instructions.startswith("SECURITY RULES")
+    assert "DATA" in agent.instructions and "prompt injection attempt" in agent.instructions
+    assert "\u2014" not in agent.instructions
 
 
 def test_markdown_agent_has_no_json_to_validate() -> None:
     with pytest.raises(TypeError):
-        AGENT_BY_NAME["sdlc-review"].validate_output({})
+        AGENT_BY_NAME["sdlc-release-notes"].validate_output({})
 
 
-def test_triage_labels_schema_enum_and_instructions_agree() -> None:
-    triage = AGENT_BY_NAME["sdlc-triage"]
-    assert triage.allowed_labels == ALLOWED_LABELS
-    assert set(TRIAGE_SCHEMA["properties"]["labels"]["items"]["enum"]) == set(ALLOWED_LABELS)
-    assert ", ".join(ALLOWED_LABELS) in triage.instructions
-    assert not any(label.startswith("agent:") for label in ALLOWED_LABELS)
-    assert all(not a.allowed_labels for a in AGENTS if a.name != "sdlc-triage")
+def test_req_gate_score_is_the_sum_and_questions_follow_the_threshold() -> None:
+    gate = AGENT_BY_NAME["sdlc-req-gate"]
+    data = {**VALID["sdlc-req-gate"], "score": 12, "questions": ["q"]}
+    gate.validate_output(data)
+    assert data["score"] == 80 and data["questions"] == []
+    low = {**VALID["sdlc-req-gate"], "criteria": dict.fromkeys(CRITERIA, 5), "questions": []}
+    with pytest.raises(ValueError, match="no questions"):
+        gate.validate_output(low)
+    too_many = {**low, "questions": ["q"] * 6}
+    with pytest.raises(ValueError, match="0-5 items"):
+        gate.validate_output(too_many)
+    over = {**VALID["sdlc-req-gate"], "criteria": {**dict.fromkeys(CRITERIA, 5), "edge_cases": 26}}
+    with pytest.raises(ValueError, match="above the maximum 25"):
+        gate.validate_output(over)
 
 
-def test_codegen_schema_and_instructions_use_the_policy_limits() -> None:
-    codegen = AGENT_BY_NAME["sdlc-codegen"]
-    files = codegen.schema["properties"]["files"]
-    assert files["maxItems"] == codegen_policy.MAX_FILES
-    assert files["items"]["properties"]["content"]["maxLength"] == codegen_policy.MAX_CONTENT_BYTES
-    assert files["items"]["properties"]["path"]["maxLength"] == codegen_policy.MAX_PATH_LENGTH
-    assert f"under {codegen_policy.allowed_roots_text()} only" in codegen.instructions
-    assert f"1 to {codegen_policy.MAX_FILES} files" in codegen.instructions
+def test_req_gate_rubric_and_product_owner_context_are_in_the_instructions() -> None:
+    gate = AGENT_BY_NAME["sdlc-req-gate"].instructions
+    for name in CRITERIA:
+        assert name in gate
+    assert "score < 80" in gate and "1 to 5 short questions" in gate and "WORKED EXAMPLE 2" in gate
+    po = AGENT_BY_NAME["sdlc-product-owner"].instructions
+    for text in ("filter the parcel list on the home page by status", "label_created, in_transit, "
+                 "out_for_delivery, delivered, exception", "status=<value>", "keyboard accessible",
+                 "No API change", "SECONDARY: show the estimated delivery date",
+                 f"must start with the exact label {PO_LABEL}"):
+        assert text in po
+    feas = AGENT_BY_NAME["sdlc-feasibility"].instructions
+    for text in ("production credentials", "external contracts", "legal, commercial", "infrastructure", "outside app/"):
+        assert text in feas
 
 
-def test_codegen_validation_normalises_paths_in_place() -> None:
-    data = {"explanation": "e", "files": [{"path": "./src//a.py", "content": "x"}]}
-    AGENT_BY_NAME["sdlc-codegen"].validate_output(data)
-    assert data["files"][0]["path"] == "src/a.py"
+def test_product_owner_label_is_enforced() -> None:
+    data = {"answers": [{"question": "q", "answer": "  Filter it."}, {"question": "q2", "answer": f"{PO_LABEL} yes"}]}
+    AGENT_BY_NAME["sdlc-product-owner"].validate_output(data)
+    assert [a["answer"] for a in data["answers"]] == [f"{PO_LABEL} Filter it.", f"{PO_LABEL} yes"]
 
 
-def test_codegen_content_bytes_limit_counts_utf8_not_chars() -> None:
-    # Within the schema's char limit, over the byte limit once encoded.
-    content = "é" * (codegen_policy.MAX_CONTENT_BYTES // 2 + 1)
-    data = {"explanation": "e", "files": [{"path": "src/a.py", "content": content}]}
-    with pytest.raises(ValueError, match="exceeds limit"):
-        AGENT_BY_NAME["sdlc-codegen"].validate_output(data)
-
-
-def test_codegen_rejects_lone_surrogate_content() -> None:
-    data = {"explanation": "e", "files": [{"path": "src/a.py", "content": "a\ud800b"}]}
-    with pytest.raises(ValueError, match="not valid UTF-8"):
-        AGENT_BY_NAME["sdlc-codegen"].validate_output(data)
-
-
-@pytest.mark.parametrize("value, message", [
-    ("x", "expected object"),
-    ({"labels": "bug", "summary": "s", "acceptance_criteria": ["a"], "tasks": ["t"]}, "expected array"),
-    ({"labels": [1], "summary": "s", "acceptance_criteria": ["a"], "tasks": ["t"]}, "expected string"),
-    ({"labels": ["bug"], "summary": "s", "acceptance_criteria": ["x" * 301], "tasks": ["t"]},
-     r"acceptance_criteria\[0\]: exceeds 300 chars"),
+@pytest.mark.parametrize("path, error", [
+    ("app/e2e/a.test.ts", "outside app/e2e"),
+    ("app/web/src/a.tsx", "not a vitest"),
+    ("src/a.test.ts", "outside app/"),
+    ("app/../.github/a.test.ts", "absolute or '..'"),
+    ("app/web/.hidden/a.test.ts", "forbidden segment"),
 ])
-def test_schema_check_reports_where_it_failed(value: object, message: str) -> None:
+def test_test_designer_paths_are_vitest_files_under_app(path: str, error: str) -> None:
+    data = {"tests": [{"path": path, "content": "import 'vitest'"}], "rationale": "r"}
+    with pytest.raises(ValueError, match=error):
+        AGENT_BY_NAME["sdlc-test-designer"].validate_output(data)
+
+
+def test_test_designer_rejects_duplicates_missing_vitest_nul_and_oversize() -> None:
+    designer = AGENT_BY_NAME["sdlc-test-designer"]
+    dup = {"tests": [{"path": "app/a.test.ts", "content": "vitest"}, {"path": "./app/A.test.ts", "content": "vitest"}],
+           "rationale": "r"}
+    with pytest.raises(ValueError, match="duplicate"):
+        designer.validate_output(dup)
+    with pytest.raises(ValueError, match="does not import from vitest"):
+        designer.validate_output({"tests": [{"path": "app/a.test.ts", "content": "jest"}], "rationale": "r"})
+    with pytest.raises(ValueError, match="NUL"):
+        designer.validate_output({"tests": [{"path": "app/a.test.ts", "content": "vitest\x00"}], "rationale": "r"})
+    big = "vitest" + "x" * 14_000
+    with pytest.raises(ValueError, match="tests total"):
+        designer.validate_output({"tests": [{"path": f"app/{i}.test.ts", "content": big} for i in range(3)],
+                                  "rationale": "r"})
+
+
+def test_reviewer_cannot_approve_with_a_blocking_finding() -> None:
+    data = {**VALID["sdlc-reviewer"], "findings": [{"severity": "critical", "area": "security", "detail": "eval"}]}
+    AGENT_BY_NAME["sdlc-reviewer"].validate_output(data)
+    assert data["verdict"] == "request-changes"
+    with pytest.raises(ValueError, match="does not match"):
+        AGENT_BY_NAME["sdlc-reviewer"].validate_output({**VALID["sdlc-reviewer"], "head": "not-a-sha"})
+
+
+def test_ci_triage_needs_test_files_for_a_stale_test_and_only_test_paths() -> None:
+    ci = AGENT_BY_NAME["sdlc-ci-triage"]
+    with pytest.raises(ValueError, match="at least one test file"):
+        ci.validate_output({"cause": "stale-test", "explanation": "e", "test_files": []})
+    with pytest.raises(ValueError, match="test glob"):
+        ci.validate_output({"cause": "stale-test", "explanation": "e", "test_files": ["app/web/src/Home.tsx"]})
+    ci.validate_output({"cause": "real-bug", "explanation": "e", "test_files": []})
+
+
+def test_triage_enums_reject_off_list_values() -> None:
+    with pytest.raises(ValueError, match="not in allowed set"):
+        AGENT_BY_NAME["sdlc-triage"].validate_output({**VALID["sdlc-triage"], "owner": "security"})
+
+
+# ---------------------------------------------------------------------------
+# schema_check
+# ---------------------------------------------------------------------------
+
+@pytest.mark.parametrize("schema, value, message", [
+    ({"type": "integer"}, True, "expected integer"),
+    ({"type": "integer"}, 1.5, "expected integer"),
+    ({"type": "number"}, "1", "expected number"),
+    ({"type": "boolean"}, 0, "expected boolean"),
+    ({"type": "null"}, 0, "expected null"),
+    ({"type": ["string", "null"]}, 3, "expected string|null"),
+    ({"type": "number", "minimum": 0}, -1, "below the minimum"),
+    ({"type": "string", "minLength": 2}, "a", "shorter than 2"),
+    ({"type": "string", "maxLength": 1}, "ab", "exceeds 1"),
+    ({"type": "string", "pattern": "^a"}, "b", "does not match"),
+    ({"type": "array", "minItems": 1}, [], "at least 1"),
+    ({"type": "object", "required": ["a"]}, {}, "missing keys"),
+    ({"type": "object", "properties": {}, "additionalProperties": False}, {"x": 1}, "unexpected keys"),
+])
+def test_schema_check_reports_violations(schema: dict[str, Any], value: Any, message: str) -> None:
     with pytest.raises(ValueError, match=message):
-        schema_check.check(TRIAGE_SCHEMA, value, "sdlc-triage")
+        schema_check.check(schema, value, "x")
 
 
-def test_schema_check_refuses_keywords_it_does_not_implement() -> None:
-    with pytest.raises(TypeError, match="unsupported"):
-        schema_check.check({"type": "string", "pattern": "^a"}, "a", "x")
-
-
-def test_schema_check_refuses_types_it_does_not_implement() -> None:
+def test_schema_check_accepts_valid_values_and_refuses_unknown_keywords_and_types() -> None:
+    schema_check.check({"type": ["integer", "null"], "minimum": 0}, None, "x")
+    schema_check.check({"type": "number", "maximum": 2}, 1.5, "x")
+    schema_check.check({"type": "boolean"}, False, "x")
+    with pytest.raises(TypeError, match="unsupported keywords"):
+        schema_check.check({"format": "date"}, "x", "x")
     with pytest.raises(TypeError, match="unsupported type"):
-        schema_check.check({"type": "integer"}, 1, "x")
-
-
-def test_every_agent_schema_uses_only_supported_keywords() -> None:
-    samples = {
-        "sdlc-triage": {"labels": ["bug"], "summary": "s", "acceptance_criteria": ["a"], "tasks": ["t"]},
-        "sdlc-codegen": {"explanation": "e", "files": [{"path": "src/a.py", "content": "x"}]},
-    }
-    for a in AGENTS:
-        if a.schema is not None:
-            a.validate_output(samples[a.name])
+        schema_check.check({"type": "tuple"}, 1, "x")
 
 
 # ---------------------------------------------------------------------------
-# create_agents: Azure errors are reported per agent, bugs are not swallowed
+# sanitise and paths
 # ---------------------------------------------------------------------------
 
-def _project(agents_client: MagicMock) -> MagicMock:
-    project = MagicMock()
-    project.agents = agents_client
-    project.__enter__ = lambda s: s
-    project.__exit__ = MagicMock(return_value=False)
-    return project
+def test_strict_json_rejects_duplicates_and_nan() -> None:
+    with pytest.raises(ValueError, match="duplicate"):
+        parse_json_strict('{"a": 1, "a": 2}')
+    with pytest.raises(ValueError, match="NaN"):
+        parse_json_strict('{"a": NaN}')
 
 
-def _run_create(project: MagicMock) -> None:
-    from sdlc_agents import create_agents
-    with (
-        patch.dict(os.environ, {"FOUNDRY_PROJECT_ENDPOINT": "https://x/api/projects/p"}),
-        patch("sdlc_agents.create_agents.AIProjectClient", return_value=project),
-        patch("sdlc_agents.create_agents.DefaultAzureCredential"),
-    ):
-        create_agents.main()
+def test_marker_json_cannot_close_an_html_comment() -> None:
+    value = {"q": "--> <script>&"}
+    encoded = encode_marker_json(value)
+    assert "-->" not in encoded and "<" not in encoded and ">" not in encoded and "&" not in encoded
+    assert json.loads(encoded) == value
 
 
-def test_azure_error_on_one_agent_still_registers_the_rest_then_exits_1(
-    capsys: pytest.CaptureFixture,
-) -> None:
-    def fake_get(name: str) -> None:
-        if name == "sdlc-review":
-            raise HttpResponseError(message="boom")
-        raise ResourceNotFoundError(message="not found")
-
-    client = MagicMock()
-    client.get.side_effect = fake_get
-    client.create_version.return_value = MagicMock(version="1")
-
-    with pytest.raises(SystemExit) as exc:
-        _run_create(_project(client))
-
-    assert exc.value.code == 1
-    assert client.create_version.call_count == 4
-    assert "ERROR registering sdlc-review" in capsys.readouterr().err
+def test_wrap_untrusted_truncates_head_or_keeps_the_log_tail() -> None:
+    text = "H" * 10 + "x" * INPUT_CHAR_LIMIT + "TAIL"
+    wrapped = wrap_untrusted("issue", text, "n1")
+    assert "INPUT TRUNCATED" in wrapped and "TAIL" not in wrapped and wrapped.endswith("</untrusted_input nonce=n1>")
+    log = wrap_untrusted("log", text, "n1", keep_tail=True)
+    assert "LOG TRUNCATED nonce=n1" in log and "TAIL\n</untrusted_input" in log
+    assert wrap_untrusted("s", "short", "n1") == "<untrusted_input nonce=n1 name=s>\nshort\n</untrusted_input nonce=n1>"
 
 
-def test_non_azure_error_propagates_instead_of_being_swallowed() -> None:
-    client = MagicMock()
-    client.get.side_effect = KeyError("bug in our code")
+def test_markdown_sanitiser_strips_images_html_mentions_and_closing_keywords() -> None:
+    out = sanitise_markdown("hi @bob ![t](http://x/p.png) <b>bold</b> <!-- hidden Fixes #4 and closes #5")
+    assert out == "hi `@bob` [image removed] bold "
+    assert sanitise_markdown("resolves GH-12 now") == "`resolves GH-12` [keyword defanged] now"
+    assert sanitise_markdown("!<b>[a](http://x)") == "[image removed]"
+    assert sanitise_markdown("a < b") == "a &lt; b"
 
-    with pytest.raises(KeyError):
-        _run_create(_project(client))
+
+@pytest.mark.parametrize("path, is_test", [
+    ("app/web/src/a.test.tsx", True), ("app/api/src/x.spec.ts", True), ("app/e2e/home.ts", True),
+    ("app/api/tests/helper.ts", True), ("app/core/__fixtures__/s.json", True), ("app/web/src/tests.ts", False),
+    ("app/web/src/Home.tsx", False), ("", False),
+])
+def test_test_globs(path: str, is_test: bool) -> None:
+    assert paths.is_test_path(path) is is_test
+
+
+@pytest.mark.parametrize("path", [None, "", " app/a.ts", "app/a\\b.ts", "app/é.ts", "app/x/", "/app/a.ts",
+                                  "app/node_modules/x.ts", "app/" + "a" * 260])
+def test_unsafe_paths_are_rejected(path: Any) -> None:
+    with pytest.raises(ValueError, match="path rejected"):
+        paths.normalise_app_path(path)
+
+
+def test_paths_normalise() -> None:
+    assert paths.normalise_app_path("./app//web/a.ts") == "app/web/a.ts"
