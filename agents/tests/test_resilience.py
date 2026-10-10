@@ -76,16 +76,18 @@ def test_lost_review_comment_means_no_recorded_verdict_and_a_clean_retry(world: 
     assert len(review_comments(world, st["pr"]["number"])) == 1 and len(gh.merges) == 1
 
 
-def test_coder_start_whose_reply_is_lost_is_retried_with_the_same_job_id(world: World) -> None:
+def test_coder_start_whose_reply_is_lost_never_runs_a_second_job(world: World) -> None:
     gh, foundry, coder = world.gh, world.foundry, world.coder
     coder.lose_next_start_reply = True
     n = gh.open_issue("Show the estimated delivery date", A_BODY)
 
+    world.drive(lambda: coder.lease_refusals == 1)     # the one resend is refused: the first job holds the lease
+    coder.run_orphans()
     world.drive(lambda: state.RELEASED in gh.labels(n))
 
     starts = [body["job"]["job_id"] for _, body, _ in foundry.hosted if body["op"] == "start"]
     assert starts == [f"j-{n}-1", f"j-{n}-1"]
-    assert coder.sessions == 1 and coder.duplicate_starts == 1
+    assert len([r for r in coder.by_session.values() if r["job"]["job_id"] == f"j-{n}-1"]) == 1
     assert gh.state_of(n)["coder"]["attempts"] == 1
 
 
@@ -174,8 +176,10 @@ def test_maintenance_repair_survives_a_lost_coder_reply(world: World) -> None:
     gh = world.gh
     world.coder.lose_next_start_reply = True
     pr = open_stale_test_pr(world)
+    world.drive(lambda: world.coder.lease_refusals == 1)
+    world.coder.run_orphans()
     world.drive(lambda: state.RELEASED in gh.labels(pr))
-    assert world.coder.sessions == 1 and len(gh.merges) == 1
+    assert len(gh.merges) == 1 and f"agent-lease/{pr}" not in gh.branches
 
 
 def test_call_list_is_bounded_but_spend_and_counts_are_kept() -> None:
@@ -200,10 +204,11 @@ def test_check_summary_falls_back_to_all_runs_when_none_are_tied_to_the_pr() -> 
 def test_designed_test_that_would_overwrite_an_existing_file_is_rejected(world: World) -> None:
     gh = world.gh
     n = gh.open_issue("Show the estimated delivery date", A_BODY)
-    gh.files[("main", f"app/web/src/issue-{n}.test.tsx")] = "existing test"
+    gh.files[("main", f"app/web/tests/issue-{n}.test.tsx")] = "existing test"
     world.tick(3)
     st = gh.state_of(n)
-    assert "existing file" in st["failures"]["error"] and not world.foundry.hosted
+    assert "already exists on main" in st["failures"]["error"] and not world.foundry.hosted
+    assert "already exists on main" in world.foundry.agent_calls("sdlc-test-designer")[1]   # re-asked once
 
 
 def test_coder_pr_is_found_by_branch_and_a_strangers_pr_is_never_picked(world: World) -> None:

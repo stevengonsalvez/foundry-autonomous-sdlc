@@ -55,6 +55,7 @@ class PullRequest:
     created_at: str
     merged_at: str | None = None
     merge_commit_sha: str | None = None
+    head_repo: str = REPO        # owner/name of the repository the head branch lives in (forks differ)
 
 
 @dataclass(frozen=True)

@@ -83,6 +83,7 @@ METRICS_SCHEMA: dict[str, Any] = {
             ],
         }},
         "gate_pass_rates": {"type": "object"},
+        "deferrals": {"type": "object"},
     },
     "required": ["version", "generated_at", "repo", "totals", "issues", "gate_pass_rates"],
 }
@@ -183,7 +184,8 @@ def _gate_pass_rates(states: list[State]) -> dict[str, dict[str, int]]:
 
 
 def build(objects: list[tuple[Issue, State]], now: str, *, orchestrator_usd: float = 0.0,
-          floor_usd: float = 0.0, deferred: dict[int, str] | None = None) -> dict[str, Any]:
+          floor_usd: float = 0.0, deferred: dict[int, str] | None = None,
+          deferrals: dict[int, int] | None = None) -> dict[str, Any]:
     """The metrics document. `orchestrator_usd` is the cumulative orchestrator compute; `floor_usd`
     keeps totals.usd monotonic when objects drop out of view."""
     deferred = deferred or {}
@@ -204,6 +206,8 @@ def build(objects: list[tuple[Issue, State]], now: str, *, orchestrator_usd: flo
         },
         "issues": entries,
         "gate_pass_rates": _gate_pass_rates([st for _, st in objects]),
+        # Consecutive deferred ticks per object: the tick reads them back to bound transient retries.
+        "deferrals": {str(k): v for k, v in sorted((deferrals or {}).items())},
     }
     schema_check.check(METRICS_SCHEMA, doc, "metrics")
     return doc
@@ -216,6 +220,7 @@ class Ledger:
     usd: float = 0.0
     orchestrator_usd: float = 0.0
     objects: dict[int, float] = field(default_factory=dict)   # issue or PR number -> usd
+    deferrals: dict[int, int] = field(default_factory=dict)   # number -> consecutive deferred ticks
 
 
 def _number(value: Any) -> float:
@@ -237,7 +242,8 @@ def previous_totals(github: GitHubPort) -> Ledger | None:
         for entry in doc.get("issues") or []:
             number = entry["pr"] if entry.get("kind") == "pr" else entry["number"]
             objects[int(number)] = _number(entry["cost"]["usd"])
-        return Ledger(_number(totals["usd"]), _number(totals.get("orchestrator_usd", 0.0)), objects)
+        deferrals = {int(k): int(v) for k, v in (doc.get("deferrals") or {}).items()}
+        return Ledger(_number(totals["usd"]), _number(totals.get("orchestrator_usd", 0.0)), objects, deferrals)
     except (ValueError, KeyError, TypeError, AttributeError):
         return None
 

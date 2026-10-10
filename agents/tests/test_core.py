@@ -188,7 +188,7 @@ def test_review_stage_decisions() -> None:
     st.data["review"] = {"verdict": "request-changes", "head": HEAD, "rounds": 1}
     revise = machine.next_action(ctx(st, pr=pull(), checks=GREEN))
     assert revise.kind is Kind.START_CODER and revise.mode == "revise"
-    st.data["coder"] = {"attempts": 3}
+    st.data["coder"] = {"attempts": machine.MAX_CODER_ATTEMPTS}
     assert machine.next_action(ctx(st, pr=pull(), checks=GREEN)).reason.startswith("coder attempts exhausted")
     st.data["review"]["rounds"] = 2
     assert machine.next_action(ctx(st, pr=pull(), checks=GREEN)).label == state.ESC_REVIEW_FAILED

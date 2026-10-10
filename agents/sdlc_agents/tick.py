@@ -25,7 +25,7 @@ from collections.abc import Callable
 from dataclasses import asdict, dataclass, field
 from typing import Any
 
-from sdlc_agents import cost, gates, lock, machine, metrics, release, repo_context, state
+from sdlc_agents import cost, designed_tests, gates, lock, machine, metrics, release, repo_context, state
 from sdlc_agents.clock import seconds_between
 from sdlc_agents.definitions import PO_LABEL
 from sdlc_agents.foundry import (
@@ -59,12 +59,19 @@ CODER_AGENT = "sdlc-coder"
 TEST_CMD = "npm test"
 CODER_WORKDIR = "app"
 CODER_PHASES = frozenset({"setup", "tests", "implement", "push", "pr"})
-CODER_ENGINES = frozenset({"agy", "loop"})
+CODER_ENGINES = frozenset({"agy", "agy-unrestricted", "loop"})
 CODER_REASONS = frozenset({
     "tests-not-red", "scope-violation", "max-iterations", "engines-exhausted", "cost-cap", "install-failed",
-    "branch-missing", "branch-conflict", "interrupted", "deadline", "cancelled", "error",
+    "branch-missing", "branch-conflict", "interrupted", "deadline", "cancelled", "error", "tests-invalid",
+    "sandbox-unavailable", "lease-held", "lease-error",
 })
 UNREPORTED_CODER_SLACK_S = 900    # one missed poll is normal; longer gaps are billed as estimated time
+UNREPORTED_STATUSES = ("running", "starting", "start-unconfirmed", "lease-held")
+CODER_STATUSES = ("running", "succeeded", "failed", "timeout", "cancelled")
+LEASE_PREFIX = "agent-lease/"     # ref the coder creates per issue; 422 there means a live job holds it
+START_RESEND_AFTER_S = 600        # two ticks before an unconfirmed start (no session) is sent again
+MAX_START_RESENDS = 1
+MAX_TRANSIENT_TICKS = 24          # consecutive deferred ticks before an object is escalated
 CODER_MAX_MODEL_USD = 0.5
 CODER_MAX_ITERATIONS = 5
 RESERVE_S = 45                    # wall time kept back for metrics and unlocking
@@ -218,6 +225,7 @@ class _Tick:
                  budget: Budget, budget_wall_s: int, sleep: Callable[[float], None]):
         self.sleep = sleep
         self.deferred: dict[int, str] = {}
+        self.streaks: dict[int, int] = {}       # consecutive ticks each object was deferred
         self.github = github
         self.foundry = foundry
         self.clock = clock
@@ -245,6 +253,8 @@ class _Tick:
         for obj in self.objects:
             if self.clock.monotonic() > self.deadline:
                 self._note(obj, "none", "skipped", "wall budget used")
+                if obj.item.number in self.previous.deferrals:      # not tried: the streak carries over
+                    self.streaks[obj.item.number] = self.previous.deferrals[obj.item.number]
                 continue
             self._step(obj)
         tick_usd = round(cost.orchestrator_tick_usd(self.clock.monotonic() - self.started), 6)
@@ -280,7 +290,12 @@ class _Tick:
             ctx = self._context(obj)
             action = machine.next_action(ctx)
             if action.kind in (Kind.NOOP, Kind.WAIT, Kind.HALT):
-                if obj.state is not None:
+                if action.record:
+                    if obj.state is None:
+                        obj.state = State.new(obj.item.number, ctx.object_type, _scenario(obj.item.body))
+                    obj.state.data.update(action.record)
+                    self._save(obj)
+                elif obj.state is not None:
                     self._sync_labels(obj)
                 self._note(obj, action.kind.value, "ok", action.reason)
                 return
@@ -300,12 +315,31 @@ class _Tick:
                 self._note(obj, action.kind.value, "capped", message)
                 self._defer(obj)
             elif is_transient(exc):
-                self._note(obj, action.kind.value, "deferred", message)
-                self.deferred[obj.item.number] = one_line(message, 300)
-                self._defer(obj)
+                self._transient(obj, _object_type(obj.item, obj.state), action, message)
             else:
                 self._note(obj, action.kind.value, "error", message)
                 self._record_failure(obj, action, message)
+
+    def _transient(self, obj: _Object, object_type: str, action: Action, message: str) -> None:
+        """Defer, but not for ever: after MAX_TRANSIENT_TICKS consecutive deferred ticks escalate."""
+        number = obj.item.number
+        streak = self.previous.deferrals.get(number, 0) + 1
+        if streak < MAX_TRANSIENT_TICKS:
+            self._note(obj, action.kind.value, "deferred", message)
+            self.deferred[number] = one_line(message, 300)
+            self.streaks[number] = streak
+            self._defer(obj)
+            return
+        self._note(obj, action.kind.value, "error", f"transient failures for {streak} consecutive ticks: {message}")
+        try:
+            self._roll_back(obj)
+            if obj.state is None:
+                obj.state = State.new(number, object_type, _scenario(obj.item.body))
+            self._escalate(obj, state.ESC_AGENT_ERROR, [
+                f"{action.kind.value} kept failing transiently for {streak} consecutive ticks", one_line(message, 200)])
+            self._save(obj)
+        except Exception as exc:
+            self.report.errors.append(f"#{number}: could not escalate: {type(exc).__name__}: {exc}")
 
     def _roll_back(self, obj: _Object) -> bool:
         """Restore the last saved state, keeping what was spent. Returns whether spend was added."""
@@ -402,10 +436,11 @@ class _Tick:
             labels = tuple(sorted((current | set(add)) - set(stale)))
             obj.item = Issue(**{**asdict(obj.item), "labels": labels})
 
-    def _upsert(self, number: int, comments: list[Comment], marker: str, body: str) -> Comment:
-        """Create the bot comment that starts with `marker`, or update it in place."""
+    def _upsert(self, number: int, comments: list[Comment], marker: str, body: str,
+                existing: Comment | None = None) -> Comment:
+        """Create the bot comment that starts with `marker` (or the given existing one), or update it in place."""
         for i, comment in enumerate(comments):
-            if comment.author == OWNER and comment.body.startswith(marker):
+            if comment.author == OWNER and (comment.id == existing.id if existing else comment.body.startswith(marker)):
                 if comment.body != body:
                     self.github.update_comment(comment.id, body)
                     comments[i] = Comment(comment.id, comment.author, body, comment.created_at)
@@ -421,10 +456,10 @@ class _Tick:
         st = obj.state
         known = max(st.usd if st else 0.0, self.previous.objects.get(obj.item.number, 0.0))
         coder = (st.get("coder") or {}) if st else {}
-        if st and st.stage == state.BUILDING and coder.get("status") in ("running", "starting") \
-                and coder.get("started_at"):
-            # Status calls can fail for a while; the coder keeps running (and billing) meanwhile.
-            wall = seconds_between(coder["started_at"], self.clock.now_iso())
+        since = coder.get("unconfirmed_at") or coder.get("started_at")
+        if st and not st.escalation and coder.get("status") in UNREPORTED_STATUSES and since:
+            # Status calls can fail, and a start can be unconfirmed; the coder may run (and bill) meanwhile.
+            wall = seconds_between(since, self.clock.now_iso())
             unreported = wall - int(coder.get("elapsed_s", 0)) - UNREPORTED_CODER_SLACK_S
             known += cost.coder_usd(max(unreported, 0))
         return known
@@ -442,14 +477,17 @@ class _Tick:
     def _retry(self) -> RetryPolicy:
         return RetryPolicy(sleep=self.sleep, monotonic=self.clock.monotonic, deadline=self.deadline)
 
-    def _call(self, obj: _Object, agent: str, sections: list[Section]) -> AgentOutput:
+    def _call(self, obj: _Object, agent: str, sections: list[Section],
+              check: Callable[[dict[str, Any]], None] | None = None) -> AgentOutput:
         """Run a prompt agent with retries; every answered call (valid or not) is billed to the object."""
         return run_agent(self.foundry, agent, sections, retry=self._retry(), allow=lambda: self._spend_stop(obj),
+                         check=check,
                          bill=lambda name, tokens_in, tokens_out: self._bill(obj, name, tokens_in, tokens_out))
 
-    def _hosted(self, body: dict[str, Any], session_id: str | None) -> tuple[dict[str, Any], str]:
+    def _hosted(self, body: dict[str, Any], session_id: str | None,
+                retry_if: Callable[[AgentRunError], bool] | None = None) -> tuple[dict[str, Any], str]:
         return call_with_retry(lambda: self.foundry.invoke_hosted(CODER_AGENT, body, session_id=session_id),
-                               self._retry())
+                               self._retry(), retry_if)
 
     def _bill(self, obj: _Object, agent: str, input_tokens: int, output_tokens: int) -> None:
         usd = cost.record_call(obj.st, agent, input_tokens, output_tokens)
@@ -572,19 +610,40 @@ class _Tick:
         st = obj.st
         mode = "bugfix" if st.type == "bug" else "feature"
         sections = [Section("mode", mode, trusted=True), self._issue_section(obj.item), self._spec_section(st)]
+        tree = self.github.list_tree("main")
+        known = set(tree)
+        cache: dict[str, str | None] = {}
+
+        def read(path: str) -> str | None:
+            if path not in cache:
+                cache[path] = self.github.get_file(path, ref="main") if path in known else None
+            return cache[path]
+
         # Hand over the file list and the most relevant files, so the model rarely needs a tool call.
-        listing, files = repo_context.build(
-            self.github.list_tree("main"),
-            f"{obj.item.title}\n{obj.item.body}\n{self._spec_section(st).text}",
-            lambda path: self.github.get_file(path, ref="main"),
-        )
+        listing, files = repo_context.build(tree, f"{obj.item.title}\n{obj.item.body}\n{self._spec_section(st).text}",
+                                            read)
         if listing:
             sections += [Section("repo_files", listing), Section("source_files", files)]
-        data = self._call(obj, "sdlc-test-designer", sections).data or {}
+        repair = st.get("tests_repair") or {}
+        if repair.get("pending"):
+            previous = "\n\n".join(f"=== FILE {t['path']} ===\n{t['content']}" for t in self._designed_tests(obj))
+            sections += [
+                Section("repair", "Your previous tests (section previous_tests) were invalid when the coder "
+                                  "ran them; the errors are in section repair_reason. Write corrected tests.",
+                        trusted=True),
+                Section("previous_tests", previous),
+                Section("repair_reason", str(repair.get("errors", ""))),
+            ]
+
+        def check(data: dict[str, Any]) -> None:
+            tests = data["tests"]
+            errors = [f"{t['path']}: already exists on main" for t in tests if t["path"] in known]
+            errors += designed_tests.lint(tests, known, read)
+            if errors:
+                raise ValueError("; ".join(errors[:12]))
+
+        data = self._call(obj, "sdlc-test-designer", sections, check=check).data or {}
         tests = [{"path": t["path"], "content": t["content"]} for t in data["tests"]]
-        for t in tests:
-            if self.github.get_file(t["path"], ref="main") is not None:
-                raise StepError(f"test designer proposed an existing file {t['path']}")
         body = "\n".join([
             f"{TESTS_MARKER}{encode_marker_json({'tests': tests})}\n-->",
             f"**Tests designed first** (sdlc-test-designer, {mode}). The coder commits these before any "
@@ -598,6 +657,8 @@ class _Tick:
             raise StepError(f"designed tests are {len(body)} chars, over the comment limit")
         self._upsert(obj.item.number, obj.comments, TESTS_MARKER, body)
         st.data["tests"] = {"files": [t["path"] for t in tests]}
+        if repair:
+            repair["pending"] = False
         st.enter(state.TESTS_WRITTEN, self.clock.now_iso())
         self._save(obj)
         return f"{len(tests)} test file(s)"
@@ -613,15 +674,43 @@ class _Tick:
     def _do_start_coder(self, obj: _Object, ctx: Context, action: Action) -> str:
         st = obj.st
         previous = st.get("coder") or {}
-        if previous.get("status") == "starting" and previous.get("mode") == action.mode:
-            attempts = int(previous["attempts"])       # a start that may have reached the coder: same job id
+        mode = str(action.mode)
+        if previous.get("status") == "starting" and previous.get("mode") == mode:
+            attempts = int(previous["attempts"])       # the last start provably never left: same job id
         else:
             attempts = int(previous.get("attempts", 0)) + 1
-        job_id = f"j-{'pr' if obj.kind == 'pr' else ''}{obj.item.number}-{attempts}"
+        job = self._coder_job(obj, ctx, mode, attempts)
+        if mode in ("feature", "bugfix"):
+            old = previous.get("branch")
+            if old and old != job["branch"] and str(old).startswith(f"agent/issue-{obj.item.number}"):
+                self.github.delete_branch(str(old))   # the abandoned branch with the invalid tests
+        # Write ahead: the job id (and any session) is saved before the call, so nothing that happens
+        # to the call can lead to a second job under another id.
+        resuming = previous.get("job_id") == job["job_id"]
+        pr = st.get("pr") or {}
+        st.data["coder"] = {
+            "job_id": job["job_id"], "session_id": previous.get("session_id") if resuming else None,
+            "mode": mode, "attempts": attempts, "started_at": previous.get("started_at") if resuming else None,
+            "status": "starting", "engine": None, "iterations": 0, "phase": None, "elapsed_s": 0,
+            "resumes": int(previous.get("resumes", 0)) if resuming else 0,
+            "prior_seconds": previous.get("prior_seconds", 0) if resuming else st.data["cost"]["coder_seconds"],
+            "prior_model_usd": previous.get("prior_model_usd", 0.0) if resuming
+            else st.data["cost"].get("coder_model_usd", 0.0),
+            "branch": job["branch"], "base_head": pr.get("head") if mode == "revise" else
+            (ctx.pr.head_sha if mode == "maintenance" and ctx.pr else None),
+            "resends": 0, "lease": "requested",
+        }
+        self._save(obj)
+        return self._send_start(obj, job)
+
+    def _coder_job(self, obj: _Object, ctx: Context, mode: str, attempts: int) -> dict[str, Any]:
+        """The start payload, rebuilt the same way for a resend."""
+        st = obj.st
         quality = st.get("quality") or {}
         spec = {"acceptance_criteria": quality.get("acceptance_criteria", []), "notes": quality.get("summary", "")}
         job: dict[str, Any] = {
-            "job_id": job_id, "repo": REPO, "base": "main", "mode": action.mode,
+            "job_id": f"j-{'pr' if obj.kind == 'pr' else ''}{obj.item.number}-{attempts}", "repo": REPO,
+            "base": "main", "mode": mode,
             "issue": {"number": obj.item.number, "title": obj.item.title, "body": obj.item.body},
             "spec": spec, "tests": [], "test_cmd": TEST_CMD, "workdir": CODER_WORKDIR,
             "max_iterations": CODER_MAX_ITERATIONS, "deadline_s": machine.CODER_DEADLINE_S,
@@ -632,51 +721,127 @@ class _Tick:
         }
         findings = (st.get("review") or {}).get("findings", [])
         review_notes = "\n".join(f"- [{f['severity']}] {f['detail']}" for f in findings)
-        if action.mode in ("feature", "bugfix"):
-            job["branch"] = f"agent/issue-{obj.item.number}"
+        if mode in ("feature", "bugfix"):
+            # After a test repair the coder starts again from main on a new branch, so the PR still
+            # opens with exactly one test commit.
+            rounds = int((st.get("tests_repair") or {}).get("rounds", 0))
+            job["branch"] = f"agent/issue-{obj.item.number}" + (f"-r{rounds}" if rounds else "")
             job["tests"] = self._designed_tests(obj)
-        elif action.mode == "revise":
+        elif mode == "revise":
             pr = st.data["pr"]
             job.update(branch=pr["branch"], pr={"number": pr["number"]})
             spec["notes"] = f"Address the reviewer's findings:\n{review_notes}"
         else:
-            pr_obj = ctx.pr
+            pr_obj = ctx.pr or self.github.get_pull(obj.item.number)
             ci = st.get("ci_triage") or {}
-            if pr_obj is None:
-                raise StepError("maintenance repair without a pull request")
             job.update(branch=pr_obj.head_ref, pr={"number": pr_obj.number}, allowed_paths=ci.get("test_files") or [])
             job["spec"] = {
                 "acceptance_criteria": ["The test check passes", "Only test files change"],
                 "notes": "\n".join(filter(None, [ci.get("explanation", ""), review_notes])),
             }
-        # Write ahead: if the start reaches the coder but its answer is lost, the retry reuses the job id.
-        resuming = previous.get("job_id") == job_id
-        st.data["coder"] = {
-            "job_id": job_id, "session_id": previous.get("session_id") if resuming else None,
-            "mode": action.mode, "attempts": attempts, "started_at": previous.get("started_at") if resuming else None,
-            "status": "starting", "engine": None, "iterations": 0, "phase": None, "elapsed_s": 0,
-            "resumes": int(previous.get("resumes", 0)) if resuming else 0,
-            "prior_seconds": previous.get("prior_seconds", 0) if resuming else st.data["cost"]["coder_seconds"],
-            "prior_model_usd": previous.get("prior_model_usd", 0.0) if resuming
-            else st.data["cost"].get("coder_model_usd", 0.0),
-            "branch": job["branch"],
-        }
-        self._save(obj)
-        resp, session = self._hosted({"op": "start", "job": job}, st.data["coder"]["session_id"])
+        return job
+
+    def _send_start(self, obj: _Object, job: dict[str, Any]) -> str:
+        """POST start. Without a session id a start is retried only if it provably never left: a
+        resent start could land in a fresh sandbox that never saw the job and run it twice."""
+        st = obj.st
+        coder = st.data["coder"]
+        session = coder.get("session_id")
+        now = self.clock.now_iso()
+        try:
+            resp, new_session = self._hosted({"op": "start", "job": job}, session,
+                                             retry_if=lambda exc: bool(session) or not exc.ambiguous)
+        except AgentRunError as exc:
+            if not (exc.transient and exc.ambiguous):
+                raise
+            coder.update(status="start-unconfirmed", unconfirmed_at=coder.get("unconfirmed_at") or now)
+            self._save(obj)
+            return f"start of {job['job_id']} unconfirmed: {one_line(str(exc), 120)}"
+        if resp.get("status") == "failed" and resp.get("reason") == "lease-held":
+            coder.update(status="lease-held", unconfirmed_at=coder.get("unconfirmed_at") or now)
+            self._save(obj)
+            return f"{job['job_id']} refused: another coder job holds the lease"
         if resp.get("status") not in ("running", "succeeded"):
             raise StepError(f"coder did not start: {one_line(json.dumps(resp), 200)}")
-        st.data["coder"].update(session_id=session, status="running",
-                                started_at=st.data["coder"]["started_at"] or self.clock.now_iso())
-        st.enter(state.BUILDING, self.clock.now_iso())
+        coder.update(session_id=new_session, status="running", lease="held", unconfirmed_at=None,
+                     started_at=coder.get("started_at") or now)
+        st.enter(state.BUILDING, now)
         self._save(obj)
-        return f"coder job {job_id} ({action.mode})"
+        return f"coder job {job['job_id']} ({job['mode']})"
+
+    def _do_reconcile_coder(self, obj: _Object, ctx: Context, action: Action) -> str:
+        """Find out what became of a start whose answer was lost or that a lease refused."""
+        st = obj.st
+        coder = st.data["coder"]
+        waited = seconds_between(coder.get("unconfirmed_at") or self.clock.now_iso(), self.clock.now_iso())
+        if coder["status"] == "start-unconfirmed":
+            if coder.get("session_id"):
+                try:
+                    resp, _ = self._hosted({"op": "status", "job_id": coder["job_id"]}, coder["session_id"])
+                except AgentRunError as exc:
+                    if exc.http_status != 404:
+                        raise
+                    resp = {}
+                if resp.get("status") in CODER_STATUSES:
+                    coder.update(status="running", lease="held", unconfirmed_at=None,
+                                 started_at=coder.get("started_at") or self.clock.now_iso())
+                    st.enter(state.BUILDING, self.clock.now_iso())
+                    self._save(obj)
+                    return f"start of {coder['job_id']} confirmed by status"
+            elif waited < START_RESEND_AFTER_S:
+                return "start unconfirmed: waiting before a resend"
+            if int(coder.get("resends", 0)) >= MAX_START_RESENDS:
+                self._escalate(obj, state.ESC_BUILD_FAILED, [f"coder start of {coder['job_id']} still unconfirmed "
+                                                             f"after {MAX_START_RESENDS} resend"])
+                self._save(obj)
+                return "start unconfirmed after a resend"
+            coder["resends"] = int(coder.get("resends", 0)) + 1
+            self._save(obj)
+            return self._send_start(obj, self._coder_job(obj, ctx, coder["mode"], int(coder["attempts"])))
+        # lease-held: an earlier start of this job is running somewhere we cannot ask
+        pr = self._finished_by_orphan(obj, coder)
+        if pr is not None:
+            unreported = seconds_between(coder["unconfirmed_at"], self.clock.now_iso())
+            cost.set_coder_spend(st, int(coder.get("prior_seconds", 0)) + unreported,
+                                 float(st.data["cost"].get("coder_model_usd", 0.0)))
+            st.data["pr"] = {"number": pr.number, "branch": pr.head_ref, "head": pr.head_sha}
+            coder.update(status="succeeded", unconfirmed_at=None)
+            self._release_lease(obj)
+            if obj.kind == "issue" and gates.AGENT_PR_LABEL not in pr.labels:
+                self.github.add_labels(pr.number, (gates.AGENT_PR_LABEL,))
+            st.enter(state.IN_REVIEW, self.clock.now_iso())
+            self._save(obj)
+            return f"adopted #{pr.number} from the job holding the lease"
+        if waited > machine.CODER_DEADLINE_S + machine.CODER_GRACE_S:
+            self._escalate(obj, state.ESC_BUILD_FAILED, [
+                f"orphaned coder job for {coder['job_id']}: no result within the deadline, lease swept"])
+            self._save(obj)
+            return "orphaned job swept"
+        return "waiting for the coder job that holds the lease"
+
+    def _finished_by_orphan(self, obj: _Object, coder: dict[str, Any]) -> PullRequest | None:
+        """The PR an unreachable job produced: a new owner PR on its branch, or a new head on the PR."""
+        if coder.get("mode") in ("feature", "bugfix"):
+            matches = [p for p in self.github.list_pulls(state="open")
+                       if p.head_ref == coder.get("branch") and p.author == OWNER and p.head_repo == REPO]
+            return matches[0] if matches else None
+        number = (obj.st.get("pr") or {}).get("number") or obj.item.number
+        pr = self.github.get_pull(int(number))
+        return pr if pr.head_sha != coder.get("base_head") else None
+
+    def _release_lease(self, obj: _Object) -> None:
+        """Delete the coder's lease ref once its job is over (the coder never deletes it)."""
+        coder = (obj.st.get("coder") or {}) if obj.state else {}
+        if coder and coder.get("lease") != "released":
+            self.github.delete_branch(f"{LEASE_PREFIX}{obj.item.number}")
+            coder["lease"] = "released"
 
     def _do_poll_coder(self, obj: _Object, ctx: Context, action: Action) -> str:
         st = obj.st
         coder = st.section("coder")
         resp, session = self._hosted({"op": "status", "job_id": coder["job_id"]}, coder.get("session_id"))
         status = str(resp.get("status", ""))
-        if status not in ("running", "succeeded", "failed", "timeout", "cancelled"):
+        if status not in CODER_STATUSES:
             raise StepError(f"coder status unknown: {one_line(json.dumps(resp), 200)}")
         before = json.dumps(st.data, sort_keys=True)
         coder.update({
@@ -691,7 +856,11 @@ class _Tick:
         cost.set_coder_spend(st, int(coder.get("prior_seconds", 0)) + coder["elapsed_s"],
                              float(coder.get("prior_model_usd", 0.0)) + float(coder_cost.get("model_usd") or 0.0))
         outcome = machine.after_coder(status, reason)
-        if outcome.resume:
+        if status != "running" and not outcome.resume:
+            self._release_lease(obj)     # the job is over: free the issue for its next job
+        if outcome.repair_tests:
+            self._tests_invalid(obj, str(resp.get("detail") or ""))
+        elif outcome.resume:
             # The coder lost its process (sandbox restart): starting the same job id resumes it.
             coder["resumes"] = int(coder.get("resumes", 0)) + 1
             coder["status"] = "starting"
@@ -711,18 +880,31 @@ class _Tick:
             self._save(obj)
         return f"coder {status}"
 
+    def _tests_invalid(self, obj: _Object, detail: str) -> None:
+        """The coder found the designed tests invalid (they failed for the wrong reason): send them back
+        to the test designer, at most MAX_TEST_REPAIRS times, then escalate as an agent error."""
+        st = obj.st
+        repair = st.get("tests_repair") or {"rounds": 0}
+        errors = detail[:4000] or "the coder reported the tests as invalid without detail"
+        if int(repair["rounds"]) >= machine.MAX_TEST_REPAIRS:
+            self._escalate(obj, state.ESC_AGENT_ERROR, [
+                f"tests still invalid after {repair['rounds']} repairs", one_line(errors, 300)])
+            return
+        st.data["tests_repair"] = {"rounds": int(repair["rounds"]) + 1, "pending": True, "errors": errors}
+        st.enter(state.FEASIBLE, self.clock.now_iso())
+
     def _coder_pull(self, obj: _Object, coder: dict[str, Any], resp: dict[str, Any]) -> PullRequest:
         if obj.kind == "pr":
             return self.github.get_pull(obj.item.number)
         number = (resp.get("pr") or {}).get("number")
         if number is None:
             matches = [p for p in self.github.list_pulls(state="open")
-                       if p.head_ref == coder.get("branch") and p.author == OWNER]
+                       if p.head_ref == coder.get("branch") and p.author == OWNER and p.head_repo == REPO]
             if not matches:
                 raise StepError(f"coder succeeded but no open PR for {coder.get('branch')}")
             number = matches[0].number
         pr = self.github.get_pull(int(number))
-        if pr.head_ref != coder.get("branch") or pr.author != OWNER:
+        if pr.head_ref != coder.get("branch") or pr.author != OWNER or pr.head_repo != REPO:
             raise StepError(f"PR #{pr.number} is not the coder's PR for {coder.get('branch')}")
         return pr
 
@@ -782,7 +964,9 @@ class _Tick:
         # The marker comment is what the merge gate trusts, so it lands before the state records the verdict.
         pr_comments = obj.comments if obj.kind == "pr" else self.github.list_comments(pr.number)
         marker = gates.render_review_marker(verdict, pr.head_sha)
-        self._upsert(pr.number, pr_comments, marker, "\n".join([
+        # One marker comment per head sha: a re-review replaces it, whatever the earlier verdict was.
+        same_head = next((c for c in pr_comments if c.author == OWNER and gates.review_of(c) == pr.head_sha), None)
+        self._upsert(pr.number, pr_comments, marker, existing=same_head, body="\n".join([
             marker,
             f"**Review** (sdlc-reviewer) for `{pr.head_sha[:7]}`: **{verdict}**.",
             "",
@@ -903,6 +1087,10 @@ class _Tick:
 
     def _escalate(self, obj: _Object, label: str, reasons: list[str]) -> None:
         st = obj.st
+        try:
+            self._release_lease(obj)
+        except Exception as exc:     # the sweep must not stop the escalation; the next tick retries
+            self.report.errors.append(f"#{obj.item.number}: lease release failed: {type(exc).__name__}: {exc}")
         st.escalate(label, [one_line(r, 300) for r in reasons if r], self.clock.now_iso())
         marker = f"<!-- sdlc-escalation:v1 {label} -->"
         self._upsert(obj.item.number, obj.comments, marker, "\n".join([
@@ -920,6 +1108,7 @@ class _Tick:
             doc = metrics.build(
                 pairs, self.clock.now_iso(),
                 orchestrator_usd=self.previous.orchestrator_usd + tick_usd, deferred=self.deferred,
+                deferrals=self.streaks,
                 floor_usd=self.previous.usd + self.report.usd_this_tick + tick_usd,
             )
             written = metrics.publish(self.github, doc)

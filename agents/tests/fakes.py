@@ -19,6 +19,7 @@ from sdlc_agents.foundry import AgentRunError
 from sdlc_agents.gates import REQUIRED_CHECKS
 from sdlc_agents.ports import (
     OWNER,
+    REPO,
     AgentResult,
     CheckRun,
     Comment,
@@ -109,11 +110,15 @@ class FakeGitHub:
         return self._number
 
     def open_pr(self, title: str, body: str, branch: str, commits: list[tuple[str, tuple[str, ...]]], *,
-                author: str = OWNER, labels: tuple[str, ...] = ()) -> int:
-        if branch not in self.branches:
-            self.branches[branch] = self.branches["main"]
+                author: str = OWNER, labels: tuple[str, ...] = (), head_repo: str = REPO) -> int:
+        """A PR from `branch`. With another head_repo it is a fork PR: its branch lives in the fork
+        (not in this repo's refs) and GitHub ties none of its check runs to a base-repo PR."""
+        fork = head_repo != REPO
+        head = self.branches["main"] if fork or branch not in self.branches else self.branches[branch]
         for message, files in commits:
-            self.branches[branch] = self._commit(message, files, self.branches[branch])
+            head = self._commit(message, files, head)
+        if not fork:
+            self.branches[branch] = head
         self._number += 1
         number = self._number
         self.issues[number] = {
@@ -121,7 +126,8 @@ class FakeGitHub:
             "created_at": self.clock.now_iso(), "closed_at": None, "is_pr": True,
         }
         self.pulls[number] = {"head_ref": branch, "base_ref": "main", "merged": False, "merge_sha": None,
-                              "merged_at": None, "base_sha": self.branches["main"]}
+                              "merged_at": None, "base_sha": self.branches["main"], "head_repo": head_repo,
+                              "fork_head": head if fork else None}
         self.comments[number] = []
         self.run_ci(number)
         return number
@@ -134,19 +140,24 @@ class FakeGitHub:
                 self.run_ci(number)
         return sha
 
+    def head_of(self, number: int) -> str:
+        pr = self.pulls[number]
+        return pr["fork_head"] or self.branches.get(pr["head_ref"], pr.get("final_head", ""))
+
     def run_ci(self, number: int) -> None:
-        sha = self.branches[self.pulls[number]["head_ref"]]
+        sha = self.head_of(number)
         results = self.ci(self, number, sha)
+        tied = () if self.pulls[number]["fork_head"] else (number,)
         self.check_runs[sha] = [
-            CheckRun(name, "in_progress", None, None, (number,)) if result == "pending"
-            else CheckRun(name, "completed", result, self.clock.now_iso(), (number,))
+            CheckRun(name, "in_progress", None, None, tied) if result == "pending"
+            else CheckRun(name, "completed", result, self.clock.now_iso(), tied)
             for name, result in results.items()
         ]
 
     def pr_commits(self, number: int) -> list[str]:
         """Commit shas on the PR branch since its base, oldest first."""
         pr = self.pulls[number]
-        shas, sha = [], self.branches[pr["head_ref"]]
+        shas, sha = [], self.head_of(number)
         while sha and sha != pr["base_sha"]:
             shas.append(sha)
             sha = self.commits[sha]["parent"]
@@ -230,8 +241,8 @@ class FakeGitHub:
     def _pull(self, number: int) -> PullRequest:
         i, p = self.issues[number], self.pulls[number]
         return PullRequest(number, i["title"], i["body"], i["author"], tuple(i["labels"]), i["state"],
-                           p["merged"], p["head_ref"], self.branches.get(p["head_ref"], p.get("final_head", "")),
-                           p["base_ref"], i["created_at"], p["merged_at"], p["merge_sha"])
+                           p["merged"], p["head_ref"], self.head_of(number),
+                           p["base_ref"], i["created_at"], p["merged_at"], p["merge_sha"], p["head_repo"])
 
     def list_pulls(self, *, state: str = "open") -> list[PullRequest]:
         self._record("list_pulls")
@@ -252,8 +263,9 @@ class FakeGitHub:
                 for sha in self.pr_commits(number)]
 
     def list_pull_files(self, number: int) -> list[str]:
+        """Files changed between base and head (every commit here adds or edits), capped like GitHub."""
         self._record("list_pull_files")
-        return sorted({f for sha in self.pr_commits(number) for f in self.commits[sha]["files"]})
+        return sorted({f for sha in self.pr_commits(number) for f in self.commits[sha]["files"]})[:3000]
 
     def create_pull(self, *, title: str, head: str, base: str, body: str) -> PullRequest:
         self._record("create_pull")
@@ -265,7 +277,7 @@ class FakeGitHub:
         pr = self.pulls[number]
         if pr["merged"] or self.issues[number]["state"] != "open":
             raise GitHubError(405, "Pull Request is not mergeable")
-        if self.branches[pr["head_ref"]] != sha:
+        if self.head_of(number) != sha:
             raise GitHubError(409, "Head branch was modified")
         merge_sha = self._commit(f"Merge pull request #{number}", (), self.branches["main"])
         self.branches["main"] = merge_sha
@@ -383,7 +395,7 @@ def default_responses() -> dict[str, Responder]:
         "sdlc-feasibility": {"suitable": True, "reasons": ["Limited to app/web"], "risk": "low",
                              "affected_paths": ["app/web/src"]},
         "sdlc-test-designer": lambda text: {
-            "tests": [{"path": f"app/web/src/issue-{issue_number(text)}.test.tsx",
+            "tests": [{"path": f"app/web/tests/issue-{issue_number(text)}.test.tsx",
                        "content": "import { describe, it, expect } from 'vitest';\n"
                                   "describe('x', () => { it('fails', () => { expect(1).toBe(2); }); });\n"}],
             "rationale": "Fails today because the behaviour is missing.",
@@ -400,60 +412,93 @@ def default_responses() -> dict[str, Responder]:
 
 
 class FakeCoder:
-    """Start returns running; the job finishes on the `polls_to_finish`-th status call."""
+    """Models the hosted coder as the platform runs it.
+
+    - A call without a session id lands in a NEW session (a fresh sandbox that knows no jobs); jobs
+      live per session. `start` on a job id the session already has returns its status (idempotent).
+    - A new job takes the lease ref agent-lease/<issue>; if another job holds it the start is
+      refused with reason lease-held. The orchestrator, not the coder, deletes leases.
+    - Jobs advance on status polls (the job finishes on the `polls_to_finish`-th poll), or all at
+      once with run_orphans(), standing in for the background thread of a job nobody polls.
+    - `status` for a job the session does not know is HTTP 404 unknown_job.
+    """
 
     def __init__(self, github: FakeGitHub, *, polls_to_finish: int = 2):
         self.github = github
         self.polls_to_finish = polls_to_finish
         self.outcomes: list[str] = []          # per finished job, default succeeded
-        self.jobs: dict[str, dict[str, Any]] = {}
+        self.jobs: dict[str, dict[str, Any]] = {}            # job id -> latest record (for assertions)
+        self.by_session: dict[tuple[str, str], dict[str, Any]] = {}
         self.sessions = 0
         self.duplicate_starts = 0
+        self.lease_refusals = 0
         self.lose_next_start_reply = False
         self.report_pr = True                    # include the PR number in the succeeded status
+        self.invalid_detail = "app/web/tests/x.test.tsx: ReferenceError: expect is not defined"
         self.start_status = "running"
         self.status_override: dict[str, Any] | None = None
         self.cancel_error: Exception | None = None
 
+    def _new_session(self) -> str:
+        self.sessions += 1
+        return f"sess-{self.sessions}"
+
     def handle(self, body: dict[str, Any], session_id: str | None) -> tuple[dict[str, Any], str]:
         op = body["op"]
+        session = session_id or self._new_session()
         if op == "start":
             job = body["job"]
-            if job["job_id"] in self.jobs:      # the real coder is idempotent per job id
+            known = self.by_session.get((session, job["job_id"]))
+            if known is not None:
                 self.duplicate_starts += 1
-                record = self.jobs[job["job_id"]]
-                return {"job_id": job["job_id"], "status": record["status"]}, record["session"]
-            self.sessions += 1
-            session = f"sess-{self.sessions}"
-            self.jobs[job["job_id"]] = {"job": job, "polls": 0, "session": session, "status": self.start_status,
-                                        "pr": None}
+                return {"job_id": job["job_id"], "status": known["status"]}, session
+            lease = f"agent-lease/{job['issue']['number']}"
+            if lease in self.github.branches:
+                self.lease_refusals += 1
+                return {"job_id": job["job_id"], "status": "failed", "reason": "lease-held"}, session
+            if self.start_status == "running":       # a refused start takes no lease
+                self.github.branches[lease] = self.github.branches["main"]
+            record = {"job": job, "polls": 0, "session": session, "status": self.start_status, "pr": None}
+            self.by_session[(session, job["job_id"])] = record
+            self.jobs[job["job_id"]] = record
             if self.lose_next_start_reply:      # started, but the caller never hears back
                 self.lose_next_start_reply = False
-                raise AgentRunError("read timed out")
+                raise AgentRunError("read timed out", transient=True, ambiguous=True)
             return {"job_id": job["job_id"], "status": self.start_status}, session
-        record = self.jobs[body["job_id"]]
-        if session_id != record["session"]:
-            raise AgentRunError("unknown session")
+        record = self.by_session.get((session, body["job_id"]))
+        if record is None:
+            raise AgentRunError("sdlc-coder: invocation returned HTTP 404: unknown_job", http_status=404)
         if op == "cancel":
             if self.cancel_error is not None:
                 raise self.cancel_error
             record["status"] = "cancelled"
-            return {"job_id": body["job_id"], "status": "cancelled"}, session_id
+            return {"job_id": body["job_id"], "status": "cancelled"}, session
         record["polls"] += 1
         if self.status_override is not None:
-            return dict(self.status_override), session_id
+            return dict(self.status_override), session
         if record["status"] == "running" and record["polls"] >= self.polls_to_finish:
             self._finish(record)
         response = {"job_id": body["job_id"], "status": record["status"], "phase": "pr", "iterations": 2,
                     "engine": "agy", "elapsed_s": 300 * record["polls"], "log_tail": "ok"}
+        for key in ("reason", "detail"):
+            if record.get(key):
+                response[key] = record[key]
         if record["pr"] and self.report_pr:
             response["pr"] = {"number": record["pr"], "url": "https://example.invalid/pr"}
-        return response, session_id
+        return response, session
+
+    def run_orphans(self) -> None:
+        """Finish every running job, as their background threads would without anyone polling."""
+        for record in list(self.by_session.values()):
+            if record["status"] == "running":
+                self._finish(record)
 
     def _finish(self, record: dict[str, Any]) -> None:
         outcome = self.outcomes.pop(0) if self.outcomes else "succeeded"
         if outcome != "succeeded":
-            record["status"] = outcome
+            status, _, reason = outcome.partition(":")     # e.g. "failed:tests-invalid"
+            record.update(status=status, reason=reason or None,
+                          detail=self.invalid_detail if reason == "tests-invalid" else None)
             return
         job, gh = record["job"], self.github
         number = job["issue"]["number"]

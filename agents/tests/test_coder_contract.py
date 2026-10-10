@@ -52,3 +52,13 @@ def test_maintenance_job_on_a_non_agent_branch_validates_against_the_coder_jobsp
     (job,) = start_jobs(world)
     assert job["mode"] == "maintenance" and job["branch"] == "chore/update-home-heading"
     assert JobSpec.from_request(job).mode == "maintenance"
+
+
+def test_rebuild_after_a_test_repair_validates_against_the_coder_jobspec(world: World) -> None:
+    world.coder.outcomes = ["failed:tests-invalid"]
+    n = open_scenario(world, "a")
+    world.drive(lambda: state.RELEASED in world.gh.labels(n))
+    jobs = start_jobs(world)
+    assert [j["branch"] for j in jobs] == [f"agent/issue-{n}", f"agent/issue-{n}-r1"]
+    for job in jobs:
+        assert JobSpec.from_request(job).mode == "feature"

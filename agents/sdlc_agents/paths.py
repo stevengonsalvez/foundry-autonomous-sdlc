@@ -60,10 +60,12 @@ def normalise_app_path(path: object) -> str:
 
 
 def normalise_vitest_path(path: object) -> str:
-    """A path the test designer may create: a vitest file under app/, outside the Playwright suite."""
+    """A path the test designer may create: app/<workspace>/tests/**/*.test.ts(x), which is what each
+    workspace's vitest.config.ts collects (the Playwright suite in app/e2e is excluded)."""
     norm = normalise_app_path(path)
-    if not norm.endswith(VITEST_SUFFIXES) or norm.startswith("app/e2e/"):
-        raise ValueError(f"path rejected (not a vitest *.test.ts(x) file outside app/e2e): {norm!r}")
+    parts = norm.split("/")
+    if not norm.endswith(VITEST_SUFFIXES) or len(parts) < 4 or parts[2] != "tests" or parts[1] == "e2e":
+        raise ValueError(f"path rejected (must be app/<workspace>/tests/**/*.test.ts(x), not app/e2e): {norm!r}")
     return norm
 
 

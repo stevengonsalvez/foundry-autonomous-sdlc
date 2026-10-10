@@ -58,6 +58,7 @@ def _pull(item: dict[str, Any]) -> PullRequest:
         head_ref=item["head"]["ref"], head_sha=item["head"]["sha"], base_ref=item["base"]["ref"],
         created_at=item["created_at"], merged_at=item.get("merged_at"),
         merge_commit_sha=item.get("merge_commit_sha"),
+        head_repo=((item["head"].get("repo") or {}).get("full_name") or "") if "repo" in item["head"] else REPO,
     )
 
 
@@ -166,8 +167,9 @@ class GitHubClient:
             batch = data[key] if key else data
             items.extend(batch)
             if 'rel="next"' not in resp.headers.get("link", "") or len(batch) < PER_PAGE:
-                break
-        return items
+                return items
+        # Never return a silently shortened list: callers check every item (PR files, issues).
+        raise GitHubError(422, f"GET {path}: more than {MAX_PAGES * PER_PAGE} items, refusing a partial list")
 
     # -- issues and comments --------------------------------------------------
 
@@ -280,6 +282,8 @@ class GitHubClient:
 
     def list_tree(self, ref: str) -> list[str]:
         data = self._call("GET", f"/git/trees/{urllib.parse.quote(ref, safe='')}", params={"recursive": "1"})
+        if data.get("truncated"):
+            raise GitHubError(422, f"tree of {ref} is truncated by GitHub, refusing a partial listing")
         return [item["path"] for item in data.get("tree") or [] if item.get("type") == "blob"]
 
     def put_file(self, path: str, content: str, *, branch: str, message: str) -> None:

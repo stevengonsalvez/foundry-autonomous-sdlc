@@ -30,6 +30,7 @@ from __future__ import annotations
 import json
 import os
 import random
+import socket
 import urllib.parse
 from collections.abc import Callable
 from dataclasses import dataclass, field
@@ -59,12 +60,17 @@ class AgentRunError(RuntimeError):
     """
 
     def __init__(self, message: str, input_tokens: int = 0, output_tokens: int = 0, *,
-                 transient: bool = False, retry_after: float | None = None):
+                 transient: bool = False, retry_after: float | None = None, ambiguous: bool = True,
+                 http_status: int | None = None):
         super().__init__(message)
         self.input_tokens = input_tokens
         self.output_tokens = output_tokens
         self.transient = transient
         self.retry_after = retry_after
+        # Whether the request may have been acted on (a timeout or a 5xx) as opposed to provably not
+        # (connection refused, unknown host, 429 throttling). Matters for non-idempotent calls.
+        self.ambiguous = ambiguous
+        self.http_status = http_status
 
 
 class AgentOutputError(ValueError):
@@ -104,14 +110,16 @@ class RetryPolicy:
         return min(self.cap_s, self.base_s * 2 ** (attempt - 1)) * (0.5 + self.jitter() / 2)
 
 
-def call_with_retry[T](fn: Callable[[], T], policy: RetryPolicy | None) -> T:
-    """Call fn, retrying transient AgentRunErrors while attempts and the deadline allow."""
+def call_with_retry[T](fn: Callable[[], T], policy: RetryPolicy | None,
+                       retry_if: Callable[[AgentRunError], bool] | None = None) -> T:
+    """Call fn, retrying transient AgentRunErrors while attempts and the deadline allow (and, when
+    given, retry_if agrees: a non-idempotent call must not be repeated after an ambiguous failure)."""
     attempt = 0
     while True:
         try:
             return fn()
         except AgentRunError as exc:
-            if not exc.transient or policy is None:
+            if not exc.transient or policy is None or (retry_if is not None and not retry_if(exc)):
                 raise
             attempt += 1
             wait = policy.delay(attempt, exc.retry_after)
@@ -198,10 +206,12 @@ class FoundryClient:
                 json.dumps(body).encode(), float(timeout_s),
             ))
         except OSError as exc:   # URLError, timeouts, resets
-            raise AgentRunError(f"{agent}: invocation failed: {type(exc).__name__}", transient=True) from exc
+            raise AgentRunError(f"{agent}: invocation failed: {type(exc).__name__}", transient=True,
+                                ambiguous=not _never_sent(exc)) from exc
         if resp.status not in (200, 201, 202):
             raise AgentRunError(f"{agent}: invocation returned HTTP {resp.status}: {resp.text()[:200]}",
-                                transient=is_transient_status(resp.status), retry_after=_retry_after(resp.headers))
+                                transient=is_transient_status(resp.status), retry_after=_retry_after(resp.headers),
+                                ambiguous=resp.status != 429, http_status=resp.status)
         try:
             if resp.headers.get("content-type", "").startswith("text/event-stream"):
                 data = _last_event(resp.text())
@@ -213,6 +223,12 @@ class FoundryClient:
             raise AgentRunError(f"{agent}: invocation returned {type(data).__name__}, expected an object")
         event_session = data.get("session_id") if isinstance(data.get("session_id"), str) else None
         return data, resp.headers.get(SESSION_HEADER) or event_session or session_id or ""
+
+
+def _never_sent(exc: OSError) -> bool:
+    """True when the request provably never reached the service (refused or unresolvable)."""
+    reason = getattr(exc, "reason", exc)
+    return isinstance(reason, ConnectionRefusedError | socket.gaierror)
 
 
 def _last_event(stream: str) -> Any:
@@ -298,21 +314,29 @@ def _call_once(foundry: FoundryPort, agent_name: str, sections: list[Section], b
     return result
 
 
-def _parse(agent_name: str, text: str) -> dict[str, Any]:
+Check = Callable[[dict[str, Any]], None]   # raises ValueError with the problems
+
+
+def _parse(agent_name: str, text: str, check: Check | None) -> dict[str, Any]:
     data = parse_json_strict(text)
     AGENT_BY_NAME[agent_name].validate_output(data)
+    if check is not None:
+        check(data)
     return data
 
 
 def run_agent(foundry: FoundryPort, agent_name: str, sections: list[Section], *,
-              bill: Bill = _no_bill, retry: RetryPolicy | None = None, allow: Allow = _always) -> AgentOutput:
+              bill: Bill = _no_bill, retry: RetryPolicy | None = None, allow: Allow = _always,
+              check: Check | None = None) -> AgentOutput:
     """`allow` is asked before every call, retries and the repair included, so a cap reached part way
-    through a step stops it (AgentBudgetError) instead of spending past the cap."""
+    through a step stops it (AgentBudgetError) instead of spending past the cap. `check` adds the
+    caller's own validation (for example against the repository); its errors get the same one repair."""
     result = _call_once(foundry, agent_name, sections, bill, retry, allow)
     if AGENT_BY_NAME[agent_name].output_kind == "markdown":
         return AgentOutput(None, sanitise_markdown(result.text), result.input_tokens, result.output_tokens)
     try:
-        return AgentOutput(_parse(agent_name, result.text), result.text, result.input_tokens, result.output_tokens)
+        return AgentOutput(_parse(agent_name, result.text, check), result.text, result.input_tokens,
+                           result.output_tokens)
     except ValueError as exc:
         # The validation error can quote the model's own output, so it travels as untrusted data.
         notes = [Section("repair", "Your previous answer was rejected for the reason in section "
@@ -321,7 +345,7 @@ def run_agent(foundry: FoundryPort, agent_name: str, sections: list[Section], *,
                  Section("repair_reason", str(exc))]
     repaired = _call_once(foundry, agent_name, [*sections, *notes], bill, retry, allow)
     try:
-        data = _parse(agent_name, repaired.text)
+        data = _parse(agent_name, repaired.text, check)
     except ValueError as exc:
         raise AgentOutputError(f"{agent_name}: invalid output after a repair retry: {exc}") from exc
     return AgentOutput(data, repaired.text, result.input_tokens + repaired.input_tokens,

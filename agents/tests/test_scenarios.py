@@ -108,7 +108,7 @@ def test_scenario_a_well_formed_feature_is_built_reviewed_merged_and_released(wo
     start = next(body for _, body, _ in world.foundry.hosted if body["op"] == "start")
     job = start["job"]
     assert job["mode"] == "feature" and job["branch"] == f"agent/issue-{n}" and job["allowed_paths"] == ["app/"]
-    assert job["tests"][0]["path"] == f"app/web/src/issue-{n}.test.tsx"
+    assert job["tests"][0]["path"] == f"app/web/tests/issue-{n}.test.tsx"
     assert job["repo"] == "stevengonsalvez/foundry-autonomous-sdlc" and job["deadline_s"] == 7_200
     assert job["workdir"] == "app" and job["test_cmd"] == "npm test" and 0 < job["max_model_usd"] <= 0.5
     pr = st["pr"]["number"]

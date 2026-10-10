@@ -16,7 +16,7 @@ from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, field
 from pathlib import PurePosixPath
 
-from sdlc_agents.ports import OWNER, CheckRun, Comment, Issue, PullRequest
+from sdlc_agents.ports import OWNER, REPO, CheckRun, Comment, Issue, PullRequest
 from sdlc_agents.sanitise import parse_json_strict
 
 REQUIRED_CHECKS = ("test", "coverage", "e2e", "gitleaks", "tdd-order", "agent-scope")
@@ -26,6 +26,7 @@ AGENT_BRANCH_PREFIX = "agent/"
 PENDING, MISSING, SUCCESS = "pending", "missing", "success"
 
 REVIEW_MARKER_PREFIX = "<!-- sdlc-review:v1 "
+MAX_PR_FILES = 3000      # GitHub's pulls files endpoint lists at most 3000: beyond that it is incomplete
 _REVIEW_RE = re.compile(r"<!-- sdlc-review:v1 (\{[^\n]*?\}) -->")
 
 
@@ -78,6 +79,12 @@ def render_review_marker(verdict: str, head: str) -> str:
     if verdict not in ("approve", "request-changes") or not re.fullmatch(r"[0-9a-f]{40}", head):
         raise ValueError(f"bad review marker values: {verdict!r} {head!r}")
     return f'{REVIEW_MARKER_PREFIX}{{"verdict":"{verdict}","head":"{head}"}} -->'
+
+
+def review_of(comment: Comment) -> str | None:
+    """The head sha a review marker comment is about, None if it is not one."""
+    found = latest_review([comment])
+    return found[1] if found else None
 
 
 def latest_review(comments: Iterable[Comment]) -> tuple[str, str] | None:
@@ -157,8 +164,15 @@ def verify_merge(
         reasons.append(f"base is {pr.base_ref}, not main")
     if pr.state != "open" or pr.merged:
         reasons.append("PR is not open")
+    if pr.head_repo != REPO:
+        reasons.append(f"head repository is {pr.head_repo or 'unknown'}, not {REPO}")
+    pr_files = list(pr_files)
+    incomplete = len(pr_files) >= MAX_PR_FILES
+    if incomplete:
+        reasons.append(f"PR changes {MAX_PR_FILES} or more files: the file list may be incomplete")
     outside = outside_app(pr_files)
     if outside:
         shown = ", ".join(outside[:5]) + (f" and {len(outside) - 5} more" if len(outside) > 5 else "")
         reasons.append(f"PR changes files outside app/: {shown}")
-    return GateResult(passed=not reasons, reasons=reasons, checks=checks, scope_violation=bool(outside))
+    return GateResult(passed=not reasons, reasons=reasons, checks=checks,
+                      scope_violation=bool(outside) or incomplete)
