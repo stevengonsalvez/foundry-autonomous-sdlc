@@ -37,7 +37,7 @@
       "pass": 0
     }
   },
-  "generated_at": "2026-10-10T13:17:30Z",
+  "generated_at": "2026-10-10T13:18:22Z",
   "issues": [
     {
       "closed_at": "2026-10-10T12:28:43Z",
@@ -332,9 +332,14 @@
         },
         {
           "entered_at": "2026-10-10T13:17:21Z",
+          "seconds": 50,
+          "stage": "stage:tests-written"
+        },
+        {
+          "entered_at": "2026-10-10T13:18:11Z",
           "in_progress": true,
           "seconds": 0,
-          "stage": "stage:tests-written"
+          "stage": "stage:building"
         }
       ],
       "title": "Show the estimated delivery date on the parcel page",
@@ -344,11 +349,11 @@
       "closed_at": null,
       "coder_engine": null,
       "cost": {
-        "calls": 3,
+        "calls": 4,
         "coder_model_usd": 0.0,
         "coder_usd": 0.0,
-        "model_usd": 0.004139,
-        "usd": 0.004139
+        "model_usd": 0.005924,
+        "usd": 0.005924
       },
       "deferred": null,
       "escalation": null,
@@ -360,7 +365,7 @@
       "outcome": "open",
       "owner": "api",
       "pr": null,
-      "quality_score": 78,
+      "quality_score": 95,
       "release": null,
       "resolution_seconds": null,
       "scenario": "d",
@@ -368,9 +373,14 @@
       "stages": [
         {
           "entered_at": "2026-10-10T13:16:43Z",
+          "seconds": 97,
+          "stage": "stage:needs-refinement"
+        },
+        {
+          "entered_at": "2026-10-10T13:18:20Z",
           "in_progress": true,
           "seconds": 0,
-          "stage": "stage:needs-refinement"
+          "stage": "stage:ready"
         }
       ],
       "title": "Lowercase tracking numbers are rejected as invalid",
@@ -382,9 +392,9 @@
     "deferred": 0,
     "escalated": 5,
     "issues": 7,
-    "orchestrator_usd": 0.09049,
+    "orchestrator_usd": 0.095706,
     "released": 0,
-    "usd": 0.172335
+    "usd": 0.179336
   },
   "version": 1
 }
