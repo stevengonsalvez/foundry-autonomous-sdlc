@@ -181,7 +181,7 @@ def test_inventory_finds_nested_repos_and_links_that_leave_the_checkout(tmp_path
     (root / "app/web/src/.git").write_text("gitdir: /tmp/elsewhere\n")             # a gitfile counts too
     inv = sandbox.inventory(root, owner_uid=os.getuid())
     assert sorted(inv.nested_git) == ["app/inner/.git", "app/web/src/.git"]
-    assert sorted(inv.escaping) == ["app/web/node_modules/evil"]
+    assert sorted(inv.escaping) == ["app/api/node_modules", "app/web/node_modules/evil"]
     assert inv.symlinks["app/api/node_modules"] == "../../.git"
     assert "app/web/node_modules/.bin/vitest" not in inv.escaping
 
@@ -205,3 +205,56 @@ def test_engine_user_gets_empty_shell_startup_files(tmp_path: Path) -> None:
         assert path.read_bytes() == b""
         assert path.stat().st_uid == user.uid
     assert not (tmp_path / "elsewhere").exists()
+
+
+WORKSPACES = ("api", "carrier-mock", "contracts", "core", "e2e", "web")
+
+
+def _npm_ci_layout(root: Path) -> None:
+    """What `npm ci` leaves in this repo's app/: workspace links and .bin links, all relative and inside."""
+    for name in WORKSPACES:
+        (root / "app" / name).mkdir(parents=True, exist_ok=True)
+    (root / "app/node_modules/@parcel").mkdir(parents=True)
+    for name in WORKSPACES:
+        (root / f"app/node_modules/@parcel/{name}").symlink_to(f"../../{name}")
+    (root / "app/node_modules/vitest").mkdir()
+    (root / "app/node_modules/vitest/vitest.mjs").write_text("")
+    (root / "app/node_modules/.bin").mkdir()
+    (root / "app/node_modules/.bin/vitest").symlink_to("../vitest/vitest.mjs")
+
+
+def test_npm_workspace_and_bin_links_are_not_violations(tmp_path: Path) -> None:
+    root = tmp_path / "checkout"
+    (root / ".git").mkdir(parents=True)
+    _npm_ci_layout(root)
+    inv = sandbox.inventory(root, owner_uid=os.getuid())
+    assert inv.escaping == []
+    assert inv.symlinks == {}            # links inside node_modules are judged by target only, never as "new"
+    assert inv.nested_git == []
+
+
+@pytest.mark.parametrize(("link", "target"), [
+    ("app/node_modules/@parcel/core", "../../../../outside"),     # workspace link retargeted out of the checkout
+    ("app/node_modules/@parcel/core", "/etc"),                    # absolute
+    ("app/node_modules/@parcel/core", "../../../.git"),           # into the root .git
+    ("app/node_modules/evil", "../../.git/config"),
+    ("app/node_modules/hop", "../web/through"),                   # through a link component: never trusted
+])
+def test_links_inside_node_modules_must_stay_inside_and_off_git(tmp_path: Path, link: str, target: str) -> None:
+    root = tmp_path / "checkout"
+    (root / ".git").mkdir(parents=True)
+    _npm_ci_layout(root)
+    (root / "app/web/through").symlink_to("/etc")
+    (root / link).unlink(missing_ok=True)
+    (root / link).symlink_to(target)
+    assert link in sandbox.inventory(root, owner_uid=os.getuid()).escaping
+
+
+def test_a_link_named_node_modules_is_still_a_new_link(tmp_path: Path) -> None:
+    root = tmp_path / "checkout"
+    (root / ".git").mkdir(parents=True)
+    (root / "app/api").mkdir(parents=True)
+    (root / "app/api/node_modules").symlink_to("../../.git")
+    inv = sandbox.inventory(root, owner_uid=os.getuid())
+    assert inv.symlinks == {"app/api/node_modules": "../../.git"}
+    assert inv.escaping == ["app/api/node_modules"]

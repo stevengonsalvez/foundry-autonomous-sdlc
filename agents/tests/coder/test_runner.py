@@ -84,6 +84,18 @@ TOOLS = {
     "tools/install_fail.py": "import sys\nprint('npm ERR! missing package')\nsys.exit(1)\n",
     "tools/dump_env.py": "import json, os, sys\nopen(sys.argv[1], 'w').write(json.dumps(dict(os.environ)))\n",
     "tools/plant_link.py": "import os\nos.symlink('/etc', 'web/src/escape')\n",
+    # The post-`npm ci` layout of this repo's app/ (cwd is app/): workspace links and a .bin link.
+    "tools/npm_links.py": (
+        "import os\n"
+        "os.makedirs('node_modules/@parcel', exist_ok=True)\n"
+        "for name in ('api', 'carrier-mock', 'contracts', 'core', 'e2e', 'web'):\n"
+        "    os.makedirs(name, exist_ok=True)\n"
+        "    os.symlink('../../' + name, 'node_modules/@parcel/' + name)\n"
+        "os.makedirs('node_modules/vitest', exist_ok=True)\n"
+        "open('node_modules/vitest/vitest.mjs', 'w').close()\n"
+        "os.makedirs('node_modules/.bin', exist_ok=True)\n"
+        "os.symlink('../vitest/vitest.mjs', 'node_modules/.bin/vitest')\n"
+    ),
 }
 
 SEED = {
@@ -1133,3 +1145,14 @@ def test_sandbox_blocked_commands_reach_the_log_excerpt() -> None:
     line = ("run_command_handler.go:574 [sandbox-telemetry] emitting SANDBOX_COMMAND_BLOCKED event with "
             "extra=map[command_line:cat /home/agyuser/.bashrc]")
     assert AGY_LOG_LINES.search(line)
+
+
+def test_a_real_npm_ci_layout_does_not_stop_the_job(world: World) -> None:
+    world.engines = [ScriptedEngine("agy", [{"app/web/src/eta.txt": "2026-10-12\n"}])]
+    service = world.service()
+    start(service, job(install_cmd=f"{sys.executable} ../tools/npm_links.py"))
+    status = wait(service, "j-12-1")
+    assert status["status"] == "succeeded", status
+    assert (world.checkout / "app/node_modules/@parcel/core").is_symlink()
+    bare = world.remote_root / f"{REPO}.git"
+    assert "node_modules" not in git(bare, "ls-tree", "-r", "--name-only", "agent/issue-12")

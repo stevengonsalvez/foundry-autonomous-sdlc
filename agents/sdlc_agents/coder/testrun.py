@@ -40,6 +40,16 @@ _INVALID_FAILURE = re.compile(r"ReferenceError|TypeError|SyntaxError|is not defi
 _VALID_FAILURE = re.compile(r"AssertionError|expected|Unable to find|TestingLibraryElementError", re.IGNORECASE)
 
 
+def _repo_relative(name: str, root: str) -> str:
+    """A reported file name relative to the checkout, by string only: the engine user writes the report,
+    so its names are never resolved on the filesystem (that would follow its links as root)."""
+    clean = os.path.normpath(name)
+    for base in (os.path.realpath(root), os.path.normpath(root)):   # `root` is the coder's own path
+        if clean.startswith(base + os.sep):
+            return clean[len(base) + 1:]
+    return clean
+
+
 def _first_line(message: str) -> str:
     return next((line.strip() for line in message.splitlines() if line.strip()), "")[:300]
 
@@ -130,10 +140,9 @@ class TestReport:
 
     def failing_tests(self, root: str) -> list[tuple[str, str, str]]:
         """(repo-relative file, test name, first assertion line) for every failure, load errors included."""
-        real_root = os.path.realpath(root)
         found: list[tuple[str, str, str]] = []
         for f in self.files:
-            path = os.path.relpath(os.path.realpath(f.name), real_root)
+            path = _repo_relative(f.name, root)
             if f.load_error:
                 found.append((path, "(file failed to load)", f.message.strip().splitlines()[0] if f.message else ""))
             for name, message in zip(f.failed_names, f.failed, strict=False):
@@ -142,8 +151,7 @@ class TestReport:
         return found
 
     def failing_paths(self, root: str) -> list[str]:
-        real_root = os.path.realpath(root)
-        return [os.path.relpath(os.path.realpath(f.name), real_root) for f in self.files if f.status == "failed"]
+        return [_repo_relative(f.name, root) for f in self.files if f.status == "failed"]
 
     def summary(self) -> str:
         if not self.parsed:

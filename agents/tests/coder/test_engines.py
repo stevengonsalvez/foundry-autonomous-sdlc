@@ -388,3 +388,25 @@ def test_unrestricted_agy_skips_permissions_but_only_as_the_engine_user(tmp_path
 
 def test_agy_rounds_are_capped_at_six_minutes_by_default() -> None:
     assert AGY_CALL_TIMEOUT_S == 360
+
+
+def test_root_never_inspects_the_tree_while_agy_still_runs(tmp_path: Path) -> None:
+    pid_file = tmp_path / "agy.pid"
+    fake = _fake_agy(tmp_path, f"import os; open({str(pid_file)!r}, 'w').write(str(os.getpid()))\n"
+                               "print('Error: RESOURCE_EXHAUSTED (429): quota exceeded', flush=True)\ntime.sleep(60)\n")
+    checks: list[bool] = []
+
+    def dirty() -> bool:
+        pid = int(pid_file.read_text())
+        try:
+            os.kill(pid, 0)
+            checks.append(False)          # agy (the engine user) still alive: root's git would race it
+        except ProcessLookupError:
+            checks.append(True)
+        return True
+
+    result = AgyEngine(fake, home=tmp_path, dirty=dirty).edit("p", workdir=str(tmp_path), timeout_s=120)
+    assert checks
+    assert all(checks)
+    assert result.returncode == 0                       # edits made before the quota stop are kept
+    assert "quota" in result.output

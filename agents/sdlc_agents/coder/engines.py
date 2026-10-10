@@ -1,9 +1,10 @@
 """
 Coding engines. Each one edits files in the working copy and nothing else (decision D7).
 
-- AgyEngine: the Antigravity CLI, headless with edits only (`agy -p ... --mode accept-edits --sandbox`):
-  shell commands are denied, our code runs the tests. Scrubbed environment, its own HOME, and an
-  unprivileged user when the sandbox allows one (decision D10).
+- AgyEngine: the Antigravity CLI, headless. `agy` runs `--mode accept-edits` with the command
+  allow-list for one round; `agy-unrestricted` runs `--dangerously-skip-permissions`. Neither uses
+  agy's `--sandbox`. Both run only as the unprivileged engine user with an environment built from
+  nothing, its own HOME and a 360 s cap per round (decision D10).
 - ModelLoopEngine: a read/edit loop on the project model deployment through the Responses
   API. The model returns whole-file edits as JSON; the engine writes only paths the job's
   scope allows, so a prompt-injected reply cannot touch anything else.
@@ -47,6 +48,7 @@ AGY_FLAGS = ("--mode", "accept-edits")
 # Owner decision (D10): when the allow-list blocks agy, retry with permissions off, but only as the
 # unprivileged engine user, whose reach is the boundary; never as root.
 AGY_UNRESTRICTED_FLAGS = ("--dangerously-skip-permissions",)
+QUOTA_ABORT = "agy reported a quota or rate limit"
 AGY_CALL_TIMEOUT_S = 360   # one agy round; denied rounds ran about four minutes
 # agy does not exit when it cannot work: with a missing or expired token it prints a login URL and
 # blocks; quota errors are printed too. Both end the call early so the fallback engine takes over.
@@ -98,6 +100,8 @@ class AgyEngine:
         self.last_logs = ()
         for attempt in (1, 2):
             result = self._call(prompt, workdir, min(self._call_timeout_s, timeout_s), attempt)
+            if result.returncode == shell.ABORTED_RC and QUOTA_ABORT in result.output and self._dirty():
+                return CommandResult(0, result.output + "\n[kept the edits agy made before the quota stop]")
             if result.returncode != shell.TIMEOUT_RC:
                 return result
             if self._dirty():
@@ -111,8 +115,9 @@ class AgyEngine:
     def _abort_reason(self, output: str) -> str | None:
         if _AGY_AUTH.search(output):
             return "agy needs authentication (token missing or expired)"
-        if _AGY_QUOTA.search(output) and not self._dirty():
-            return "agy reported a quota or rate limit before editing"
+        if _AGY_QUOTA.search(output):
+            # Whether it edited anything is checked only after agy is dead: root's git never races it.
+            return QUOTA_ABORT
         return None
 
     def _call(self, prompt: str, workdir: str, timeout_s: int, attempt: int = 1) -> CommandResult:

@@ -195,9 +195,9 @@ def user_env(user: RunAs, node_bin: Path) -> dict[str, str]:
 
 @dataclass(frozen=True)
 class Inventory:
-    symlinks: dict[str, str]      # every link outside pruned node_modules -> its target
+    symlinks: dict[str, str]      # every link not inside a node_modules directory -> its target
     nested_git: list[str]         # any .git file or directory below the checkout root
-    escaping: list[str]           # links that resolve outside the checkout (also checked inside node_modules)
+    escaping: list[str]           # links anywhere whose target is absolute, outside the checkout or in .git
 
 
 def inventory(root: Path, *, owner_uid: int) -> Inventory:
@@ -206,9 +206,11 @@ def inventory(root: Path, *, owner_uid: int) -> Inventory:
     Each entry is lstat'ed before anything is pruned, so a link merely named node_modules is still seen.
     A node_modules is pruned only when it is a real directory owned by the engine user (npm put it
     there; git ignores it and `git clean -X` removes it without following links); its first level
-    (and @scope directories) is still checked for links that leave the checkout.
+    (@scope and .bin directories) is still checked for links that leave the checkout.
+
+    Links inside node_modules (npm workspace links like @parcel/core -> ../../core, .bin entries) are
+    judged by target only, so they are not reported as new; a link named node_modules is not inside.
     """
-    base = os.path.realpath(root)
     links: dict[str, str] = {}
     nested: list[str] = []
     escaping: list[str] = []
@@ -219,9 +221,10 @@ def inventory(root: Path, *, owner_uid: int) -> Inventory:
         if os.path.basename(path) == ".git" and os.path.dirname(rel):
             nested.append(rel)
         if stat.S_ISLNK(info.st_mode):
-            links[rel] = os.readlink(path)
-            target = os.path.realpath(path)
-            if target != base and not target.startswith(base + os.sep):
+            target = os.readlink(path)
+            if "node_modules" not in Path(rel).parent.parts:
+                links[rel] = target
+            if not _link_stays_inside(root, rel, target):
                 escaping.append(rel)
         return info
 
@@ -247,9 +250,35 @@ def inventory(root: Path, *, owner_uid: int) -> Inventory:
 def _first_level(node_modules: str, visit: Callable[[str], os.stat_result]) -> None:
     for entry in os.scandir(node_modules):
         info = visit(entry.path)
-        if entry.name.startswith("@") and stat.S_ISDIR(info.st_mode):
+        if (entry.name.startswith("@") or entry.name == ".bin") and stat.S_ISDIR(info.st_mode):
             for scoped in os.scandir(entry.path):
                 visit(scoped.path)
+
+
+def _link_stays_inside(root: Path, rel: str, target: str) -> bool:
+    """Resolve without following anything: lexical normalisation, then an lstat walk that refuses links on the way.
+
+    A target is allowed only when it is relative, lands inside the checkout, is not in any .git, and
+    every existing component on the way is a real directory or file (missing components are fine,
+    a dangling link inside the tree cannot reach outside).
+    """
+    if os.path.isabs(target):
+        return False
+    resolved = os.path.normpath(os.path.join(os.path.dirname(rel), target))
+    if resolved == ".":
+        return True
+    parts = Path(resolved).parts
+    if parts[0] == ".." or ".git" in parts:
+        return False
+    current = str(root)
+    for part in parts:
+        current = os.path.join(current, part)
+        try:
+            if stat.S_ISLNK(os.lstat(current).st_mode):
+                return False
+        except FileNotFoundError:
+            return True
+    return True
 
 
 def symlinks(root: Path) -> dict[str, str]:

@@ -262,3 +262,19 @@ def test_passing_or_uncollected_new_tests_are_not_a_red() -> None:
 ])
 def test_failure_classification(message: str, valid: bool) -> None:
     assert is_valid_red(message) is valid
+
+
+def test_report_paths_are_never_resolved_on_the_filesystem(tmp_path: Path) -> None:
+    secret_dir = tmp_path / "root-only"
+    secret_dir.mkdir()
+    checkout = tmp_path / "checkout"
+    (checkout / "app").mkdir(parents=True)
+    (checkout / "app/link").symlink_to(secret_dir)      # planted by the engine user
+    name = f"{checkout}/app/link/x.test.ts"
+    report = parse_vitest_json(_report({"name": name, "status": "failed", "message": "", "assertionResults": [
+        _assertion("t", "failed", "AssertionError: expected 1 to be 2")]}))
+    assert report.failing_tests(str(checkout))[0][0] == "app/link/x.test.ts"
+    assert report.failing_paths(str(checkout)) == ["app/link/x.test.ts"]
+    outside = parse_vitest_json(_report({"name": "/etc/x.test.ts", "status": "failed", "message": "",
+                                         "assertionResults": [_assertion("t", "failed", "AssertionError: x")]}))
+    assert outside.failing_paths(str(checkout)) == ["/etc/x.test.ts"]
