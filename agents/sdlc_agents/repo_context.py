@@ -19,7 +19,7 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import PurePosixPath
 
-from sdlc_agents.designed_tests import PACKAGE_ENTRIES, exports_of
+from sdlc_agents.designed_tests import PACKAGE_ENTRIES, branded, exports_of
 from sdlc_agents.paths import is_test_path
 
 MAX_CONTEXT_CHARS = 12_000
@@ -109,6 +109,20 @@ def _exports_line(label: str, path: str, read: Reader, known: set[str]) -> str |
     return f"Exports of {label}: " + ", ".join(sorted(n for n in names if n != "default"))
 
 
+# A valid value per branded type the designer is likely to need; any other brand gets a placeholder.
+BRAND_EXAMPLES = {"TrackingNumber": '"PK1000000001"'}   # app/core/src/tracking-number.ts: /^PK\d{10}$/
+
+
+def _branded_line(label: str, path: str, read: Reader, known: set[str]) -> str | None:
+    """How to build each branded (nominal) type: a plain literal does not type-check."""
+    types, _ = branded(path, read, known)
+    if not types:
+        return None
+    return f"Branded types in {label}: " + "; ".join(
+        f"{name} ({base}): write {BRAND_EXAMPLES.get(name, '1' if base == 'number' else '"..."')} as {name}"
+        for name, base in sorted(types.items()))
+
+
 def build(paths: list[str], issue_text: str, read: Reader) -> tuple[str, str]:
     """(file listing, context text) for the test designer; ("", "") for an empty repository."""
     listed = listable(paths)
@@ -136,6 +150,7 @@ def build(paths: list[str], issue_text: str, read: Reader) -> tuple[str, str]:
     for package, entry in PACKAGE_ENTRIES.items():
         if entry in known:
             header.append(_exports_line(package, entry, cached, known))
+            header.append(_branded_line(package, entry, cached, known))
     blocks = [line for line in header if line]
     left = MAX_CONTEXT_CHARS
     files = [p for p in (chosen.template, chosen.helpers, *chosen.sources) if p]

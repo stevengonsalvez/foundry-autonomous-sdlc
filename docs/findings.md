@@ -30,6 +30,26 @@ See `docs/decisions.md` for the full list. The short version: the orchestrator i
 
 The `agy` OAuth token is a personal login (its `auth_method` field is `consumer`). Running it from a cloud container may be a use the plan terms do not anticipate. The official install page we read states no policy on automated or CI use, and we did not find the plan terms themselves, so this is unverified. We use it for a bounded demo with low iteration counts, keep it in Key Vault, and the fallback chain does not depend on it: if agy is blocked or out of quota the coder falls back to an Agent Framework loop on gpt-5-mini, and failing that to a worker outside Foundry. Review the terms before reusing this pattern for anything beyond a demo.
 
+## Findings from the live run
+
+Things that only appeared once the real system ran, in the order they were hit. Each was fixed and has a regression test.
+
+| Finding | Effect | Fix |
+|---------|--------|-----|
+| The model deployment was capped at 10 requests and 10K tokens per minute | A tool-using prompt agent got HTTP 429 | Raised to 50K TPM in Terraform |
+| An MCP agent looped on `search_code` and directory listings, resending large tool output each step | HTTP 429 after about 40 s even at 50K TPM, because the hosted tool loop does not retry the throttled step | MCP limited to `get_file_contents`, hard budget of 2 reads in the prompt, the test designer gets pre-fetched file context. After: 4 to 5 s and 1.2K to 1.7K input tokens |
+| Three failed feasibility calls (429) produced the verdict label `escalated:not-agent-suitable` on a well-formed feature | An infrastructure error changed an issue's verdict | Transient errors are retried or deferred and never count; persistent failures escalate as `escalated:agent-error` |
+| Hosted agent zip rejected with `No Python dependency manifest found at the project root` although `requirements.txt` was at the root | First deploy failed | The zip builders wrote entry modes without the regular-file bit (`0o644 << 16`); `0o100644 << 16` is accepted |
+| The test designer produced a test without importing `expect` (`ReferenceError: expect is not defined`) | The red check accepted a load-time error as red, so no implementation could ever pass | Red must be an assertion failure (coder and CI gate), designed tests are linted and sent back for repair |
+| `agy -p` was soft-denied on shell commands even with an allow-list (settings loaded, per its debug log) and agy's own `--sandbox` blocked even its startup `cat ~/.bashrc` | Every coder round ended without edits after about 4 minutes | `--sandbox` dropped, the allow-list round is capped at one, then `agy --dangerously-skip-permissions` as the unprivileged user (owner decision D10) |
+| When agy failed twice the model-loop fallback rewrote unrelated code | 126 tests, 3 files failed to load; nothing was pushed | Kept as the last resort only; scope checks and the clean reinstall catch it |
+| A reviewer-driven hardening rejected the standard npm workspace links (`node_modules/@parcel/core -> ../../core`) as escapes | Every coder job failed at setup | Links inside `node_modules` are judged by their resolved target |
+| Security reviews of the coder found a nested-repo filter running as root, a symlink named `node_modules` slipping past the scan, a root fallback that failed open, and a lost `start` reply that could create a duplicate job | See `docs/runbook.md`, "Reviewed and accepted" | All closed test-first |
+
+## Fresh clone reproduction (criterion 3)
+
+A clone of the public repository was bootstrapped and applied into a separate resource group (`rg-fsdlcv-verify`, state in `rg-fsdlcv-tfstate`) with the commands in `docs/runbook.md`: `terraform apply` from clean created 15 resources (Foundry account and project with the `sdlc-default` deployment, Application Insights and Log Analytics, Key Vault, budget, role assignments) and a working Foundry project endpoint. `terraform destroy` then removed 15 and 5 resources and no `rg-fsdlcv-*` group was left.
+
 ## Evidence added during the run
 
 Later sections are appended by the scenarios (issue to release traces, cost table, gate pass rates).

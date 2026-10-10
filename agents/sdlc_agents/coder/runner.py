@@ -3,8 +3,9 @@ The coder job runner and the Invocations-level service (ops start, status, cance
 
 Steps (docs/architecture.md, Coder contract), all in code; engines only edit files:
 
-  setup ─▶ tests (feature/bugfix: commit tests alone, prove red, push)
-        ─▶ implement (engine edit ─▶ post-run scan + scope check ─▶ commit+push ─▶ run tests, until green)
+  setup ─▶ tests (feature/bugfix: commit tests alone, typecheck and lint them, prove red, push)
+        ─▶ implement (engine edit ─▶ post-run scan + scope check ─▶ commit+push ─▶ run tests, until green:
+                      tests pass, then typecheck and lint pass, as in CI)
         ─▶ push ─▶ pr (feature/bugfix: open or reuse the PR, label agent:pr; revise and
                        maintenance push to the existing PR's branch)
 
@@ -27,7 +28,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Protocol
 
-from sdlc_agents.coder import sandbox, scope, shell
+from sdlc_agents.coder import checks, sandbox, scope, shell
 from sdlc_agents.coder.git_adapter import resolve_author
 from sdlc_agents.coder.job import JobSpec, JobSpecError, JobState, JobStore, Mode, Phase, Status
 from sdlc_agents.coder.testrun import TestOutcome, TestRunner
@@ -49,6 +50,7 @@ AGENT_PR_LABEL = "agent:pr"
 LEASE_PREFIX = "agent-lease/"   # refs/heads/agent-lease/<issue>: one live coder job per issue
 INSTALL_TIMEOUT_S = 1800
 TEST_TIMEOUT_S = 1800
+CHECK_TIMEOUT_S = 900   # each of checks.CHECK_COMMANDS
 EDIT_TIMEOUT_S = 3600
 ISSUE_BODY_CHARS = 6000
 FEEDBACK_CHARS = 6000
@@ -59,6 +61,8 @@ AGY_LOG_LINES = re.compile(
     r"CLI settings initialized|SANDBOX_COMMAND_BLOCKED|"
     r"(?i:permission|denied|auto-den|ask|tool call|run_command|command\()")
 NO_PROGRESS_ROUNDS = 2
+# Rounds an engine gets before the next one takes over, progress or not; others run until no progress.
+ENGINE_MAX_ROUNDS = {"agy": 1, "agy-unrestricted": 2}
 ENGINE_LABELS = {
     "agy": "agy (agyuser, allow-list)",
     "agy-unrestricted": "agy-unrestricted (agyuser, skip-permissions after allow-list denial)",
@@ -316,17 +320,40 @@ class JobRunner:
     def _install(self) -> None:
         if not self.spec.install_cmd.strip():
             return
-        self._hand_over()
-        before = self._snapshot()
-        result = shell.run(self.spec.install_cmd, cwd=self.checkout / self.spec.workdir,
-                           env=self._work_env(), timeout_s=self._timeout(INSTALL_TIMEOUT_S),
-                           cancel=self.cancel, **self._as_user())
-        self._quiesce()
-        self._scan(before, "install")
+        result = self._run_untrusted(self.spec.install_cmd, "install", INSTALL_TIMEOUT_S)
         self._log(f"install ({result.returncode}): {result.output[-3000:]}")
         if result.returncode != 0:
             self._check_stops()
             raise JobStop(Status.FAILED, "install-failed", result.output[-1500:])
+
+    def _run_untrusted(self, cmd: str, step: str, cap: int) -> CommandResult:
+        """Run a job command as the engine user in the workdir, then scan what it left behind."""
+        self._hand_over()
+        before = self._snapshot()
+        result = shell.run(cmd, cwd=self.checkout / self.spec.workdir, env=self._work_env(),
+                           timeout_s=self._timeout(cap), cancel=self.cancel, **self._as_user())
+        self._quiesce()
+        self._scan(before, step)
+        return result
+
+    def _run_checks(self) -> list[checks.CheckResult]:
+        results = []
+        for cmd in checks.CHECK_COMMANDS:
+            self._check_stops()
+            raw = self._run_untrusted(cmd, cmd, CHECK_TIMEOUT_S)
+            result = checks.parse(cmd, raw.returncode, raw.output, str(self.checkout))
+            self._log("\n".join([result.summary(), *result.lines()]))
+            results.append(result)
+        self._check_stops()
+        return results
+
+    def _checks_if_green(self, outcome: TestOutcome, must_pass: tuple[str, ...]) -> list[checks.CheckResult]:
+        """Typecheck and lint only once the tests pass; an empty list means not run."""
+        return self._run_checks() if self._green(outcome, must_pass) else []
+
+    def _check_lines(self, results: list[checks.CheckResult]) -> list[str]:
+        lines = [line for r in results for line in r.lines()][:checks.MAX_CHECK_LINES]
+        return [self.store.redact(line) for line in lines]
 
     # -- step 2: red -----------------------------------------------------------------------
 
@@ -351,6 +378,11 @@ class JobRunner:
             return
         self.git.write_files({t.path: t.content for t in self.spec.tests})
         self._red_sha = self._last_sha = self.git.commit_all(f"test: add failing tests for #{self.spec.issue_number}")
+        # Errors in the new test files are the designer's to fix (the engine may not edit them); errors
+        # elsewhere would exist on main too and are not the tests' fault, so they only block green later.
+        broken = checks.errors_in(self._run_checks(), [t.path for t in self.spec.tests], workdir=self.spec.workdir)
+        if broken:
+            raise JobStop(Status.FAILED, "tests-invalid", "\n".join(broken[:20]))
         outcome = self._run_tests()
         verdict = outcome.report.red_verdict([t.path for t in self.spec.tests])
         if verdict.kind == "invalid":
@@ -394,28 +426,37 @@ class JobRunner:
                                                   round_no=lambda: self.state.iterations + 1))
         current = 0
         idle_rounds = 0   # consecutive rounds in which the current engine changed nothing
+        rounds = 0        # rounds the current engine has had
         outcome = self._run_tests()
         # The suites that define done: the new tests, or in maintenance the ones failing at the start.
         must_pass = red_files or tuple(outcome.report.failing_paths(str(self.checkout)))
+        found = self._checks_if_green(outcome, must_pass)
         # A revise job exists to put a new head on the PR, so green alone is not done until it commits.
         committed = self.spec.mode is not Mode.REVISE
         while True:
-            if committed and self._green(outcome, must_pass):
+            if committed and self._done(outcome, must_pass, found):
                 if not self.spec.install_cmd.strip():
                     break
                 outcome = self._clean_rerun()
-                if self._green(outcome, must_pass):
+                found = self._checks_if_green(outcome, must_pass)
+                if self._done(outcome, must_pass, found):
                     break
                 self._log("green did not hold after a clean install; continuing")
             self._check_stops()
             if self.state.iterations >= self.spec.max_iterations:
-                raise JobStop(Status.FAILED, "max-iterations", outcome.report.summary())
+                raise JobStop(Status.FAILED, "max-iterations",
+                              "\n".join([outcome.report.summary(), *self._check_lines(found)]))
             if current >= len(engines):
                 raise JobStop(Status.FAILED, "engines-exhausted", "every engine in the chain failed")
             engine = engines[current]
             pre = self.git.head_sha()
             before = self._snapshot()
-            result = self._edit(engine, outcome, red_files)
+            started = self.deps.clock.monotonic()
+            result = self._edit(engine, outcome, red_files, found)
+            self._engine_event(engine.name, "round", iteration=self.state.iterations + 1,
+                               seconds=round(self.deps.clock.monotonic() - started),
+                               timed_out=bool(getattr(engine, "last_timed_out", False)),
+                               returncode=result.returncode)
             self._account(engines)
             self._quiesce()
             self._scan(before, f"engine {engine.name}")
@@ -424,33 +465,41 @@ class JobRunner:
                 self._check_stops()
                 self._log(f"engine {engine.name} failed ({result.returncode}), falling back: {result.output[-1500:]}")
                 self.git.revert_paths(changed)
-                current += 1
+                current, rounds = current + 1, 0
                 continue
             self.state.iterations += 1
+            rounds += 1
+            used_up = rounds >= ENGINE_MAX_ROUNDS.get(engine.name, self.spec.max_iterations)
             self.state.engine = engine.name
             self._check_stops()
             if not changed:
                 idle_rounds += 1
                 if SOFT_DENY.search(result.output):
                     self._engine_event(engine.name, "engine-permission-denied")
-                    current, idle_rounds = current + 1, 0   # next engine: agy-unrestricted, then the loop
-                elif idle_rounds >= (1 if engine.name == "agy" else NO_PROGRESS_ROUNDS):
+                    current, idle_rounds, rounds = current + 1, 0, 0   # next: agy-unrestricted, then the loop
+                elif used_up or idle_rounds >= NO_PROGRESS_ROUNDS:
                     self._engine_event(engine.name, "engine-no-progress")
-                    current, idle_rounds = current + 1, 0
+                    current, idle_rounds, rounds = current + 1, 0, 0
                 self._checkpoint()
                 continue
             idle_rounds = 0
-            if engine.name == "agy":
-                current += 1   # the restricted agy gets exactly one round; then agy-unrestricted, then the loop
+            if used_up:
+                current, rounds = current + 1, 0   # agy: one round, agy-unrestricted: two, then the loop
             self._enforce_scope(changed, pre, protected, tests_only)
             committed = self._commit_iteration(changed, protected, tests_only) or committed
             outcome = self._run_tests()
+            found = self._checks_if_green(outcome, must_pass)
             self._checkpoint()
-        self.state.green_summary = outcome.report.summary()
+        self.state.green_summary = "\n".join([outcome.report.summary(), *(r.summary() for r in found)])
 
     @staticmethod
     def _green(outcome: TestOutcome, must_pass: tuple[str, ...]) -> bool:
         return outcome.green and outcome.report.suites_passed(must_pass)
+
+    @classmethod
+    def _done(cls, outcome: TestOutcome, must_pass: tuple[str, ...], found: list[checks.CheckResult]) -> bool:
+        """CI's `test` job: the tests pass, then typecheck and lint pass."""
+        return cls._green(outcome, must_pass) and bool(found) and all(r.passed for r in found)
 
     def _clean_rerun(self) -> TestOutcome:
         """Reinstall from scratch so nothing an engine hid in ignored files (node_modules) can fake green."""
@@ -493,10 +542,11 @@ class JobRunner:
             self.git.reset_soft(pre)
         return self.git.changed_since(pre)
 
-    def _edit(self, engine: CodingEnginePort, outcome: TestOutcome, red_files: tuple[str, ...]) -> CommandResult:
+    def _edit(self, engine: CodingEnginePort, outcome: TestOutcome, red_files: tuple[str, ...],
+              found: list[checks.CheckResult]) -> CommandResult:
         iteration = self.state.iterations + 1
         self._log(f"iteration {iteration} with engine {engine.name}")
-        result = engine.edit(self._prompt(outcome, red_files), workdir=str(self.checkout),
+        result = engine.edit(self._prompt(outcome, red_files, found), workdir=str(self.checkout),
                              timeout_s=self._timeout(EDIT_TIMEOUT_S))
         self._log(f"{engine.name} output (iteration {iteration}) exit {result.returncode}:\n{result.output[-4000:]}")
         self._quiesce()
@@ -535,10 +585,11 @@ class JobRunner:
                 excerpt = "\n".join(settings) + "\n...\n" + excerpt[-AGY_LOG_EXCERPT_CHARS:]
             self._log(f"agy log (iteration {iteration}) {path.name}:\n{excerpt or '(no permission lines)'}")
 
-    def _engine_event(self, engine: str, reason: str, **extra: str) -> None:
-        self.state.engine_events.append({"iteration": self.state.iterations, "engine": engine, "reason": reason,
-                                         **extra})
-        self._log(f"iteration {self.state.iterations}: {engine} {reason}")
+    def _engine_event(self, engine: str, reason: str, **extra: Any) -> None:
+        event = {"iteration": self.state.iterations, "engine": engine, "reason": reason, **extra}
+        self.state.engine_events.append(event)
+        details = " ".join(f"{k}={v}" for k, v in extra.items() if k != "iteration")
+        self._log(f"iteration {event['iteration']}: {engine} {reason} {details}".rstrip())
 
     def _account(self, engines: list[CodingEnginePort]) -> None:
         used_in = sum(e.usage.input_tokens for e in engines if hasattr(e, "usage"))
@@ -588,7 +639,7 @@ class JobRunner:
     def _title(self) -> str:
         return " ".join(self.spec.issue_title.split())[:72] or f"issue {self.spec.issue_number}"
 
-    def _prompt(self, outcome: TestOutcome, red_files: tuple[str, ...]) -> str:
+    def _prompt(self, outcome: TestOutcome, red_files: tuple[str, ...], found: list[checks.CheckResult]) -> str:
         s = self.spec
         allowed = ", ".join(s.allowed_paths)
         if s.mode is Mode.MAINTENANCE:
@@ -615,7 +666,17 @@ class JobRunner:
             f"Issue #{s.issue_number}:\n{_untrusted(s.issue_title + chr(10) + s.issue_body[:ISSUE_BODY_CHARS])}\n\n"
             f"Acceptance criteria:\n{_untrusted(criteria)}\n\nNotes:\n{_untrusted(s.notes or '(none)')}\n\n"
             f"Current failing test output:\n{_untrusted(outcome.feedback(FEEDBACK_CHARS))}\n"
+            + self._checks_prompt(found)
         )
+
+    def _checks_prompt(self, found: list[checks.CheckResult]) -> str:
+        lines = self._check_lines(found)
+        if not lines:
+            return ""
+        commands = " and ".join(f"`{c}`" for c in checks.CHECK_COMMANDS)
+        return (f"\nThe tests pass, but CI also runs {commands} in `{self.spec.workdir}` and they fail. "
+                f"Fix these without editing any test file. Typecheck and lint errors:\n"
+                f"{_untrusted(chr(10).join(lines))}\n")
 
     # -- step 4: push and PR ---------------------------------------------------------------
 

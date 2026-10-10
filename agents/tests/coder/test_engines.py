@@ -13,7 +13,8 @@ import pytest
 
 from sdlc_agents.coder import shell
 from sdlc_agents.coder.engines import (
-    AGY_CALL_TIMEOUT_S,
+    AGY_RESTRICTED_CALL_TIMEOUT_S,
+    AGY_UNRESTRICTED_CALL_TIMEOUT_S,
     AgyEngine,
     ModelLoopEngine,
     ModelReply,
@@ -386,8 +387,36 @@ def test_unrestricted_agy_skips_permissions_but_only_as_the_engine_user(tmp_path
         AgyEngine(Path("/opt/agy/bin/agy"), home=tmp_path, run_as=None, unrestricted=True)
 
 
-def test_agy_rounds_are_capped_at_six_minutes_by_default() -> None:
-    assert AGY_CALL_TIMEOUT_S == 360
+def test_agy_rounds_are_capped_six_minutes_restricted_and_fifteen_unrestricted(tmp_path: Path) -> None:
+    assert (AGY_RESTRICTED_CALL_TIMEOUT_S, AGY_UNRESTRICTED_CALL_TIMEOUT_S) == (360, 900)
+    caps: list[float] = []
+
+    def run(cmd: list[str], **kwargs: Any) -> CommandResult:
+        caps.append(kwargs["timeout_s"])
+        return CommandResult(0, "ok")
+
+    user = RunAs("agyuser", 1001, 1001, Path("/home/agyuser"))
+    for unrestricted in (False, True):
+        AgyEngine(Path("/opt/agy/bin/agy"), home=user.home, run_as=user, run=run, unrestricted=unrestricted,
+                  reap=lambda u: 0).edit("p", workdir=str(tmp_path), timeout_s=7200)
+    AgyEngine(Path("/opt/agy/bin/agy"), home=user.home, run_as=user, run=run, unrestricted=True,
+              reap=lambda u: 0).edit("p", workdir=str(tmp_path), timeout_s=100)   # the job deadline still wins
+    assert caps == [360, 900, 100]
+
+
+def test_a_timed_out_round_with_edits_keeps_them_and_says_it_timed_out(tmp_path: Path) -> None:
+    user = RunAs("agyuser", 1001, 1001, Path("/home/agyuser"))
+    engine = AgyEngine(Path("/opt/agy/bin/agy"), home=user.home, run_as=user, unrestricted=True, reap=lambda u: 0,
+                       run=lambda cmd, **kw: CommandResult(shell.TIMEOUT_RC, "[timed out after 900s]"),
+                       dirty=lambda: True)
+    result = engine.edit("p", workdir=str(tmp_path), timeout_s=7200)
+    assert result.returncode == 0
+    assert "keeping them for the test run" in result.output
+    assert engine.last_timed_out
+    finished = AgyEngine(Path("/opt/agy/bin/agy"), home=user.home, run_as=user, reap=lambda u: 0,
+                         run=lambda cmd, **kw: CommandResult(0, "done"))
+    finished.edit("p", workdir=str(tmp_path), timeout_s=7200)
+    assert not finished.last_timed_out
 
 
 def test_root_never_inspects_the_tree_while_agy_still_runs(tmp_path: Path) -> None:

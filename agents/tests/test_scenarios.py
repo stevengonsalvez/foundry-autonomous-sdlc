@@ -572,7 +572,8 @@ def test_red_ci_blocks_the_merge_and_escalates_build_failed(world: World) -> Non
     assert gh.merges == [] and not foundry.agent_calls("sdlc-reviewer")
     st = gh.state_of(n)
     assert "e2e" in st["escalation"]["reasons"][0] and st["gates"]["e2e"] == "failure"
-    assert metrics_doc(world)["gate_pass_rates"]["e2e"]["fail"] == 1
+    # the first head and the two CI revise heads (tests/test_ci_revise.py) all failed e2e
+    assert st["ci_revise"]["rounds"] == 2 and metrics_doc(world)["gate_pass_rates"]["e2e"]["fail"] == 3
 
 
 def test_pending_checks_wait_without_spend(world: World) -> None:

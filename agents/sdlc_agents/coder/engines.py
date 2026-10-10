@@ -49,7 +49,8 @@ AGY_FLAGS = ("--mode", "accept-edits")
 # unprivileged engine user, whose reach is the boundary; never as root.
 AGY_UNRESTRICTED_FLAGS = ("--dangerously-skip-permissions",)
 QUOTA_ABORT = "agy reported a quota or rate limit"
-AGY_CALL_TIMEOUT_S = 360   # one agy round; denied rounds ran about four minutes
+AGY_RESTRICTED_CALL_TIMEOUT_S = 360    # one allow-list round; denied rounds ran about four minutes
+AGY_UNRESTRICTED_CALL_TIMEOUT_S = 900  # one full-tools round: a multi-file feature needs more (live issue #16)
 # agy does not exit when it cannot work: with a missing or expired token it prints a login URL and
 # blocks; quota errors are printed too. Both end the call early so the fallback engine takes over.
 _AGY_AUTH = re.compile(r"Authentication required", re.IGNORECASE)
@@ -72,7 +73,7 @@ class AgyEngine:
                  cancel: threading.Event | None = None, run: Callable[..., CommandResult] = shell.run,
                  prepare: Callable[[Path], None] | None = None,
                  reap: Callable[[RunAs], int] = sandbox.reap_user,
-                 dirty: Callable[[], bool] = lambda: False, call_timeout_s: int = AGY_CALL_TIMEOUT_S,
+                 dirty: Callable[[], bool] = lambda: False, call_timeout_s: int | None = None,
                  before_call: Callable[[], None] | None = None, log_dir: Path | None = None,
                  round_no: Callable[[], int] = lambda: 0, unrestricted: bool = False):
         if unrestricted and (run_as is None or run_as.uid == 0):
@@ -87,11 +88,13 @@ class AgyEngine:
         self._prepare = prepare
         self._reap = reap
         self._dirty = dirty
-        self._call_timeout_s = call_timeout_s
+        self._call_timeout_s = call_timeout_s or (
+            AGY_UNRESTRICTED_CALL_TIMEOUT_S if unrestricted else AGY_RESTRICTED_CALL_TIMEOUT_S)
         self._before_call = before_call
         self._log_dir = log_dir
         self._round_no = round_no
         self.last_logs: tuple[Path, ...] = ()   # agy's --log-file of each call in the latest edit()
+        self.last_timed_out = False             # whether the latest edit() ended by hitting the cap
         self.usage = Usage()
 
     def edit(self, prompt: str, *, workdir: str, timeout_s: int) -> CommandResult:
@@ -100,6 +103,7 @@ class AgyEngine:
         self.last_logs = ()
         for attempt in (1, 2):
             result = self._call(prompt, workdir, min(self._call_timeout_s, timeout_s), attempt)
+            self.last_timed_out = result.returncode == shell.TIMEOUT_RC
             if result.returncode == shell.ABORTED_RC and QUOTA_ABORT in result.output and self._dirty():
                 return CommandResult(0, result.output + "\n[kept the edits agy made before the quota stop]")
             if result.returncode != shell.TIMEOUT_RC:

@@ -23,6 +23,7 @@ import re
 import time
 from collections.abc import Callable
 from dataclasses import asdict, dataclass, field
+from pathlib import PurePosixPath
 from typing import Any
 
 from sdlc_agents import cost, designed_tests, gates, lock, machine, metrics, release, repo_context, state
@@ -52,7 +53,14 @@ from sdlc_agents.ports import (
     PullRequest,
     SecretsPort,
 )
-from sdlc_agents.sanitise import encode_marker_json, one_line, parse_json_strict, sanitise_markdown
+from sdlc_agents.sanitise import (
+    encode_marker_json,
+    fenced,
+    one_line,
+    parse_json_strict,
+    redact_secrets,
+    sanitise_markdown,
+)
 from sdlc_agents.state import State
 
 CODER_AGENT = "sdlc-coder"
@@ -71,6 +79,9 @@ CODER_STATUSES = ("running", "succeeded", "failed", "timeout", "cancelled")
 LEASE_PREFIX = "agent-lease/"     # ref the coder creates per issue; 422 there means a live job holds it
 START_RESEND_AFTER_S = 600        # two ticks before an unconfirmed start (no session) is sent again
 MAX_START_RESENDS = 1
+CODER_LOG_CHARS = 3_000         # log tail copied onto the issue when a coder job fails
+MAX_ENGINE_EVENTS = 20
+CI_LOG_CHARS = 20_000            # tail of a failing check log handed to triage and the coder
 MAX_TRANSIENT_TICKS = 24          # consecutive deferred ticks before an object is escalated
 CODER_MAX_MODEL_USD = 0.5
 CODER_MAX_ITERATIONS = 5
@@ -206,6 +217,26 @@ def _object_type(item: Issue, st: State | None) -> str:
         if f"type:{type_}" in item.labels:
             return type_
     return "feature"
+
+
+_ERROR_LINE = re.compile(r"error|fail|expected|assert|exception|TS\d{4}|\u2717|\u00d7", re.IGNORECASE)
+
+
+def _engine_events(events: list[Any]) -> list[dict[str, Any]]:
+    """The coder's per-iteration engine trouble, bounded and redacted, for the state comment."""
+    kept = []
+    for event in events[-MAX_ENGINE_EVENTS:]:
+        if isinstance(event, dict):
+            kept.append({str(k)[:40]: v if isinstance(v, int | float | bool) or v is None
+                         else one_line(redact_secrets(str(v)), 300) for k, v in event.items()})
+    return kept
+
+
+def _error_lines(log: str, limit: int = 20) -> str:
+    """The lines of a CI log that say what broke (tsc, vitest, Playwright), else its last lines."""
+    lines = [ln.rstrip() for ln in log.splitlines() if ln.strip()]
+    picked = [ln for ln in lines if _ERROR_LINE.search(ln)][:limit] or lines[-limit:]
+    return "\n".join(one_line(ln, 300) for ln in picked)
 
 
 def _allowed(value: object, allowed: frozenset[str]) -> str | None:
@@ -730,7 +761,12 @@ class _Tick:
         elif mode == "revise":
             pr = st.data["pr"]
             job.update(branch=pr["branch"], pr={"number": pr["number"]})
-            spec["notes"] = f"Address the reviewer's findings:\n{review_notes}"
+            head = ctx.pr.head_sha if ctx.pr else pr.get("head")
+            ci = st.get("ci_revise") or {}
+            if ci.get("head") == head and ci.get("action") == "revise":
+                spec["notes"] = str(ci["notes"])           # CI error lines (untrusted; the coder wraps them)
+            else:
+                spec["notes"] = f"Address the reviewer's findings:\n{review_notes}"
         else:
             pr_obj = ctx.pr or self.github.get_pull(obj.item.number)
             ci = st.get("ci_triage") or {}
@@ -852,6 +888,10 @@ class _Tick:
             "session_id": session or coder.get("session_id"),
         })
         reason = _allowed(resp.get("reason"), CODER_REASONS) or ""
+        if isinstance(resp.get("engine_events"), list):
+            coder["engine_events"] = _engine_events(resp["engine_events"])
+        if status in ("failed", "timeout"):
+            self._post_coder_log(obj, coder, reason, resp)
         coder_cost = resp.get("cost") if isinstance(resp.get("cost"), dict) else {}
         cost.set_coder_spend(st, int(coder.get("prior_seconds", 0)) + coder["elapsed_s"],
                              float(coder.get("prior_model_usd", 0.0)) + float(coder_cost.get("model_usd") or 0.0))
@@ -879,6 +919,83 @@ class _Tick:
         if json.dumps(st.data, sort_keys=True) != before:
             self._save(obj)
         return f"coder {status}"
+
+    def _post_coder_log(self, obj: _Object, coder: dict[str, Any], reason: str, resp: dict[str, Any]) -> None:
+        """Copy a failed job's evidence onto the issue: the sandbox log does not outlive its session.
+        One comment per job id; every coder-supplied text is redacted and fenced."""
+        job_id = coder["job_id"]
+        marker = f"<!-- sdlc-coder-log:v1 {job_id} -->"
+        tail = redact_secrets(str(resp.get("log_tail") or ""))[-CODER_LOG_CHARS:]
+        sections = [
+            ("engine_events", json.dumps(coder.get("engine_events", []), indent=1), "json"),
+            ("red", redact_secrets(str(resp.get("red") or "")), "text"),
+            ("green", redact_secrets(str(resp.get("green") or "")), "text"),
+            (f"log_tail (last {CODER_LOG_CHARS} characters)", tail, "text"),
+        ]
+        lines = [marker,
+                 f"**Coder job `{job_id}` {coder['status']}** (reason `{reason or 'none'}`, phase "
+                 f"`{coder.get('phase')}`, {coder.get('iterations', 0)} iterations, engine `{coder.get('engine')}`). "
+                 "Copied here because the sandbox log does not outlive its session.",
+                 "", "<details><summary>Coder log</summary>", ""]
+        for title, text, info in sections:
+            lines += [f"{title}:", "", fenced(text[:CODER_LOG_CHARS], info), ""]
+        self._upsert(obj.item.number, obj.comments, marker, "\n".join([*lines, "</details>"]))
+
+    def _ci_failure(self, obj: _Object, ctx: Context) -> str:
+        """Red required checks on an agent PR head. A failure inside the designed (protected) test files
+        goes back to the test designer; anything else is triaged and revised by the coder, at most
+        MAX_CI_REVISIONS rounds; after that the issue is escalated with the last log line."""
+        st, pr = obj.st, _require_pr(ctx)
+        failed = [n for n in gates.failed(ctx.checks) if ctx.checks[n] != "cancelled"]
+        check = next(n for n in machine.CI_REVISABLE if n in failed)
+        log = self.github.get_check_log(pr.head_sha, check)[-CI_LOG_CHARS:]
+        errors = _error_lines(log)
+        last_line = one_line(next((ln for ln in reversed(log.splitlines()) if ln.strip()), "(empty log)"), 200)
+        self._record_gates(st, pr.head_sha, ctx.checks)
+        designed = list((st.get("tests") or {}).get("files", []))
+        if any(path in log or PurePosixPath(path).name in log for path in designed):
+            return self._back_to_designer(obj, pr, f"CI check {check} failed in the designed tests:\n{errors}")
+        rounds = int((st.get("ci_revise") or {}).get("rounds", 0))
+        if rounds >= machine.MAX_CI_REVISIONS:
+            self._escalate(obj, state.ESC_BUILD_FAILED, [
+                f"required checks failed on {pr.head_sha[:7]}: {', '.join(failed)} after {rounds} CI revise rounds; "
+                f"last log line: {last_line}"])
+            self._save(obj)
+            return "CI revise rounds exhausted"
+        files = sorted({f for c in self.github.list_pull_commits(pr.number) for f in c.files})
+        data = self._call(obj, "sdlc-ci-triage", [
+            Section("pr", f"{pr.title}\n\n{pr.body}"),
+            Section("changed_files", "\n".join(files) + "\n\nprotected test files: " + ", ".join(designed)),
+            Section("diff", self.github.get_pull_diff(pr.number)),
+            Section("log", log, keep_tail=True),
+        ]).data or {}
+        if data["cause"] == "stale-test" and set(data["test_files"]) & set(designed):
+            return self._back_to_designer(obj, pr, f"CI check {check} failed in the designed tests:\n{errors}")
+        notes = (f"CI check {check} failed on {pr.head_sha[:7]}. Make it pass without changing any test file.\n"
+                 f"Error lines:\n{errors}\n\nTriage: {data['explanation']}")
+        st.data["ci_revise"] = {"rounds": rounds + 1, "head": pr.head_sha, "check": check, "action": "revise",
+                                "notes": notes[:4000], "last_line": last_line}
+        self._upsert(pr.number, self.github.list_comments(pr.number),
+                     "<!-- sdlc-ci-triage:v1 -->", "\n".join([
+                         "<!-- sdlc-ci-triage:v1 -->",
+                         f"**CI triage** (sdlc-ci-triage) for `{pr.head_sha[:7]}`: check `{check}` failed, "
+                         f"`{data['cause']}`; the coder revises the PR (round {rounds + 1} of "
+                         f"{machine.MAX_CI_REVISIONS}).",
+                         "",
+                         sanitise_markdown(one_line(data["explanation"], 600)),
+                     ]))
+        st.data["failures"] = None
+        self._save(obj)
+        return f"CI revise round {rounds + 1}"
+
+    def _back_to_designer(self, obj: _Object, pr: PullRequest, errors: str) -> str:
+        """The designed tests themselves are wrong: close this PR and run the test repair loop; the
+        rebuild opens a new PR from a fresh branch."""
+        self.github.close_issue(pr.number)            # closes the PR without merging; the issue stays open
+        obj.st.data["pr"] = None
+        self._tests_invalid(obj, errors)
+        self._save(obj)
+        return "failure in the designed tests: back to the test designer"
 
     def _tests_invalid(self, obj: _Object, detail: str) -> None:
         """The coder found the designed tests invalid (they failed for the wrong reason): send them back
@@ -909,6 +1026,8 @@ class _Tick:
         return pr
 
     def _do_ci_triage(self, obj: _Object, ctx: Context, action: Action) -> str:
+        if obj.kind == "issue":
+            return self._ci_failure(obj, ctx)
         st, pr = obj.st, _require_pr(ctx)
         log = self.github.get_check_log(pr.head_sha, "test")
         diff = self.github.get_pull_diff(pr.number)
