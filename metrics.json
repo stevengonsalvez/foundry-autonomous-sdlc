@@ -38,7 +38,7 @@
       "pass": 4
     }
   },
-  "generated_at": "2026-10-10T18:30:24Z",
+  "generated_at": "2026-10-10T18:35:18Z",
   "issues": [
     {
       "closed_at": "2026-10-10T12:28:43Z",
@@ -1256,17 +1256,17 @@
     },
     {
       "closed_at": null,
-      "coder_engine": null,
+      "coder_engine": "loop",
       "coder_sessions_lost": 0,
       "cost": {
         "calls": 1,
-        "coder_model_usd": 0.0,
-        "coder_usd": 0.0,
+        "coder_model_usd": 0.007476,
+        "coder_usd": 0.007893,
         "model_usd": 0.007717,
-        "usd": 0.007717
+        "usd": 0.023086
       },
       "deferred": null,
-      "escalation": null,
+      "escalation": "escalated:build-failed",
       "gate_attempts": {
         "agent-scope": [
           "success"
@@ -1298,7 +1298,7 @@
       "kind": "pr",
       "number": null,
       "opened_at": "2026-10-10T18:24:00Z",
-      "outcome": "open",
+      "outcome": "escalated",
       "owner": null,
       "pr": 33,
       "quality_score": null,
@@ -1309,9 +1309,13 @@
       "stages": [
         {
           "entered_at": "2026-10-10T18:30:18Z",
-          "in_progress": true,
-          "seconds": 0,
+          "seconds": 298,
           "stage": "stage:building"
+        },
+        {
+          "entered_at": "2026-10-10T18:35:16Z",
+          "seconds": 0,
+          "stage": "escalated:build-failed"
         }
       ],
       "title": "Update the home page heading copy",
@@ -1321,11 +1325,11 @@
   "repo": "stevengonsalvez/foundry-autonomous-sdlc",
   "totals": {
     "deferred": 0,
-    "escalated": 14,
+    "escalated": 15,
     "issues": 19,
-    "orchestrator_usd": 0.587182,
+    "orchestrator_usd": 0.592105,
     "released": 4,
-    "usd": 1.496837
+    "usd": 1.517129
   },
   "version": 1
 }
