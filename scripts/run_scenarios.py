@@ -46,7 +46,11 @@ def parse(path: Path) -> tuple[dict[str, str], str]:
 
 
 def create_issue(meta: dict[str, str], body: str, run: Gh) -> int:
-    payload = {"title": meta["title"], "body": f"{body}\n\n<!-- scenario: {meta['scenario']} -->"}
+    payload = {
+        "title": meta["title"],
+        "body": f"{body}\n\n<!-- scenario: {meta['scenario']} -->",
+        "labels": [f"type:{meta['type']}"],
+    }
     out = run(["api", f"repos/{REPO}/issues", "--input", "-"], json.dumps(payload))
     return int(json.loads(out)["number"])
 

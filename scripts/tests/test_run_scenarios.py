@@ -39,6 +39,13 @@ def test_issue_carries_the_scenario_marker_and_owner_flow_only():
     assert created == {"b": 8}
     assert sent["title"] == "Make the parcel tracker better"
     assert sent["body"].endswith("<!-- scenario: b -->")
+    assert sent["labels"] == ["type:feature"]
+
+
+def test_bug_scenario_is_labelled_as_a_bug():
+    fake = FakeGh()
+    rs.run_scenarios(["d"], run=fake)
+    assert json.loads(fake.calls[0][1])["labels"] == ["type:bug"]
 
 
 def test_stale_test_pr_changes_only_the_heading_and_is_labelled(monkeypatch):
