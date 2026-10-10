@@ -37,7 +37,7 @@
       "pass": 0
     }
   },
-  "generated_at": "2026-10-10T13:18:49Z",
+  "generated_at": "2026-10-10T13:19:56Z",
   "issues": [
     {
       "closed_at": "2026-10-10T12:28:43Z",
@@ -349,11 +349,11 @@
       "closed_at": null,
       "coder_engine": null,
       "cost": {
-        "calls": 4,
+        "calls": 5,
         "coder_model_usd": 0.0,
         "coder_usd": 0.0,
-        "model_usd": 0.005924,
-        "usd": 0.005924
+        "model_usd": 0.007153,
+        "usd": 0.007153
       },
       "deferred": null,
       "escalation": null,
@@ -378,9 +378,14 @@
         },
         {
           "entered_at": "2026-10-10T13:18:20Z",
+          "seconds": 94,
+          "stage": "stage:ready"
+        },
+        {
+          "entered_at": "2026-10-10T13:19:54Z",
           "in_progress": true,
           "seconds": 0,
-          "stage": "stage:ready"
+          "stage": "stage:feasible"
         }
       ],
       "title": "Lowercase tracking numbers are rejected as invalid",
@@ -392,9 +397,9 @@
     "deferred": 0,
     "escalated": 5,
     "issues": 7,
-    "orchestrator_usd": 0.100522,
+    "orchestrator_usd": 0.105397,
     "released": 0,
-    "usd": 0.186556
+    "usd": 0.19266
   },
   "version": 1
 }
