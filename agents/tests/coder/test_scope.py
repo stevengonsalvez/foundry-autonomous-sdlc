@@ -90,3 +90,8 @@ def test_case_and_unicode_lookalikes_stay_inside_or_out_of_scope(tmp_path, path:
     target = scope.contained_path(tmp_path, path)
     assert target is None or tmp_path.resolve() in target.parents
     assert not scope.within_allowed(path, ("app/",)) or path.startswith("app/")
+
+
+@pytest.mark.parametrize("path", ["app/.gitattributes", ".gitattributes", "app/web/.gitmodules", ".gitmodules"])
+def test_git_attribute_and_module_files_are_never_in_scope(path: str) -> None:
+    assert scope.violations([path], allowed_paths=(".",), protected=(), tests_only=False) == [path]

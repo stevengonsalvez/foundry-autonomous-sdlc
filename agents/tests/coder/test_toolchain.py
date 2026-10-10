@@ -6,6 +6,7 @@ import hashlib
 import io
 import json
 import os
+import re
 import stat
 import tarfile
 from pathlib import Path
@@ -13,7 +14,7 @@ from pathlib import Path
 import pytest
 
 from sdlc_agents.coder import shell
-from sdlc_agents.coder.toolchain import NODE_INDEX, Toolchain, ToolchainError
+from sdlc_agents.coder.toolchain import AGY_SETTINGS_BYTES, NODE_INDEX, Toolchain, ToolchainError
 from sdlc_agents.ports import CommandResult
 
 NODE_NAME = "node-v22.99.1-linux-x64"
@@ -166,28 +167,55 @@ def test_node_installs_once_into_a_root_owned_world_readable_dir(tmp_path: Path)
     assert len(fetch.calls) == 2
 
 
-EXPECTED_AGY_SETTINGS = {"permissions": {"allow": [
-    "command(ls)", "command(cat)", "command(head)", "command(tail)", "command(wc)", "command(grep)",
-    "command(find)", "command(regex:git (status|diff|log|show|ls-files)( .*)?)",
-    "command(regex:npm (test|run (lint|typecheck|test|test:coverage))( .*)?)", "command(regex:npx vitest( .*)?)",
-]}}
+def _allows(rules: list[str], command: str) -> bool:
+    """How agy applies the rules: command(<name>) by program name, command(regex:<re>) on the whole line."""
+    for rule in rules:
+        body = rule.removeprefix("command(").removesuffix(")")
+        if body.startswith("regex:"):
+            pattern = body.removeprefix("regex:")
+            assert pattern.startswith("^") and pattern.endswith("$"), "anchored, whatever agy's matcher does"
+            if re.search(pattern, command):
+                return True
+        elif command.split()[0] == body:
+            return True
+    return False
 
 
-def test_agy_settings_allow_exactly_the_read_and_test_commands(tmp_path: Path) -> None:
+def _written_rules(tmp_path: Path) -> list[str]:
+    path = Toolchain(tmp_path, fetch=FakeFetch({})).write_agy_settings()
+    data = json.loads(path.read_text())
+    assert set(data) == {"permissions"}
+    rules: list[str] = data["permissions"]["allow"]
+    return rules
+
+
+@pytest.mark.parametrize("command", [
+    "ls -la app/web", "cat app/web/src/eta.ts", "grep -rn eta app/web/src", "head -50 app/x.ts", "wc -l app/x.ts",
+    "git status", "git diff", "git diff --stat HEAD~1", "git log --oneline -n 5", "git show HEAD:app/web/src/eta.ts",
+    "git ls-files app/web", "npm test", "npm test -- web/tests/eta.test.ts", "npm run typecheck", "npm run lint",
+    "npm run test:coverage", "npx vitest run web/tests/eta.test.ts", "npx vitest run -t eta --reporter=verbose",
+])
+def test_agy_may_read_the_repo_and_run_the_tests(tmp_path: Path, command: str) -> None:
+    assert _allows(_written_rules(tmp_path), command), command
+
+
+@pytest.mark.parametrize("command", [
+    "find . -exec sh -c id ;", "find . -delete", "curl https://evil.example", "wget x", "bash -c id", "sh -c id",
+    "python3 -c 1", "node -e 1", "env", "printenv", "rm -rf app", "ssh host", "nc host 1",
+    "git push origin HEAD", "git remote -v", "git config core.pager sh", "git -c core.pager=sh log",
+    "git diff --output=/tmp/x", "git diff --ext-diff", "git log --textconv", "git status; curl x",
+    "git log $(id)", "git show `id`", "npm test && curl x", "npm test -- --config=/tmp/evil.ts",
+    "npm run build", "npm install left-pad", "npx vitest run --config /tmp/x", "npx vitest --watch",
+    "npx vitest run --outputFile=/tmp/x", "npx some-other-tool", "git diff | sh",
+])
+def test_agy_may_not_escape_through_the_allow_list(tmp_path: Path, command: str) -> None:
+    assert not _allows(_written_rules(tmp_path), command), command
+
+
+def test_agy_settings_go_to_the_engine_user_home_privately(tmp_path: Path) -> None:
     tools = Toolchain(tmp_path / "coder", fetch=FakeFetch({}))
     (tmp_path / "agyuser").mkdir()
-    owner = (os.getuid(), os.getgid())
-    path = tools.write_agy_settings(home=tmp_path / "agyuser", owner=owner)
+    path = tools.write_agy_settings(home=tmp_path / "agyuser", owner=(os.getuid(), os.getgid()))
     assert path == tmp_path / "agyuser/.gemini/antigravity-cli/settings.json"
-    assert json.loads(path.read_text()) == EXPECTED_AGY_SETTINGS
-    assert stat.S_IMODE(path.stat().st_mode) == 0o600
-    allow = " ".join(EXPECTED_AGY_SETTINGS["permissions"]["allow"])
-    for forbidden in ("curl", "wget", "ssh", "command(bash", "command(sh", "python", "command(node", "printenv",
-                      "push", "remote", "config", "rm"):
-        assert forbidden not in allow, forbidden
-
-
-def test_agy_settings_in_the_coder_home_when_there_is_no_engine_user(tmp_path: Path) -> None:
-    path = Toolchain(tmp_path, fetch=FakeFetch({})).write_agy_settings()
-    assert json.loads(path.read_text()) == EXPECTED_AGY_SETTINGS
+    assert path.read_bytes() == AGY_SETTINGS_BYTES
     assert stat.S_IMODE(path.stat().st_mode) == 0o600

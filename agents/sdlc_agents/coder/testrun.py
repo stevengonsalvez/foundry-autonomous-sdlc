@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import shlex
 import threading
 from collections.abc import Iterable
@@ -30,6 +31,29 @@ def with_json_reporter(test_cmd: str, report_path: str) -> str:
     words = test_cmd.split()
     separator = " -- " if words[0] == "npm" and "--" not in words else " "
     return f"{test_cmd}{separator}{args}"
+
+
+# A red test must fail because the behaviour is missing, not because the test itself is broken.
+_INVALID_FAILURE = re.compile(r"ReferenceError|TypeError|SyntaxError|is not defined|is not a function|"
+                              r"Cannot find module|Failed to resolve import|does not provide an export|timed out",
+                              re.IGNORECASE)
+_VALID_FAILURE = re.compile(r"AssertionError|expected|Unable to find|TestingLibraryElementError", re.IGNORECASE)
+
+
+def _first_line(message: str) -> str:
+    return next((line.strip() for line in message.splitlines() if line.strip()), "")[:300]
+
+
+def is_valid_red(message: str) -> bool:
+    """An assertion failure (incl. Testing Library queries); errors, bad imports and timeouts are not."""
+    head = message.split("\n    at ", 1)[0]
+    return not _INVALID_FAILURE.search(head) and bool(_VALID_FAILURE.search(head))
+
+
+@dataclass(frozen=True)
+class RedVerdict:
+    kind: str                       # "red" | "not-red" | "invalid"
+    invalid: tuple[str, ...] = ()   # one line per broken new test: "<path> > <test>: <first error line>"
 
 
 @dataclass(frozen=True)
@@ -69,13 +93,31 @@ class TestReport:
         return self.parsed and self.success and self.total > 0 and self.failed == 0 and not self.load_errors
 
     def is_red_for(self, new_paths: Iterable[str]) -> bool:
-        if not self.parsed or self.load_errors:
-            return False
+        return self.red_verdict(new_paths).kind == "red"
+
+    def red_verdict(self, new_paths: Iterable[str]) -> RedVerdict:
+        """Red only when the new suites fail on assertions alone. A new test that errors (not defined,
+        bad import, timeout, ...) or a new suite vitest did not collect makes the tests invalid."""
+        if not self.parsed:
+            return RedVerdict("not-red")
         suites = [p for p in new_paths if scope.is_suite_path(p)]
-        collected = {p: [f for f in self.files if f.is_for(p)] for p in suites}
-        if not suites or any(not hits for hits in collected.values()):
-            return False
-        return any(f.failed for hits in collected.values() for f in hits)
+        invalid: list[str] = []
+        valid = 0
+        for path in suites:
+            hits = [f for f in self.files if f.is_for(path)]
+            if not hits:
+                invalid.append(f"{path}: not collected by vitest (check the file name and location)")
+            for f in hits:
+                if f.load_error:
+                    invalid.append(f"{path}: {_first_line(f.message) or 'failed to load'}")
+                for name, message in zip(f.failed_names, f.failed, strict=False):
+                    if is_valid_red(message):
+                        valid += 1
+                    else:
+                        invalid.append(f"{path} > {name}: {_first_line(message)}")
+        if invalid:
+            return RedVerdict("invalid", tuple(invalid))
+        return RedVerdict("red" if suites and valid else "not-red")
 
     def suites_passed(self, paths: Iterable[str]) -> bool:
         """Every suite in `paths` was collected and every one of its assertions ran and passed."""

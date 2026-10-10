@@ -66,8 +66,12 @@ def build_service(env: Mapping[str, str] = os.environ, *, credential: Any = None
         if ctx.agy_binary is not None:
             run_as = ctx.run_as
             prepare = (lambda checkout: sandbox.give_tree(checkout, run_as)) if run_as is not None else None
-            chain.append(AgyEngine(ctx.agy_binary, home=ctx.agy_home, run_as=run_as, cancel=ctx.cancel,
-                                   prepare=prepare, dirty=ctx.dirty))
+            agy = {"home": ctx.agy_home, "run_as": run_as, "cancel": ctx.cancel, "prepare": prepare,
+                   "dirty": ctx.dirty, "before_call": ctx.refresh_agy_settings, "log_dir": ctx.agy_log_dir,
+                   "round_no": ctx.round_no}
+            chain.append(AgyEngine(ctx.agy_binary, **agy))
+            if run_as is not None and run_as.uid != 0:
+                chain.append(AgyEngine(ctx.agy_binary, unrestricted=True, **agy))
         chain.append(ModelLoopEngine(responses, allowed_paths=ctx.spec.allowed_paths, protected=ctx.protected,
                                      tests_only=ctx.tests_only))
         return chain

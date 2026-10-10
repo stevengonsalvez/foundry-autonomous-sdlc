@@ -157,8 +157,17 @@ def write_private_file(base: Path, rel: str, data: bytes, *, owner: tuple[int, i
     return base / rel
 
 
-def safe_read(path: Path, *, max_bytes: int) -> bytes:
-    """Read a file in a tree another user controls: regular files only, links refused, never blocking."""
+def ensure_shell_files(user: RunAs) -> None:
+    """Empty ~/.bashrc and ~/.profile: agy reads them at start, and a missing file stalled its first command."""
+    for name in (".bashrc", ".profile"):
+        write_private_file(user.home, name, b"", owner=(user.uid, user.gid))
+
+
+def safe_read(path: Path, *, max_bytes: int, tail: bool = False) -> bytes:
+    """Read a file in a tree another user controls: regular files only, links refused, never blocking.
+
+    A file over `max_bytes` is refused, or with `tail` only its last `max_bytes` are read (logs).
+    """
     try:
         fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
     except OSError as exc:
@@ -167,9 +176,10 @@ def safe_read(path: Path, *, max_bytes: int) -> bytes:
         info = os.fstat(fd)
         if not stat.S_ISREG(info.st_mode):
             raise UnsafePathError(f"{path} is not a regular file")
-        if info.st_size > max_bytes:
+        if info.st_size > max_bytes and not tail:
             raise UnsafePathError(f"{path} is larger than {max_bytes} bytes")
         with os.fdopen(os.dup(fd), "rb") as fh:
+            fh.seek(max(info.st_size - max_bytes, 0))
             return fh.read(max_bytes)
     finally:
         os.close(fd)
@@ -183,17 +193,64 @@ def user_env(user: RunAs, node_bin: Path) -> dict[str, str]:
     return env
 
 
-def symlinks(root: Path) -> dict[str, str]:
-    """Every symlink under `root` and its target; used to spot links untrusted code created.
+@dataclass(frozen=True)
+class Inventory:
+    symlinks: dict[str, str]      # every link outside pruned node_modules -> its target
+    nested_git: list[str]         # any .git file or directory below the checkout root
+    escaping: list[str]           # links that resolve outside the checkout (also checked inside node_modules)
 
-    .git is checked by digest instead, and node_modules is skipped: npm creates links there, git
-    ignores it, `git clean -X` removes it without following links, and no root write goes there.
+
+def inventory(root: Path, *, owner_uid: int) -> Inventory:
+    """Everything in the tree that could steer root: links, nested repositories, links leaving the tree.
+
+    Each entry is lstat'ed before anything is pruned, so a link merely named node_modules is still seen.
+    A node_modules is pruned only when it is a real directory owned by the engine user (npm put it
+    there; git ignores it and `git clean -X` removes it without following links); its first level
+    (and @scope directories) is still checked for links that leave the checkout.
     """
-    found: dict[str, str] = {}
+    base = os.path.realpath(root)
+    links: dict[str, str] = {}
+    nested: list[str] = []
+    escaping: list[str] = []
+
+    def visit(path: str) -> os.stat_result:
+        info = os.lstat(path)
+        rel = os.path.relpath(path, root)
+        if os.path.basename(path) == ".git" and os.path.dirname(rel):
+            nested.append(rel)
+        if stat.S_ISLNK(info.st_mode):
+            links[rel] = os.readlink(path)
+            target = os.path.realpath(path)
+            if target != base and not target.startswith(base + os.sep):
+                escaping.append(rel)
+        return info
+
     for dirpath, dirnames, filenames in os.walk(root):
-        dirnames[:] = [d for d in dirnames if d not in (".git", "node_modules")]
-        for name in (*dirnames, *filenames):
+        for name in filenames:
+            visit(os.path.join(dirpath, name))
+        keep: list[str] = []
+        for name in dirnames:
             path = os.path.join(dirpath, name)
-            if stat.S_ISLNK(os.lstat(path).st_mode):
-                found[os.path.relpath(path, root)] = os.readlink(path)
-    return found
+            info = visit(path)
+            if stat.S_ISLNK(info.st_mode) or (name == ".git" and dirpath == str(root)):
+                continue
+            if name == ".git":
+                continue   # reported as nested; never descended
+            if name == "node_modules" and info.st_uid == owner_uid:
+                _first_level(path, visit)
+                continue
+            keep.append(name)
+        dirnames[:] = keep
+    return Inventory(links, sorted(nested), sorted(escaping))
+
+
+def _first_level(node_modules: str, visit: Callable[[str], os.stat_result]) -> None:
+    for entry in os.scandir(node_modules):
+        info = visit(entry.path)
+        if entry.name.startswith("@") and stat.S_ISDIR(info.st_mode):
+            for scoped in os.scandir(entry.path):
+                visit(scoped.path)
+
+
+def symlinks(root: Path) -> dict[str, str]:
+    return inventory(root, owner_uid=os.getuid()).symlinks

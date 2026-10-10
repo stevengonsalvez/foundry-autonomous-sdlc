@@ -14,6 +14,7 @@ import pytest
 from sdlc_agents.coder.git_adapter import NEUTRAL_AUTHOR, SubprocessGit, resolve_author
 from sdlc_agents.ports import REPO, GitError
 
+from .gitfixture import git as git_fixture
 from .gitfixture import make_remote, remote_file, remote_log
 
 PAT = "github_pat_SECRET0123456789abcdef"
@@ -213,3 +214,42 @@ def test_push_sends_exactly_the_verified_sha(cloned: tuple[SubprocessGit, Path],
     git.commit_all("test: add y")
     with pytest.raises(GitError, match="HEAD moved"):
         git.push("agent/new", sha=sha)
+
+
+def _nested_repo_with_filter(dest: Path, marker: Path) -> None:
+    """What untrusted code can build in the tree: a repo whose own config runs a command as a clean filter."""
+    inner = dest / "app/x"
+    inner.mkdir(parents=True)
+    git_fixture(inner, "init", "-q")
+    (inner / "f.txt").write_text("data\n")
+    (inner / ".gitattributes").write_text("* filter=evil\n")
+    git_fixture(inner, "add", "-A")
+    git_fixture(inner, "commit", "-q", "-m", "inner")
+    with open(inner / ".git/config", "a") as fh:
+        fh.write(f"[filter \"evil\"]\n\tclean = touch {marker}\n\tsmudge = cat\n")
+    (inner / "f.txt").write_text("changed\n")
+
+
+def test_root_git_never_runs_a_nested_repo_filter(cloned: tuple[SubprocessGit, Path], tmp_path: Path) -> None:
+    git, dest = cloned
+    git.checkout_new_branch("agent/new", base="main")
+    pre = git.head_sha()
+    marker = tmp_path / "PWNED"
+    _nested_repo_with_filter(dest, marker)
+    changed = git.changed_since(pre)
+    git.changed_paths()
+    assert git.special_paths_since(pre) == ["app/x"]          # a gitlink (mode 160000)
+    assert "app/x" in changed
+    git.commit_all("chore: gitlink")
+    git.changed_paths()
+    git.changed_since(pre)
+    assert not marker.exists()
+    assert git.special_paths_in_commit(git.head_sha()) == ["app/x"]
+
+
+def test_staged_symlinks_are_special(cloned: tuple[SubprocessGit, Path]) -> None:
+    git, dest = cloned
+    pre = git.head_sha()
+    (dest / "app/link").symlink_to("../README.md")
+    git.changed_since(pre)
+    assert git.special_paths_since(pre) == ["app/link"]

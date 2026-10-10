@@ -8,9 +8,9 @@ orchestrator does and asserts on what landed in the remote, the PR and the log.
 from __future__ import annotations
 
 import base64
+import hashlib
 import json
 import os
-import pwd
 import sys
 import threading
 import time
@@ -23,10 +23,11 @@ import pytest
 
 from sdlc_agents.coder.engines import Usage
 from sdlc_agents.coder.git_adapter import SubprocessGit
-from sdlc_agents.coder.job import JobStore, Redactor
-from sdlc_agents.coder.runner import CoderDeps, CoderService, EngineContext
+from sdlc_agents.coder.job import JobSpec, JobState, JobStore, Redactor
+from sdlc_agents.coder.runner import AGY_LOG_LINES, CoderDeps, CoderService, EngineContext
 from sdlc_agents.coder.sandbox import RunAs
-from sdlc_agents.ports import REPO, CommandResult, PullRequest
+from sdlc_agents.coder.toolchain import AGY_SETTINGS_BYTES
+from sdlc_agents.ports import REPO, CommandResult, GitHubError, PullRequest
 
 from .gitfixture import git, make_remote, remote_file, remote_log
 
@@ -45,6 +46,11 @@ forced = (root / "node_modules" / "FORCE_GREEN").exists()   # what a tampered de
 results = []
 for f in sorted(root.rglob("*.test.ts")):
     lines = [l.strip() for l in f.read_text().splitlines()]
+    if "REFERENCE_ERROR" in lines:
+        results.append({{"name": str(f), "status": "failed", "message": "", "assertionResults": [
+            {{"fullName": "uses expect", "status": "failed",
+             "failureMessages": ["ReferenceError: expect is not defined\\n    at x.test.ts:3:5"]}}]}})
+        continue
     if "IMPORT_ERROR" in lines:
         results.append({{"name": str(f), "status": "failed", "message": "Error: Failed to load url",
                         "assertionResults": []}})
@@ -58,7 +64,8 @@ for f in sorted(root.rglob("*.test.ts")):
         actual = target.read_text().strip() if target.exists() else None
         ok = forced or actual == m.group(2)
         asserts.append({{"fullName": line, "status": "passed" if ok else "failed",
-                        "failureMessages": [] if ok else [f"expected {{m.group(2)!r}} got {{actual!r}}"]}})
+                        "failureMessages": [] if ok else
+                            [f"AssertionError: expected {{m.group(2)!r}} got {{actual!r}}"]}})
     failed = any(a["status"] == "failed" for a in asserts)
     results.append({{"name": str(f), "status": "failed" if failed else "passed", "message": "",
                     "assertionResults": asserts}})
@@ -96,6 +103,15 @@ class FakeGitHub:
         self.pulls: list[PullRequest] = []
         self.labels: dict[int, tuple[str, ...]] = {}
         self.bodies: dict[int, str] = {}
+        self.branches: dict[str, str] = {"main": "base-sha"}
+
+    def get_branch_sha(self, branch: str) -> str | None:
+        return self.branches.get(branch)
+
+    def create_branch(self, branch: str, *, from_sha: str) -> None:
+        if branch in self.branches:
+            raise GitHubError(422, "Reference already exists")
+        self.branches[branch] = from_sha
 
     def list_pulls(self, *, state: str = "open") -> list[PullRequest]:
         return list(self.pulls)
@@ -132,7 +148,11 @@ class FakeToolchain:
 
     def write_agy_settings(self, *, home: Path | None = None, owner: tuple[int, int] | None = None) -> Path:
         self.settings_writes.append((home, owner))
-        return (home or self.home) / "settings.json"
+        path = (home or self.home) / "settings.json"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(AGY_SETTINGS_BYTES)
+        path.chmod(0o600)
+        return path
 
     def write_agy_token(self, token: str, *, home: Path | None = None,
                         owner: tuple[int, int] | None = None) -> Path:
@@ -191,9 +211,20 @@ class World:
     engines: list[ScriptedEngine]
     contexts: list[EngineContext] = field(default_factory=list)
     owner_id: int | None = None
+    reaped: list[RunAs] = field(default_factory=list)
+
+    @property
+    def engine_user(self) -> RunAs:
+        """The engine user, played by this test's own uid (only root can switch to another)."""
+        return RunAs("agyuser", os.getuid(), os.getgid(), self.tmp / "agyuser-home")
+
+    @property
+    def checkout(self) -> Path:
+        return self.tmp / "srv/j-12-1/checkout"
 
     def service(self) -> CoderService:
         home = self.tmp / "home"
+        self.engine_user.home.mkdir(exist_ok=True)
         deps = CoderDeps(
             home=home,
             secrets=_Secrets({"github-pat": PAT, "agy-cli-token": AGY_TOKEN}),
@@ -203,8 +234,16 @@ class World:
             toolchain=FakeToolchain(home),
             clock=self.clock,
             owner_user_id=lambda pat: self.owner_id,
+            engine_user=lambda: self.engine_user,
+            privileged_work_root=self.tmp / "srv",
+            agy_installer=lambda src: Path("/opt/agy/bin/agy"),
+            reap=self._reap,   # the real one kills by uid, which here is this test's own
         )
         return CoderService(JobStore(home / "jobs", Redactor()), deps)
+
+    def _reap(self, user: RunAs) -> int:
+        self.reaped.append(user)
+        return 0
 
     def _engines(self, ctx: EngineContext) -> list[Any]:
         self.contexts.append(ctx)
@@ -323,13 +362,12 @@ def test_secrets_never_reach_logs_state_or_the_pr(world: World) -> None:
         assert secret not in (job_dir / "state.json").read_text()
         assert secret not in json.dumps(status)
         assert secret not in world.github.bodies[100]
-    checkout = world.tmp / "home/work/j-12-1/checkout"
+    checkout = world.checkout
     assert PAT not in (checkout / ".git/config").read_text()
 
 
 @pytest.mark.parametrize("test_content", [
     "expect web/src/eta.txt == none\n",          # already passes: not red
-    "IMPORT_ERROR\nexpect web/src/eta.txt == 2026-10-12\n",   # fails to load: not red
 ])
 def test_tests_that_are_not_red_stop_the_job_before_anything_is_pushed(world: World, test_content: str) -> None:
     world.engines = [ScriptedEngine("agy", [])]
@@ -352,7 +390,7 @@ def test_scope_violation_is_reverted_and_fails_the_job(world: World, bad_path: s
     assert status["reason"] == "scope-violation"
     assert bad_path in status["detail"]
     assert remote_log(world.remote_root, "agent/issue-12") == ["test: add failing tests for #12"]
-    checkout = world.tmp / "home/work/j-12-1/checkout"
+    checkout = world.checkout
     if bad_path == ETA_TEST:
         assert (checkout / ETA_TEST).read_text() == "expect web/src/eta.txt == 2026-10-12\n"
     else:
@@ -395,7 +433,7 @@ def test_all_engines_failing_exhausts_the_chain(world: World) -> None:
 
 
 def test_max_iterations_stops_a_job_that_never_goes_green(world: World) -> None:
-    world.engines = [ScriptedEngine("agy", [{"app/web/src/eta.txt": "wrong 1\n"},
+    world.engines = [ScriptedEngine("loop", [{"app/web/src/eta.txt": "wrong 1\n"},
                                             {"app/web/src/eta.txt": "wrong 2\n"}])]
     service = world.service()
     start(service, job(max_iterations=2))
@@ -709,7 +747,7 @@ def test_revise_puts_a_new_head_on_the_existing_pr(world: World) -> None:
 
 
 def test_revise_without_any_change_never_counts_as_done(world: World) -> None:
-    world.engines = [ScriptedEngine("agy", [{}, {}])]
+    world.engines = [ScriptedEngine("loop", [{}, {}])]
     service = world.service()
     start(service, revise_job(max_iterations=2))
     status = wait(service, "j-40-2")
@@ -741,6 +779,7 @@ def test_maintenance_on_a_pr_branch_is_limited_to_the_named_test_files(world: Wo
     assert "app/web/tests/other.test.ts" in status["detail"]
 
     world.engines = [ScriptedEngine("agy", [{title: repaired}])]
+    del world.github.branches["agent-lease/14"]     # the orchestrator releases the lease on a terminal outcome
     start(service, maintenance("j-pr14-2"))
     status = wait(service, "j-pr14-2")
     assert status["status"] == "succeeded", status
@@ -817,17 +856,17 @@ def test_with_an_engine_user_agy_install_and_tests_run_as_that_user(world: World
     assert "Tests user: agyuser" in world.github.bodies[100]
 
 
-def test_without_an_engine_user_the_fallback_is_recorded(world: World) -> None:
+def test_no_engine_user_means_no_job_never_a_root_fallback(world: World) -> None:
     world.engines = [ScriptedEngine("agy", [{"app/web/src/eta.txt": "2026-10-12\n"}])]
     service = world.service()
+    service._deps.engine_user = lambda: None
     start(service, job())
     status = wait(service, "j-12-1")
-    assert status["agy_user"] == pwd.getpwuid(os.geteuid()).pw_name
-    assert status["tests_user"] == status["agy_user"]
-    assert f"Engine user: {status['agy_user']}" in world.github.bodies[100]
-    assert f"Tests user: {status['tests_user']}" in world.github.bodies[100]
-    log = (world.tmp / "home/jobs/j-12-1/log").read_text()
-    assert f"tests_user: {status['tests_user']}" in log
+    assert status["status"] == "failed"
+    assert status["reason"] == "sandbox-unavailable"
+    assert world.engines[0].prompts == []
+    assert not world.checkout.exists()
+    assert git(world.remote_root / f"{REPO}.git", "branch", "--list", "agent/issue-12").strip() == ""
 
 
 def test_start_is_idempotent_per_job_id_and_reports_its_session(world: World) -> None:
@@ -881,33 +920,46 @@ SOFT_DENY = ('jetski: no output produced - a tool required the "command" permiss
              'cannot prompt for, so it was auto-denied. Add an allow-rule under permissions.allow in settings.json')
 
 
-def test_soft_denied_agy_runs_are_recorded_and_hand_over_to_the_fallback(world: World) -> None:
+def test_soft_denied_agy_hands_over_to_unrestricted_agy_which_commits(world: World) -> None:
     denied = lambda root: CommandResult(0, SOFT_DENY)  # noqa: E731
-    world.engines = [ScriptedEngine("agy", [denied, denied]),
-                     ScriptedEngine("loop", [{"app/web/src/eta.txt": "2026-10-12\n"}])]
+    world.engines = [ScriptedEngine("agy", [denied]),
+                     ScriptedEngine("agy-unrestricted", [{"app/web/src/eta.txt": "2026-10-12\n"}]),
+                     ScriptedEngine("loop", [])]
     service = world.service()
     start(service, job(max_iterations=5))
     status = wait(service, "j-12-1")
     assert status["status"] == "succeeded", status
-    assert status["engine"] == "loop"
-    assert status["iterations"] == 3
-    reasons = [(e["iteration"], e["engine"], e["reason"]) for e in status["engine_events"]]
-    assert reasons == [(1, "agy", "engine-permission-denied"), (2, "agy", "engine-permission-denied"),
-                       (2, "agy", "engine-no-progress")]
+    assert status["engine"] == "agy-unrestricted"
+    assert status["iterations"] == 2
+    events = [(e["iteration"], e["engine"], e["reason"]) for e in status["engine_events"]]
+    assert events == [(1, "agy", "engine-permission-denied"), (2, "agy-unrestricted", "committed")]
+    sha = status["engine_events"][1]["sha"]
+    body = world.github.bodies[100]
+    assert "Engine: agy-unrestricted (agyuser, skip-permissions after allow-list denial)" in body
+    assert f"{sha[:12]} agy-unrestricted" in body
     log = (world.tmp / "home/jobs/j-12-1/log").read_text()
     assert "engine-permission-denied" in log
     assert "agy output (iteration 1)" in log
-    assert len(world.engines[0].prompts) == 2
+    assert world.engines[2].prompts == []
 
 
-def test_an_engine_that_twice_changes_nothing_gives_way(world: World) -> None:
-    world.engines = [ScriptedEngine("agy", [{}, {}]),
-                     ScriptedEngine("loop", [{"app/web/src/eta.txt": "2026-10-12\n"}])]
+def test_restricted_agy_without_progress_gives_way_after_one_round(world: World) -> None:
+    world.engines = [ScriptedEngine("agy", [{}]), ScriptedEngine("loop", [{"app/web/src/eta.txt": "2026-10-12\n"}])]
     service = world.service()
     start(service, job(max_iterations=5))
     status = wait(service, "j-12-1")
     assert status["engine"] == "loop"
-    assert [e["reason"] for e in status["engine_events"]] == ["engine-no-progress"]
+    assert [e["reason"] for e in status["engine_events"]] == ["engine-no-progress", "committed"]
+
+
+def test_other_engines_get_two_rounds_without_progress(world: World) -> None:
+    world.engines = [ScriptedEngine("loop", [{}, {}]),
+                     ScriptedEngine("spare", [{"app/web/src/eta.txt": "2026-10-12\n"}])]
+    service = world.service()
+    start(service, job(max_iterations=5))
+    status = wait(service, "j-12-1")
+    assert status["engine"] == "spare"
+    assert [e["reason"] for e in status["engine_events"]] == ["engine-no-progress", "committed"]
 
 
 def test_prompt_names_the_failing_tests_their_assertions_and_the_allowed_commands(world: World) -> None:
@@ -923,3 +975,161 @@ def test_prompt_names_the_failing_tests_their_assertions_and_the_allowed_command
     assert rule in prompt
     assert "npx vitest" in prompt
     assert "git status" in prompt
+
+
+def test_root_rewrites_the_agy_allow_list_before_each_round_and_logs_its_hash(world: World) -> None:
+    world.engines = [ScriptedEngine("agy", [{"app/web/src/eta.txt": "2026-10-12\n"}])]
+    service = world.service()
+    start(service, job())
+    wait(service, "j-12-1")
+    writes_before = len(service._deps.toolchain.settings_writes)
+    world.contexts[0].refresh_agy_settings()
+    world.contexts[0].refresh_agy_settings()
+    assert len(service._deps.toolchain.settings_writes) == writes_before + 2
+    digest = hashlib.sha256(AGY_SETTINGS_BYTES).hexdigest()[:16]
+    assert f"agy settings rewritten, sha256 {digest}" in (world.tmp / "home/jobs/j-12-1/log").read_text()
+
+
+@pytest.mark.parametrize("content", [
+    "REFERENCE_ERROR\n",
+    "IMPORT_ERROR\nexpect web/src/eta.txt == 2026-10-12\n",
+])
+def test_broken_designed_tests_stop_the_job_as_tests_invalid(world: World, content: str) -> None:
+    world.engines = [ScriptedEngine("agy", [])]
+    service = world.service()
+    start(service, job(tests=[{"path": ETA_TEST, "content": content}]))
+    status = wait(service, "j-12-1")
+    assert status["status"] == "failed", status
+    assert status["reason"] == "tests-invalid"
+    assert ETA_TEST in status["detail"]
+    assert world.engines[0].prompts == []
+    assert git(world.remote_root / f"{REPO}.git", "branch", "--list", "agent/issue-12").strip() == ""
+
+
+AGY_DEBUG_LOG = f"""\
+2026-10-10T13:40:01Z INFO CLI settings initialized: permissions=&{{Allow:[command(ls) command(cat)]}}
+2026-10-10T13:40:02Z DEBUG model streaming 512 tokens
+2026-10-10T13:40:03Z INFO tool call run_command: npx tsc --noEmit
+2026-10-10T13:40:03Z WARN permission auto-denied: command(npx tsc --noEmit) not in allow list
+2026-10-10T13:40:04Z DEBUG using token {PAT}
+"""
+
+
+def test_agy_debug_log_excerpt_shows_which_command_was_denied(world: World) -> None:
+    class LoggingAgy(ScriptedEngine):
+        last_logs: tuple[Path, ...] = ()
+
+        def edit(self, prompt: str, *, workdir: str, timeout_s: int) -> CommandResult:
+            log = world.contexts[-1].agy_log_dir / f"agy-iter{world.contexts[-1].round_no()}.log"
+            log.write_text(AGY_DEBUG_LOG)
+            self.last_logs = (log, log.parent / "missing.log")
+            return super().edit(prompt, workdir=workdir, timeout_s=timeout_s)
+
+    world.engines = [LoggingAgy("agy", [{"app/web/src/eta.txt": "2026-10-12\n"}])]
+    service = world.service()
+    start(service, job())
+    assert wait(service, "j-12-1")["status"] == "succeeded"
+    log = (world.tmp / "home/jobs/j-12-1/log").read_text()
+    assert "agy log (iteration 1)" in log
+    assert "CLI settings initialized: permissions=&{Allow:[command(ls) command(cat)]}" in log
+    assert "permission auto-denied: command(npx tsc --noEmit)" in log
+    assert "tool call run_command: npx tsc --noEmit" in log
+    assert "model streaming 512 tokens" not in log
+    assert PAT not in log
+    assert "missing.log unreadable" in log
+    settings = world.engine_user.home / "settings.json"
+    assert f"agy settings {settings} mode 0600 owner {os.getuid()}:{os.getgid()}" in log
+
+
+@pytest.mark.parametrize("attack", ["nested-repo", "gitfile", "node-modules-link", "escaping-link-in-node-modules",
+                                    "gitattributes"])
+def test_untrusted_code_cannot_arm_root_git(world: World, attack: str) -> None:
+    def hostile(root: Path) -> None:
+        (root / "app/web/src/eta.txt").write_text("2026-10-12\n")
+        if attack == "nested-repo":
+            (root / "app/web/inner").mkdir()
+            git(root / "app/web/inner", "init", "-q")
+        elif attack == "gitfile":
+            (root / "app/web/src/.git").write_text("gitdir: /tmp/elsewhere\n")
+        elif attack == "node-modules-link":
+            (root / "app/api").mkdir(exist_ok=True)
+            (root / "app/api/node_modules").symlink_to("../../.git")
+        elif attack == "escaping-link-in-node-modules":
+            (root / "app/node_modules").mkdir(exist_ok=True)
+            (root / "app/node_modules/evil").symlink_to("/etc")
+        else:
+            (root / "app/.gitattributes").write_text("* filter=evil\n")
+
+    world.engines = [ScriptedEngine("agy", [hostile])]
+    service = world.service()
+    start(service, job())
+    status = wait(service, "j-12-1")
+    assert status["status"] == "failed", status
+    assert status["reason"] == "scope-violation"
+    assert remote_log(world.remote_root, "agent/issue-12") == ["test: add failing tests for #12"]
+    assert not (world.checkout / "app/web/inner/.git").exists()
+    assert not (world.checkout / "app/web/src/.git").exists()
+
+
+def test_a_strangers_pr_with_the_same_branch_name_is_never_reused(world: World) -> None:
+    stranger = PullRequest(number=99, title="x", body="", author="mallory", labels=(), state="open", merged=False,
+                           head_ref="agent/issue-12", head_sha="", base_ref="main", created_at="",
+                           head_repo="mallory/foundry-autonomous-sdlc")
+    impostor = PullRequest(number=98, title="x", body="", author="mallory", labels=(), state="open", merged=False,
+                           head_ref="agent/issue-12", head_sha="", base_ref="main", created_at="")
+    world.github.pulls = [stranger, impostor]
+    world.engines = [ScriptedEngine("agy", [{"app/web/src/eta.txt": "2026-10-12\n"}])]
+    service = world.service()
+    start(service, job())
+    status = wait(service, "j-12-1")
+    assert status["pr"]["number"] == 102
+    assert 99 not in world.github.labels
+    assert 98 not in world.github.labels
+
+
+def test_start_takes_a_lease_per_issue_and_refuses_a_second_job(world: World) -> None:
+    gate = threading.Event()
+
+    def held(root: Path) -> None:
+        gate.wait(30)
+        (root / "app/web/src/eta.txt").write_text("2026-10-12\n")
+
+    world.engines = [ScriptedEngine("agy", [held])]
+    service = world.service()
+    start(service, job())
+    assert world.github.branches["agent-lease/12"] == "base-sha"
+    code, refused = service.handle({"op": "start", "job": job(job_id="j-12-2")})
+    assert code == 200
+    assert refused == {"job_id": "j-12-2", "status": "failed", "reason": "lease-held"}
+    assert service.handle({"op": "status", "job_id": "j-12-2"})[0] == 404
+    assert start(service, job())["status"] == "running"          # a retried start of the holder is fine
+    gate.set()
+    assert wait(service, "j-12-1")["status"] == "succeeded"
+
+
+def test_an_interrupted_job_resumes_without_taking_its_lease_again(world: World) -> None:
+    world.github.branches["agent-lease/12"] = "base-sha"           # held by this very job before the eviction
+    service = world.service()
+    service._store.save(JobState.new(JobSpec.from_request(job()), started_at="2026-10-10T12:00:00Z"))
+    world.engines = [ScriptedEngine("agy", [{"app/web/src/eta.txt": "2026-10-12\n"}])]
+    assert service.handle({"op": "status", "job_id": "j-12-1"})[1]["reason"] == "interrupted"
+    assert start(service, job())["status"] == "running"
+    assert wait(service, "j-12-1")["status"] == "succeeded"
+
+
+def test_restricted_agy_gets_exactly_one_round_even_with_progress(world: World) -> None:
+    world.engines = [ScriptedEngine("agy", [{"app/web/src/eta.txt": "close\n"}, {"app/web/src/eta.txt": "x\n"}]),
+                     ScriptedEngine("agy-unrestricted", [{"app/web/src/eta.txt": "2026-10-12\n"}])]
+    service = world.service()
+    start(service, job(max_iterations=5))
+    status = wait(service, "j-12-1")
+    assert status["status"] == "succeeded", status
+    assert len(world.engines[0].prompts) == 1
+    assert [(e["engine"], e["reason"]) for e in status["engine_events"]] == [
+        ("agy", "committed"), ("agy-unrestricted", "committed")]
+
+
+def test_sandbox_blocked_commands_reach_the_log_excerpt() -> None:
+    line = ("run_command_handler.go:574 [sandbox-telemetry] emitting SANDBOX_COMMAND_BLOCKED event with "
+            "extra=map[command_line:cat /home/agyuser/.bashrc]")
+    assert AGY_LOG_LINES.search(line)

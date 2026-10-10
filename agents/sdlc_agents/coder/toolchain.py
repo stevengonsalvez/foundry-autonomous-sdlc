@@ -28,15 +28,31 @@ AGY_INSTALLER = "https://antigravity.google/cli/install.sh"
 NODE_DIR = Path("/opt/node")   # outside $HOME: the engine user cannot traverse the coder's home
 AGY_AUTH_FILE = ".gemini/antigravity-cli/antigravity-oauth-token"
 AGY_SETTINGS_FILE = ".gemini/antigravity-cli/settings.json"
-# Headless agy denies every shell command not allowed here (antigravity.google/docs/cli/headless). Reading
-# and running the tests only: no network tools, shells, interpreters, env dumps, git writes or rm.
+# Headless agy denies every shell command not allowed here (antigravity.google/docs/cli/headless). This is
+# guidance for the engine, not the security boundary (that is the engine user, its scrubbed environment and
+# root's scans; see docs/runbook.md). Reading and running the tests only: no find (-exec is a shell), no
+# network tools, shells, interpreters, env dumps, git writes or rm. Arguments are plain words that cannot
+# start with a dash, plus an explicit list of harmless flags, so no --config, --exec, --output, -c,
+# --ext-diff or --textconv, and no shell metacharacters. Patterns are anchored, so a substring matcher
+# cannot widen them.
+_WORD = r"[A-Za-z0-9._/:@,+%][A-Za-z0-9._/=:@,+%~-]*"
+_GIT_FLAGS = r"--stat|--name-only|--name-status|--oneline|--cached|--staged|--no-color|-n|-p|-[0-9]+"
+_VITEST_FLAGS = r"--run|--reporter=(default|verbose|dot)|-t|--no-color|--"
+
+
+def _args(flags: str) -> str:
+    return rf"( ({flags}|{_WORD}))*"
+
+
 AGY_ALLOWED_COMMANDS = (
     "command(ls)", "command(cat)", "command(head)", "command(tail)", "command(wc)", "command(grep)",
-    "command(find)", "command(regex:git (status|diff|log|show|ls-files)( .*)?)",
-    "command(regex:npm (test|run (lint|typecheck|test|test:coverage))( .*)?)", "command(regex:npx vitest( .*)?)",
+    f"command(regex:^git (status|diff|log|show|ls-files){_args(_GIT_FLAGS)}$)",
+    f"command(regex:^npm (test|run (lint|typecheck|test|test:coverage)){_args(_VITEST_FLAGS)}$)",
+    f"command(regex:^npx vitest run{_args(_VITEST_FLAGS)}$)",
 )
-AGY_COMMANDS_HELP = ("ls, cat, head, tail, wc, grep, find; git status, diff, log, show, ls-files; npm test, "
-                     "npm run lint, typecheck, test, test:coverage; npx vitest")
+AGY_SETTINGS_BYTES = json.dumps({"permissions": {"allow": list(AGY_ALLOWED_COMMANDS)}}, indent=2).encode()
+AGY_COMMANDS_HELP = ("ls, cat, head, tail, wc, grep; git status, diff, log, show, ls-files; npm test, "
+                     "npm run lint, typecheck, test, test:coverage; npx vitest run (plain arguments only)")
 _NODE_ARCH = {"x86_64": "x64", "amd64": "x64", "aarch64": "arm64", "arm64": "arm64"}
 # Environment passed to engines and test commands. Anything else (managed identity endpoints,
 # Azure settings, git auth) stays out of reach of code the engine writes or runs.
@@ -152,7 +168,7 @@ class Toolchain:
 
     def write_agy_settings(self, *, home: Path | None = None, owner: tuple[int, int] | None = None) -> Path:
         """agy's permission allow-list, 0600 in agy's home (link-safe when that home belongs to another user)."""
-        data = json.dumps({"permissions": {"allow": list(AGY_ALLOWED_COMMANDS)}}, indent=2).encode()
+        data = AGY_SETTINGS_BYTES
         if owner is not None:
             return sandbox.write_private_file(home or self.home, AGY_SETTINGS_FILE, data, owner=owner)
         path = (home or self.home) / AGY_SETTINGS_FILE

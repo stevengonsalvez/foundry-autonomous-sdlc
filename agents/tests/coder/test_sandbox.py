@@ -155,3 +155,53 @@ def test_reap_kills_until_the_user_has_no_processes_left(tmp_path: Path) -> None
     endless = sandbox.reap_user(user, list_pids=lambda u: [999], kill=lambda pid, sig: None, max_rounds=3)
     assert endless == 1
     assert sandbox.reap_user(RunAs("root", 0, 0, Path("/")), list_pids=lambda u: [1]) == 0
+
+
+def test_safe_read_can_take_the_tail_of_a_big_file(tmp_path: Path) -> None:
+    (tmp_path / "big.log").write_bytes(b"x" * 5000 + b"END")
+    assert sandbox.safe_read(tmp_path / "big.log", max_bytes=10, tail=True) == b"xxxxxxxEND"
+
+
+def _tree(tmp_path: Path) -> Path:
+    root = tmp_path / "checkout"
+    (root / ".git").mkdir(parents=True)
+    (root / "app/api").mkdir(parents=True)
+    (root / "app/web/node_modules/pkg").mkdir(parents=True)
+    (root / "app/web/node_modules/.bin").mkdir()
+    (root / "app/web/node_modules/.bin/vitest").symlink_to("../pkg/cli.js")       # npm's own, stays inside
+    return root
+
+
+def test_inventory_finds_nested_repos_and_links_that_leave_the_checkout(tmp_path: Path) -> None:
+    root = _tree(tmp_path)
+    (root / "app/api/node_modules").symlink_to("../../.git")                     # H1: link named node_modules
+    (root / "app/web/node_modules/evil").symlink_to("/etc")                       # depth 1 inside node_modules
+    (root / "app/inner/.git").mkdir(parents=True)                                 # C1: nested repository
+    (root / "app/web/src").mkdir()
+    (root / "app/web/src/.git").write_text("gitdir: /tmp/elsewhere\n")             # a gitfile counts too
+    inv = sandbox.inventory(root, owner_uid=os.getuid())
+    assert sorted(inv.nested_git) == ["app/inner/.git", "app/web/src/.git"]
+    assert sorted(inv.escaping) == ["app/web/node_modules/evil"]
+    assert inv.symlinks["app/api/node_modules"] == "../../.git"
+    assert "app/web/node_modules/.bin/vitest" not in inv.escaping
+
+
+def test_node_modules_owned_by_someone_else_is_walked_fully(tmp_path: Path) -> None:
+    root = _tree(tmp_path)
+    (root / "app/web/node_modules/pkg/deep").mkdir()
+    (root / "app/web/node_modules/pkg/deep/escape").symlink_to("/etc")
+    assert sandbox.inventory(root, owner_uid=os.getuid()).escaping == []          # owned: only depth 1 checked
+    assert sandbox.inventory(root, owner_uid=os.getuid() + 1).escaping == ["app/web/node_modules/pkg/deep/escape"]
+
+
+def test_engine_user_gets_empty_shell_startup_files(tmp_path: Path) -> None:
+    user = RunAs("agyuser", os.getuid(), os.getgid(), tmp_path / "agyuser")
+    user.home.mkdir()
+    (user.home / ".profile").symlink_to(tmp_path / "elsewhere")         # never followed
+    sandbox.ensure_shell_files(user)
+    for name in (".bashrc", ".profile"):
+        path = user.home / name
+        assert path.is_file() and not path.is_symlink()
+        assert path.read_bytes() == b""
+        assert path.stat().st_uid == user.uid
+    assert not (tmp_path / "elsewhere").exists()

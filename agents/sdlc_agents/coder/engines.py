@@ -41,8 +41,13 @@ class Usage:
     output_tokens: int = 0
 
 
-AGY_FLAGS = ("--mode", "accept-edits", "--sandbox")
-AGY_CALL_TIMEOUT_S = 600
+# No --sandbox: agy's own sandbox blocked every shell command (live job j-10-1, SANDBOX_COMMAND_BLOCKED);
+# the isolation is the unprivileged engine user, not agy's sandbox.
+AGY_FLAGS = ("--mode", "accept-edits")
+# Owner decision (D10): when the allow-list blocks agy, retry with permissions off, but only as the
+# unprivileged engine user, whose reach is the boundary; never as root.
+AGY_UNRESTRICTED_FLAGS = ("--dangerously-skip-permissions",)
+AGY_CALL_TIMEOUT_S = 360   # one agy round; denied rounds ran about four minutes
 # agy does not exit when it cannot work: with a missing or expired token it prints a login URL and
 # blocks; quota errors are printed too. Both end the call early so the fallback engine takes over.
 _AGY_AUTH = re.compile(r"Authentication required", re.IGNORECASE)
@@ -65,7 +70,13 @@ class AgyEngine:
                  cancel: threading.Event | None = None, run: Callable[..., CommandResult] = shell.run,
                  prepare: Callable[[Path], None] | None = None,
                  reap: Callable[[RunAs], int] = sandbox.reap_user,
-                 dirty: Callable[[], bool] = lambda: False, call_timeout_s: int = AGY_CALL_TIMEOUT_S):
+                 dirty: Callable[[], bool] = lambda: False, call_timeout_s: int = AGY_CALL_TIMEOUT_S,
+                 before_call: Callable[[], None] | None = None, log_dir: Path | None = None,
+                 round_no: Callable[[], int] = lambda: 0, unrestricted: bool = False):
+        if unrestricted and (run_as is None or run_as.uid == 0):
+            raise ValueError("agy without permission checks never runs as root")
+        self.name = "agy-unrestricted" if unrestricted else "agy"
+        self._flags = AGY_UNRESTRICTED_FLAGS if unrestricted else AGY_FLAGS
         self._binary = binary
         self._env = agy_env(binary, home)
         self._run_as = run_as
@@ -75,13 +86,18 @@ class AgyEngine:
         self._reap = reap
         self._dirty = dirty
         self._call_timeout_s = call_timeout_s
+        self._before_call = before_call
+        self._log_dir = log_dir
+        self._round_no = round_no
+        self.last_logs: tuple[Path, ...] = ()   # agy's --log-file of each call in the latest edit()
         self.usage = Usage()
 
     def edit(self, prompt: str, *, workdir: str, timeout_s: int) -> CommandResult:
         """One agy call, retried once if it timed out without touching a file."""
         result = CommandResult(shell.TIMEOUT_RC, "")
+        self.last_logs = ()
         for attempt in (1, 2):
-            result = self._call(prompt, workdir, min(self._call_timeout_s, timeout_s))
+            result = self._call(prompt, workdir, min(self._call_timeout_s, timeout_s), attempt)
             if result.returncode != shell.TIMEOUT_RC:
                 return result
             if self._dirty():
@@ -99,10 +115,17 @@ class AgyEngine:
             return "agy reported a quota or rate limit before editing"
         return None
 
-    def _call(self, prompt: str, workdir: str, timeout_s: int) -> CommandResult:
+    def _call(self, prompt: str, workdir: str, timeout_s: int, attempt: int = 1) -> CommandResult:
+        if self._before_call is not None:   # root restores agy's settings: earlier rounds may have edited them
+            self._before_call()
         if self._prepare is not None:
             self._prepare(Path(workdir))
-        cmd = [str(self._binary), "-p", prompt[:MAX_PROMPT_CHARS], *AGY_FLAGS]
+        cmd = [str(self._binary), "-p", prompt[:MAX_PROMPT_CHARS], *self._flags]
+        if self._log_dir is not None:
+            suffix = "" if attempt == 1 else f"-{attempt}"
+            log = self._log_dir / f"agy-iter{self._round_no()}{suffix}.log"
+            self.last_logs = (*self.last_logs, log)
+            cmd += ["--log-file", str(log)]
         user = {"user": self._run_as.uid, "group": self._run_as.gid} if self._run_as else {}
         try:
             return self._run(cmd, cwd=workdir, env=self._env, timeout_s=timeout_s, cancel=self._cancel,

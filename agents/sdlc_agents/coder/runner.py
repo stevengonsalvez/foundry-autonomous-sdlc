@@ -14,12 +14,13 @@ the branch and continues from it instead of redoing finished steps.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
-import pwd
 import re
 import secrets
 import shutil
+import stat
 import threading
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -30,18 +31,39 @@ from sdlc_agents.coder import sandbox, scope, shell
 from sdlc_agents.coder.git_adapter import resolve_author
 from sdlc_agents.coder.job import JobSpec, JobSpecError, JobState, JobStore, Mode, Phase, Status
 from sdlc_agents.coder.testrun import TestOutcome, TestRunner
-from sdlc_agents.coder.toolchain import AGY_COMMANDS_HELP
+from sdlc_agents.coder.toolchain import AGY_COMMANDS_HELP, AGY_SETTINGS_BYTES
 from sdlc_agents.cost import HOSTED_GIB_USD_PER_HOUR, HOSTED_VCPU_USD_PER_HOUR, token_usd
-from sdlc_agents.ports import REPO, ClockPort, CodingEnginePort, CommandResult, GitHubPort, GitPort, SecretsPort
+from sdlc_agents.ports import (
+    OWNER,
+    REPO,
+    ClockPort,
+    CodingEnginePort,
+    CommandResult,
+    GitHubError,
+    GitHubPort,
+    GitPort,
+    SecretsPort,
+)
 
 AGENT_PR_LABEL = "agent:pr"
+LEASE_PREFIX = "agent-lease/"   # refs/heads/agent-lease/<issue>: one live coder job per issue
 INSTALL_TIMEOUT_S = 1800
 TEST_TIMEOUT_S = 1800
 EDIT_TIMEOUT_S = 3600
 ISSUE_BODY_CHARS = 6000
 FEEDBACK_CHARS = 6000
 MAX_FAILING_LISTED = 40
-NO_PROGRESS_ROUNDS = 2   # rounds without any change before the next engine takes over
+AGY_LOG_READ_BYTES = 2_000_000
+AGY_LOG_EXCERPT_CHARS = 3000
+AGY_LOG_LINES = re.compile(
+    r"CLI settings initialized|SANDBOX_COMMAND_BLOCKED|"
+    r"(?i:permission|denied|auto-den|ask|tool call|run_command|command\()")
+NO_PROGRESS_ROUNDS = 2
+ENGINE_LABELS = {
+    "agy": "agy (agyuser, allow-list)",
+    "agy-unrestricted": "agy-unrestricted (agyuser, skip-permissions after allow-list denial)",
+    "loop": "loop (model deployment sdlc-default, edits written by the coder)",
+}   # rounds without any change before the next engine takes over
 # agy exits 0 without editing when a tool it wanted was refused by the headless permission rules.
 SOFT_DENY = re.compile(r'permission that headless mode cannot prompt for|no output produced', re.IGNORECASE)
 
@@ -56,6 +78,8 @@ class CoderGit(GitPort, Protocol):
     def reset_soft(self, sha: str) -> None: ...
     def changed_since(self, sha: str) -> list[str]: ...
     def clean_ignored(self, subdir: str) -> None: ...
+    def special_paths_since(self, sha: str) -> list[str]: ...
+    def special_paths_in_commit(self, sha: str) -> list[str]: ...
 
 
 class Toolchain(Protocol):
@@ -82,6 +106,9 @@ class EngineContext:
     agy_home: Path              # HOME for agy: its own user's home, or the coder's
     run_as: sandbox.RunAs | None = None   # the unprivileged engine user, when the sandbox allows one
     dirty: Callable[[], bool] = lambda: False   # whether the working tree has changes right now
+    refresh_agy_settings: Callable[[], None] = lambda: None   # root rewrites agy's allow-list (each call)
+    agy_log_dir: Path = Path("/nonexistent")   # where agy writes --log-file (engine-user owned when isolated)
+    round_no: Callable[[], int] = lambda: 0    # the iteration number about to run
 
 
 @dataclass
@@ -194,21 +221,24 @@ class JobRunner:
 
     def _setup(self) -> None:
         self._checkpoint(Phase.SETUP)
+        # Fail closed: agy, install and tests run code nobody reviewed, so they never run as root.
+        self._run_as = self.deps.engine_user()
+        if self._run_as is None:
+            raise JobStop(Status.FAILED, "sandbox-unavailable",
+                          "could not create the unprivileged engine user; agy, install and tests never run as root")
+        self.state.agy_user = self.state.tests_user = self._run_as.name
+        sandbox.ensure_shell_files(self._run_as)
+        self._log(f"agy_user: {self.state.agy_user}")
+        self._log(f"tests_user: {self.state.tests_user}")
         tools = self.deps.toolchain
         tools.ensure_git()
         tools.ensure_node()
         self._pat = self.deps.secrets.get_secret("github-pat")
         self.store.redact.add(self._pat)
-        self._run_as = self.deps.engine_user()
-        self.state.agy_user = self._run_as.name if self._run_as else pwd.getpwuid(os.geteuid()).pw_name
-        self.state.tests_user = self.state.agy_user   # install and tests run as the same user as agy
-        self._log(f"agy_user: {self.state.agy_user}")
-        self._log(f"tests_user: {self.state.tests_user}")
-        if self._run_as is not None:
-            self._node_bin = tools.node_bin()
-            # Outside the coder's $HOME, which the engine user cannot traverse; root owns the top level.
-            self.deps.privileged_work_root.mkdir(mode=0o755, parents=True, exist_ok=True)
-            self.checkout = self.deps.privileged_work_root / self.spec.job_id / "checkout"
+        self._node_bin = tools.node_bin()
+        # Outside the coder's $HOME, which the engine user cannot traverse; root owns the top level.
+        self.deps.privileged_work_root.mkdir(mode=0o755, parents=True, exist_ok=True)
+        self.checkout = self.deps.privileged_work_root / self.spec.job_id / "checkout"
         self._agy = self._prepare_agy()
         self._git = self.deps.git(resolve_author(self.deps.owner_user_id(self._pat)), self.cancel)
         self._quiesce()   # a previous job's leftovers must not race the delete
@@ -230,28 +260,28 @@ class JobRunner:
             token = self.deps.secrets.get_secret("agy-cli-token")
             self.store.redact.add(token)
             binary = self.deps.toolchain.ensure_agy()
-            if self._run_as is None:
-                self.deps.toolchain.write_agy_token(token)
-                self.deps.toolchain.write_agy_settings()
-                return binary
             # Token and allow-list live in the engine user's home; the Key Vault read stayed in this process.
-            owner = (self._run_as.uid, self._run_as.gid)
-            self.deps.toolchain.write_agy_token(token, home=self._run_as.home, owner=owner)
-            self.deps.toolchain.write_agy_settings(home=self._run_as.home, owner=owner)
+            owner = (self.user.uid, self.user.gid)
+            self.deps.toolchain.write_agy_token(token, home=self.user.home, owner=owner)
+            self._log_settings(self.deps.toolchain.write_agy_settings(home=self.user.home, owner=owner))
             return self.deps.agy_installer(binary)
         except Exception as exc:
             self._log(f"agy unavailable, using the fallback engines: {type(exc).__name__}: {exc}")
             return None
 
-    # -- running untrusted code (install, tests): as the engine user when there is one ----------
+    # -- running untrusted code (agy, install, tests): always as the engine user --------------
+
+    @property
+    def user(self) -> sandbox.RunAs:
+        assert self._run_as is not None, "engine user used before setup"
+        return self._run_as
 
     def _work_env(self) -> dict[str, str]:
-        if self._run_as is not None and self._node_bin is not None:
-            return sandbox.user_env(self._run_as, self._node_bin)
-        return self.deps.toolchain.env()
+        assert self._node_bin is not None
+        return sandbox.user_env(self.user, self._node_bin)
 
     def _as_user(self) -> dict[str, int]:
-        return {"user": self._run_as.uid, "group": self._run_as.gid} if self._run_as else {}
+        return {"user": self.user.uid, "group": self.user.gid}
 
     def _quiesce(self) -> None:
         """Kill every engine-user process; root only touches the user's tree while nothing of it runs."""
@@ -261,13 +291,15 @@ class JobRunner:
                 raise JobStop(Status.FAILED, "error", f"{left} {self._run_as.name} processes survived SIGKILL")
 
     def _hand_over(self) -> None:
-        if self._run_as is not None:
-            self._quiesce()
-            sandbox.give_tree(self.checkout, self._run_as)
+        self._quiesce()
+        sandbox.give_tree(self.checkout, self.user)
 
     def _snapshot(self) -> tuple[str, dict[str, str]]:
         self._quiesce()
-        return self.git.metadata_digest(), sandbox.symlinks(self.checkout)
+        return self.git.metadata_digest(), self._inventory().symlinks
+
+    def _inventory(self) -> sandbox.Inventory:
+        return sandbox.inventory(self.checkout, owner_uid=self.user.uid)
 
     def _push(self, sha: str) -> None:
         """Push exactly the commit root verified, with no engine-user process alive."""
@@ -276,11 +308,9 @@ class JobRunner:
         self.git.push(self.spec.branch, sha=sha)
 
     def _report_path(self) -> Path:
-        if self._run_as is None:
-            return self.store.job_dir(self.spec.job_id) / "report.json"
         reports = self.checkout.parent / "reports"
         reports.mkdir(mode=0o700, exist_ok=True)
-        os.lchown(reports, self._run_as.uid, self._run_as.gid)
+        os.lchown(reports, self.user.uid, self.user.gid)
         return reports / "report.json"
 
     def _install(self) -> None:
@@ -322,7 +352,11 @@ class JobRunner:
         self.git.write_files({t.path: t.content for t in self.spec.tests})
         self._red_sha = self._last_sha = self.git.commit_all(f"test: add failing tests for #{self.spec.issue_number}")
         outcome = self._run_tests()
-        if not outcome.report.is_red_for([t.path for t in self.spec.tests]):
+        verdict = outcome.report.red_verdict([t.path for t in self.spec.tests])
+        if verdict.kind == "invalid":
+            # Broken tests go back to the test designer; the coder never implements against them.
+            raise JobStop(Status.FAILED, "tests-invalid", "\n".join(verdict.invalid[:20]))
+        if verdict.kind != "red":
             raise JobStop(Status.FAILED, "tests-not-red",
                           f"{outcome.report.summary()}\n{outcome.feedback(1500)}")
         self.state.red_summary = outcome.report.summary()
@@ -351,10 +385,13 @@ class JobRunner:
         tests_only = self.spec.mode is Mode.MAINTENANCE
         protected = () if tests_only else tuple(p for p in self.git.tracked_files() if scope.is_test_path(p))
         red_files = () if tests_only else tuple(self.git.files_in_commit(self._red_sha))
-        agy_home = self._run_as.home if self._run_as else self.deps.home
+        agy_home = self.user.home
         engines = self.deps.engines(EngineContext(self.spec, protected, tests_only, self.cancel,
                                                   self.deps.toolchain.env(), self._agy, agy_home, self._run_as,
-                                                  dirty=lambda: bool(self.git.changed_paths())))
+                                                  dirty=lambda: bool(self.git.changed_paths()),
+                                                  refresh_agy_settings=self._refresh_agy_settings,
+                                                  agy_log_dir=self._agy_log_dir(),
+                                                  round_no=lambda: self.state.iterations + 1))
         current = 0
         idle_rounds = 0   # consecutive rounds in which the current engine changed nothing
         outcome = self._run_tests()
@@ -393,17 +430,19 @@ class JobRunner:
             self.state.engine = engine.name
             self._check_stops()
             if not changed:
+                idle_rounds += 1
                 if SOFT_DENY.search(result.output):
                     self._engine_event(engine.name, "engine-permission-denied")
-                idle_rounds += 1
-                if idle_rounds >= NO_PROGRESS_ROUNDS:
+                    current, idle_rounds = current + 1, 0   # next engine: agy-unrestricted, then the loop
+                elif idle_rounds >= (1 if engine.name == "agy" else NO_PROGRESS_ROUNDS):
                     self._engine_event(engine.name, "engine-no-progress")
-                    current += 1
-                    idle_rounds = 0
+                    current, idle_rounds = current + 1, 0
                 self._checkpoint()
                 continue
             idle_rounds = 0
-            self._enforce_scope(changed, protected, tests_only)
+            if engine.name == "agy":
+                current += 1   # the restricted agy gets exactly one round; then agy-unrestricted, then the loop
+            self._enforce_scope(changed, pre, protected, tests_only)
             committed = self._commit_iteration(changed, protected, tests_only) or committed
             outcome = self._run_tests()
             self._checkpoint()
@@ -425,11 +464,24 @@ class JobRunner:
         digest, links = before
         if self.git.metadata_digest() != digest:
             raise JobStop(Status.FAILED, "scope-violation", f"{step} changed .git/config or .git/hooks")
-        added = sorted(path for path, target in sandbox.symlinks(self.checkout).items() if links.get(path) != target)
+        # Checked before any root git call: a nested repository's own config could make root's git run code.
+        found = self._inventory()
+        if found.nested_git:
+            for path in found.nested_git:
+                target = self.checkout / path
+                if target.is_dir() and not target.is_symlink():
+                    shutil.rmtree(target)
+                else:
+                    target.unlink()
+            raise JobStop(Status.FAILED, "scope-violation",
+                          f"{step} created nested git repositories (removed): " + ", ".join(found.nested_git))
+        added = sorted({path for path, target in found.symlinks.items() if links.get(path) != target}
+                       | set(found.escaping))
         if added:
             for path in added:
                 os.unlink(self.checkout / path)
-            raise JobStop(Status.FAILED, "scope-violation", f"{step} created symlinks (removed): " + ", ".join(added))
+            raise JobStop(Status.FAILED, "scope-violation",
+                          f"{step} created symlinks or links leaving the checkout (removed): " + ", ".join(added))
 
     def _contain(self, pre: str) -> list[str]:
         """Everything the engine changed since `pre`, even if it ran git itself; it must stay on the branch."""
@@ -447,10 +499,45 @@ class JobRunner:
         result = engine.edit(self._prompt(outcome, red_files), workdir=str(self.checkout),
                              timeout_s=self._timeout(EDIT_TIMEOUT_S))
         self._log(f"{engine.name} output (iteration {iteration}) exit {result.returncode}:\n{result.output[-4000:]}")
+        self._quiesce()
+        self._log_agy_debug(engine, iteration)
         return result
 
-    def _engine_event(self, engine: str, reason: str) -> None:
-        self.state.engine_events.append({"iteration": self.state.iterations, "engine": engine, "reason": reason})
+    def _refresh_agy_settings(self) -> None:
+        """Rewrite agy's settings.json from the constant: whatever agy changed in an earlier round is gone."""
+        self._quiesce()
+        path = self.deps.toolchain.write_agy_settings(home=self.user.home, owner=(self.user.uid, self.user.gid))
+        self._log(f"agy settings rewritten, sha256 {hashlib.sha256(AGY_SETTINGS_BYTES).hexdigest()[:16]}")
+        self._log_settings(path)
+
+    def _log_settings(self, path: Path) -> None:
+        try:
+            info = os.lstat(path)
+            self._log(f"agy settings {path} mode {stat.S_IMODE(info.st_mode):04o} owner {info.st_uid}:{info.st_gid}")
+        except OSError as exc:
+            self._log(f"agy settings {path} not readable: {exc}")
+
+    def _agy_log_dir(self) -> Path:
+        return self._report_path().parent
+
+    def _log_agy_debug(self, engine: CodingEnginePort, iteration: int) -> None:
+        """A filtered, redacted excerpt of agy's own debug log: was the allow-list loaded, what was refused."""
+        for path in getattr(engine, "last_logs", ()):
+            try:
+                text = sandbox.safe_read(path, max_bytes=AGY_LOG_READ_BYTES, tail=True).decode("utf-8", "replace")
+            except sandbox.UnsafePathError:
+                self._log(f"agy log (iteration {iteration}): {path.name} unreadable")
+                continue
+            lines = [line for line in text.splitlines() if AGY_LOG_LINES.search(line)]
+            excerpt = "\n".join(lines)
+            if len(excerpt) > AGY_LOG_EXCERPT_CHARS:
+                settings = [line for line in lines if "CLI settings initialized" in line][:1]
+                excerpt = "\n".join(settings) + "\n...\n" + excerpt[-AGY_LOG_EXCERPT_CHARS:]
+            self._log(f"agy log (iteration {iteration}) {path.name}:\n{excerpt or '(no permission lines)'}")
+
+    def _engine_event(self, engine: str, reason: str, **extra: str) -> None:
+        self.state.engine_events.append({"iteration": self.state.iterations, "engine": engine, "reason": reason,
+                                         **extra})
         self._log(f"iteration {self.state.iterations}: {engine} {reason}")
 
     def _account(self, engines: list[CodingEnginePort]) -> None:
@@ -463,9 +550,10 @@ class JobRunner:
             raise JobStop(Status.FAILED, "cost-cap",
                           f"model spend {self.state.model_usd:.4f} USD over {self.spec.max_model_usd} USD")
 
-    def _enforce_scope(self, changed: list[str], protected: tuple[str, ...], tests_only: bool) -> None:
+    def _enforce_scope(self, changed: list[str], pre: str, protected: tuple[str, ...], tests_only: bool) -> None:
         bad = scope.violations(changed, allowed_paths=self.spec.allowed_paths, protected=protected,
                                tests_only=tests_only)
+        bad += [p for p in self.git.special_paths_since(pre) if p not in bad]   # gitlinks and symlinks
         if bad:
             self.git.revert_paths(bad)
             self.state.violations = bad
@@ -489,9 +577,11 @@ class JobRunner:
         # Re-check what the commit actually contains, then push exactly that commit.
         bad = scope.violations(self.git.files_in_commit(sha), allowed_paths=self.spec.allowed_paths,
                                protected=protected, tests_only=tests_only)
+        bad += self.git.special_paths_in_commit(sha)
         if bad:
             raise JobStop(Status.FAILED, "scope-violation", "commit contained out-of-scope paths: " + ", ".join(bad))
         self._last_sha = sha
+        self._engine_event(self.state.engine or "", "committed", sha=sha)
         self._push(sha)
         return True
 
@@ -539,7 +629,9 @@ class JobRunner:
             return
         self._checkpoint(Phase.PR)
         github = self.deps.github(self._pat)
-        existing = [p for p in github.list_pulls(state="open") if p.head_ref == self.spec.branch]
+        # Only our own PR on this repository: anyone can open a PR from a branch with the same name.
+        existing = [p for p in github.list_pulls(state="open")
+                    if p.head_ref == self.spec.branch and p.author == OWNER and p.head_repo == REPO]
         title = f"{self.spec.mode.commit_prefix}: {self._title()} (#{self.spec.issue_number})"
         pr = existing[0] if existing else github.create_pull(
             title=title, head=self.spec.branch, base=self.spec.base, body=self.store.redact(self._pr_body()))
@@ -549,9 +641,13 @@ class JobRunner:
 
     def _pr_body(self) -> str:
         red_output = self._red_output or "(red verified in an earlier run of this job)"
+        commits = "\n".join(f"- {e['sha'][:12]} {e['engine']}" for e in self.state.engine_events
+                            if e["reason"] == "committed") or "- (none)"
         return (
             f"Closes #{self.spec.issue_number}\n\n"
-            f"Engine: {self.state.engine}\nIterations: {self.state.iterations}\n"
+            f"Engine: {ENGINE_LABELS.get(self.state.engine or '', self.state.engine)}\n"
+            f"Iterations: {self.state.iterations}\n"
+            f"Commits:\n{commits}\n"
             f"Engine user: {self.state.agy_user}\nTests user: {self.state.tests_user}\n\n"
             f"## Red (tests committed first)\n\n{self.state.red_summary or 'red commit on branch'}\n\n"
             f"```\n{red_output}\n```\n\n"
@@ -602,6 +698,9 @@ class CoderService:
             if state is not None and state.reason != "interrupted":
                 return 200, state.view(self._store.tail(spec.job_id), usd_per_hour=self._usd_per_hour)
             if state is None:
+                refused = self._take_lease(spec)
+                if refused is not None:
+                    return 200, refused
                 state = JobState.new(spec, started_at=self._deps.clock.now_iso())
                 state.session_id = session_id
             else:
@@ -615,6 +714,28 @@ class CoderService:
             self._threads[spec.job_id] = (thread, cancel)
             thread.start()
         return 200, {"job_id": spec.job_id, "status": Status.RUNNING.value, "session_id": state.session_id}
+
+    def _take_lease(self, spec: JobSpec) -> dict[str, Any] | None:
+        """Atomically claim the issue (ref agent-lease/<issue>); None on success, else the refusal.
+
+        Only a new job takes it: a resumed or retried job already holds it. The orchestrator releases it.
+        """
+        refusal = {"job_id": spec.job_id, "status": Status.FAILED.value}
+        try:
+            pat = self._deps.secrets.get_secret("github-pat")
+            self._store.redact.add(pat)
+            github = self._deps.github(pat)
+            base = github.get_branch_sha(spec.base)
+            if base is None:
+                return {**refusal, "reason": "lease-error", "detail": f"base branch {spec.base} not found"}
+            github.create_branch(f"{LEASE_PREFIX}{spec.issue_number}", from_sha=base)
+        except GitHubError as exc:
+            if exc.status == 422:
+                return {**refusal, "reason": "lease-held"}
+            return {**refusal, "reason": "lease-error", "detail": self._store.redact(str(exc))}
+        except Exception as exc:
+            return {**refusal, "reason": "lease-error", "detail": self._store.redact(f"{type(exc).__name__}: {exc}")}
+        return None
 
     def status(self, job_id: str) -> tuple[int, dict[str, Any]]:
         with self._lock:

@@ -52,13 +52,17 @@ def test_build_service_wires_vault_github_git_and_the_engine_chain(tmp_path: Pat
     assert [type(e) for e in chain] == [AgyEngine, ModelLoopEngine]
     assert chain[0]._prepare is None
     assert chain[0]._dirty is ctx.dirty
+    assert chain[0]._before_call is ctx.refresh_agy_settings
+    assert chain[0]._log_dir == ctx.agy_log_dir
     assert chain[0]._env["HOME"] == str(tmp_path)
     user = RunAs("agyuser", 1001, 1001, Path("/home/agyuser"))
-    isolated = deps.engines(EngineContext(_spec(), (), False, threading.Event(), {},
-                                          agy_binary=Path("/usr/local/bin/agy"),
-                                          agy_home=user.home, run_as=user))[0]
+    chain_as_user = deps.engines(EngineContext(_spec(), (), False, threading.Event(), {},
+                                               agy_binary=Path("/usr/local/bin/agy"), agy_home=user.home, run_as=user))
+    assert [e.name for e in chain_as_user] == ["agy", "agy-unrestricted", "loop"]
+    isolated = chain_as_user[0]
     assert isolated._run_as == user
     assert isolated._prepare is not None
+    assert chain_as_user[1]._run_as == user
     no_agy = deps.engines(EngineContext(_spec(), (), False, threading.Event(), {}, agy_binary=None, agy_home=tmp_path))
     assert [e.name for e in no_agy] == ["loop"]
     assert deps.engine_user is sandbox.ensure_agy_user

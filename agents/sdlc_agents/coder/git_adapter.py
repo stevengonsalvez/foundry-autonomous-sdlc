@@ -81,7 +81,7 @@ class SubprocessGit:
                 fh.write(content)
 
     def changed_paths(self) -> list[str]:
-        out = self._git("status", "--porcelain=v1", "-z", "--untracked-files=all")
+        out = self._git("status", "--porcelain=v1", "-z", "--untracked-files=all", "--ignore-submodules=all")
         entries = out.split("\0")
         paths: list[str] = []
         i = 0
@@ -107,14 +107,16 @@ class SubprocessGit:
                 if path in tracked:
                     self._git("rm", "--cached", "--quiet", "--", path)
                 target = scope.contained_path(self.workdir, path)
-                if target is not None:
+                if target is not None and target.is_dir():
+                    shutil.rmtree(target)   # a nested repository staged as a gitlink
+                elif target is not None:
                     target.unlink(missing_ok=True)
                 elif os.path.islink(self.workdir / path):
                     os.unlink(self.workdir / path)   # the link itself, never what it points to
 
     def commit_all(self, message: str) -> str:
-        self._git("add", "--all")
-        if not self._git("diff", "--cached", "--name-only").strip():
+        self._stage_all()
+        if not self._git("diff", "--cached", "--ignore-submodules=dirty", "--name-only").strip():
             raise GitError("nothing to commit")
         self._git("commit", "--quiet", "--no-verify", "-m", message)
         return self.head_sha()
@@ -169,8 +171,38 @@ class SubprocessGit:
 
     def changed_since(self, sha: str) -> list[str]:
         """Every path that differs from `sha`: committed, staged, unstaged or new (ignored files excluded)."""
-        self._git("add", "--all")
-        return [p for p in self._git("diff", "--cached", "--no-renames", "-z", "--name-only", sha).split("\0") if p]
+        self._stage_all()
+        return [p for p in self._git("diff", "--cached", "--no-renames", "--ignore-submodules=dirty", "-z",
+                                      "--name-only", sha).split("\0") if p]
+
+    def _stage_all(self) -> None:
+        """`git add --all`, except index entries that are gitlinks: re-adding one makes git ask the nested
+        repository for its state, which runs that repository's own config (a clean filter) as root."""
+        gitlinks = [path for mode, path in self._index_modes() if mode == "160000"]
+        excludes = [f":(exclude,literal){path}" for path in gitlinks]
+        self._git("add", "--all", "--", ".", *excludes)
+
+    def _index_modes(self, *paths: str) -> list[tuple[str, str]]:
+        entries = []
+        for entry in self._git("ls-files", "-s", "-z", "--", *paths).split("\0"):
+            meta, _, path = entry.partition("\t")
+            if path:
+                entries.append((meta.split(" ")[0], path))
+        return entries
+
+    def special_paths_since(self, sha: str) -> list[str]:
+        """Changed paths staged as gitlinks (160000) or symlinks (120000): never allowed from an engine.
+
+        Modes come from the index (`ls-files -s`), never from a diff: a diff against a gitlink asks the
+        nested repository for its state, which runs that repository's own config (filters) as root.
+        """
+        changed = self.changed_since(sha)
+        if not changed:
+            return []
+        return [path for mode, path in self._index_modes(*changed) if mode in ("160000", "120000")]
+
+    def special_paths_in_commit(self, sha: str) -> list[str]:
+        return _special(self._git("diff-tree", "--no-commit-id", "--root", "-r", "--raw", "-z", sha))
 
     def clean_ignored(self, subdir: str) -> None:
         """Delete gitignored files (node_modules, caches) so nothing an engine hid there survives."""
@@ -182,11 +214,16 @@ class SubprocessGit:
         return hashlib.sha256((self.workdir / ".git" / "config").read_bytes()).hexdigest()
 
     def _git_env(self) -> dict[str, str]:
+        # Nothing in the working tree may make root's git run a command: no hooks, no fsmonitor, no
+        # attributes file, no recursion into nested repositories (whose own config could define filters).
         config = [("commit.gpgsign", "false"), ("credential.helper", ""), ("core.hooksPath", os.devnull),
-                  ("core.fsmonitor", "false")]
+                  ("core.fsmonitor", "false"), ("core.attributesFile", os.devnull),
+                  ("diff.ignoreSubmodules", "all"), ("submodule.recurse", "false"),
+                  ("status.submoduleSummary", "false")]
         env = {k: v for k, v in os.environ.items() if not k.startswith("GIT_") and k != TOKEN_VAR}
         env.update({
             "GIT_CONFIG_NOSYSTEM": "1", "GIT_CONFIG_GLOBAL": os.devnull, "GIT_TERMINAL_PROMPT": "0",
+            "GIT_ATTR_NOSYSTEM": "1",
             "GIT_AUTHOR_NAME": self._author[0], "GIT_AUTHOR_EMAIL": self._author[1],
             "GIT_COMMITTER_NAME": self._author[0], "GIT_COMMITTER_EMAIL": self._author[1],
             "GIT_CONFIG_COUNT": str(len(config)),
@@ -222,3 +259,17 @@ class SubprocessGit:
             detail = (proc.stderr + proc.stdout).strip()[-2000:]
             raise GitError(f"git {args[0]} failed ({proc.returncode}): {detail}")
         return proc.stdout
+
+
+def _special(raw: str) -> list[str]:
+    """Paths whose new mode in `--raw -z` output is a gitlink or a symlink."""
+    fields = raw.split("\0")
+    found: list[str] = []
+    i = 0
+    while i + 1 < len(fields):
+        meta, path = fields[i], fields[i + 1]
+        i += 2
+        parts = meta.lstrip(":").split()
+        if len(parts) >= 2 and parts[1] in ("160000", "120000"):
+            found.append(path)
+    return found

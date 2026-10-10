@@ -1,0 +1,74 @@
+{
+  "numTotalTestSuites": 3,
+  "numPassedTestSuites": 1,
+  "numFailedTestSuites": 1,
+  "numPendingTestSuites": 0,
+  "numTotalTests": 2,
+  "numPassedTests": 1,
+  "numFailedTests": 1,
+  "numPendingTests": 0,
+  "numTodoTests": 0,
+  "snapshot": {
+    "added": 0,
+    "failure": false,
+    "filesAdded": 0,
+    "filesRemoved": 0,
+    "filesRemovedList": [],
+    "filesUnchecked": 0,
+    "filesUncheckedList": [],
+    "filesUpdated": 0,
+    "matched": 0,
+    "total": 0,
+    "unchecked": 0,
+    "uncheckedKeysByFile": [],
+    "unmatched": 0,
+    "updated": 0,
+    "didUpdate": false
+  },
+  "startTime": 1791633000000,
+  "success": false,
+  "testResults": [
+    {
+      "assertionResults": [
+        {
+          "ancestorTitles": [
+            "ParcelPage"
+          ],
+          "fullName": "ParcelPage waits for the parcel",
+          "status": "failed",
+          "title": "waits for the parcel",
+          "duration": 12.3,
+          "failureMessages": [
+            "Error: Test timed out in 5000ms.\nIf this is a long-running test, pass a timeout value as the last argument or configure it globally with \"testTimeout\"."
+          ],
+          "meta": {}
+        }
+      ],
+      "startTime": 1791633000000,
+      "endTime": 1791633000420,
+      "status": "failed",
+      "message": "",
+      "name": "/srv/sdlc-work/j-8-1/checkout/app/web/tests/estimated-delivery.test.tsx"
+    },
+    {
+      "assertionResults": [
+        {
+          "ancestorTitles": [
+            "tracking"
+          ],
+          "fullName": "tracking accepts PK numbers",
+          "status": "passed",
+          "title": "accepts PK numbers",
+          "duration": 12.3,
+          "failureMessages": [],
+          "meta": {}
+        }
+      ],
+      "startTime": 1791633000000,
+      "endTime": 1791633000420,
+      "status": "passed",
+      "message": "",
+      "name": "/srv/sdlc-work/j-8-1/checkout/app/core/tests/tracking.test.ts"
+    }
+  ]
+}

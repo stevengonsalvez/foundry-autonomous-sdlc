@@ -11,7 +11,7 @@ from pathlib import Path
 import pytest
 
 from sdlc_agents.coder import shell
-from sdlc_agents.coder.testrun import TestRunner, parse_vitest_json, with_json_reporter
+from sdlc_agents.coder.testrun import TestRunner, is_valid_red, parse_vitest_json, with_json_reporter
 
 ROOT = "/home/session/work/checkout"
 
@@ -50,7 +50,7 @@ def test_failed_assertion_in_the_new_test_file_is_red() -> None:
 def test_import_error_is_not_red_even_with_a_failed_assertion_elsewhere() -> None:
     report = parse_vitest_json(_report(
         _file(NEW, "failed", [], message="Error: Failed to load url ../src/eta (resolved id: ../src/eta)"),
-        _file(OLD, "failed", [_assertion("validates", "failed", "boom")]),
+        _file(OLD, "failed", [_assertion("validates", "failed", "AssertionError: expected 1 to be 2")]),
     ))
     assert report.load_errors == (f"{ROOT}/{NEW}",)
     assert not report.is_red_for([NEW])
@@ -60,13 +60,14 @@ def test_import_error_is_not_red_even_with_a_failed_assertion_elsewhere() -> Non
 def test_failure_only_in_an_unrelated_file_is_not_red_for_the_new_tests() -> None:
     report = parse_vitest_json(_report(
         _file(NEW, "passed", [_assertion("shows eta", "passed")]),
-        _file(OLD, "failed", [_assertion("validates", "failed", "boom")]),
+        _file(OLD, "failed", [_assertion("validates", "failed", "AssertionError: expected 1 to be 2")]),
     ))
     assert not report.is_red_for([NEW])
 
 
-def test_a_new_suite_vitest_did_not_collect_is_not_red() -> None:
-    report = parse_vitest_json(_report(_file(OLD, "failed", [_assertion("validates", "failed", "boom")])))
+def test_a_new_suite_vitest_did_not_collect_is_never_red() -> None:
+    failing = _assertion("validates", "failed", "AssertionError: expected 1 to be 2")
+    report = parse_vitest_json(_report(_file(OLD, "failed", [failing])))
     assert not report.is_red_for([NEW, OLD])
     assert report.is_red_for([OLD, "app/api/tests/__fixtures__/data.json"])
 
@@ -205,3 +206,59 @@ def test_runner_never_follows_a_planted_report(tmp_path: Path, kind: str) -> Non
     assert outcome.report.summary() == "no test report"
     assert "TOPSECRET" not in json.dumps(outcome.report.failure_excerpt())
     assert time.monotonic() - started < 10
+
+
+# -- valid red: only assertion failures count ----------------------------------------------------------
+
+FIXTURES = Path(__file__).parent / "fixtures"
+CHECKOUT = "/srv/sdlc-work/j-8-1/checkout"
+DESIGNED = "app/web/tests/estimated-delivery.test.tsx"
+
+
+def _fixture(name: str):  # type: ignore[no-untyped-def]
+    return parse_vitest_json((FIXTURES / name).read_text())
+
+
+@pytest.mark.parametrize("name", ["valid_assertion.json", "valid_testing_library.json"])
+def test_assertion_and_testing_library_failures_are_a_valid_red(name: str) -> None:
+    verdict = _fixture(name).red_verdict([DESIGNED])
+    assert verdict.kind == "red", verdict
+    assert verdict.invalid == ()
+
+
+@pytest.mark.parametrize(("name", "first_line"), [
+    ("invalid_reference_error.json", "ReferenceError: expect is not defined"),
+    ("mixed_valid_and_type_error.json", "TypeError: formatEta is not a function"),
+    ("timeout.json", "Error: Test timed out in 5000ms."),
+    ("load_error.json", 'Error: Failed to resolve import "../src/eta"'),
+])
+def test_broken_tests_are_invalid_not_red(name: str, first_line: str) -> None:
+    verdict = _fixture(name).red_verdict([DESIGNED])
+    assert verdict.kind == "invalid", verdict
+    assert any(DESIGNED in line and first_line in line for line in verdict.invalid), verdict.invalid
+
+
+def test_passing_or_uncollected_new_tests_are_not_a_red() -> None:
+    passing = parse_vitest_json(_report(_file(NEW, "passed", [_assertion("a", "passed")])))
+    assert passing.red_verdict([NEW]).kind == "not-red"
+    missing = parse_vitest_json(_report(_file(OLD, "failed", [_assertion("x", "failed", "AssertionError: x")])))
+    verdict = missing.red_verdict([NEW])
+    assert verdict.kind == "invalid"                       # the designer put it where vitest does not look
+    assert verdict.invalid == (f"{NEW}: not collected by vitest (check the file name and location)",)
+    assert parse_vitest_json("garbage").red_verdict([NEW]).kind == "not-red"
+
+
+@pytest.mark.parametrize(("message", "valid"), [
+    ("AssertionError: expected 1 to be 2", True),
+    ("Error: expect(received).toEqual(expected)\n\nExpected: 1\nReceived: 2", True),
+    ("TestingLibraryElementError: Unable to find role=\"heading\"", True),
+    ("ReferenceError: expect is not defined", False),
+    ("TypeError: Cannot read properties of undefined (reading 'eta')", False),
+    ("SyntaxError: Unexpected token '<'", False),
+    ("Error: Cannot find module '../src/eta'", False),
+    ("SyntaxError: The requested module './x' does not provide an export named 'eta'", False),
+    ("Error: Test timed out in 5000ms.", False),
+    ("Error: something odd", False),
+])
+def test_failure_classification(message: str, valid: bool) -> None:
+    assert is_valid_red(message) is valid

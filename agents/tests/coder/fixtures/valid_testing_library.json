@@ -1,0 +1,87 @@
+{
+  "numTotalTestSuites": 3,
+  "numPassedTestSuites": 1,
+  "numFailedTestSuites": 1,
+  "numPendingTestSuites": 0,
+  "numTotalTests": 3,
+  "numPassedTests": 1,
+  "numFailedTests": 2,
+  "numPendingTests": 0,
+  "numTodoTests": 0,
+  "snapshot": {
+    "added": 0,
+    "failure": false,
+    "filesAdded": 0,
+    "filesRemoved": 0,
+    "filesRemovedList": [],
+    "filesUnchecked": 0,
+    "filesUncheckedList": [],
+    "filesUpdated": 0,
+    "matched": 0,
+    "total": 0,
+    "unchecked": 0,
+    "uncheckedKeysByFile": [],
+    "unmatched": 0,
+    "updated": 0,
+    "didUpdate": false
+  },
+  "startTime": 1791633000000,
+  "success": false,
+  "testResults": [
+    {
+      "assertionResults": [
+        {
+          "ancestorTitles": [
+            "ParcelPage"
+          ],
+          "fullName": "ParcelPage shows the estimated delivery date",
+          "status": "failed",
+          "title": "shows the estimated delivery date",
+          "duration": 12.3,
+          "failureMessages": [
+            "TestingLibraryElementError: Unable to find an element with the text: Estimated delivery. This could be because the text is broken up by multiple elements.\n\nIgnored nodes: comments, script, style\n<body>...</body>\n    at Object.getElementError (/srv/sdlc-work/j-8-1/checkout/app/node_modules/@testing-library/dom/dist/config.js:37:19)"
+          ],
+          "meta": {}
+        },
+        {
+          "ancestorTitles": [
+            "ParcelPage"
+          ],
+          "fullName": "ParcelPage formats the date",
+          "status": "failed",
+          "title": "formats the date",
+          "duration": 12.3,
+          "failureMessages": [
+            "Error: expect(element).toHaveTextContent()\n\nExpected element to have text content:\n  12 October 2026\nReceived:\n  In transit"
+          ],
+          "meta": {}
+        }
+      ],
+      "startTime": 1791633000000,
+      "endTime": 1791633000420,
+      "status": "failed",
+      "message": "",
+      "name": "/srv/sdlc-work/j-8-1/checkout/app/web/tests/estimated-delivery.test.tsx"
+    },
+    {
+      "assertionResults": [
+        {
+          "ancestorTitles": [
+            "tracking"
+          ],
+          "fullName": "tracking accepts PK numbers",
+          "status": "passed",
+          "title": "accepts PK numbers",
+          "duration": 12.3,
+          "failureMessages": [],
+          "meta": {}
+        }
+      ],
+      "startTime": 1791633000000,
+      "endTime": 1791633000420,
+      "status": "passed",
+      "message": "",
+      "name": "/srv/sdlc-work/j-8-1/checkout/app/core/tests/tracking.test.ts"
+    }
+  ]
+}

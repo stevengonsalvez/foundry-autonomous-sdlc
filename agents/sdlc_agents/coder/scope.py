@@ -26,6 +26,9 @@ TEST_GLOBS = (
 # Test runner configuration decides which tests run and how; no engine may change it.
 TEST_RUNNER_CONFIG_GLOBS = ("**/vitest.config.*", "**/vitest.workspace.*", "**/vitest.setup.*")
 
+# Files that make git run or fetch things (filters, diff drivers, submodules): never engine-editable.
+GIT_CONTROL_FILES = (".gitattributes", ".gitmodules")
+
 # Suites vitest collects; other test-glob files (helpers, fixtures) need not appear in a report.
 SUITE_SUFFIXES = (".test.ts", ".test.tsx", ".spec.ts")
 
@@ -115,6 +118,7 @@ def violations(changed: Iterable[str], *, allowed_paths: Iterable[str], protecte
     bad: list[str] = []
     for path in changed:
         if (not within_allowed(path, allowed) or path in locked or is_test_runner_config(path)
+                or posixpath.basename(path) in GIT_CONTROL_FILES
                 or (tests_only and not is_test_path(path))):
             bad.append(path)
     return bad

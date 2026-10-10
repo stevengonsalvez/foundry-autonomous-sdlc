@@ -13,6 +13,7 @@ import pytest
 
 from sdlc_agents.coder import shell
 from sdlc_agents.coder.engines import (
+    AGY_CALL_TIMEOUT_S,
     AgyEngine,
     ModelLoopEngine,
     ModelReply,
@@ -41,8 +42,8 @@ def test_agy_runs_headless_without_shell_permission_and_with_a_scrubbed_env(
     agy_home = tmp_path / "agy-home"
     result = AgyEngine(fake, home=agy_home).edit("make tests pass", workdir=str(work), timeout_s=30)
     assert result.returncode == 0
-    assert json.loads((work / "argv.json").read_text()) == ["-p", "make tests pass", "--mode", "accept-edits",
-                                                             "--sandbox"]
+    # No --sandbox: agy's own sandbox blocked every command (job j-10-1); the engine user is the isolation.
+    assert json.loads((work / "argv.json").read_text()) == ["-p", "make tests pass", "--mode", "accept-edits"]
     env = json.loads((work / "env.json").read_text())
     assert "must-not-leak" not in env.values()
     assert set(env) <= {"PATH", "HOME", "LANG", "TERM", "TMPDIR", "PWD", "SHLVL", "_", "__CF_USER_TEXT_ENCODING"}
@@ -342,3 +343,48 @@ def test_model_loop_does_not_block_on_a_fifo(hostile_checkout: Path) -> None:
     started = time.monotonic()
     assert "not readable" in engine._read(hostile_checkout, ["app/src/pipe.ts"])
     assert time.monotonic() - started < 5
+
+
+def test_agy_settings_are_rewritten_before_every_call_including_the_retry(tmp_path: Path) -> None:
+    fake = _fake_agy(tmp_path, "time.sleep(60)\n")
+    rewrites: list[int] = []
+    AgyEngine(fake, home=tmp_path, call_timeout_s=1, dirty=lambda: False,
+              before_call=lambda: rewrites.append(1)).edit("p", workdir=str(tmp_path), timeout_s=120)
+    assert len(rewrites) == 2
+
+
+def test_every_agy_call_writes_its_own_debug_log(tmp_path: Path) -> None:
+    fake = _fake_agy(tmp_path, "time.sleep(60)\n")
+    logs = tmp_path / "reports"
+    logs.mkdir()
+    engine = AgyEngine(fake, home=tmp_path, call_timeout_s=1, dirty=lambda: False, log_dir=logs, round_no=lambda: 3)
+    argv_file = tmp_path / "argv.json"
+    fake.write_text(fake.read_text().replace("time.sleep(60)", f"import json; open({str(argv_file)!r}, 'a').write("
+                                             "json.dumps(sys.argv[1:]) + chr(10)); time.sleep(60)"))
+    engine.edit("p", workdir=str(tmp_path), timeout_s=120)
+    calls = [json.loads(line) for line in argv_file.read_text().splitlines()]
+    assert [c[c.index("--log-file") + 1] for c in calls] == [str(logs / "agy-iter3.log"), str(logs / "agy-iter3-2.log")]
+    assert engine.last_logs == (logs / "agy-iter3.log", logs / "agy-iter3-2.log")
+
+
+def test_unrestricted_agy_skips_permissions_but_only_as_the_engine_user(tmp_path: Path) -> None:
+    calls: list[list[str]] = []
+
+    def run(cmd: list[str], **kwargs: Any) -> CommandResult:
+        calls.append(cmd)
+        assert kwargs["user"] == 1001
+        return CommandResult(0, "ok")
+
+    user = RunAs("agyuser", 1001, 1001, Path("/home/agyuser"))
+    engine = AgyEngine(Path("/opt/agy/bin/agy"), home=user.home, run_as=user, run=run, unrestricted=True,
+                       reap=lambda u: 0)
+    assert engine.name == "agy-unrestricted"
+    engine.edit("p", workdir=str(tmp_path), timeout_s=5)
+    assert calls[0][1:4] == ["-p", "p", "--dangerously-skip-permissions"]
+    assert "--sandbox" not in calls[0]
+    with pytest.raises(ValueError, match="root"):
+        AgyEngine(Path("/opt/agy/bin/agy"), home=tmp_path, run_as=None, unrestricted=True)
+
+
+def test_agy_rounds_are_capped_at_six_minutes_by_default() -> None:
+    assert AGY_CALL_TIMEOUT_S == 360
