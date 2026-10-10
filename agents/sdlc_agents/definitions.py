@@ -358,31 +358,41 @@ never write implementation code.
 
 INPUT: section "issue", section "spec" (summary and acceptance criteria), the mode: "feature"
 (new behaviour) or "bugfix" (a regression test that reproduces the bug), section "repo_files" (every
-file path under app/ on main) and section "source_files" (the full text of the most relevant source
-files and one existing test, each after a line "=== FILE <path> ===").
+file path under app/ on main) and section "source_files": lines "Exports of <module>: <names>",
+then the full text of an existing test (the TEMPLATE to copy), the tests helpers module and the most
+relevant source files, each after a line "=== FILE <path> ===". On a repair you also get
+"previous_tests" (your last files) and "repair_reason" (why they were rejected or how they failed).
 
 STEPS:
-1. Read source_files: the code you will exercise and an existing test to copy its imports, render
-   helpers and fakes. Use repo_files for correct relative import paths. Only if a file you need is
-   missing, read it with get_file_contents (within the tool budget).
-2. Write 1 to {MAX_TEST_FILES} complete vitest test files.
+1. Read source_files. Copy the template's imports, helpers and style. Use repo_files for correct
+   relative import paths. Only if a file you need is missing, read it with get_file_contents.
+2. Write 1 to {MAX_TEST_FILES} complete vitest test files. On a repair, fix every listed problem.
 
 RULES FOR EVERY TEST FILE:
-- Path: a NEW file under app/ ending in .test.ts or .test.tsx, next to the existing tests of that
-  workspace (never under app/e2e, never an existing file name).
-- Import describe/it/expect from "vitest". Use Testing Library for React components, exactly as
-  the existing tests do.
-- Import ONLY modules and exports that exist on main today, with correct relative paths. Test new
-  behaviour through existing entry points (render the existing page or call the existing function)
-  so the test fails with an assertion error, not with a missing module or missing export.
+- Path: a NEW file app/<workspace>/tests/<name>.test.ts or .test.tsx, in the tests folder of the
+  workspace you test (for example app/web/tests/estimated-delivery.test.tsx; never app/e2e, never
+  an existing file name). Only that folder is collected by vitest.
+- Vitest globals are NOT enabled. Every file starts with
+  import {{ describe, expect, it }} from "vitest";
+  (add vi or beforeEach to that same import only if you use them).
+- Import the shared test helpers by their exact exported names, as listed in the "Exports of"
+  line (for app/web: import {{ renderApp, fakeService }} from "./helpers"), and domain code from
+  "@parcel/core" by its exact exported names. Import nothing else except @testing-library/*, react
+  and the page or module under test by its relative path. Use only functions, props and texts that
+  exist in the provided files.
+- Each test must fail on an ASSERTION when the feature is absent (an expect that does not hold),
+  never on a missing import, a missing export or an exception.
+- Use await screen.findBy* (or findAllBy*) for anything that appears after loading; getBy* only
+  for content that is there on the first render.
 - Each test checks one acceptance criterion with exact values from the spec.
 - No network, no timers longer than the default, no snapshots, no .only or .skip.
 - In "bugfix" mode, at least one test reproduces the reported bug and fails on main.
 
 WORKED EXAMPLE (shape only):
-{{"tests":[{{"path":"app/web/src/pages/parcel-estimated-delivery.test.tsx","content":"import {{ describe, it,
-expect }} from 'vitest';\\n..."}}],"rationale":"Criterion 1 fails today because the page renders no
-estimated delivery text."}}
+{{"tests":[{{"path":"app/web/tests/estimated-delivery.test.tsx","content":"import {{ screen }} from
+'@testing-library/react';\\nimport {{ describe, expect, it }} from 'vitest';\\nimport {{ fakeService,
+renderApp }} from './helpers';\\n..."}}],"rationale":"Criterion 1 fails today: the page renders no
+estimated delivery text, so findByText rejects."}}
 
 OUTPUT: one JSON object with keys tests (each path and content) and rationale (which criteria each
 file covers and why it fails on main today).

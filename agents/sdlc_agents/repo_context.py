@@ -1,19 +1,25 @@
 """
 Repository context the orchestrator hands the test designer, so the model rarely needs a tool call
-(each MCP round trip re-sends its output and costs time and rate-limit headroom).
+(each MCP round trip re-sends its output and costs time and rate-limit headroom) and writes tests
+that import what really exists.
 
-One tree listing gives every path under app/; simple rules pick the 2 to 4 most relevant files:
-source files whose path, then text, shares words with the issue, plus the nearest existing test as a
-style example. The text is capped at MAX_CONTEXT_CHARS. Everything returned is untrusted data and is
-wrapped as such by the caller. Stdlib only.
+One tree listing gives every path under app/. Simple rules then pick:
+- up to MAX_SOURCES source files whose path, then text, shares words with the issue;
+- the template: the existing test in that workspace's tests/ folder that best matches the issue,
+  given in full as the style to copy;
+- the workspace's tests/helpers module, and the exported names of it and of @parcel/core.
+The text is capped at about MAX_CONTEXT_CHARS, template first. Everything returned is untrusted data
+and is wrapped as such by the caller. Stdlib only.
 """
 
 from __future__ import annotations
 
 import re
 from collections.abc import Callable
+from dataclasses import dataclass, field
 from pathlib import PurePosixPath
 
+from sdlc_agents.designed_tests import PACKAGE_ENTRIES, exports_of
 from sdlc_agents.paths import is_test_path
 
 MAX_CONTEXT_CHARS = 12_000
@@ -22,6 +28,8 @@ MAX_SOURCES = 3
 MAX_READS = 6
 LISTED_SUFFIXES = (".ts", ".tsx", ".json", ".yaml", ".yml", ".md", ".css")
 CODE_SUFFIXES = (".ts", ".tsx")
+HELPER_NAMES = ("helpers.tsx", "helpers.ts")
+DEFAULT_WORKSPACE = "app/web"
 SKIP_SEGMENTS = frozenset({"node_modules", "dist", "dist-pages", "build", "coverage", "playwright-report",
                            "test-results"})
 SKIP_NAMES = frozenset({"package-lock.json"})
@@ -34,6 +42,13 @@ STOPWORDS = frozenset({
 })
 
 Reader = Callable[[str], str | None]
+
+
+@dataclass(frozen=True)
+class Selection:
+    sources: list[str] = field(default_factory=list)
+    template: str | None = None       # an existing test to copy the style of
+    helpers: str | None = None        # the workspace's tests/helpers module
 
 
 def _stem(word: str) -> str:
@@ -57,31 +72,20 @@ def listable(paths: list[str]) -> list[str]:
 
 
 def _path_score(path: str, words: set[str]) -> int:
-    flat = path.lower()
+    flat = re.sub(r"[^a-z0-9]", "", path.lower())
     return sum(word in flat for word in words)
 
 
-def _nearest_test(source: str, tests: list[str]) -> str | None:
-    p = PurePosixPath(source)
-    stem = p.name.split(".")[0]
-    workspace = "/".join(p.parts[:2])
-    same_stem = [t for t in tests if PurePosixPath(t).name.split(".")[0] == stem]
-    same_dir = [t for t in tests if str(PurePosixPath(t).parent) == str(p.parent)]
-    same_workspace = [t for t in tests if t.startswith(workspace + "/")]
-    for group in (same_stem, same_dir, same_workspace):
-        if group:
-            return min(group, key=len)
-    return None
+def _workspace(path: str) -> str:
+    return "/".join(PurePosixPath(path).parts[:2])
 
 
-def select(paths: list[str], issue_text: str, read: Reader, cache: dict[str, str] | None = None) -> list[str]:
-    """Up to MAX_SOURCES relevant source files, then the nearest existing test as a style example."""
+def select(paths: list[str], issue_text: str, read: Reader, cache: dict[str, str] | None = None) -> Selection:
     cache = {} if cache is None else cache
     words = terms(issue_text)
     listed = listable(paths)
     code = [p for p in listed if p.endswith(CODE_SUFFIXES)]
     sources = [p for p in code if not is_test_path(p)]
-    tests = [p for p in code if is_test_path(p) and not p.startswith("app/e2e/")]
     shortlist = sorted(sources, key=lambda p: (-_path_score(p, words), len(p), p))[:MAX_READS]
     scored = []
     for path in shortlist:
@@ -90,13 +94,23 @@ def select(paths: list[str], issue_text: str, read: Reader, cache: dict[str, str
         if score:
             scored.append((-score, len(path), path))
     chosen = [path for _, _, path in sorted(scored)[:MAX_SOURCES]]
-    if chosen and (test := _nearest_test(chosen[0], tests)):
-        chosen.append(test)
-    return chosen
+    workspace = _workspace(chosen[0]) if chosen else DEFAULT_WORKSPACE
+    folder = f"{workspace}/tests/"
+    tests = [p for p in code if p.startswith(folder) and p.endswith((".test.ts", ".test.tsx"))]
+    template = min(tests, key=lambda p: (-_path_score(p, words), len(p), p)) if tests else None
+    helpers = next((folder + name for name in HELPER_NAMES if folder + name in listed), None)
+    return Selection(chosen, template, helpers)
+
+
+def _exports_line(label: str, path: str, read: Reader, known: set[str]) -> str | None:
+    names = exports_of(path, read, known)
+    if not names:
+        return None
+    return f"Exports of {label}: " + ", ".join(sorted(n for n in names if n != "default"))
 
 
 def build(paths: list[str], issue_text: str, read: Reader) -> tuple[str, str]:
-    """(file listing, selected file texts) for the test designer; ("", "") for an empty repository."""
+    """(file listing, context text) for the test designer; ("", "") for an empty repository."""
     listed = listable(paths)
     if not listed:
         return "", ""
@@ -104,14 +118,31 @@ def build(paths: list[str], issue_text: str, read: Reader) -> tuple[str, str]:
     if len(listed) > MAX_LISTED:
         listing += f"\n[{len(listed) - MAX_LISTED} more paths not listed]"
     cache: dict[str, str] = {}
-    blocks: list[str] = []
+
+    def cached(path: str) -> str | None:
+        if path not in cache:
+            text = read(path)
+            if text is None:
+                return None
+            cache[path] = text
+        return cache[path]
+
+    chosen = select(paths, issue_text, cached, cache)
+    known = set(paths)
+    header = []
+    if chosen.helpers:
+        name = PurePosixPath(chosen.helpers).stem
+        header.append(_exports_line(f'{chosen.helpers} (import from "./{name}")', chosen.helpers, cached, known))
+    for package, entry in PACKAGE_ENTRIES.items():
+        if entry in known:
+            header.append(_exports_line(package, entry, cached, known))
+    blocks = [line for line in header if line]
     left = MAX_CONTEXT_CHARS
-    for path in select(paths, issue_text, read, cache):
+    files = [p for p in (chosen.template, chosen.helpers, *chosen.sources) if p]
+    for path in dict.fromkeys(files):
         if left <= 0:
             break
-        text = cache.get(path)
-        if text is None:
-            text = read(path) or ""
+        text = cached(path) or ""
         if len(text) > left:
             text = text[:left] + "\n[truncated]"
         blocks.append(f"=== FILE {path} ===\n{text}")

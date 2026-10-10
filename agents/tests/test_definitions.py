@@ -31,7 +31,7 @@ VALID: dict[str, dict[str, Any]] = {
                       "acceptance_criteria": ["a"], "questions": []},
     "sdlc-product-owner": {"answers": [{"question": "q", "answer": f"{PO_LABEL} a"}]},
     "sdlc-feasibility": {"suitable": True, "reasons": ["r"], "risk": "low", "affected_paths": []},
-    "sdlc-test-designer": {"tests": [{"path": "app/web/src/a.test.tsx", "content": "import { it } from 'vitest'"}],
+    "sdlc-test-designer": {"tests": [{"path": "app/web/tests/a.test.tsx", "content": "import { it } from 'vitest'"}],
                            "rationale": "r"},
     "sdlc-reviewer": {"verdict": "approve", "head": "abcdef1", "findings": [], "summary": "s"},
     "sdlc-triage": {"severity": "s2", "owner": "web", "summary": "s", "suspected_area": "a", "rationale": "r"},
@@ -128,8 +128,9 @@ def test_product_owner_label_is_enforced() -> None:
 
 
 @pytest.mark.parametrize("path, error", [
-    ("app/e2e/a.test.ts", "outside app/e2e"),
-    ("app/web/src/a.tsx", "not a vitest"),
+    ("app/e2e/tests/a.test.ts", "not app/e2e"),
+    ("app/web/tests/a.tsx", "must be app/<workspace>/tests"),
+    ("app/web/src/a.test.tsx", "must be app/<workspace>/tests"),
     ("src/a.test.ts", "outside app/"),
     ("app/../.github/a.test.ts", "absolute or '..'"),
     ("app/web/.hidden/a.test.ts", "forbidden segment"),
@@ -142,17 +143,19 @@ def test_test_designer_paths_are_vitest_files_under_app(path: str, error: str) -
 
 def test_test_designer_rejects_duplicates_missing_vitest_nul_and_oversize() -> None:
     designer = AGENT_BY_NAME["sdlc-test-designer"]
-    dup = {"tests": [{"path": "app/a.test.ts", "content": "vitest"}, {"path": "./app/A.test.ts", "content": "vitest"}],
+    dup = {"tests": [{"path": "app/web/tests/a.test.ts", "content": "vitest"},
+                     {"path": "./app/web/tests/A.test.ts", "content": "vitest"}],
            "rationale": "r"}
     with pytest.raises(ValueError, match="duplicate"):
         designer.validate_output(dup)
     with pytest.raises(ValueError, match="does not import from vitest"):
-        designer.validate_output({"tests": [{"path": "app/a.test.ts", "content": "jest"}], "rationale": "r"})
+        designer.validate_output({"tests": [{"path": "app/web/tests/a.test.ts", "content": "jest"}], "rationale": "r"})
     with pytest.raises(ValueError, match="NUL"):
-        designer.validate_output({"tests": [{"path": "app/a.test.ts", "content": "vitest\x00"}], "rationale": "r"})
+        designer.validate_output({"tests": [{"path": "app/web/tests/a.test.ts", "content": "vitest\x00"}],
+                                  "rationale": "r"})
     big = "vitest" + "x" * 14_000
     with pytest.raises(ValueError, match="tests total"):
-        designer.validate_output({"tests": [{"path": f"app/{i}.test.ts", "content": big} for i in range(3)],
+        designer.validate_output({"tests": [{"path": f"app/web/tests/{i}.test.ts", "content": big} for i in range(3)],
                                   "rationale": "r"})
 
 
