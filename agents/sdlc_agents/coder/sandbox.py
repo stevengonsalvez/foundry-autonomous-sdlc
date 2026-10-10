@@ -256,29 +256,49 @@ def _first_level(node_modules: str, visit: Callable[[str], os.stat_result]) -> N
 
 
 def _link_stays_inside(root: Path, rel: str, target: str) -> bool:
-    """Resolve without following anything: lexical normalisation, then an lstat walk that refuses links on the way.
+    """Resolve a link target one component at a time, never following a link and never cancelling one with `..`.
 
-    A target is allowed only when it is relative, lands inside the checkout, is not in any .git, and
-    every existing component on the way is a real directory or file (missing components are fine,
-    a dangling link inside the tree cannot reach outside).
+    The link's own folder must be real directories all the way down from the root. Then each target
+    component is lstat'ed as it is reached: a link on the way, a `.git`, or a `..` above the root is a
+    violation, and `..` only ever steps back over a component already confirmed not to be a link.
+    Missing components are fine (a dangling target inside the tree cannot reach outside; a later scan
+    sees anything created there). Absolute targets are always a violation. As a second check, the
+    realpath of the link (stat calls only) must stay inside the checkout and outside its .git.
     """
     if os.path.isabs(target):
         return False
-    resolved = os.path.normpath(os.path.join(os.path.dirname(rel), target))
-    if resolved == ".":
-        return True
-    parts = Path(resolved).parts
-    if parts[0] == ".." or ".git" in parts:
+    resolved = list(Path(rel).parent.parts)
+    if not all(_is_real(root, resolved[:depth], missing_ok=False) for depth in range(1, len(resolved) + 1)):
         return False
-    current = str(root)
-    for part in parts:
-        current = os.path.join(current, part)
-        try:
-            if stat.S_ISLNK(os.lstat(current).st_mode):
+    for part in Path(target).parts:
+        if part == ".":
+            continue
+        if part == "..":
+            if not resolved:
                 return False
-        except FileNotFoundError:
-            return True
-    return True
+            resolved.pop()
+            continue
+        resolved.append(part)
+        if part == ".git" or not _is_real(root, resolved, missing_ok=True):
+            return False
+    base = os.path.realpath(root)
+    real = os.path.realpath(os.path.join(root, rel))
+    git = os.path.join(base, ".git")
+    inside = real == base or real.startswith(base + os.sep)
+    return inside and real != git and not real.startswith(git + os.sep)
+
+
+def _is_real(root: Path, parts: list[str], *, missing_ok: bool) -> bool:
+    """True when root/parts exists (or, with missing_ok, is absent) and is not itself a link.
+
+    Only the last component is lstat'ed: callers walk paths one component at a time.
+    """
+    try:
+        return not stat.S_ISLNK(os.lstat(os.path.join(root, *parts)).st_mode)
+    except FileNotFoundError:
+        return missing_ok
+    except OSError:
+        return False   # e.g. a component below a regular file: fail closed
 
 
 def symlinks(root: Path) -> dict[str, str]:

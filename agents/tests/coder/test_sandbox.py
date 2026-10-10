@@ -258,3 +258,25 @@ def test_a_link_named_node_modules_is_still_a_new_link(tmp_path: Path) -> None:
     inv = sandbox.inventory(root, owner_uid=os.getuid())
     assert inv.symlinks == {"app/api/node_modules": "../../.git"}
     assert inv.escaping == ["app/api/node_modules"]
+
+
+def test_a_link_below_a_linked_directory_is_judged_by_where_it_really_is(tmp_path: Path) -> None:
+    # Lexically app/node_modules/dirlink/inner/../../../../etc is root/etc, but dirlink lives outside.
+    root = tmp_path / "checkout"
+    (root / ".git").mkdir(parents=True)
+    (root / "app/node_modules").mkdir(parents=True)
+    (tmp_path / "outside/inner").mkdir(parents=True)
+    (root / "app/node_modules/dirlink").symlink_to(tmp_path / "outside")
+    (tmp_path / "outside/inner/ln").symlink_to("../../../../etc")
+    assert not sandbox._link_stays_inside(root, "app/node_modules/dirlink/inner/ln", "../../../../etc")
+
+
+def test_dot_dot_never_cancels_a_link_component(tmp_path: Path) -> None:
+    # Lexically ../../web/through/../../etc is root/etc; really it climbs out of through's target.
+    root = tmp_path / "checkout"
+    (root / ".git").mkdir(parents=True)
+    _npm_ci_layout(root)
+    (tmp_path / "outside/a/b").mkdir(parents=True)
+    (root / "app/web/through").symlink_to(tmp_path / "outside/a/b")
+    (root / "app/node_modules/sneak").symlink_to("../../app/web/through/../../etc")
+    assert "app/node_modules/sneak" in sandbox.inventory(root, owner_uid=os.getuid()).escaping
