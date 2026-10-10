@@ -38,7 +38,7 @@
       "pass": 2
     }
   },
-  "generated_at": "2026-10-10T17:10:30Z",
+  "generated_at": "2026-10-10T17:11:06Z",
   "issues": [
     {
       "closed_at": "2026-10-10T12:28:43Z",
@@ -868,9 +868,9 @@
       "cost": {
         "calls": 6,
         "coder_model_usd": 0.0,
-        "coder_usd": 0.001879,
+        "coder_usd": 0.003307,
         "model_usd": 0.022689,
-        "usd": 0.024567
+        "usd": 0.025996
       },
       "deferred": null,
       "escalation": null,
@@ -1000,14 +1000,14 @@
       "type": "feature"
     },
     {
-      "closed_at": null,
+      "closed_at": "2026-10-10T17:10:27Z",
       "coder_engine": "agy-unrestricted",
       "cost": {
-        "calls": 5,
+        "calls": 6,
         "coder_model_usd": 0.0,
         "coder_usd": 0.026384,
-        "model_usd": 0.008776,
-        "usd": 0.03516
+        "model_usd": 0.010404,
+        "usd": 0.036788
       },
       "deferred": null,
       "escalation": null,
@@ -1042,12 +1042,12 @@
       "kind": "issue",
       "number": 25,
       "opened_at": "2026-10-10T16:42:40Z",
-      "outcome": "open",
+      "outcome": "released",
       "owner": "api",
       "pr": 26,
       "quality_score": 83,
-      "release": null,
-      "resolution_seconds": null,
+      "release": "v0.1.1",
+      "resolution_seconds": 1703,
       "scenario": "d",
       "severity": "s3",
       "stages": [
@@ -1078,9 +1078,13 @@
         },
         {
           "entered_at": "2026-10-10T17:10:27Z",
-          "in_progress": true,
-          "seconds": 0,
+          "seconds": 36,
           "stage": "stage:merged"
+        },
+        {
+          "entered_at": "2026-10-10T17:11:03Z",
+          "seconds": 0,
+          "stage": "stage:released"
         }
       ],
       "title": "Lowercase tracking numbers are rejected as invalid",
@@ -1092,9 +1096,9 @@
     "deferred": 0,
     "escalated": 13,
     "issues": 17,
-    "orchestrator_usd": 0.511058,
-    "released": 1,
-    "usd": 1.176177
+    "orchestrator_usd": 0.516392,
+    "released": 2,
+    "usd": 1.184568
   },
   "version": 1
 }
