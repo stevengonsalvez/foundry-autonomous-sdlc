@@ -1,0 +1,39 @@
+name: Bug report
+description: Report behaviour that differs from what is expected
+title: "fix: "
+labels: ["type:bug"]
+body:
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: The exact input or clicks, so the bug can be reproduced in a test.
+      placeholder: |
+        1. Open the home page
+        2. Search for a tracking number and open the result
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behaviour
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behaviour
+      description: What happens instead, including any error text or status code.
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: Where did you see it?
+      options:
+        - Web app
+        - API
+        - Carrier mock
+        - Not sure
+    validations:
+      required: false

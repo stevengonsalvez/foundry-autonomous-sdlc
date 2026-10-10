@@ -1,0 +1,37 @@
+name: Feature request
+description: Ask for new behaviour in the parcel tracker
+title: "feat: "
+labels: ["type:feature"]
+body:
+  - type: textarea
+    id: goal
+    attributes:
+      label: Goal
+      description: What should be possible afterwards, and for whom?
+      placeholder: A shopper can see when a parcel is expected to arrive.
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance criteria
+      description: One testable statement per line. Each should be checkable by a test.
+      placeholder: |
+        - The parcel page shows "Estimated delivery" with the date from the API
+        - When there is no estimate the page shows "No estimate yet"
+    validations:
+      required: true
+  - type: textarea
+    id: scope
+    attributes:
+      label: Scope
+      description: What is in, and what is explicitly out.
+    validations:
+      required: false
+  - type: textarea
+    id: edge-cases
+    attributes:
+      label: Edge cases
+      description: Empty, missing, malformed or unusual inputs worth handling.
+    validations:
+      required: false
