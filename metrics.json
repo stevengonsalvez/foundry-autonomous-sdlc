@@ -38,7 +38,7 @@
       "pass": 1
     }
   },
-  "generated_at": "2026-10-10T15:14:06Z",
+  "generated_at": "2026-10-10T15:15:14Z",
   "issues": [
     {
       "closed_at": "2026-10-10T12:28:43Z",
@@ -521,14 +521,14 @@
       "type": "feature"
     },
     {
-      "closed_at": null,
+      "closed_at": "2026-10-10T15:14:04Z",
       "coder_engine": "agy-unrestricted",
       "cost": {
-        "calls": 4,
+        "calls": 5,
         "coder_model_usd": 0.0,
         "coder_usd": 0.060058,
-        "model_usd": 0.011444,
-        "usd": 0.071502
+        "model_usd": 0.012957,
+        "usd": 0.073015
       },
       "deferred": null,
       "escalation": null,
@@ -563,12 +563,12 @@
       "kind": "issue",
       "number": 12,
       "opened_at": "2026-10-10T14:53:52Z",
-      "outcome": "open",
+      "outcome": "released",
       "owner": null,
       "pr": 13,
       "quality_score": 100,
-      "release": null,
-      "resolution_seconds": null,
+      "release": "v0.1.0",
+      "resolution_seconds": 1280,
       "scenario": "a",
       "severity": null,
       "stages": [
@@ -599,9 +599,13 @@
         },
         {
           "entered_at": "2026-10-10T15:14:04Z",
-          "in_progress": true,
-          "seconds": 0,
+          "seconds": 68,
           "stage": "stage:merged"
+        },
+        {
+          "entered_at": "2026-10-10T15:15:12Z",
+          "seconds": 0,
+          "stage": "stage:released"
         }
       ],
       "title": "Show the estimated delivery date on the parcel page",
@@ -613,9 +617,9 @@
     "deferred": 0,
     "escalated": 9,
     "issues": 10,
-    "orchestrator_usd": 0.367778,
-    "released": 0,
-    "usd": 0.669512
+    "orchestrator_usd": 0.372877,
+    "released": 1,
+    "usd": 0.676124
   },
   "version": 1
 }
