@@ -38,7 +38,7 @@
       "pass": 1
     }
   },
-  "generated_at": "2026-10-10T15:25:41Z",
+  "generated_at": "2026-10-10T15:30:45Z",
   "issues": [
     {
       "closed_at": "2026-10-10T12:28:43Z",
@@ -615,11 +615,11 @@
       "closed_at": null,
       "coder_engine": null,
       "cost": {
-        "calls": 1,
+        "calls": 2,
         "coder_model_usd": 0.0,
         "coder_usd": 0.0,
-        "model_usd": 0.001376,
-        "usd": 0.001376
+        "model_usd": 0.002517,
+        "usd": 0.002517
       },
       "deferred": null,
       "escalation": null,
@@ -639,9 +639,14 @@
       "stages": [
         {
           "entered_at": "2026-10-10T15:25:18Z",
+          "seconds": 300,
+          "stage": "stage:ready"
+        },
+        {
+          "entered_at": "2026-10-10T15:30:18Z",
           "in_progress": true,
           "seconds": 0,
-          "stage": "stage:ready"
+          "stage": "stage:feasible"
         }
       ],
       "title": "Show when the parcel was last updated on the parcel page",
@@ -651,11 +656,11 @@
       "closed_at": null,
       "coder_engine": null,
       "cost": {
-        "calls": 1,
+        "calls": 2,
         "coder_model_usd": 0.0,
         "coder_usd": 0.0,
-        "model_usd": 0.001089,
-        "usd": 0.001089
+        "model_usd": 0.003136,
+        "usd": 0.003136
       },
       "deferred": null,
       "escalation": null,
@@ -687,11 +692,11 @@
       "closed_at": null,
       "coder_engine": null,
       "cost": {
-        "calls": 1,
+        "calls": 2,
         "coder_model_usd": 0.0,
         "coder_usd": 0.0,
-        "model_usd": 0.002031,
-        "usd": 0.002031
+        "model_usd": 0.004231,
+        "usd": 0.004231
       },
       "deferred": null,
       "escalation": null,
@@ -723,11 +728,11 @@
       "closed_at": null,
       "coder_engine": null,
       "cost": {
-        "calls": 1,
+        "calls": 2,
         "coder_model_usd": 0.0,
         "coder_usd": 0.0,
-        "model_usd": 0.000728,
-        "usd": 0.000728
+        "model_usd": 0.002485,
+        "usd": 0.002485
       },
       "deferred": null,
       "escalation": null,
@@ -739,12 +744,19 @@
       "outcome": "open",
       "owner": "api",
       "pr": null,
-      "quality_score": null,
+      "quality_score": 78,
       "release": null,
       "resolution_seconds": null,
       "scenario": "d",
       "severity": "s3",
-      "stages": [],
+      "stages": [
+        {
+          "entered_at": "2026-10-10T15:30:43Z",
+          "in_progress": true,
+          "seconds": 0,
+          "stage": "stage:needs-refinement"
+        }
+      ],
       "title": "Lowercase tracking numbers are rejected as invalid",
       "type": "bug"
     }
@@ -754,9 +766,9 @@
     "deferred": 0,
     "escalated": 9,
     "issues": 14,
-    "orchestrator_usd": 0.392603,
+    "orchestrator_usd": 0.398526,
     "released": 1,
-    "usd": 0.701075
+    "usd": 0.714143
   },
   "version": 1
 }
