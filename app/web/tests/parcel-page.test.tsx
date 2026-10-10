@@ -91,7 +91,7 @@ describe("parcel page", () => {
     renderApp(fakeService(), "#/parcel/PK1000000001");
     await screen.findByRole("list", { name: "Shipment history" });
     await userEvent.click(screen.getByRole("link", { name: /Track another parcel/ }));
-    expect(await screen.findByRole("heading", { level: 1, name: "Track your parcel" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { level: 1, name: "Track a parcel" })).toBeInTheDocument();
   });
 
   it("does not show the previous parcel while the next one loads", async () => {
@@ -119,7 +119,7 @@ describe("navigation", () => {
 
   it("titles the document after the page", async () => {
     renderApp(fakeService());
-    await waitFor(() => expect(document.title).toBe("Track your parcel · Parcel Tracker"));
+    await waitFor(() => expect(document.title).toBe("Track a parcel · Parcel Tracker"));
     window.location.hash = "#/parcel/PK1000000001";
     await waitFor(() => expect(document.title).toBe("PK1000000001 · Parcel Tracker"));
   });

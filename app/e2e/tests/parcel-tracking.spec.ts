@@ -4,7 +4,7 @@ import { expect, test } from "@playwright/test";
 test.describe("tracking a parcel", () => {
   test("search for a parcel and read its timeline", async ({ page }) => {
     await page.goto("/");
-    await expect(page.getByRole("heading", { level: 1, name: "Track your parcel" })).toBeVisible();
+    await expect(page.getByRole("heading", { level: 1, name: "Track a parcel" })).toBeVisible();
 
     await page.getByLabel("Tracking number").fill("PK1000000001");
     await page.getByRole("button", { name: "Track" }).click();
@@ -44,7 +44,7 @@ test.describe("tracking a parcel", () => {
     await expect(alert).toContainText("Parcel not found");
     await expect(alert).toContainText("PK9999999999");
     await page.getByRole("link", { name: /Track another parcel/ }).click();
-    await expect(page.getByRole("heading", { level: 1, name: "Track your parcel" })).toBeVisible();
+    await expect(page.getByRole("heading", { level: 1, name: "Track a parcel" })).toBeVisible();
   });
 
   test("tell the visitor when the number is malformed", async ({ page }) => {

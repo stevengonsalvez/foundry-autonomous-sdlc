@@ -5,9 +5,9 @@ import { CarrierUnavailableError, type ParcelSummary } from "@parcel/core";
 import { deferred, fakeService, renderApp } from "./helpers";
 
 describe("home page", () => {
-  it("greets with the Track your parcel heading", async () => {
+  it("greets with the Track a parcel heading", async () => {
     renderApp(fakeService());
-    expect(screen.getByRole("heading", { level: 1, name: "Track your parcel" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { level: 1, name: "Track a parcel" })).toBeInTheDocument();
     await screen.findByRole("table");
   });
 
