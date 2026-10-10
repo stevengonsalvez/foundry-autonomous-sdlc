@@ -1,36 +1,43 @@
 import React from "react";
+import { useEffect } from "react";
 import { useParams } from "react-router-dom";
 import { useRemote } from "../useRemote";
-import { getParcel } from "../http-parcel-service";
-import Timeline from "../components/Timeline";
-import StatusBadge from "../components/StatusBadge";
-import { formatDate } from "../format";
+import { parcelService } from "../http-parcel-service";
+import { StatusBadge } from "../components/StatusBadge";
+import { Timeline } from "../components/Timeline";
+import { formatDateTime } from "../format";
 
 export default function ParcelPage() {
   const { id } = useParams();
-  const { loading, error, value: parcel } = useRemote(() => (id ? getParcel(id) : Promise.resolve(null)), [id]);
+  const remote = useRemote(() => parcelService.getParcel(id ?? ""), [id]);
+
+  useEffect(() => {
+    // noop
+  }, [remote]);
+
+  if (remote.loading) return <div>Loading…</div>;
+  if (remote.error) return <div>Error</div>;
+  if (!remote.data) return <div>Not found</div>;
+
+  const p = remote.data;
+
+  const showEstimate = p.estimatedDelivery && ["label_created", "in_transit", "out_for_delivery"].includes(p.status);
 
   return (
     <main>
-      <header className="parcel-header">
-        <p className="eyebrow">Tracking number</p>
-        <div className="parcel-header__row">
-          <h1 className="mono" id="page-title" tabIndex={-1}>
-            {parcel?.trackingNumber ?? (loading ? "Loading…" : "")}
-          </h1>
-          {parcel && <StatusBadge status={parcel.status} />}
-        </div>
-        {/* Show estimated delivery directly below the status badge when appropriate */}
-        {parcel && parcel.estimatedDelivery &&
-          (parcel.status === "label_created" || parcel.status === "in_transit" || parcel.status === "out_for_delivery") && (
-            <p aria-live="polite">Estimated delivery: {formatDate(parcel.estimatedDelivery)}</p>
-          )}
-      </header>
+      <section aria-labelledby="summary">
+        <h1 id="summary">Parcel {p.trackingNumber}</h1>
+        <StatusBadge status={p.status} />
+        {showEstimate ? <div>Estimated delivery: {formatDateTime(p.estimatedDelivery)}</div> : null}
+        <dl>
+          <dt>Last update</dt>
+          <dd>{p.lastUpdate}</dd>
+        </dl>
+      </section>
 
-      <section aria-label="parcel-summary">
-        {loading && <p>Loading…</p>}
-        {error && <p role="alert">Error loading parcel</p>}
-        {parcel && <Timeline events={parcel.events} />}
+      <section aria-labelledby="timeline">
+        <h2 id="timeline">Timeline</h2>
+        <Timeline events={p.events} />
       </section>
     </main>
   );
