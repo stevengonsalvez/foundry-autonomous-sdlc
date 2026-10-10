@@ -212,12 +212,12 @@ class JobRunner:
         # Redacted and without local variables everywhere it goes: stdout (the platform logstream), log, state.
         print(f"coder job {self.spec.job_id}: unhandled {type(exc).__name__}\n{self.store.redact.traceback(exc)}",
               flush=True)
+        self._release_lease()   # before the failure is visible, so a retry started on seeing it finds the lease free
         try:
             self._finish(Status.FAILED, "internal-error", self.store.redact.traceback(exc, limit=TRACEBACK_CHARS))
         except Exception as failure:
             print(f"coder job {self.spec.job_id}: could not record the failure\n"
                   f"{self.store.redact.traceback(failure)}", flush=True)
-        self._release_lease()
 
     def _release_lease(self) -> None:
         """After a crash the orchestrator may never see a clean end, so free the issue for the next attempt."""

@@ -94,6 +94,7 @@ MAX_START_RESENDS = 1
 SESSION_GONE_POLLS = 2          # consecutive session_not_accessible polls before a job counts as lost
 CODER_LOG_CHARS = 3_000         # log tail copied onto the issue when a coder job fails
 MAX_ENGINE_EVENTS = 20
+MAX_TEST_FILES_SCANNED = 60       # test files read at the PR head to find text a PR removed
 CI_LOG_CHARS = 20_000            # tail of a failing check log handed to triage and the coder
 MAX_TRANSIENT_TICKS = 24          # consecutive deferred ticks before an object is escalated
 CODER_MAX_MODEL_USD = 0.5
@@ -985,6 +986,14 @@ class _Tick:
         ci["test_files"] = fixed
         return True
 
+    def _tests_asserting_removed_text(self, ref: str, diff: str, repo_tests: list[str]) -> list[str]:
+        """Every real test file that still contains text the PR removed from the app."""
+        literals = paths.removed_literals(diff)
+        if not literals:
+            return []
+        return [p for p in repo_tests[:MAX_TEST_FILES_SCANNED]
+                if any(t in (self.github.get_file(p, ref=ref) or "") for t in literals)]
+
     def _repo_test_files(self, ref: str) -> list[str]:
         return [p for p in self.github.list_tree(ref)
                 if p.startswith(paths.APP_ROOT) and p.endswith(paths.TEST_FILE_SUFFIXES)]
@@ -1151,6 +1160,8 @@ class _Tick:
         # The agent's paths are a hint: only real test files, matched or seen failing in the log, are kept.
         test_files = paths.resolve_test_files(data["test_files"], repo_tests, log) \
             if data["cause"] == "stale-test" else []
+        if data["cause"] == "stale-test":
+            test_files = sorted({*test_files, *self._tests_asserting_removed_text(pr.head_sha, diff, repo_tests)})
         st.data["ci_triage"] = {"cause": data["cause"], "explanation": data["explanation"], "test_files": test_files,
                                 "claimed": [one_line(str(p), 200) for p in data["test_files"][:20]],
                                 "head": pr.head_sha}

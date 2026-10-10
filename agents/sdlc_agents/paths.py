@@ -57,6 +57,34 @@ def resolve_test_files(claimed: list[str], real: list[str], log: str) -> list[st
     return sorted(found)
 
 
+_QUOTED = re.compile(r"\"([^\"\n]{6,80})\"|'([^'\n]{6,80})'|`([^`\n$]{6,80})`")
+_JSX_TEXT = re.compile(r">([^<>{}\n]{6,80})<")
+MAX_REMOVED_LITERALS = 20
+
+
+def removed_literals(diff: str) -> list[str]:
+    """
+    Strings and JSX text the PR removed from non-test files and did not put back: what a stale test
+    still asserts. Looking for them in every test file finds specs the failing log never named
+    (live: the Playwright spec under app/e2e kept the old heading while only vitest failed first).
+    """
+    removed: list[str] = []
+    added: set[str] = set()
+    in_tests = False
+    for line in diff.splitlines():
+        if line.startswith("diff --git "):
+            in_tests = is_test_path(line.rsplit(" b/", 1)[-1])
+        elif in_tests or line.startswith(("---", "+++")):
+            continue
+        elif line[:1] in ("-", "+"):
+            hits = [t for m in (*_QUOTED.finditer(line), *_JSX_TEXT.finditer(line)) for t in m.groups() if t]
+            if line[0] == "-":
+                removed.extend(hits)
+            else:
+                added.update(hits)
+    return list(dict.fromkeys(t.strip() for t in removed if t.strip() not in added))[:MAX_REMOVED_LITERALS]
+
+
 def is_test_path(path: str) -> bool:
     """True when the repo-relative path matches one of the architecture's test globs."""
     parts = PurePosixPath(path).parts
