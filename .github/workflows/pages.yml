@@ -1,0 +1,91 @@
+name: Pages
+
+# Publishes the demo app at the site root and the metrics dashboard at /dashboard/.
+# The orchestrator dispatches this after writing metrics.json to the `metrics` branch;
+# the schedule is the fallback. No secrets and no Azure credentials, ever.
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+  schedule:
+    - cron: "*/30 * * * *"
+
+# Deployments are queued, never cancelled half way.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+defaults:
+  run:
+    shell: bash -euo pipefail {0}
+
+permissions:
+  contents: read
+
+env:
+  NODE_VERSION: "22"
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: main
+          persist-credentials: false
+
+      # The metrics branch does not exist until the orchestrator first writes to it.
+      - name: Look for the metrics branch
+        id: metrics
+        run: |
+          rc=0
+          git ls-remote --exit-code --heads \
+            "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY" refs/heads/metrics >/dev/null || rc=$?
+          case "$rc" in
+            0) echo "exists=true" >> "$GITHUB_OUTPUT" ;;
+            2) echo "exists=false" >> "$GITHUB_OUTPUT" ;;
+            *) echo "::error::git ls-remote failed with exit code $rc"; exit "$rc" ;;
+          esac
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        if: steps.metrics.outputs.exists == 'true'
+        with:
+          ref: metrics
+          path: metrics-checkout
+          persist-credentials: false
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+
+      - name: Assemble the site
+        env:
+          METRICS_EXISTS: ${{ steps.metrics.outputs.exists }}
+        run: |
+          metrics_dir=()
+          if [[ "$METRICS_EXISTS" == "true" ]]; then
+            metrics_dir=(metrics-checkout)
+          fi
+          scripts/build_pages.sh _site "${metrics_dir[@]}"
+
+      - uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
+        with:
+          path: _site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5.0.1
