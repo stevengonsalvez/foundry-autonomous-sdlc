@@ -59,7 +59,7 @@ variable "model_candidates" {
   default = [
     { name = "gpt-5.4-nano", version = "2026-03-17", sku_name = "GlobalStandard", capacity = 10 },
     { name = "gpt-5-nano", version = "2025-08-07", sku_name = "GlobalStandard", capacity = 10 },
-    { name = "gpt-5-mini", version = "2025-08-07", sku_name = "GlobalStandard", capacity = 10 },
+    { name = "gpt-5-mini", version = "2025-08-07", sku_name = "GlobalStandard", capacity = 50 },
   ]
 }
 

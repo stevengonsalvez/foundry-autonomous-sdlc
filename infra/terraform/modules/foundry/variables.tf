@@ -60,8 +60,8 @@ variable "model_candidates" {
   }
 
   validation {
-    condition     = alltrue([for m in var.model_candidates : m.capacity >= 1 && m.capacity <= 30])
-    error_message = "Keep capacity between 1 and 30 (1k to 30k TPM). The TPM cap is the PoC's main spend brake."
+    condition     = alltrue([for m in var.model_candidates : m.capacity >= 1 && m.capacity <= 100])
+    error_message = "Keep capacity between 1 and 100 (1k to 100k TPM). The TPM cap is a spend brake; the agents also enforce per-issue and total cost caps."
   }
 }
 
