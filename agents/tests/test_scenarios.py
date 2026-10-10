@@ -434,7 +434,7 @@ def test_prompt_injection_in_issue_text_stays_inside_the_nonce_wrapper(world: Wo
 def test_model_output_that_breaks_the_schema_is_rejected_billed_and_retried(world: World) -> None:
     gh, foundry = world.gh, world.foundry
     injected = {**REFINED_SCORE, "merge": True}
-    foundry.script("sdlc-req-gate", injected)
+    foundry.script("sdlc-req-gate", injected, injected)    # the repair retry repeats the attack
     n = gh.open_issue("Show the estimated delivery date", A_BODY)
 
     report = world.tick()[0]
@@ -442,7 +442,7 @@ def test_model_output_that_breaks_the_schema_is_rejected_billed_and_retried(worl
     assert [o.result for o in report.objects if o.number == n] == ["error"]
     st = gh.state_of(n)
     assert st["stages"] == [] and st["failures"]["count"] == 1 and "unexpected keys" in st["failures"]["error"]
-    assert len(st["cost"]["calls"]) == 1 and st["cost"]["usd"] > 0
+    assert len(st["cost"]["calls"]) == 2 and st["cost"]["usd"] > 0
     assert not [label for label in gh.labels(n) if label.startswith("stage:")]
     world.tick()
     assert stages(world, n) == [state.READY]
@@ -451,10 +451,10 @@ def test_model_output_that_breaks_the_schema_is_rejected_billed_and_retried(worl
 
 def test_off_list_triage_values_and_unsafe_test_paths_never_reach_labels_or_the_coder(world: World) -> None:
     gh, foundry = world.gh, world.foundry
-    foundry.script("sdlc-triage", {"severity": "s0", "owner": "security-team", "summary": "x",
-                                   "suspected_area": "y", "rationale": "z"})
-    foundry.script("sdlc-test-designer", {"tests": [{"path": ".github/workflows/pwn.test.ts",
-                                                     "content": "import 'vitest'"}], "rationale": "r"})
+    off_list = {"severity": "s0", "owner": "security-team", "summary": "x", "suspected_area": "y", "rationale": "z"}
+    unsafe = {"tests": [{"path": ".github/workflows/pwn.test.ts", "content": "import 'vitest'"}], "rationale": "r"}
+    foundry.script("sdlc-triage", off_list, off_list)
+    foundry.script("sdlc-test-designer", unsafe, unsafe)
     n = gh.open_issue("Lowercase tracking numbers are rejected", D_BODY, labels=("type:bug",))
     world.tick()
     assert not {label for label in gh.labels(n) if label.startswith(("severity:", "owner:"))}
@@ -654,8 +654,8 @@ def test_repeated_step_failures_escalate_instead_of_spending_forever(world: Worl
     foundry.defaults["sdlc-feasibility"] = "not json"
     n = gh.open_issue("Show the estimated delivery date", A_BODY)
     world.tick(5)
-    assert len(foundry.agent_calls("sdlc-feasibility")) == 3
-    assert state.ESC_NOT_SUITABLE in gh.labels(n)
+    assert len(foundry.agent_calls("sdlc-feasibility")) == 6
+    assert state.ESC_AGENT_ERROR in gh.labels(n) and state.ESC_NOT_SUITABLE not in gh.labels(n)
     assert "failed 3 times" in gh.state_of(n)["escalation"]["reasons"][0]
 
 

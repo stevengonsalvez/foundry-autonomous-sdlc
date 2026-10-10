@@ -71,7 +71,7 @@ One object, one `stage:*` label at a time. Transitions are performed only by the
 Label set (created by `scripts/setup_repo.py`; names are exact):
 
 - Stage: `stage:needs-refinement`, `stage:ready`, `stage:feasible`, `stage:tests-written`, `stage:building`, `stage:in-review`, `stage:merged`, `stage:released`
-- Escalation (terminal): `escalated:not-agent-suitable`, `escalated:requirements`, `escalated:review-failed`, `escalated:cost-cap`, `escalated:build-failed`
+- Escalation (terminal): `escalated:not-agent-suitable`, `escalated:requirements`, `escalated:review-failed`, `escalated:cost-cap`, `escalated:build-failed`, `escalated:agent-error`
 - Type: `type:feature`, `type:bug`, `type:maintenance`
 - Bug triage: `bug:triaged`, `severity:s1`, `severity:s2`, `severity:s3`, `severity:s4`, `owner:web`, `owner:api`, `owner:carrier-mock`
 - PR: `agent:pr` (set on every PR the coder opens), `maintenance:test-repair`
@@ -83,6 +83,8 @@ The object type comes from the `type:*` label (default `type:feature`); the scen
 ### State comment
 
 Each issue (or maintenance PR) has exactly one bot comment starting with `<!-- sdlc-state:v1` followed by JSON and `-->`, then a human readable summary. The orchestrator edits it in place. The JSON is the source of truth for the stage; labels are a projection the orchestrator keeps in sync. Only comments authored by the owner identity count. Characters `<`, `>` and `&` in the JSON are written as `<`, `>`, `&`, so text inside can never close the comment. Unknown keys are preserved; a version above 1 is refused, never overwritten. Beyond the example below the orchestrator records `quality.history`, `ci_triage`, `tests` (file list; contents live in the `<!-- sdlc-tests:v1` comment), `gate_history` (results per evaluated head), `release.pending` (a reserved tag), `escalation`, `failures` (consecutive failures of one step; 3, or 6 for coder polls, escalate) and `cost.coder_model_usd`. A failing step rolls the state back to its last saved version, keeping only its spend and the failure count.
+
+Failures are classified. Transient ones (HTTP 408, 429, 5xx, `rate_limit_exceeded`, timeouts, dropped connections, GitHub rate limits) are retried inside the tick with exponential backoff and jitter, honouring `Retry-After`, never past the tick's wall budget; if they persist the object is deferred: left exactly as it was (no label, comment or failure count change; spend already incurred is still saved), reported as `result: "deferred"` in the tick report and as `deferred` in metrics. Only non-transient failures count: an agent answer that fails its schema or checks after one repair retry (the validation error is sent back to the agent), a refusal or incomplete answer, or a contract violation. Three consecutive counted failures of a prompt agent step end in `escalated:agent-error`; `escalated:not-agent-suitable` is reserved for a real `suitable: false` verdict from the feasibility agent. The three MCP-using agents get one tool, `get_file_contents` (it also lists directories), because every listed tool's schema is billed as input tokens on every call. The tick report lists input and output tokens per model call.
 
 ```json
 {
@@ -153,7 +155,7 @@ Response to `start`: `{"job_id", "status": "running"}` immediately; the work con
 
 Coder steps, all in code (the CLI only edits files):
 
-1. Install node into `/opt/node` (once per session, sha256-checked) and `agy` for `agyuser` if missing, read both secrets from Key Vault, clone the repo, check out or create the branch. The PAT reaches git only through `GIT_ASKPASS` on clone, fetch and push (token-free script in a root-only directory, deleted after each call); it is never in `.git/config`, the remote URL, a log, or any environment agy or the tests see.
+1. Install node into `/opt/node` (once per session, sha256-checked) and `agy` into `/opt/agy` (root-owned, run by `agyuser`) if missing, read both secrets from Key Vault, clone the repo, check out or create the branch. The PAT reaches git only through `GIT_ASKPASS` on clone, fetch and push (token-free script in a root-only directory, deleted after each call); it is never in `.git/config`, the remote URL, a log, or any environment agy or the tests see.
 2. `feature` and `bugfix`: write `tests` and commit them alone with message `test: ...` first. Run `test_cmd` with the vitest JSON reporter; at least one assertion in the new tests must fail and every new test file must load, else `failed` with reason `tests-not-red`. `revise` finds the existing red commit; `maintenance` has none.
 3. Loop up to `max_iterations`: run the engine with the issue, spec, failing output and the scope rules; run `test_cmd`; commit and push each round. Done when green: tests pass, the red suites (or, for maintenance, the suites failing at the start) ran with every assertion passing, and the result holds after `git clean -X` and a fresh `install_cmd`. A `revise` job is not done until it has committed.
 4. After every engine run: any new symlink, any change to `.git/config` or `.git/hooks`, the branch switched, or a change outside `allowed_paths`, to an existing test file (feature, bugfix, revise), to vitest config, or (maintenance) to a non-test file is a `scope-violation`: reverted, job failed, nothing further pushed. Engine-made commits are undone first so their content is checked too. Then for `feature` and `bugfix` open (or reuse) the PR with label `agent:pr` and a body with `Closes #N`, the red and green summaries, iteration count and engine.
@@ -202,7 +204,7 @@ After a merge: the release-notes agent writes notes from the PR title, body and 
 }
 ```
 
-Additions to schema version 1 (all optional for readers): `totals.escalated`, `totals.orchestrator_usd`; per entry `kind` (`issue` or `pr`; the maintenance PR has `number: null`, `pr` set and scenario `d-maintenance`), `escalation`, `cost.coder_model_usd`, `gate_attempts` (each gate's conclusions per evaluated head sha, oldest first: first element is the first attempt, last is the eventual result); per gate in `gate_pass_rates`, `first_pass` and `first_fail`. The stage the object is in now has `seconds: 0` and `in_progress: true`.
+Additions to schema version 1 (all optional for readers): `totals.escalated`, `totals.orchestrator_usd`; per entry `kind` (`issue` or `pr`; the maintenance PR has `number: null`, `pr` set and scenario `d-maintenance`), `escalation`, `cost.coder_model_usd`, `deferred` (the transient error that deferred the object this tick, else null; `totals.deferred` counts them), `gate_attempts` (each gate's conclusions per evaluated head sha, oldest first: first element is the first attempt, last is the eventual result); per gate in `gate_pass_rates`, `first_pass` and `first_fail`. The stage the object is in now has `seconds: 0` and `in_progress: true`.
 
 Dashboard panels: cycle time per stage (median and per issue), defect owner and resolution time, cost per issue (table plus total against the 5 USD cap), gate pass rates (first-attempt and eventual).
 

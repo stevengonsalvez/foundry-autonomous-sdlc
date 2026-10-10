@@ -20,12 +20,14 @@ from __future__ import annotations
 import copy
 import json
 import re
+import time
+from collections.abc import Callable
 from dataclasses import asdict, dataclass, field
 from typing import Any
 
-from sdlc_agents import cost, gates, lock, machine, metrics, release, state
+from sdlc_agents import cost, gates, lock, machine, metrics, release, repo_context, state
 from sdlc_agents.definitions import PO_LABEL
-from sdlc_agents.foundry import AgentOutput, AgentOutputError, AgentRunError, Section, run_agent
+from sdlc_agents.foundry import AgentOutput, AgentRunError, RetryPolicy, Section, call_with_retry, run_agent
 from sdlc_agents.machine import Action, Context, Kind
 from sdlc_agents.paths import is_test_path
 from sdlc_agents.ports import (
@@ -35,6 +37,7 @@ from sdlc_agents.ports import (
     ClockPort,
     Comment,
     FoundryPort,
+    GitHubError,
     GitHubPort,
     Issue,
     PullRequest,
@@ -61,6 +64,16 @@ class StepError(RuntimeError):
     """A step could not complete; recorded against the object and retried on a later tick."""
 
 
+def is_transient(exc: BaseException) -> bool:
+    """Worth retrying later and never held against the object: rate limits, timeouts, 5xx, dropped
+    connections. Bad answers, refusals and contract violations are not transient."""
+    if isinstance(exc, AgentRunError):
+        return exc.transient
+    if isinstance(exc, GitHubError):
+        return exc.status in (408, 429) or exc.status >= 500 or (exc.status == 403 and "rate limited" in str(exc))
+    return isinstance(exc, OSError)        # URLError, TimeoutError, ConnectionError
+
+
 @dataclass
 class ObjectReport:
     number: int
@@ -77,6 +90,7 @@ class TickReport:
     lock: str = ""
     objects: list[ObjectReport] = field(default_factory=list)
     model_calls: int = 0
+    calls: list[dict[str, Any]] = field(default_factory=list)   # per model call: number, agent, in, out, usd
     usd_this_tick: float = 0.0          # model spend billed to objects this tick
     orchestrator_usd: float = 0.0       # this tick's own hosted compute
     total_usd: float = 0.0
@@ -121,8 +135,9 @@ def run_tick(
     budget_wall_s: int = 240,
     *,
     budget: Budget | None = None,
+    sleep: Callable[[float], None] = time.sleep,
 ) -> TickReport:
-    """Run one bounded tick and return its report. Never raises.
+    """Run one bounded tick and return its report. Never raises. `sleep` waits out retry backoff.
 
     `secrets` is part of the hosted entrypoint contract; the adapters already hold what they need,
     so the tick itself reads no secret.
@@ -143,7 +158,7 @@ def run_tick(
         return report
     report.lock = "took-over-stale" if held.took_over_stale else "acquired"
     try:
-        _Tick(github, foundry, clock, report, budget or Budget(), budget_wall_s).run()
+        _Tick(github, foundry, clock, report, budget or Budget(), budget_wall_s, sleep).run()
     except Exception as exc:
         report.errors.append(f"tick: {type(exc).__name__}: {exc}")
     finally:
@@ -177,7 +192,9 @@ def _scenario(body: str) -> str | None:
 
 class _Tick:
     def __init__(self, github: GitHubPort, foundry: FoundryPort, clock: ClockPort, report: TickReport,
-                 budget: Budget, budget_wall_s: int):
+                 budget: Budget, budget_wall_s: int, sleep: Callable[[float], None]):
+        self.sleep = sleep
+        self.deferred: dict[int, str] = {}
         self.github = github
         self.foundry = foundry
         self.clock = clock
@@ -249,16 +266,39 @@ class _Tick:
             self._note(obj, action.kind.value, "ok", detail or action.reason)
         except Exception as exc:
             message = f"{type(exc).__name__}: {exc}"
-            self._note(obj, action.kind.value, "error", message)
-            self._record_failure(obj, action, message)
+            if is_transient(exc):
+                self._note(obj, action.kind.value, "deferred", message)
+                self.deferred[obj.item.number] = one_line(message, 300)
+                self._defer(obj)
+            else:
+                self._note(obj, action.kind.value, "error", message)
+                self._record_failure(obj, action, message)
+
+    def _roll_back(self, obj: _Object) -> bool:
+        """Restore the last saved state, keeping what was spent. Returns whether spend was added."""
+        if obj.state is None or obj.committed is None:
+            return False
+        spent = copy.deepcopy(obj.state.data["cost"])
+        obj.state.data = copy.deepcopy(obj.committed)
+        added = spent != obj.state.data["cost"]
+        obj.state.data["cost"] = spent
+        return added
+
+    def _defer(self, obj: _Object) -> None:
+        """A transient failure: leave the object as it was for the next tick, counting nothing."""
+        try:
+            if self._roll_back(obj):
+                self._save(obj)      # only to persist spend; stage, labels and failures are unchanged
+            elif obj.state_comment is None:
+                obj.state = None     # nothing was ever written for this object: keep it that way
+        except Exception as exc:
+            self.report.errors.append(f"#{obj.item.number}: could not defer: {type(exc).__name__}: {exc}")
 
     def _record_failure(self, obj: _Object, action: Action, message: str) -> None:
         if obj.state is None or obj.committed is None:
             return
         # Roll back to the last saved state; keep what was spent and count the failure.
-        spent = copy.deepcopy(obj.state.data["cost"])
-        obj.state.data = copy.deepcopy(obj.committed)
-        obj.state.data["cost"] = spent
+        self._roll_back(obj)
         try:
             obj.state.record_failure(action.kind.value, message)
             self._save(obj)
@@ -342,23 +382,25 @@ class _Tick:
 
     # -- model calls --------------------------------------------------------------
 
+    def _retry(self) -> RetryPolicy:
+        return RetryPolicy(sleep=self.sleep, monotonic=self.clock.monotonic, deadline=self.deadline)
+
     def _call(self, obj: _Object, agent: str, sections: list[Section]) -> AgentOutput:
-        """Run a prompt agent and bill the object, also when the answer fails validation."""
-        try:
-            out = run_agent(self.foundry, agent, sections)
-        except (AgentOutputError, AgentRunError) as exc:
-            # Incomplete or invalid answers were still generated, so they are still paid for.
-            if exc.input_tokens or exc.output_tokens:
-                self._bill(obj, agent, exc.input_tokens, exc.output_tokens)
-            raise
-        self._bill(obj, agent, out.input_tokens, out.output_tokens)
-        return out
+        """Run a prompt agent with retries; every answered call (valid or not) is billed to the object."""
+        return run_agent(self.foundry, agent, sections, retry=self._retry(),
+                         bill=lambda name, tokens_in, tokens_out: self._bill(obj, name, tokens_in, tokens_out))
+
+    def _hosted(self, body: dict[str, Any], session_id: str | None) -> tuple[dict[str, Any], str]:
+        return call_with_retry(lambda: self.foundry.invoke_hosted(CODER_AGENT, body, session_id=session_id),
+                               self._retry())
 
     def _bill(self, obj: _Object, agent: str, input_tokens: int, output_tokens: int) -> None:
         usd = cost.record_call(obj.st, agent, input_tokens, output_tokens)
         self.budget.usd_total += usd
         self.report.usd_this_tick = round(self.report.usd_this_tick + usd, 8)
         self.report.model_calls += 1
+        self.report.calls.append({"number": obj.item.number, "agent": agent, "in": input_tokens,
+                                  "out": output_tokens, "usd": usd})
 
     @staticmethod
     def _issue_section(item: Issue) -> Section:
@@ -472,9 +514,16 @@ class _Tick:
     def _do_design_tests(self, obj: _Object, ctx: Context, action: Action) -> str:
         st = obj.st
         mode = "bugfix" if st.type == "bug" else "feature"
-        data = self._call(obj, "sdlc-test-designer", [
-            Section("mode", mode, trusted=True), self._issue_section(obj.item), self._spec_section(st),
-        ]).data or {}
+        sections = [Section("mode", mode, trusted=True), self._issue_section(obj.item), self._spec_section(st)]
+        # Hand over the file list and the most relevant files, so the model rarely needs a tool call.
+        listing, files = repo_context.build(
+            self.github.list_tree("main"),
+            f"{obj.item.title}\n{obj.item.body}\n{self._spec_section(st).text}",
+            lambda path: self.github.get_file(path, ref="main"),
+        )
+        if listing:
+            sections += [Section("repo_files", listing), Section("source_files", files)]
+        data = self._call(obj, "sdlc-test-designer", sections).data or {}
         tests = [{"path": t["path"], "content": t["content"]} for t in data["tests"]]
         for t in tests:
             if self.github.get_file(t["path"], ref="main") is not None:
@@ -555,8 +604,7 @@ class _Tick:
             "branch": job["branch"],
         }
         self._save(obj)
-        resp, session = self.foundry.invoke_hosted(CODER_AGENT, {"op": "start", "job": job},
-                                                   session_id=st.data["coder"]["session_id"])
+        resp, session = self._hosted({"op": "start", "job": job}, st.data["coder"]["session_id"])
         if resp.get("status") not in ("running", "succeeded"):
             raise StepError(f"coder did not start: {one_line(json.dumps(resp), 200)}")
         st.data["coder"].update(session_id=session, status="running",
@@ -568,8 +616,7 @@ class _Tick:
     def _do_poll_coder(self, obj: _Object, ctx: Context, action: Action) -> str:
         st = obj.st
         coder = st.section("coder")
-        resp, session = self.foundry.invoke_hosted(CODER_AGENT, {"op": "status", "job_id": coder["job_id"]},
-                                                   session_id=coder.get("session_id"))
+        resp, session = self._hosted({"op": "status", "job_id": coder["job_id"]}, coder.get("session_id"))
         status = str(resp.get("status", ""))
         if status not in ("running", "succeeded", "failed", "timeout", "cancelled"):
             raise StepError(f"coder status unknown: {one_line(json.dumps(resp), 200)}")
@@ -812,7 +859,7 @@ class _Tick:
             pairs = [(o.item, o.state) for o in self.objects if o.state is not None]
             doc = metrics.build(
                 pairs, self.clock.now_iso(),
-                orchestrator_usd=self.previous["orchestrator_usd"] + tick_usd,
+                orchestrator_usd=self.previous["orchestrator_usd"] + tick_usd, deferred=self.deferred,
                 floor_usd=self.previous["usd"] + self.report.usd_this_tick + tick_usd,
             )
             written = metrics.publish(self.github, doc)

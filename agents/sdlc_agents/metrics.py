@@ -38,7 +38,7 @@ METRICS_SCHEMA: dict[str, Any] = {
         "totals": {
             "type": "object",
             "properties": {"usd": _USD, "issues": _COUNT, "released": _COUNT, "escalated": _COUNT,
-                           "orchestrator_usd": _USD},
+                           "orchestrator_usd": _USD, "deferred": _COUNT},
             "required": ["usd", "issues", "released"],
         },
         "issues": {"type": "array", "items": {
@@ -73,6 +73,7 @@ METRICS_SCHEMA: dict[str, Any] = {
                 },
                 "gates": {"type": "object"},
                 "gate_attempts": {"type": "object"},
+                "deferred": {"type": ["string", "null"]},
             },
             "required": [
                 "number", "title", "scenario", "type", "outcome", "opened_at", "closed_at", "stages",
@@ -181,10 +182,12 @@ def _gate_pass_rates(states: list[State]) -> dict[str, dict[str, int]]:
 
 
 def build(objects: list[tuple[Issue, State]], now: str, *, orchestrator_usd: float = 0.0,
-          floor_usd: float = 0.0) -> dict[str, Any]:
+          floor_usd: float = 0.0, deferred: dict[int, str] | None = None) -> dict[str, Any]:
     """The metrics document. `orchestrator_usd` is the cumulative orchestrator compute; `floor_usd`
     keeps totals.usd monotonic when objects drop out of view."""
-    entries = [_issue_entry(item, st) for item, st in sorted(objects, key=lambda p: p[0].number)]
+    deferred = deferred or {}
+    entries = [{**_issue_entry(item, st), "deferred": deferred.get(item.number)}
+               for item, st in sorted(objects, key=lambda p: p[0].number)]
     objects_usd = sum(e["cost"]["usd"] for e in entries)
     doc = {
         "version": 1,
@@ -193,6 +196,7 @@ def build(objects: list[tuple[Issue, State]], now: str, *, orchestrator_usd: flo
         "totals": {
             "usd": round(max(objects_usd + orchestrator_usd, floor_usd), 6),
             "orchestrator_usd": round(orchestrator_usd, 6),
+            "deferred": sum(e["deferred"] is not None for e in entries),
             "issues": len(entries),
             "released": sum(e["outcome"] == "released" for e in entries),
             "escalated": sum(e["outcome"] == "escalated" for e in entries),

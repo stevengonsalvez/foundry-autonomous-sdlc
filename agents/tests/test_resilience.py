@@ -26,18 +26,18 @@ def review_comments(world: World, pr: int) -> list[str]:
 
 def test_failed_rescore_keeps_the_answers_and_escalates_without_re_asking(world: World) -> None:
     gh, foundry = world.gh, world.foundry
-    foundry.script("sdlc-req-gate", LOW_SCORE, NO_QUESTIONS, NO_QUESTIONS, NO_QUESTIONS)
+    foundry.script("sdlc-req-gate", LOW_SCORE, *[NO_QUESTIONS] * 6)
     n = gh.open_issue("Make the parcel tracker better", B_BODY)
 
     world.tick(8)
 
     assert len(foundry.agent_calls("sdlc-product-owner")) == 1
-    assert len(foundry.agent_calls("sdlc-req-gate")) == 4
+    assert len(foundry.agent_calls("sdlc-req-gate")) == 7      # 1 + 3 steps x (answer + repair)
     st = gh.state_of(n)
-    assert st["escalation"]["label"] == state.ESC_REQUIREMENTS
+    assert st["escalation"]["label"] == state.ESC_AGENT_ERROR
     assert "rescore failed 3 times" in st["escalation"]["reasons"][0]
     assert st["quality"]["answers"] and st["quality"]["rounds"] == 1 and not st["quality"]["history"]
-    assert len(st["cost"]["calls"]) == 5          # every call billed, including the three rejected ones
+    assert len(st["cost"]["calls"]) == 8          # every call billed, including the six rejected ones
     assert max(len(b) for b in gh.bodies(n)) < 20_000
 
 
@@ -63,10 +63,12 @@ def test_lost_review_comment_means_no_recorded_verdict_and_a_clean_retry(world: 
     world.drive(lambda: state.IN_REVIEW in gh.labels(n))
     gh.fail_once["create_comment"] = 1
 
-    world.tick()
+    report = world.tick()[0]
     st = gh.state_of(n)
-    assert st["review"] is None and st["failures"]["action"] == "review"
-    # gate, feasibility, test design, review: the review is billed although its step was rolled back
+    # a 502 on the comment is transient: the step is deferred, nothing is recorded or counted ...
+    assert [o.result for o in report.objects if o.number == n] == ["deferred"]
+    assert st["review"] is None and st["failures"] is None
+    # ... except the spend: the review call is billed although its step was rolled back
     assert [c["agent"] for c in st["cost"]["calls"]][-1] == "sdlc-reviewer" and len(st["cost"]["calls"]) == 4
 
     world.drive(lambda: state.RELEASED in gh.labels(n))

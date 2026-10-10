@@ -23,6 +23,7 @@ from sdlc_agents.definitions import MAX_REFINEMENT_ROUNDS, QUALITY_THRESHOLD
 from sdlc_agents.ports import OWNER, Budget, PullRequest
 from sdlc_agents.state import (
     BUILDING,
+    ESC_AGENT_ERROR,
     ESC_BUILD_FAILED,
     ESC_COST_CAP,
     ESC_NOT_SUITABLE,
@@ -79,10 +80,9 @@ MODEL_ACTIONS = frozenset({
 SPEND_ACTIONS = MODEL_ACTIONS | {Kind.START_CODER}
 
 # Which escalation a repeatedly failing step ends in.
-_FAILURE_LABELS = {
-    Kind.TRIAGE: ESC_REQUIREMENTS, Kind.GATE: ESC_REQUIREMENTS, Kind.ANSWER: ESC_REQUIREMENTS,
-    Kind.RESCORE: ESC_REQUIREMENTS, Kind.FEASIBILITY: ESC_NOT_SUITABLE, Kind.REVIEW: ESC_REVIEW_FAILED,
-}
+# Only non-transient failures are counted (tick.py defers transient ones). A prompt agent that keeps
+# failing ends in escalated:agent-error, never in a verdict label such as not-agent-suitable.
+_FAILURE_LABELS = dict.fromkeys(MODEL_ACTIONS | {Kind.RELEASE}, ESC_AGENT_ERROR)
 
 
 @dataclass(frozen=True)

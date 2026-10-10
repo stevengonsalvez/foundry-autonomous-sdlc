@@ -247,7 +247,7 @@ def test_repeated_failures_escalate_with_the_phase_label() -> None:
     for _ in range(3):
         st.record_failure("gate", "bad json")
     action = machine.next_action(ctx(st))
-    assert action.label == state.ESC_REQUIREMENTS and "failed 3 times" in action.reason
+    assert action.label == state.ESC_AGENT_ERROR and "failed 3 times" in action.reason
     building = make_state(state.BUILDING)
     building.data["coder"] = {"job_id": "j", "started_at": NOW}
     for _ in range(5):
@@ -431,7 +431,8 @@ def test_metrics_document_validates_against_the_schema_and_counts_gates() -> Non
         "stage": state.RELEASED, "entered_at": "2026-10-10T12:00:00Z", "seconds": 0}
     assert doc["issues"][1]["stages"][0]["in_progress"] is True and doc["issues"][1]["outcome"] == "open"
     assert doc["gate_pass_rates"]["e2e"] == {"pass": 1, "fail": 1, "first_pass": 0, "first_fail": 1}
-    assert doc["totals"] == {"usd": 0.0, "issues": 2, "released": 1, "escalated": 0, "orchestrator_usd": 0.0}
+    assert doc["totals"] == {"usd": 0.0, "issues": 2, "released": 1, "escalated": 0, "orchestrator_usd": 0.0,
+                             "deferred": 0}
     assert first["gate_attempts"]["e2e"] == ["failure", "success"] and first["kind"] == "issue"
     with_orchestrator = metrics.build([(issue, st)], NOW, orchestrator_usd=0.2, floor_usd=0.1)
     assert with_orchestrator["totals"]["usd"] == 0.2
