@@ -78,12 +78,43 @@ print(f"fake vitest: {{total}} tests, {{bad}} failed")
 sys.exit(0 if ok else 1)
 '''
 
+# `npm run typecheck` and `npm run lint` as CI runs them in app/: a line "TYPE_ERROR <msg>" in any file
+# is a tsc error (path relative to its workspace, like `npm run typecheck --workspaces`), "LINT_ERROR <msg>"
+# an eslint error (stylish format, absolute path header). Installed as `npm` in the job's node bin.
+FAKE_NPM = f"""#!{sys.executable}
+import pathlib, sys
+root = pathlib.Path.cwd()
+script = sys.argv[1:]
+marker = {{("run", "typecheck"): "TYPE_ERROR ", ("run", "lint"): "LINT_ERROR "}}.get(tuple(script))
+if marker is None:
+    print("fake npm: unexpected", script); sys.exit(1)
+found = 0
+for f in sorted(root.rglob("*")):
+    if not f.is_file() or f.is_symlink():
+        continue
+    for no, line in enumerate(f.read_text(errors="replace").splitlines(), 1):
+        if not line.startswith(marker):
+            continue
+        found += 1
+        rel = f.relative_to(root)
+        if marker.startswith("TYPE"):
+            ws = rel.parts[0] if len(rel.parts) > 1 else "."
+            print(f"> @parcel/{{ws}}@0.1.0 typecheck")
+            print(f"{{rel.relative_to(ws) if ws != '.' else rel}}({{no}},1): error TS2322: {{line[len(marker):]}}")
+        else:
+            print(f)
+            print(f"  {{no}}:1  error  {{line[len(marker):]}}  no-restricted-syntax")
+sys.exit((2 if marker.startswith("TYPE") else 1) if found else 0)
+"""
+
 # Install commands are plain words (JobSpec forbids shell syntax), so test behaviours live in scripts.
 TOOLS = {
     "tools/noop.py": "",
     "tools/install_fail.py": "import sys\nprint('npm ERR! missing package')\nsys.exit(1)\n",
     "tools/dump_env.py": "import json, os, sys\nopen(sys.argv[1], 'w').write(json.dumps(dict(os.environ)))\n",
     "tools/plant_link.py": "import os\nos.symlink('/etc', 'web/src/escape')\n",
+    "tools/plant_type_error.py": ("import os\nos.makedirs('node_modules/legacy', exist_ok=True)\n"
+                                  "open('node_modules/legacy/index.d.ts', 'w').write('TYPE_ERROR legacy typing\\n')\n"),
     # The post-`npm ci` layout of this repo's app/ (cwd is app/): workspace links and a .bin link.
     "tools/npm_links.py": (
         "import os\n"
@@ -193,6 +224,7 @@ class ScriptedEngine:
     steps: list[Step]
     prompts: list[str] = field(default_factory=list)
     usage: Usage = field(default_factory=Usage)
+    last_timed_out: bool = False
 
     def edit(self, prompt: str, *, workdir: str, timeout_s: int) -> CommandResult:
         self.prompts.append(prompt)
@@ -237,6 +269,10 @@ class World:
     def service(self) -> CoderService:
         home = self.tmp / "home"
         self.engine_user.home.mkdir(exist_ok=True)
+        npm = FakeToolchain(home).node_bin() / "npm"
+        npm.parent.mkdir(parents=True, exist_ok=True)
+        npm.write_text(FAKE_NPM)
+        npm.chmod(0o755)
         deps = CoderDeps(
             home=home,
             secrets=_Secrets({"github-pat": PAT, "agy-cli-token": AGY_TOKEN}),
@@ -943,9 +979,9 @@ def test_soft_denied_agy_hands_over_to_unrestricted_agy_which_commits(world: Wor
     assert status["status"] == "succeeded", status
     assert status["engine"] == "agy-unrestricted"
     assert status["iterations"] == 2
-    events = [(e["iteration"], e["engine"], e["reason"]) for e in status["engine_events"]]
+    events = [(e["iteration"], e["engine"], e["reason"]) for e in status["engine_events"] if e["reason"] != "round"]
     assert events == [(1, "agy", "engine-permission-denied"), (2, "agy-unrestricted", "committed")]
-    sha = status["engine_events"][1]["sha"]
+    sha = next(e["sha"] for e in status["engine_events"] if e["reason"] == "committed")
     body = world.github.bodies[100]
     assert "Engine: agy-unrestricted (agyuser, skip-permissions after allow-list denial)" in body
     assert f"{sha[:12]} agy-unrestricted" in body
@@ -961,7 +997,8 @@ def test_restricted_agy_without_progress_gives_way_after_one_round(world: World)
     start(service, job(max_iterations=5))
     status = wait(service, "j-12-1")
     assert status["engine"] == "loop"
-    assert [e["reason"] for e in status["engine_events"]] == ["engine-no-progress", "committed"]
+    reasons = [e["reason"] for e in status["engine_events"] if e["reason"] != "round"]
+    assert reasons == ["engine-no-progress", "committed"]
 
 
 def test_other_engines_get_two_rounds_without_progress(world: World) -> None:
@@ -971,7 +1008,8 @@ def test_other_engines_get_two_rounds_without_progress(world: World) -> None:
     start(service, job(max_iterations=5))
     status = wait(service, "j-12-1")
     assert status["engine"] == "spare"
-    assert [e["reason"] for e in status["engine_events"]] == ["engine-no-progress", "committed"]
+    reasons = [e["reason"] for e in status["engine_events"] if e["reason"] != "round"]
+    assert reasons == ["engine-no-progress", "committed"]
 
 
 def test_prompt_names_the_failing_tests_their_assertions_and_the_allowed_commands(world: World) -> None:
@@ -1137,7 +1175,7 @@ def test_restricted_agy_gets_exactly_one_round_even_with_progress(world: World) 
     status = wait(service, "j-12-1")
     assert status["status"] == "succeeded", status
     assert len(world.engines[0].prompts) == 1
-    assert [(e["engine"], e["reason"]) for e in status["engine_events"]] == [
+    assert [(e["engine"], e["reason"]) for e in status["engine_events"] if e["reason"] != "round"] == [
         ("agy", "committed"), ("agy-unrestricted", "committed")]
 
 
@@ -1156,3 +1194,100 @@ def test_a_real_npm_ci_layout_does_not_stop_the_job(world: World) -> None:
     assert (world.checkout / "app/node_modules/@parcel/core").is_symlink()
     bare = world.remote_root / f"{REPO}.git"
     assert "node_modules" not in git(bare, "ls-tree", "-r", "--name-only", "agent/issue-12")
+
+
+TYPE_BUG = "TYPE_ERROR Type 'string' is not assignable to type 'TrackingNumber'."
+
+
+def test_designed_tests_that_do_not_typecheck_go_back_as_tests_invalid(world: World) -> None:
+    world.engines = [ScriptedEngine("agy", [{"app/web/src/eta.txt": "2026-10-12\n"}])]
+    service = world.service()
+    start(service, job(tests=[{"path": ETA_TEST, "content": f"expect web/src/eta.txt == 2026-10-12\n{TYPE_BUG}\n"}]))
+    status = wait(service, "j-12-1")
+    assert (status["status"], status["reason"]) == ("failed", "tests-invalid"), status
+    assert status["detail"] == ("app/web/tests/eta.test.ts(2,1): error TS2322: "
+                                "Type 'string' is not assignable to type 'TrackingNumber'.")
+    assert world.engines[0].prompts == []                       # no engine ran
+    assert git(world.remote_root / f"{REPO}.git", "branch", "--list", "agent/issue-12") == ""
+
+
+def test_typecheck_errors_outside_the_new_tests_do_not_invalidate_them_but_block_green(world: World) -> None:
+    world.engines = [ScriptedEngine("agy", [{"app/web/src/eta.txt": "2026-10-12\n"}]),
+                     ScriptedEngine("agy-unrestricted", [{}, {}])]
+    service = world.service()
+    start(service, job(install_cmd=f"{sys.executable} ../tools/plant_type_error.py"))
+    status = wait(service, "j-12-1")
+    assert (status["status"], status["reason"]) == ("failed", "max-iterations"), status
+    assert "legacy/index.d.ts(1,1): error TS2322: legacy typing" in status["detail"]
+    assert remote_log(world.remote_root, "agent/issue-12")[0] == "test: add failing tests for #12"
+    assert world.github.pulls == []
+
+
+def test_green_needs_typecheck_and_errors_are_fed_to_the_next_round(world: World) -> None:
+    world.engines = [
+        ScriptedEngine("agy", [{"app/web/src/eta.txt": "2026-10-12\n",
+                                "app/web/src/eta.ts": "TYPE_ERROR Property 'eta' is missing.\n"}]),
+        ScriptedEngine("agy-unrestricted", [{"app/web/src/eta.ts": "export const eta = '2026-10-12'\n"}]),
+    ]
+    service = world.service()
+    start(service, job())
+    status = wait(service, "j-12-1")
+    assert status["status"] == "succeeded", status
+    assert status["iterations"] == 2
+    prompt = world.engines[1].prompts[0]
+    assert "Typecheck and lint errors" in prompt
+    assert "src/eta.ts(1,1): error TS2322: Property 'eta' is missing." in prompt
+    body = world.github.bodies[100]
+    assert "`npm run typecheck`: passed" in body and "`npm run lint`: passed" in body
+    log = (world.tmp / "home/jobs/j-12-1/log").read_text()
+    assert "`npm run typecheck`: failed (1 errors)" in log
+    assert "`npm run lint`: passed" in log
+
+
+def test_lint_errors_block_green_and_nothing_is_published(world: World) -> None:
+    world.engines = [
+        ScriptedEngine("agy", [{"app/web/src/eta.txt": "2026-10-12\n",
+                                "app/web/src/eta.ts": "LINT_ERROR 'x' is unused\n"}]),
+        ScriptedEngine("agy-unrestricted", [{}, {}]),
+    ]
+    service = world.service()
+    start(service, job())
+    status = wait(service, "j-12-1")
+    assert (status["status"], status["reason"]) == ("failed", "max-iterations"), status
+    assert "app/web/src/eta.ts(1,1): error no-restricted-syntax: 'x' is unused" in status["detail"]
+    assert world.github.pulls == []
+    assert "Typecheck and lint errors" in world.engines[1].prompts[0]
+
+
+def test_unrestricted_agy_gets_at_most_two_rounds_then_the_loop(world: World) -> None:
+    world.engines = [ScriptedEngine("agy-unrestricted", [{"app/web/src/eta.txt": "close\n"},
+                                                         {"app/web/src/eta.txt": "closer\n"},
+                                                         {"app/web/src/eta.txt": "2026-10-12\n"}]),
+                     ScriptedEngine("loop", [{"app/web/src/eta.txt": "2026-10-12\n"}])]
+    service = world.service()
+    start(service, job(max_iterations=5))
+    status = wait(service, "j-12-1")
+    assert status["status"] == "succeeded", status
+    assert status["engine"] == "loop"
+    assert len(world.engines[0].prompts) == 2
+    assert "got 'close'" in world.engines[0].prompts[1]     # the second round continues from the first's edits
+
+
+def test_each_round_records_its_wall_seconds_and_whether_it_timed_out(world: World) -> None:
+    engine = ScriptedEngine("agy-unrestricted", [])
+
+    def slow(root: Path) -> CommandResult:
+        world.clock.t += 900
+        (root / "app/web/src/eta.txt").write_text("2026-10-12\n")
+        engine.last_timed_out = True
+        return CommandResult(0, "[agy timed out after making edits; keeping them for the test run]")
+
+    engine.steps = [slow]
+    world.engines = [engine]
+    service = world.service()
+    start(service, job())
+    status = wait(service, "j-12-1")
+    assert status["status"] == "succeeded", status
+    rounds = [e for e in status["engine_events"] if e["reason"] == "round"]
+    assert rounds == [{"iteration": 1, "engine": "agy-unrestricted", "reason": "round", "seconds": 900,
+                       "timed_out": True, "returncode": 0}]
