@@ -37,7 +37,7 @@
       "pass": 0
     }
   },
-  "generated_at": "2026-10-10T13:16:45Z",
+  "generated_at": "2026-10-10T13:17:30Z",
   "issues": [
     {
       "closed_at": "2026-10-10T12:28:43Z",
@@ -298,11 +298,11 @@
       "closed_at": null,
       "coder_engine": null,
       "cost": {
-        "calls": 2,
+        "calls": 3,
         "coder_model_usd": 0.0,
         "coder_usd": 0.0,
-        "model_usd": 0.002535,
-        "usd": 0.002535
+        "model_usd": 0.007852,
+        "usd": 0.007852
       },
       "deferred": null,
       "escalation": null,
@@ -327,9 +327,14 @@
         },
         {
           "entered_at": "2026-10-10T13:16:35Z",
+          "seconds": 46,
+          "stage": "stage:feasible"
+        },
+        {
+          "entered_at": "2026-10-10T13:17:21Z",
           "in_progress": true,
           "seconds": 0,
-          "stage": "stage:feasible"
+          "stage": "stage:tests-written"
         }
       ],
       "title": "Show the estimated delivery date on the parcel page",
@@ -339,11 +344,11 @@
       "closed_at": null,
       "coder_engine": null,
       "cost": {
-        "calls": 2,
+        "calls": 3,
         "coder_model_usd": 0.0,
         "coder_usd": 0.0,
-        "model_usd": 0.002353,
-        "usd": 0.002353
+        "model_usd": 0.004139,
+        "usd": 0.004139
       },
       "deferred": null,
       "escalation": null,
@@ -377,9 +382,9 @@
     "deferred": 0,
     "escalated": 5,
     "issues": 7,
-    "orchestrator_usd": 0.084721,
+    "orchestrator_usd": 0.09049,
     "released": 0,
-    "usd": 0.159463
+    "usd": 0.172335
   },
   "version": 1
 }
