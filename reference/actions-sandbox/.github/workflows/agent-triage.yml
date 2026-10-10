@@ -1,0 +1,101 @@
+name: Agent triage
+
+on:
+  issues:
+    # Use 'labeled' only to avoid opened+labeled double-spend when agent:triage
+    # is pre-applied at creation. The README instructs users to apply the label
+    # to trigger triage on any issue (new or existing).
+    types: [labeled]
+
+concurrency:
+  group: agent-triage-${{ github.event.issue.number }}
+  cancel-in-progress: false
+
+defaults:
+  run:
+    shell: bash -euo pipefail {0}
+
+permissions: {}
+
+jobs:
+  triage:
+    if: >
+      github.actor == github.repository_owner &&
+      github.event.label.name == 'agent:triage'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      issues: write
+      id-token: write
+
+    steps:
+      - uses: azure/login@a641126d1b8aa4d1fa005f4f92df94a3a4c4c906 # v3.1.0
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: "false"
+
+      - name: Build prompt file
+        env:
+          ISSUE_TITLE: ${{ github.event.issue.title }}
+          ISSUE_BODY: ${{ github.event.issue.body }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+        run: |
+          python3 - <<'PYEOF'
+          import os
+          title = os.environ.get("ISSUE_TITLE", "")[:500]
+          body = os.environ.get("ISSUE_BODY", "")[:3000]
+          issue_num = os.environ.get("ISSUE_NUMBER", "")
+          prompt = f"Title: {title}\n\nBody:\n{body}"
+          with open(f"{os.environ['RUNNER_TEMP']}/prompt.txt", "w", encoding="utf-8") as fh:
+              fh.write(prompt)
+          PYEOF
+
+      - name: Invoke sdlc-triage agent
+        uses: ./.github/actions/call-agent
+        env:
+          FOUNDRY_PROJECT_ENDPOINT: ${{ vars.FOUNDRY_PROJECT_ENDPOINT }}
+        with:
+          agent: sdlc-triage
+          input-file: ${{ runner.temp }}/prompt.txt
+          output-file: ${{ runner.temp }}/triage_output.json
+          max-output-tokens: "8000"
+
+      - name: Validate and apply triage output
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+          PYTHONPATH: tools
+        run: |
+          # The allow-list is the one on the agent definition (sdlc_agents.call already rejects
+          # anything else). agent:* labels are never on it: only humans authorise implement.
+          ALLOWED=$(python3 -c 'import json; from sdlc_agents.definitions import AGENT_BY_NAME; print(json.dumps(AGENT_BY_NAME["sdlc-triage"].allowed_labels))')
+          jq -e '(.labels|type=="array") and (.summary|type=="string") and (.acceptance_criteria|type=="array") and (.tasks|type=="array")' \
+            "$RUNNER_TEMP/triage_output.json"
+
+          # Post summary, acceptance criteria, and tasks as a single comment first, so a label
+          # problem below cannot lose the triage result.
+          jq -r '"## Summary\n\n\(.summary)\n\n### Acceptance criteria\n\n" +
+            (.acceptance_criteria | map("- " + .) | join("\n")) +
+            "\n\n### Tasks\n\n" +
+            (.tasks | map("- " + .) | join("\n"))' \
+            "$RUNNER_TEMP/triage_output.json" | \
+            gh issue comment "$ISSUE_NUMBER" --body-file - --repo "$GITHUB_REPOSITORY"
+
+          # Apply only labels from the allow-list. Try every label, then fail the job if any
+          # could not be applied (e.g. the label does not exist in the repo yet).
+          jq -r --argjson a "$ALLOWED" \
+            '.labels[] | select(. as $l | $a | index($l))' \
+            "$RUNNER_TEMP/triage_output.json" > "$RUNNER_TEMP/labels.txt"
+          failed=0
+          while IFS= read -r label; do
+            # stdin is the label stream; gh must not consume it.
+            gh issue edit "$ISSUE_NUMBER" --add-label "$label" --repo "$GITHUB_REPOSITORY" < /dev/null \
+              || { echo "::error::could not apply label: $label"; failed=1; }
+          done < "$RUNNER_TEMP/labels.txt"
+          exit "$failed"

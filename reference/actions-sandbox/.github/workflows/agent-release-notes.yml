@@ -1,0 +1,143 @@
+name: Agent release notes
+
+# workflow_dispatch only: ensures the OIDC subject is ref:refs/heads/main,
+# which matches the FIC created by Terraform. The release:published trigger
+# would produce ref:refs/tags/vX.Y.Z which has no matching FIC.
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag to generate notes for (e.g. v1.2.0)"
+        required: true
+
+concurrency:
+  group: agent-release-notes-${{ github.event.inputs.tag }}
+  cancel-in-progress: false
+
+defaults:
+  run:
+    shell: bash -euo pipefail {0}
+
+permissions: {}
+
+jobs:
+  release-notes:
+    # Must run from main: the Azure federated credential only trusts ref:refs/heads/main.
+    if: github.actor == github.repository_owner && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+      id-token: write
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: "false"
+
+      - uses: azure/login@a641126d1b8aa4d1fa005f4f92df94a3a4c4c906 # v3.1.0
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Validate tag input
+        env:
+          CURRENT_TAG: ${{ github.event.inputs.tag }}
+        run: |
+          # Reject tags that could be mis-parsed as git options.
+          # First char must be alphanumeric (or v + alphanumeric) so it can never look like an option.
+          [[ "$CURRENT_TAG" =~ ^v?[0-9A-Za-z][0-9A-Za-z._-]*$ ]] || {
+            echo "ERROR: invalid tag format: $CURRENT_TAG" >&2
+            exit 1
+          }
+
+      - name: Collect merged PRs since previous tag
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CURRENT_TAG: ${{ github.event.inputs.tag }}
+        run: |
+          if ! git rev-parse --verify --quiet "refs/tags/${CURRENT_TAG}^{commit}" > /dev/null; then
+            echo "ERROR: tag ${CURRENT_TAG} does not exist in this checkout" >&2
+            exit 1
+          fi
+          # git describe finds the nearest ancestor tag, which is the correct previous
+          # release even when regenerating an older one.
+          PREV_TAG=""
+          if git rev-parse --verify --quiet "${CURRENT_TAG}^" > /dev/null; then
+            ANCESTOR_TAGS=$(git tag --merged "${CURRENT_TAG}^")
+            if [ -n "$ANCESTOR_TAGS" ]; then
+              PREV_TAG=$(git describe --tags --abbrev=0 "${CURRENT_TAG}^")
+            fi
+          fi
+          if [ -z "$PREV_TAG" ]; then
+            # First release: the window starts at the root commit.
+            PREV_TAG=$(git rev-list --max-parents=0 "${CURRENT_TAG}" | tail -n 1)
+          fi
+          echo "Range: ${PREV_TAG}..${CURRENT_TAG}"
+
+          # Commits in range (end-of-options to guard against tag-as-option).
+          # To a file first: piping into head makes git die of SIGPIPE (141) under pipefail.
+          git log --oneline --end-of-options "${PREV_TAG}..${CURRENT_TAG}" \
+            > "$RUNNER_TEMP/range_commits_full.txt"
+          RANGE_COMMITS=$(head -c 4096 "$RUNNER_TEMP/range_commits_full.txt")
+
+          # Merged PRs whose mergedAt falls in the window between the two tagged commits.
+          # Compared as epoch seconds: committer dates carry local offsets, mergedAt is UTC (Z).
+          # The lower bound is exclusive: the PR merged at the previous tag belongs to that release.
+          TAG_TS=$(git log -1 --format=%ct --end-of-options "${CURRENT_TAG}")
+          PREV_TS=$(git log -1 --format=%ct --end-of-options "${PREV_TAG}")
+
+          gh pr list --repo "$GITHUB_REPOSITORY" --state merged --limit 100 \
+            --json number,title,mergedAt > "$RUNNER_TEMP/merged_prs.json"
+          # gh --jq takes a single expression and has no --arg: use jq for variables.
+          jq -r --argjson from "$PREV_TS" --argjson to "$TAG_TS" \
+            '[.[] | select((.mergedAt | fromdateiso8601) as $t | $t > $from and $t <= $to)]
+             | .[:30] | map("- PR #\(.number): \(.title)") | join("\n")' \
+            "$RUNNER_TEMP/merged_prs.json" > "$RUNNER_TEMP/pr_list.txt"
+
+          {
+            echo "Tag: ${CURRENT_TAG}"
+            echo "Previous: ${PREV_TAG}"
+            echo ""
+            echo "Recent commits:"
+            echo "$RANGE_COMMITS"
+            echo ""
+            echo "Merged PRs in range:"
+            cat "$RUNNER_TEMP/pr_list.txt"
+          } > "$RUNNER_TEMP/release_context.txt"
+          echo "Context size: $(wc -c < "$RUNNER_TEMP/release_context.txt") bytes"
+
+      - name: Build prompt file
+        env:
+          CURRENT_TAG: ${{ github.event.inputs.tag }}
+        run: |
+          python3 - <<'PYEOF'
+          import os
+          current_tag = os.environ.get("CURRENT_TAG", "")[:50]
+          with open(f"{os.environ['RUNNER_TEMP']}/release_context.txt", encoding="utf-8") as fh:
+              context = fh.read()
+          prompt = f"Generate release notes for {current_tag}:\n\n{context[:6000]}"
+          with open(f"{os.environ['RUNNER_TEMP']}/prompt.txt", "w", encoding="utf-8") as fh:
+              fh.write(prompt)
+          PYEOF
+
+      - name: Invoke sdlc-release-notes agent
+        uses: ./.github/actions/call-agent
+        env:
+          FOUNDRY_PROJECT_ENDPOINT: ${{ vars.FOUNDRY_PROJECT_ENDPOINT }}
+        with:
+          agent: sdlc-release-notes
+          input-file: ${{ runner.temp }}/prompt.txt
+          output-file: ${{ runner.temp }}/release_notes.md
+          max-output-tokens: "8000"
+
+      - name: Update release body
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CURRENT_TAG: ${{ github.event.inputs.tag }}
+        run: |
+          gh release edit "$CURRENT_TAG" \
+            --notes-file "$RUNNER_TEMP/release_notes.md" \
+            --repo "$GITHUB_REPOSITORY"

@@ -1,0 +1,218 @@
+name: Agent implement
+
+on:
+  issues:
+    types: [labeled]
+
+concurrency:
+  group: agent-implement-${{ github.event.issue.number }}
+  cancel-in-progress: false
+
+defaults:
+  run:
+    shell: bash -euo pipefail {0}
+
+permissions: {}
+
+jobs:
+  # Job 1: call Azure, produce codegen JSON, upload as artifact.
+  # Holds id-token:write and contents:read only. persist-credentials:false.
+  generate:
+    if: >
+      github.actor == github.repository_owner &&
+      github.event.issue.user.login == github.repository_owner &&
+      github.event.label.name == 'agent:implement'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: "false"
+
+      - uses: azure/login@a641126d1b8aa4d1fa005f4f92df94a3a4c4c906 # v3.1.0
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Build prompt file
+        env:
+          ISSUE_TITLE: ${{ github.event.issue.title }}
+          ISSUE_BODY: ${{ github.event.issue.body }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+          PYTHONPATH: tools
+        run: |
+          # Untrusted text goes via env vars into the prompt file, never inline in run:.
+          python3 - <<'PYEOF'
+          import os
+          from sdlc_agents.codegen_policy import allowed_roots_text
+          title = os.environ.get("ISSUE_TITLE", "")[:500]
+          body = os.environ.get("ISSUE_BODY", "")[:3000]
+          issue_num = os.environ.get("ISSUE_NUMBER", "")
+          # Repo context: the agent cannot see the checkout, so hand it the
+          # existing source and tests (capped) and require exact existing paths.
+          import pathlib
+          ctx, omitted, used, cap = [], [], 0, 40000
+          for root in ("src", "tests"):
+              for f in sorted(pathlib.Path(root).rglob("*.py")):
+                  if f.is_symlink() or not f.is_file():
+                      continue
+                  text = f.read_text(encoding="utf-8", errors="replace")
+                  if used + len(text) > cap:
+                      omitted.append(f.as_posix())
+                      continue
+                  used += len(text)
+                  ctx.append(f"--- FILE {f.as_posix()} ---\n{text}")
+          rules = (
+              "Rules: change existing files by returning their FULL new content at the exact "
+              "existing path listed below. Never replace a test file with fewer tests; keep all "
+              f"existing tests and add new ones. Only paths under {allowed_roots_text()} are allowed."
+          )
+          prompt = f"Issue #{issue_num}: {title}\n\n{body}\n\n{rules}\n\nEXISTING FILES:\n" + "\n".join(ctx)
+          if omitted:
+              # Without this the model cannot tell "file absent" from "file cut for size".
+              prompt += "\nFiles NOT shown (do not modify them): " + ", ".join(omitted) + "\n"
+          with open(f"{os.environ['RUNNER_TEMP']}/prompt.txt", "w", encoding="utf-8") as fh:
+              fh.write(prompt)
+          PYEOF
+
+      - name: Invoke sdlc-codegen agent
+        uses: ./.github/actions/call-agent
+        env:
+          FOUNDRY_PROJECT_ENDPOINT: ${{ vars.FOUNDRY_PROJECT_ENDPOINT }}
+        with:
+          agent: sdlc-codegen
+          input-file: ${{ runner.temp }}/prompt.txt
+          output-file: ${{ runner.temp }}/codegen_output.json
+          max-output-tokens: "16000"
+
+      - name: Validate codegen JSON structure
+        run: |
+          jq -e '(.explanation|type=="string") and (.files|type=="array")' \
+            "$RUNNER_TEMP/codegen_output.json"
+
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: codegen-${{ github.event.issue.number }}
+          path: ${{ runner.temp }}/codegen_output.json
+          retention-days: 1
+
+  # Job 2: no Azure access. Downloads artifact, validates again, commits exactly the
+  # paths in apply_codegen.py's manifest, never git add -A, never commits the JSON.
+  publish:
+    needs: generate
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+      pull-requests: write
+      issues: read
+    outputs:
+      changed: ${{ steps.commit.outputs.changed }}
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
+
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: codegen-${{ github.event.issue.number }}
+          path: ${{ runner.temp }}
+
+      - name: Validate and apply files (re-validates in publish job)
+        env:
+          PYTHONPATH: tools
+        run: |
+          # apply_codegen.py validates again; exits non-zero on any violation and then
+          # writes no manifest.
+          python scripts/apply_codegen.py "$RUNNER_TEMP/codegen_output.json" \
+            "$RUNNER_TEMP/written_paths.nul"
+
+      - name: Stage and commit
+        id: commit
+        env:
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+        run: |
+          BRANCH="agent/issue-${ISSUE_NUMBER}"
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git checkout -b "$BRANCH"
+
+          # Stage exactly the manifest paths, as literal paths (a name like src/a*.py must not
+          # glob). Hooks and fsmonitor are disabled so applied files cannot execute code.
+          GIT=(git --literal-pathspecs -c core.hooksPath=/dev/null -c core.fsmonitor=false)
+          "${GIT[@]}" add --pathspec-from-file="$RUNNER_TEMP/written_paths.nul" --pathspec-file-nul
+
+          if "${GIT[@]}" diff --cached --quiet; then
+            echo "Generated files are identical to main; nothing to commit."
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          "${GIT[@]}" commit -m "feat: agent codegen for issue #${ISSUE_NUMBER}"
+          echo "changed=true" >> "$GITHUB_OUTPUT"
+
+      - name: Push branch
+        if: steps.commit.outputs.changed == 'true'
+        env:
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+        run: |
+          BRANCH="agent/issue-${ISSUE_NUMBER}"
+          # The branch is rebuilt from main on every run, so an existing remote branch must be
+          # overwritten, but only if it is still the exact tip seen now. Never a plain --force.
+          REMOTE_REF=$(git ls-remote --heads origin "refs/heads/${BRANCH}")
+          REMOTE_SHA="${REMOTE_REF%%[[:space:]]*}"
+          if [ -z "$REMOTE_SHA" ]; then
+            git push origin "$BRANCH"
+          elif ! git push origin "$BRANCH" --force-with-lease="refs/heads/${BRANCH}:${REMOTE_SHA}"; then
+            echo "ERROR: ${BRANCH} on origin moved since ${REMOTE_SHA}; refusing to overwrite it." >&2
+            echo "Inspect the branch, then re-run by removing and re-adding the agent:implement label." >&2
+            exit 1
+          fi
+
+      - name: Open or update draft PR
+        if: steps.commit.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+        run: |
+          BRANCH="agent/issue-${ISSUE_NUMBER}"
+          jq -r '.explanation // ""' "$RUNNER_TEMP/codegen_output.json" > "$RUNNER_TEMP/explanation_full.txt"
+          EXPLANATION=$(head -c 1000 "$RUNNER_TEMP/explanation_full.txt")
+          PR_BODY=$(printf 'Closes #%s\n\nAgent explanation:\n%s\n\n> [!NOTE]\n> Opened by sdlc-codegen. CI and review start only after the owner closes and reopens this PR. Agents never merge.' \
+            "$ISSUE_NUMBER" "$EXPLANATION")
+
+          # Create only if there is no OPEN PR for this branch (a closed one must not block).
+          OPEN=$(gh pr list --head "$BRANCH" --state open --repo "$GITHUB_REPOSITORY" --json number --jq 'length')
+          [ "$OPEN" != "0" ] || \
+            gh pr create \
+              --base main \
+              --head "$BRANCH" \
+              --title "feat: agent codegen for issue #${ISSUE_NUMBER}" \
+              --body "$PR_BODY" \
+              --draft \
+              --repo "$GITHUB_REPOSITORY"
+
+  # Job 3: only issues:write, no code access. Runs when the generated files equal main.
+  report-noop:
+    needs: publish
+    if: needs.publish.outputs.changed == 'false'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      issues: write
+
+    steps:
+      - name: Report a no-op on the issue
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+        run: |
+          gh issue comment "$ISSUE_NUMBER" --repo "$GITHUB_REPOSITORY" --body \
+            "sdlc-codegen returned files identical to main, so this run pushed no commit and opened no PR."
