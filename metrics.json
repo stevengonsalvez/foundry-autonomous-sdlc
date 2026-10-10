@@ -38,7 +38,7 @@
       "pass": 1
     }
   },
-  "generated_at": "2026-10-10T15:18:00Z",
+  "generated_at": "2026-10-10T15:25:41Z",
   "issues": [
     {
       "closed_at": "2026-10-10T12:28:43Z",
@@ -136,7 +136,7 @@
       "type": "feature"
     },
     {
-      "closed_at": null,
+      "closed_at": "2026-10-10T15:22:15Z",
       "coder_engine": "agy",
       "cost": {
         "calls": 5,
@@ -196,7 +196,7 @@
       "type": "feature"
     },
     {
-      "closed_at": null,
+      "closed_at": "2026-10-10T15:22:17Z",
       "coder_engine": null,
       "cost": {
         "calls": 4,
@@ -610,16 +610,153 @@
       ],
       "title": "Show the estimated delivery date on the parcel page",
       "type": "feature"
+    },
+    {
+      "closed_at": null,
+      "coder_engine": null,
+      "cost": {
+        "calls": 1,
+        "coder_model_usd": 0.0,
+        "coder_usd": 0.0,
+        "model_usd": 0.001376,
+        "usd": 0.001376
+      },
+      "deferred": null,
+      "escalation": null,
+      "gate_attempts": {},
+      "gates": {},
+      "kind": "issue",
+      "number": 15,
+      "opened_at": "2026-10-10T15:22:24Z",
+      "outcome": "open",
+      "owner": null,
+      "pr": null,
+      "quality_score": 93,
+      "release": null,
+      "resolution_seconds": null,
+      "scenario": "a",
+      "severity": null,
+      "stages": [
+        {
+          "entered_at": "2026-10-10T15:25:18Z",
+          "in_progress": true,
+          "seconds": 0,
+          "stage": "stage:ready"
+        }
+      ],
+      "title": "Show when the parcel was last updated on the parcel page",
+      "type": "feature"
+    },
+    {
+      "closed_at": null,
+      "coder_engine": null,
+      "cost": {
+        "calls": 1,
+        "coder_model_usd": 0.0,
+        "coder_usd": 0.0,
+        "model_usd": 0.001089,
+        "usd": 0.001089
+      },
+      "deferred": null,
+      "escalation": null,
+      "gate_attempts": {},
+      "gates": {},
+      "kind": "issue",
+      "number": 16,
+      "opened_at": "2026-10-10T15:22:24Z",
+      "outcome": "open",
+      "owner": null,
+      "pr": null,
+      "quality_score": 5,
+      "release": null,
+      "resolution_seconds": null,
+      "scenario": "b",
+      "severity": null,
+      "stages": [
+        {
+          "entered_at": "2026-10-10T15:25:24Z",
+          "in_progress": true,
+          "seconds": 0,
+          "stage": "stage:needs-refinement"
+        }
+      ],
+      "title": "Make the parcel tracker better",
+      "type": "feature"
+    },
+    {
+      "closed_at": null,
+      "coder_engine": null,
+      "cost": {
+        "calls": 1,
+        "coder_model_usd": 0.0,
+        "coder_usd": 0.0,
+        "model_usd": 0.002031,
+        "usd": 0.002031
+      },
+      "deferred": null,
+      "escalation": null,
+      "gate_attempts": {},
+      "gates": {},
+      "kind": "issue",
+      "number": 17,
+      "opened_at": "2026-10-10T15:22:25Z",
+      "outcome": "open",
+      "owner": null,
+      "pr": null,
+      "quality_score": 68,
+      "release": null,
+      "resolution_seconds": null,
+      "scenario": "c",
+      "severity": null,
+      "stages": [
+        {
+          "entered_at": "2026-10-10T15:25:32Z",
+          "in_progress": true,
+          "seconds": 0,
+          "stage": "stage:needs-refinement"
+        }
+      ],
+      "title": "Move the live carrier integration to the new vendor and rotate the production keys",
+      "type": "feature"
+    },
+    {
+      "closed_at": null,
+      "coder_engine": null,
+      "cost": {
+        "calls": 1,
+        "coder_model_usd": 0.0,
+        "coder_usd": 0.0,
+        "model_usd": 0.000728,
+        "usd": 0.000728
+      },
+      "deferred": null,
+      "escalation": null,
+      "gate_attempts": {},
+      "gates": {},
+      "kind": "issue",
+      "number": 18,
+      "opened_at": "2026-10-10T15:22:25Z",
+      "outcome": "open",
+      "owner": "api",
+      "pr": null,
+      "quality_score": null,
+      "release": null,
+      "resolution_seconds": null,
+      "scenario": "d",
+      "severity": "s3",
+      "stages": [],
+      "title": "Lowercase tracking numbers are rejected as invalid",
+      "type": "bug"
     }
   ],
   "repo": "stevengonsalvez/foundry-autonomous-sdlc",
   "totals": {
     "deferred": 0,
     "escalated": 9,
-    "issues": 10,
-    "orchestrator_usd": 0.386876,
+    "issues": 14,
+    "orchestrator_usd": 0.392603,
     "released": 1,
-    "usd": 0.690123
+    "usd": 0.701075
   },
   "version": 1
 }
