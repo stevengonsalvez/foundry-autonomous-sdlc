@@ -9,7 +9,7 @@ with no valid file left the PR escalates agent-error.
 from __future__ import annotations
 
 from conftest import World
-from test_scenarios import REPO_TEST_FILES, open_stale_test_pr
+from test_scenarios import REPO_TEST_FILES, REQUIRED_CHECKS, open_stale_test_pr
 
 from sdlc_agents import state
 from sdlc_agents.paths import resolve_test_files
@@ -68,3 +68,46 @@ def test_resolution_rules() -> None:
     assert resolve_test_files([], REAL, "FAIL app/core/tests/parcel-page.test.ts > x") == [
         "app/core/tests/parcel-page.test.ts"]
     assert resolve_test_files([], REAL, "FAIL |web| tests/missing.test.tsx > x") == []
+
+
+HEADING_DIFF = """diff --git a/app/web/src/pages/Home.tsx b/app/web/src/pages/Home.tsx
+--- a/app/web/src/pages/Home.tsx
++++ b/app/web/src/pages/Home.tsx
+@@ -1,3 +1,3 @@
+-  useDocumentTitle("Track your parcel");
+-  return <h1>Track your parcel</h1>;
++  useDocumentTitle("Track a parcel");
++  return <h1>Track a parcel</h1>;
+diff --git a/app/web/tests/home-page.test.tsx b/app/web/tests/home-page.test.tsx
+--- a/app/web/tests/home-page.test.tsx
++++ b/app/web/tests/home-page.test.tsx
+@@ -1 +1 @@
+-const unrelated = "an old line in a test file";
++const unrelated = "a new line";
+"""
+
+
+def test_every_test_file_holding_the_text_the_pr_removed_is_claimed_even_in_app_e2e(world: World) -> None:
+    gh, foundry = world.gh, world.foundry
+    # Live PR #36: triage claimed only the vitest files, so the Playwright spec kept the old heading.
+    foundry.script("sdlc-ci-triage", {"cause": "stale-test", "explanation": "Heading copy changed.",
+                                      "test_files": ["app/web/tests/home-page.test.tsx"]})
+    pr = open_stale_test_pr(world)
+    head = gh.head_of(pr)
+    gh.get_pull_diff = lambda number: HEADING_DIFF            # type: ignore[method-assign]
+    gh.ci = lambda g, number, sha: dict.fromkeys(REQUIRED_CHECKS, "success" if all(     # type: ignore[method-assign]
+        f.endswith((".test.tsx", ".spec.ts")) for f in g.commits[sha]["files"]) else "failure")
+    gh.files[(head, "app/e2e/home.spec.ts")] = 'await expect(heading("Track your parcel")).toBeVisible();'
+    gh.files[(head, "app/core/tests/tracking-number.test.ts")] = "expect(parse('PK1')).toBeNull();"
+    world.drive(lambda: state.RELEASED in gh.labels(pr))
+
+    [job] = start_jobs(world)
+    assert job["allowed_paths"] == ["app/e2e/home.spec.ts", "app/web/tests/home-page.test.tsx"]
+
+
+def test_text_removed_from_non_test_files_only() -> None:
+    from sdlc_agents.paths import removed_literals
+    assert removed_literals(HEADING_DIFF) == ["Track your parcel"]
+    # text that comes back on an added line was not really removed
+    kept = 'diff --git a/app/web/src/a.ts b/app/web/src/a.ts\n-x("Keep this text")\n+y("Keep this text")'
+    assert removed_literals(kept) == []
