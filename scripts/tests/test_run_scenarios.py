@@ -54,7 +54,7 @@ def test_stale_test_pr_changes_only_the_heading_and_is_labelled(monkeypatch):
     created = rs.run_scenarios(["d-maintenance"], run=fake)
     put = next(json.loads(i) for a, i in fake.calls if "PUT" in a)
     assert base64.b64decode(put["content"]) == b"<h1>Track a parcel</h1>"
-    assert put["branch"] == "chore/update-home-heading"
+    assert put["branch"] == "chore/update-home-heading-r2"
     labels = json.loads(fake.calls[-1][1])
     assert labels == {"labels": ["maintenance:test-repair"]} and created["d-maintenance"] == 8
 
