@@ -1,0 +1,51 @@
+{
+  "gate_pass_rates": {
+    "agent-scope": {
+      "fail": 0,
+      "first_fail": 0,
+      "first_pass": 0,
+      "pass": 0
+    },
+    "coverage": {
+      "fail": 0,
+      "first_fail": 0,
+      "first_pass": 0,
+      "pass": 0
+    },
+    "e2e": {
+      "fail": 0,
+      "first_fail": 0,
+      "first_pass": 0,
+      "pass": 0
+    },
+    "gitleaks": {
+      "fail": 0,
+      "first_fail": 0,
+      "first_pass": 0,
+      "pass": 0
+    },
+    "tdd-order": {
+      "fail": 0,
+      "first_fail": 0,
+      "first_pass": 0,
+      "pass": 0
+    },
+    "test": {
+      "fail": 0,
+      "first_fail": 0,
+      "first_pass": 0,
+      "pass": 0
+    }
+  },
+  "generated_at": "2026-10-10T12:23:55Z",
+  "issues": [],
+  "repo": "stevengonsalvez/foundry-autonomous-sdlc",
+  "totals": {
+    "escalated": 0,
+    "issues": 0,
+    "orchestrator_usd": 0.00453,
+    "released": 0,
+    "usd": 0.00453
+  },
+  "version": 1
+}
