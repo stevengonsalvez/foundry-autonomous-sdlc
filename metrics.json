@@ -38,7 +38,7 @@
       "pass": 4
     }
   },
-  "generated_at": "2026-10-10T19:30:25Z",
+  "generated_at": "2026-10-10T19:35:23Z",
   "issues": [
     {
       "closed_at": "2026-10-10T12:28:43Z",
@@ -1373,7 +1373,14 @@
       "resolution_seconds": null,
       "scenario": "d-maintenance",
       "severity": null,
-      "stages": [],
+      "stages": [
+        {
+          "entered_at": "2026-10-10T19:35:17Z",
+          "in_progress": true,
+          "seconds": 0,
+          "stage": "stage:building"
+        }
+      ],
       "title": "Update the home page heading copy",
       "type": "maintenance"
     }
@@ -1383,9 +1390,9 @@
     "deferred": 0,
     "escalated": 15,
     "issues": 20,
-    "orchestrator_usd": 0.606809,
+    "orchestrator_usd": 0.61187,
     "released": 4,
-    "usd": 1.539536
+    "usd": 1.544597
   },
   "version": 1
 }
