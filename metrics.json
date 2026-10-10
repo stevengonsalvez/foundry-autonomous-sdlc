@@ -38,7 +38,7 @@
       "pass": 4
     }
   },
-  "generated_at": "2026-10-10T17:21:18Z",
+  "generated_at": "2026-10-10T17:25:31Z",
   "issues": [
     {
       "closed_at": "2026-10-10T12:28:43Z",
@@ -951,9 +951,14 @@
         },
         {
           "entered_at": "2026-10-10T17:20:15Z",
+          "seconds": 306,
+          "stage": "stage:in-review"
+        },
+        {
+          "entered_at": "2026-10-10T17:25:21Z",
           "in_progress": true,
           "seconds": 0,
-          "stage": "stage:in-review"
+          "stage": "stage:merged"
         }
       ],
       "title": "Show when the parcel was last updated on the parcel page",
@@ -1053,9 +1058,14 @@
         },
         {
           "entered_at": "2026-10-10T17:20:19Z",
+          "seconds": 310,
+          "stage": "stage:in-review"
+        },
+        {
+          "entered_at": "2026-10-10T17:25:29Z",
           "in_progress": true,
           "seconds": 0,
-          "stage": "stage:in-review"
+          "stage": "stage:merged"
         }
       ],
       "title": "Make the parcel tracker better",
@@ -1154,13 +1164,13 @@
     },
     {
       "closed_at": null,
-      "coder_engine": null,
+      "coder_engine": "agy",
       "cost": {
         "calls": 1,
         "coder_model_usd": 0.0,
-        "coder_usd": 0.0,
+        "coder_usd": 0.003157,
         "model_usd": 0.007901,
-        "usd": 0.007901
+        "usd": 0.011058
       },
       "deferred": null,
       "escalation": null,
@@ -1220,9 +1230,9 @@
     "deferred": 0,
     "escalated": 13,
     "issues": 18,
-    "orchestrator_usd": 0.537227,
+    "orchestrator_usd": 0.542594,
     "released": 2,
-    "usd": 1.305214
+    "usd": 1.313738
   },
   "version": 1
 }
