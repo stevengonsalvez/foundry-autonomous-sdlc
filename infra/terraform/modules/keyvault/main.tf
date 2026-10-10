@@ -8,9 +8,11 @@ locals {
 
 # RBAC mode (no access policies). Public endpoint is a recorded demo decision:
 # access is Entra ID only. Purge protection stays off so one destroy removes it.
+# tflint-ignore: azurerm_resources_missing_prevent_destroy # teardown is one terraform destroy; soft delete (7 days) covers accidents
 resource "azurerm_key_vault" "this" {
   #checkov:skip=CKV_AZURE_109:Demo decision recorded in docs/decisions.md, public endpoint with Entra-only RBAC
   #checkov:skip=CKV_AZURE_189:Same decision as CKV_AZURE_109
+  #checkov:skip=CKV_AZURE_42:Recoverable via soft delete (7 days); purge protection stays off so one terraform destroy removes the demo
   #checkov:skip=CKV_AZURE_110:Purge protection off so terraform destroy leaves nothing behind (soft delete 7 days stays on)
   #checkov:skip=CKV2_AZURE_32:No private endpoint, private networking is out of scope
   name                = "kv-${var.name}-${var.name_suffix}"
