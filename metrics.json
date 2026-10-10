@@ -37,7 +37,7 @@
       "pass": 0
     }
   },
-  "generated_at": "2026-10-10T12:54:22Z",
+  "generated_at": "2026-10-10T12:55:24Z",
   "issues": [
     {
       "closed_at": "2026-10-10T12:28:43Z",
@@ -117,9 +117,14 @@
         },
         {
           "entered_at": "2026-10-10T12:53:51Z",
+          "seconds": 48,
+          "stage": "stage:tests-written"
+        },
+        {
+          "entered_at": "2026-10-10T12:54:39Z",
           "in_progress": true,
           "seconds": 0,
-          "stage": "stage:tests-written"
+          "stage": "stage:building"
         }
       ],
       "title": "Show the estimated delivery date on the parcel page",
@@ -129,11 +134,11 @@
       "closed_at": null,
       "coder_engine": null,
       "cost": {
-        "calls": 4,
+        "calls": 5,
         "coder_model_usd": 0.0,
         "coder_usd": 0.0,
-        "model_usd": 0.006101,
-        "usd": 0.006101
+        "model_usd": 0.014183,
+        "usd": 0.014183
       },
       "deferred": null,
       "escalation": null,
@@ -163,9 +168,14 @@
         },
         {
           "entered_at": "2026-10-10T12:53:56Z",
+          "seconds": 80,
+          "stage": "stage:feasible"
+        },
+        {
+          "entered_at": "2026-10-10T12:55:16Z",
           "in_progress": true,
           "seconds": 0,
-          "stage": "stage:feasible"
+          "stage": "stage:tests-written"
         }
       ],
       "title": "Make the parcel tracker better",
@@ -254,9 +264,14 @@
         },
         {
           "entered_at": "2026-10-10T12:54:19Z",
+          "seconds": 63,
+          "stage": "stage:tests-written"
+        },
+        {
+          "entered_at": "2026-10-10T12:55:22Z",
           "in_progress": true,
           "seconds": 0,
-          "stage": "stage:tests-written"
+          "stage": "stage:building"
         }
       ],
       "title": "Lowercase tracking numbers are rejected as invalid",
@@ -268,9 +283,9 @@
     "deferred": 0,
     "escalated": 2,
     "issues": 5,
-    "orchestrator_usd": 0.06293,
+    "orchestrator_usd": 0.069355,
     "released": 0,
-    "usd": 0.093357
+    "usd": 0.107864
   },
   "version": 1
 }
