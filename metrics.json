@@ -4,41 +4,41 @@
     "agent-scope": {
       "fail": 0,
       "first_fail": 0,
-      "first_pass": 3,
-      "pass": 3
+      "first_pass": 4,
+      "pass": 4
     },
     "coverage": {
-      "fail": 0,
-      "first_fail": 0,
+      "fail": 1,
+      "first_fail": 1,
       "first_pass": 3,
       "pass": 3
     },
     "e2e": {
-      "fail": 1,
-      "first_fail": 1,
+      "fail": 2,
+      "first_fail": 2,
       "first_pass": 2,
       "pass": 2
     },
     "gitleaks": {
       "fail": 0,
       "first_fail": 0,
-      "first_pass": 3,
-      "pass": 3
+      "first_pass": 4,
+      "pass": 4
     },
     "tdd-order": {
       "fail": 0,
       "first_fail": 0,
-      "first_pass": 3,
-      "pass": 3
+      "first_pass": 4,
+      "pass": 4
     },
     "test": {
-      "fail": 1,
-      "first_fail": 1,
+      "fail": 2,
+      "first_fail": 2,
       "first_pass": 2,
       "pass": 2
     }
   },
-  "generated_at": "2026-10-10T17:15:14Z",
+  "generated_at": "2026-10-10T17:20:34Z",
   "issues": [
     {
       "closed_at": "2026-10-10T12:28:43Z",
@@ -864,13 +864,13 @@
     },
     {
       "closed_at": null,
-      "coder_engine": "agy",
+      "coder_engine": "agy-unrestricted",
       "cost": {
         "calls": 6,
         "coder_model_usd": 0.0,
-        "coder_usd": 0.010148,
+        "coder_usd": 0.038936,
         "model_usd": 0.022689,
-        "usd": 0.032837
+        "usd": 0.061624
       },
       "deferred": null,
       "escalation": null,
@@ -881,7 +881,7 @@
       "opened_at": "2026-10-10T16:42:39Z",
       "outcome": "open",
       "owner": null,
-      "pr": null,
+      "pr": 28,
       "quality_score": 100,
       "release": null,
       "resolution_seconds": null,
@@ -920,9 +920,14 @@
         },
         {
           "entered_at": "2026-10-10T17:10:15Z",
+          "seconds": 600,
+          "stage": "stage:building"
+        },
+        {
+          "entered_at": "2026-10-10T17:20:15Z",
           "in_progress": true,
           "seconds": 0,
-          "stage": "stage:building"
+          "stage": "stage:in-review"
         }
       ],
       "title": "Show when the parcel was last updated on the parcel page",
@@ -930,13 +935,13 @@
     },
     {
       "closed_at": null,
-      "coder_engine": "agy",
+      "coder_engine": "agy-unrestricted",
       "cost": {
         "calls": 6,
         "coder_model_usd": 0.0,
-        "coder_usd": 0.009546,
+        "coder_usd": 0.060509,
         "model_usd": 0.016231,
-        "usd": 0.025777
+        "usd": 0.07674
       },
       "deferred": null,
       "escalation": null,
@@ -947,7 +952,7 @@
       "opened_at": "2026-10-10T16:42:39Z",
       "outcome": "open",
       "owner": null,
-      "pr": null,
+      "pr": 29,
       "quality_score": 90,
       "release": null,
       "resolution_seconds": null,
@@ -991,9 +996,14 @@
         },
         {
           "entered_at": "2026-10-10T17:05:32Z",
+          "seconds": 887,
+          "stage": "stage:building"
+        },
+        {
+          "entered_at": "2026-10-10T17:20:19Z",
           "in_progress": true,
           "seconds": 0,
-          "stage": "stage:building"
+          "stage": "stage:in-review"
         }
       ],
       "title": "Make the parcel tracker better",
@@ -1089,16 +1099,71 @@
       ],
       "title": "Lowercase tracking numbers are rejected as invalid",
       "type": "bug"
+    },
+    {
+      "closed_at": null,
+      "coder_engine": null,
+      "cost": {
+        "calls": 1,
+        "coder_model_usd": 0.0,
+        "coder_usd": 0.0,
+        "model_usd": 0.007901,
+        "usd": 0.007901
+      },
+      "deferred": null,
+      "escalation": null,
+      "gate_attempts": {
+        "agent-scope": [
+          "success"
+        ],
+        "coverage": [
+          "failure"
+        ],
+        "e2e": [
+          "failure"
+        ],
+        "gitleaks": [
+          "success"
+        ],
+        "tdd-order": [
+          "success"
+        ],
+        "test": [
+          "failure"
+        ]
+      },
+      "gates": {
+        "agent-scope": "success",
+        "coverage": "failure",
+        "e2e": "failure",
+        "gitleaks": "success",
+        "tdd-order": "success",
+        "test": "failure"
+      },
+      "kind": "pr",
+      "number": null,
+      "opened_at": "2026-10-10T17:17:34Z",
+      "outcome": "open",
+      "owner": null,
+      "pr": 27,
+      "quality_score": null,
+      "release": null,
+      "resolution_seconds": null,
+      "scenario": "d-maintenance",
+      "severity": null,
+      "stages": [],
+      "title": "Update the home page heading copy",
+      "type": "maintenance"
     }
   ],
   "repo": "stevengonsalvez/foundry-autonomous-sdlc",
   "totals": {
     "deferred": 0,
     "escalated": 13,
-    "issues": 17,
-    "orchestrator_usd": 0.525907,
+    "issues": 18,
+    "orchestrator_usd": 0.531392,
     "released": 2,
-    "usd": 1.200924
+    "usd": 1.29406
   },
   "version": 1
 }
