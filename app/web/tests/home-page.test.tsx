@@ -1,19 +1,15 @@
 import { render, screen } from "@testing-library/react";
-import HomePage from "../src/pages/Home";
-
-// render helper
-function renderWithProviders(ui: React.ReactElement) {
-  return render(ui);
-}
+import Home from "../src/pages/Home";
 
 describe("Home page", () => {
-  it("renders a level 1 heading and sets the document title", () => {
-    renderWithProviders(<HomePage />);
+  it("renders a heading and sets the document title", () => {
+    render(<Home />);
 
-    // The product copy was changed to "Track a parcel"
-    const heading = screen.getByRole("heading", { level: 1 });
-    expect(heading).toHaveTextContent(/Track a parcel/i);
+    // Updated copy: heading now says "Track a parcel"
+    const heading = screen.getByRole("heading", { level: 1, name: /Track a parcel/i });
+    expect(heading).toBeInTheDocument();
 
-    expect(document.title).toMatch(/Track a parcel/i);
+    // document title was updated accordingly
+    expect(document.title).toContain("Track a parcel");
   });
 });

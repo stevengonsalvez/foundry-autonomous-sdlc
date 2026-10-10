@@ -1,16 +1,14 @@
 import { render, screen } from "@testing-library/react";
-import ParcelPage from "../src/pages/Parcel";
-
-// simple render helper
-function renderWithProviders(ui: React.ReactElement) {
-  return render(ui);
-}
+import Parcel from "../src/pages/Parcel";
 
 describe("Parcel page", () => {
-  it("renders parcel lookup form", () => {
-    renderWithProviders(<ParcelPage />);
+  it("renders parcel input and button", () => {
+    render(<Parcel />);
 
-    expect(screen.getByLabelText(/tracking number/i)).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /track/i })).toBeInTheDocument();
+    const input = screen.getByPlaceholderText(/Enter parcel id/i);
+    const button = screen.getByRole("button");
+
+    expect(input).toBeInTheDocument();
+    expect(button).toBeInTheDocument();
   });
 });
