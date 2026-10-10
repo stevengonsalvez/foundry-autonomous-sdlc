@@ -1,0 +1,354 @@
+name: CI
+
+# Plain checks only. This workflow never drives agents: it holds no secrets and no
+# Azure credentials, and nothing here calls the orchestrator or the coder. The agents
+# read these results through the GitHub API; the branch ruleset enforces the same
+# six required checks server side (test, coverage, e2e, gitleaks, tdd-order, agent-scope).
+#
+# The gate scripts and .gitleaks.toml are always read from a checkout of main (`trusted/`),
+# so a pull request cannot change the rules it is judged by.
+#
+# No path filters on purpose: a required check that is skipped never reports, which
+# would block the merge. Job ids equal job names because the name is the check context.
+
+on:
+  pull_request:
+    # `edited` also fires when the base branch changes, so the gates run again.
+    types: [opened, synchronize, reopened, edited]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# Superseded PR runs are cancelled; runs on main always complete so every merged
+# commit has a result.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+defaults:
+  run:
+    shell: bash -euo pipefail {0}
+
+permissions:
+  contents: read
+
+env:
+  NODE_VERSION: "22"
+  PYTHON_VERSION: "3.12"
+  UV_VERSION: "0.12.24"
+  PYTEST_VERSION: "9.1.1"
+  PYYAML_VERSION: "6.0.3"
+  RUFF_VERSION: "0.16.8"
+  GITLEAKS_VERSION: "8.30.1"
+  GITLEAKS_SHA256: "551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb"
+  COVERAGE_MIN_LINES: "80"
+
+jobs:
+  test:
+    name: test
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+
+      - name: Install
+        working-directory: app
+        run: npm ci
+
+      - name: Lint
+        working-directory: app
+        run: npm run lint
+
+      - name: Typecheck
+        working-directory: app
+        run: npm run typecheck
+
+      - name: Unit, component and contract tests
+        working-directory: app
+        run: npm test
+
+      - name: Build
+        working-directory: app
+        run: npm run build
+
+  coverage:
+    name: coverage
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      # Gate code and config come from main, never from the PR under test: a PR that
+      # rewrites a gate must still be judged by the gate as it is on main.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: main
+          path: trusted
+          sparse-checkout: scripts
+          persist-credentials: false
+
+      - name: Install
+        working-directory: app
+        run: npm ci
+
+      # The app enforces its own threshold here; the report below is the second check
+      # and prints the per-workspace table.
+      - name: Run tests with coverage
+        working-directory: app
+        run: npm run test:coverage
+
+      - name: Check line coverage
+        working-directory: trusted
+        run: >-
+          python -m scripts.gates.coverage_report
+          --root "$GITHUB_WORKSPACE/app"
+          --min "$COVERAGE_MIN_LINES"
+          --require-workspaces core,carrier-mock,api,web
+
+  e2e:
+    name: e2e
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+
+      - name: Install
+        working-directory: app
+        run: npm ci
+
+      - name: Install Chromium
+        working-directory: app
+        run: npx playwright install --with-deps chromium
+
+      - name: Build
+        working-directory: app
+        run: npm run build
+
+      - name: Playwright tests
+        working-directory: app
+        run: npm run e2e
+
+      - name: Keep the Playwright report and traces
+        if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: playwright-report
+          path: |
+            app/e2e/playwright-report
+            app/e2e/test-results
+            app/playwright-report
+            app/test-results
+          if-no-files-found: ignore
+          retention-days: 7
+
+  gitleaks:
+    name: gitleaks
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      # Gate code and config come from main, never from the PR under test: a PR that
+      # rewrites a gate must still be judged by the gate as it is on main.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: main
+          path: trusted
+          sparse-checkout: scripts
+          persist-credentials: false
+
+      - name: Install gitleaks
+        run: |
+          archive="gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz"
+          curl -fsSL -o "$RUNNER_TEMP/$archive" \
+            "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/$archive"
+          echo "$GITLEAKS_SHA256  $RUNNER_TEMP/$archive" | sha256sum --check --strict
+          tar -xzf "$RUNNER_TEMP/$archive" -C "$RUNNER_TEMP" gitleaks
+          echo "$RUNNER_TEMP" >> "$GITHUB_PATH"
+
+      # Pull requests: only the commits the PR adds. Pushes and manual runs: all history.
+      - name: Scan commits
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          log_opts=()
+          if [[ -n "$BASE_SHA" ]]; then
+            log_opts=(--log-opts "$BASE_SHA..$HEAD_SHA")
+          fi
+          gitleaks git --config trusted/.gitleaks.toml --redact --no-banner "${log_opts[@]}" .
+
+      - name: Scan working tree
+        run: gitleaks dir --config trusted/.gitleaks.toml --redact --no-banner .
+
+  tdd-order:
+    name: tdd-order
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      # Branch names are attacker controlled: they reach the script only through env.
+      # A manual run off main is judged as an agent branch, so it can never report a
+      # pass for a sha that the pull request run fails.
+      BRANCH: ${{ github.head_ref || (github.ref_name == 'main' && 'main' || format('agent/{0}', github.ref_name)) }}
+      HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      # Gate code and config come from main, never from the PR under test: a PR that
+      # rewrites a gate must still be judged by the gate as it is on main.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: main
+          path: trusted
+          sparse-checkout: scripts
+          persist-credentials: false
+
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      # Only agent branches run the red check, which installs and runs the app tests.
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        if: startsWith(env.BRANCH, 'agent/')
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+
+      # The base is always main: that is the only branch the ruleset protects, and
+      # retargeting a pull request must not change what the gate compares against.
+      - name: Check tests come first and are red
+        working-directory: trusted
+        run: >-
+          python -m scripts.gates.tdd_order
+          --repo "$GITHUB_WORKSPACE"
+          --base origin/main
+          --head "$HEAD_SHA"
+          --branch "$BRANCH"
+          --setup-cmd "npm ci --prefix app"
+          --test-cmd "npm test --prefix app"
+
+  agent-scope:
+    name: agent-scope
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      BRANCH: ${{ github.head_ref || (github.ref_name == 'main' && 'main' || format('agent/{0}', github.ref_name)) }}
+      HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      # Gate code and config come from main, never from the PR under test: a PR that
+      # rewrites a gate must still be judged by the gate as it is on main.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: main
+          path: trusted
+          sparse-checkout: scripts
+          persist-credentials: false
+
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Check changes stay under app/
+        working-directory: trusted
+        run: >-
+          python -m scripts.gates.agent_scope
+          --repo "$GITHUB_WORKSPACE"
+          --base origin/main
+          --head "$HEAD_SHA"
+          --branch "$BRANCH"
+
+  # Not a required check: tests for the gate scripts and the repo setup script.
+  gates-tests:
+    name: gates-tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+        with:
+          version: ${{ env.UV_VERSION }}
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Run script tests
+        run: >-
+          uv run --no-project
+          --with "pytest==$PYTEST_VERSION"
+          --with "pyyaml==$PYYAML_VERSION"
+          python -m pytest -q scripts/tests
+
+      - name: Lint scripts
+        run: >-
+          uvx --from "ruff==$RUFF_VERSION" ruff check
+          --isolated --target-version py312 --line-length 100 --select E,F,I,UP,B,SIM,RUF
+          scripts/gates scripts/tests/gates scripts/setup_repo.py scripts/tests/test_setup_repo.py
+
+  # Not a required check: the Python agents package.
+  agents:
+    name: agents
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        shell: bash -euo pipefail {0}
+        working-directory: agents
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+        with:
+          version: ${{ env.UV_VERSION }}
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Sync locked dependencies
+        run: uv sync --locked --all-extras
+
+      - name: Run tests
+        run: uv run --locked --all-extras --with "pytest==$PYTEST_VERSION" python -m pytest -q
+
+      - name: Lint
+        run: uvx --from "ruff==$RUFF_VERSION" ruff check .
