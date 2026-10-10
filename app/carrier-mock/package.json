@@ -1,0 +1,20 @@
+{
+  "name": "@parcel/carrier-mock",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "HTTP mock of the carrier API described by contracts/carrier.openapi.yaml.",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "start": "tsx src/main.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@parcel/core": "0.1.0"
+  },
+  "devDependencies": {
+    "@parcel/contracts": "0.1.0"
+  }
+}

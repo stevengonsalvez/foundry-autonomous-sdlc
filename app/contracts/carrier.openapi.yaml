@@ -1,0 +1,104 @@
+openapi: 3.1.0
+info:
+  title: Carrier shipments API
+  version: 1.0.0
+  description: >-
+    The external carrier system the parcel tracker depends on. The carrier mock
+    implements this contract and the API's HttpCarrierClient consumes it. Field
+    names and state codes deliberately differ from the parcel tracker's own
+    domain model.
+servers:
+  - url: http://localhost:4010
+paths:
+  /v1/shipments:
+    get:
+      operationId: listShipments
+      summary: List every shipment the carrier knows about
+      responses:
+        "200":
+          description: All shipments
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ShipmentList"
+  /v1/shipments/{id}:
+    get:
+      operationId: getShipment
+      summary: Fetch one shipment by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Shipment id, which is the parcel tracking number.
+          schema:
+            type: string
+      responses:
+        "200":
+          description: The shipment
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Shipment"
+        "404":
+          description: No shipment with that id
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UnknownShipmentError"
+components:
+  schemas:
+    ShipmentState:
+      type: string
+      enum: [CREATED, TRANSIT, OFD, DELIVERED, EXCEPTION]
+    HistoryEntry:
+      type: object
+      additionalProperties: false
+      required: [ts, place, note]
+      properties:
+        ts:
+          type: string
+          format: date-time
+          description: Instant the scan happened, UTC.
+        place:
+          type: string
+          minLength: 1
+        note:
+          type: string
+          minLength: 1
+    Shipment:
+      type: object
+      additionalProperties: false
+      required: [id, state, history, eta]
+      properties:
+        id:
+          type: string
+          pattern: "^PK[0-9]{10}$"
+        state:
+          $ref: "#/components/schemas/ShipmentState"
+        history:
+          type: array
+          minItems: 1
+          description: Scan history, newest first.
+          items:
+            $ref: "#/components/schemas/HistoryEntry"
+        eta:
+          type: [string, "null"]
+          format: date
+          description: Estimated delivery date, or null when the carrier has none.
+    ShipmentList:
+      type: object
+      additionalProperties: false
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/Shipment"
+    UnknownShipmentError:
+      type: object
+      additionalProperties: false
+      required: [code]
+      properties:
+        code:
+          type: string
+          const: UNKNOWN_SHIPMENT
