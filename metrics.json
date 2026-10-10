@@ -38,7 +38,7 @@
       "pass": 1
     }
   },
-  "generated_at": "2026-10-10T16:50:52Z",
+  "generated_at": "2026-10-10T16:55:25Z",
   "issues": [
     {
       "closed_at": "2026-10-10T12:28:43Z",
@@ -900,9 +900,14 @@
         },
         {
           "entered_at": "2026-10-10T16:50:33Z",
+          "seconds": 286,
+          "stage": "stage:tests-written"
+        },
+        {
+          "entered_at": "2026-10-10T16:55:19Z",
           "in_progress": true,
           "seconds": 0,
-          "stage": "stage:tests-written"
+          "stage": "stage:building"
         }
       ],
       "title": "Show when the parcel was last updated on the parcel page",
@@ -914,9 +919,9 @@
       "cost": {
         "calls": 5,
         "coder_model_usd": 0.0,
-        "coder_usd": 0.0,
+        "coder_usd": 0.001879,
         "model_usd": 0.011045,
-        "usd": 0.011045
+        "usd": 0.012924
       },
       "deferred": null,
       "escalation": null,
@@ -956,9 +961,14 @@
         },
         {
           "entered_at": "2026-10-10T16:50:37Z",
+          "seconds": 278,
+          "stage": "stage:building"
+        },
+        {
+          "entered_at": "2026-10-10T16:55:15Z",
           "in_progress": true,
           "seconds": 0,
-          "stage": "stage:building"
+          "stage": "stage:feasible"
         }
       ],
       "title": "Make the parcel tracker better",
@@ -966,13 +976,13 @@
     },
     {
       "closed_at": null,
-      "coder_engine": null,
+      "coder_engine": "agy",
       "cost": {
         "calls": 4,
         "coder_model_usd": 0.0,
-        "coder_usd": 0.0,
+        "coder_usd": 0.006991,
         "model_usd": 0.007083,
-        "usd": 0.007083
+        "usd": 0.014073
       },
       "deferred": null,
       "escalation": null,
@@ -1021,9 +1031,9 @@
     "deferred": 0,
     "escalated": 13,
     "issues": 17,
-    "orchestrator_usd": 0.488741,
+    "orchestrator_usd": 0.493891,
     "released": 1,
-    "usd": 1.105435
+    "usd": 1.119453
   },
   "version": 1
 }
