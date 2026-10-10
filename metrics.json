@@ -37,7 +37,7 @@
       "pass": 0
     }
   },
-  "generated_at": "2026-10-10T14:11:33Z",
+  "generated_at": "2026-10-10T14:12:52Z",
   "issues": [
     {
       "closed_at": "2026-10-10T12:28:43Z",
@@ -411,22 +411,22 @@
     },
     {
       "closed_at": null,
-      "coder_engine": "agy",
+      "coder_engine": "loop",
       "cost": {
         "calls": 3,
-        "coder_model_usd": 0.0,
-        "coder_usd": 0.021272,
+        "coder_model_usd": 0.01046,
+        "coder_usd": 0.065245,
         "model_usd": 0.007364,
-        "usd": 0.028636
+        "usd": 0.083068
       },
       "deferred": null,
-      "escalation": null,
+      "escalation": "escalated:build-failed",
       "gate_attempts": {},
       "gates": {},
       "kind": "issue",
       "number": 10,
       "opened_at": "2026-10-10T13:54:20Z",
-      "outcome": "open",
+      "outcome": "escalated",
       "owner": null,
       "pr": null,
       "quality_score": 100,
@@ -452,9 +452,13 @@
         },
         {
           "entered_at": "2026-10-10T13:57:55Z",
-          "in_progress": true,
-          "seconds": 0,
+          "seconds": 895,
           "stage": "stage:building"
+        },
+        {
+          "entered_at": "2026-10-10T14:12:50Z",
+          "seconds": 0,
+          "stage": "escalated:build-failed"
         }
       ],
       "title": "Show the estimated delivery date on the parcel page",
@@ -464,11 +468,11 @@
   "repo": "stevengonsalvez/foundry-autonomous-sdlc",
   "totals": {
     "deferred": 0,
-    "escalated": 7,
+    "escalated": 8,
     "issues": 8,
-    "orchestrator_usd": 0.214719,
+    "orchestrator_usd": 0.219427,
     "released": 0,
-    "usd": 0.38195
+    "usd": 0.44109
   },
   "version": 1
 }
