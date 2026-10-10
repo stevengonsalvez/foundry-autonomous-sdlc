@@ -114,11 +114,11 @@ uv run --project agents python scripts/deploy_agents.py all
 |------|--------------|
 | `connection` | Creates or updates the project connection `github-mcp` (category RemoteTool, auth CustomKeys, target `https://api.githubcopilot.com/mcp/`, key `Authorization: Bearer <github-pat>`). The PAT is read from Key Vault and never printed. |
 | `prompt-agents` | Registers the prompt agent versions (`python -m sdlc_agents.create_agents`). |
-| `hosted` | Zips and deploys `sdlc-orchestrator` (1 vCPU, 2Gi, idle timeout 2 minutes) and `sdlc-coder` (2 vCPU, 4Gi, idle timeout 30 minutes): `python_3_13`, `remote_build`, Invocations 2.0.0. Waits up to 900 seconds for status `active` and prints `error.message` on failure. An unchanged zip and definition reuse the existing version. |
+| `hosted` | Zips and deploys `sdlc-orchestrator` (1 vCPU, 2Gi, idle timeout 2 minutes) and `sdlc-coder` (2 vCPU, 4Gi, idle timeout 10 minutes): `python_3_13`, `remote_build`, Invocations 2.0.0. Waits up to 900 seconds for status `active` and prints `error.message` on failure. An unchanged zip and definition reuse the existing version. |
 | `roles` | Assigns `Key Vault Secrets User` on single secrets (orchestrator: `github-pat`; coder: `github-pat`, `agy-cli-token`) and `Foundry User` on the project to both hosted agents: the orchestrator calls the prompt agents and the coder, the coder's fallback engine calls the model. Role ids are resolved by name with `az role definition list`. |
 | `routine` | Creates the routine `sdlc-tick` (cron `*/5 * * * *`, UTC, Invocations body `{"op":"tick"}` to `sdlc-orchestrator`) disabled. The spike routine `probe-tick` cannot be deleted yet; it is kept disabled. |
 
-The idle timeout decides how long compute stays billed after the last request. The orchestrator's 2 minutes (the platform minimum) is shorter than the five minute tick, so its compute is released between ticks; the coder's 30 minutes keeps a running job alive between the orchestrator's status polls. Sizes, idle timeouts (2 to 60 minutes) and the wait can be overridden, for example:
+The idle timeout decides how long compute stays billed after the last request. The orchestrator's 2 minutes (the platform minimum) is shorter than the five minute tick, so its compute is released between ticks; the coder's 10 minutes keeps a running job alive between the orchestrator's five minute status polls (one missed tick is tolerated; a longer gap evicts the sandbox and the job resumes as `interrupted`). Sizes, idle timeouts (2 to 60 minutes) and the wait can be overridden, for example:
 
 ```bash
 uv run --project agents python scripts/deploy_agents.py hosted --only sdlc-coder --coder-cpu 1 --coder-memory 2Gi --coder-idle-minutes 45 --timeout 1200
@@ -224,10 +224,22 @@ uv run --project agents python scripts/deploy_agents.py roles
 | All work | New work halts at 4.50 USD total (`metrics.json` `totals.usd`) | Orchestrator |
 | Monthly budget | 5 USD, alerts only, data lags up to 72 hours | Terraform budget on the resource group |
 | Model throughput | 10k tokens per minute on `sdlc-default` | Model deployment capacity |
-| Coder job | `max_iterations` 5, `deadline_s` 7200 (default and maximum: two hours of coder compute is about 0.54 USD against the 1 USD issue cap), model loop spend 0.50 USD | Coder runtime hard stops |
-| Hosted compute | 0.10934 USD per vCPU-hour and 0.01298 USD per GiB-hour (UK South list price), billed while a session is active | Idle timeouts: orchestrator 2 minutes (0.1353 USD per active hour at 1 vCPU, 2 GiB; a one minute tick plus the 2 minute idle tail is about 0.007 USD), coder 30 minutes (0.2706 USD per active hour at 2 vCPU, 4 GiB) |
+| Coder job | `max_iterations` 5, `deadline_s` 7200 (default and maximum: two hours of coder compute is about 1.15 USD at the real hosted rate, so the 1 USD issue cap stops a job after about 100 minutes), model loop spend 0.50 USD | Coder runtime hard stops |
+| Hosted compute | Billed twice while a session is active: Foundry 'Hosted vCPU/Memory Usage' (0.10934 USD per vCPU-hour, 0.01298 per GiB-hour) and Azure Container Apps 'Standard vCPU/Memory Active Usage' (0.000034 USD per vCPU-second, 0.000004 per GiB-second), together 0.2318 USD per vCPU-hour and 0.0274 per GiB-hour | Idle timeouts: orchestrator 2 minutes (0.2865 USD per active hour at 1 vCPU, 2 GiB; a one minute tick plus the 2 minute idle tail is about 0.014 USD), coder 10 minutes (0.5730 USD per active hour at 2 vCPU, 4 GiB, and one 10 minute tail per finished job, about 0.095 USD) |
 
 agy usage is billed to the Antigravity plan behind the token and is not metered by the demo.
+
+Check the real spend against Azure, not against the ledger. The ledger (`metrics.json`) is an estimate; on 2026-10-10 it said 1.86 USD while Azure billed 4.80 USD. Cost Management lags by hours, so leave a margin below the 5 USD limit:
+
+```bash
+SUB=$(az account show --query id -o tsv)
+az rest --method post \
+  --url "https://management.azure.com/subscriptions/$SUB/resourceGroups/rg-fsdlcd-demo/providers/Microsoft.CostManagement/query?api-version=2023-11-01" \
+  --body '{"type":"ActualCost","timeframe":"MonthToDate","dataset":{"granularity":"None","aggregation":{"usd":{"name":"CostUSD","function":"Sum"}}}}' \
+  --query "properties.rows" -o json
+```
+
+Disable the routine (`deploy_agents.py routine --disable`) as soon as a run is finished: hosted sessions are the whole bill.
 
 ## 9. How the coder isolates and checks its work
 

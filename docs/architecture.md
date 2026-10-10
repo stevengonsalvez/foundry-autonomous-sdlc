@@ -159,7 +159,7 @@ Response to `start`: `{"job_id", "status": "running"}` immediately; the work con
  "detail": "...", "updated_at": "2026-10-10T12:00:00Z", "stale_s": 12, "iterations": 2, "engine": "agy|agy-unrestricted|loop", "elapsed_s": 312, "pr": {"number": 13, "url": "..."},
  "red": "...", "green": "...",
  "cost": {"model_usd": 0.0, "input_tokens": 0, "output_tokens": 0, "coder_seconds": 312, "coder_usd": 0.0,
-          "hosted_vcpu_usd_per_hour": 0.10934, "hosted_gib_usd_per_hour": 0.01298},
+          "hosted_vcpu_usd_per_hour": 0.23174, "hosted_gib_usd_per_hour": 0.02738},
  "log_tail": "..."}
 ```
 
