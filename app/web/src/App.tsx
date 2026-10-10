@@ -1,4 +1,4 @@
-import { useEffect, useRef, type MouseEvent } from "react";
+import { useEffect, useLayoutEffect, useRef, type MouseEvent } from "react";
 import type { ParcelService } from "@parcel/core";
 import { BoxIcon } from "./components/Icons";
 import { HomePage } from "./pages/HomePage";
@@ -16,6 +16,20 @@ export function App({ service }: { service: ParcelService }) {
   const main = useRef<HTMLElement>(null);
   const key = routeKey(route);
   const shownKey = useRef(key);
+
+  useLayoutEffect(() => {
+    const container = main.current?.parentElement;
+    if (container && container.parentElement === document.body) {
+      let prev = container.previousElementSibling;
+      while (prev) {
+        const toRemove = prev;
+        prev = prev.previousElementSibling;
+        if (toRemove.querySelector("#main-content")) {
+          toRemove.remove();
+        }
+      }
+    }
+  }, []);
 
   // Hash navigation keeps the same document, so hand focus to the new page's heading ourselves.
   useEffect(() => {
