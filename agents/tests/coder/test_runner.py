@@ -1578,3 +1578,16 @@ def test_revise_pushes_one_squashed_commit(world: World) -> None:
     assert remote_log(world.remote_root, "agent/issue-40") == [
         "test: add failing tests for #40", "feat: Show the ETA (#40)", "fix: address review findings for #40"]
     assert remote_file(world.remote_root, "agent/issue-40", "app/web/src/eta.txt") == "2026-10-12\n"
+
+
+def test_a_repeated_start_reports_a_finished_job_even_while_its_thread_winds_down(world: World) -> None:
+    # CI flake on main: the state said succeeded while the thread was still alive for a moment (cgroup log,
+    # heartbeat stop), and the idempotent start answered "running" for a job that had already finished.
+    world.engines = [ScriptedEngine("agy", [{"app/web/src/eta.txt": "2026-10-12\n"}])]
+    service = world.service()
+    body = json.dumps({"op": "start", "job": job()}).encode()
+    service.handle_raw(body, session_id="sess-a")
+    assert wait(service, "j-12-1")["status"] == "succeeded"
+    service._alive_locked = lambda job_id: True        # type: ignore[method-assign]
+    code, after = service.handle_raw(body, session_id="sess-a")
+    assert (code, after["status"]) == (200, "succeeded")
