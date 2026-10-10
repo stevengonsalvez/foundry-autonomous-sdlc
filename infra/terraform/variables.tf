@@ -1,6 +1,6 @@
 variable "subscription_id" {
   type        = string
-  description = "Azure subscription to deploy into (the personal Free Trial subscription for the PoC)."
+  description = "Azure subscription to deploy into (the personal Free Trial subscription)."
 
   validation {
     condition     = can(regex("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$", var.subscription_id))
@@ -16,7 +16,7 @@ variable "location" {
 
 variable "name_prefix" {
   type        = string
-  default     = "fsdlc"
+  default     = "fsdlcd"
   description = "Short prefix for resource names. A random suffix is appended to globally unique names."
 
   validation {
@@ -27,7 +27,7 @@ variable "name_prefix" {
 
 variable "environment" {
   type        = string
-  default     = "poc"
+  default     = "demo"
   description = "Environment tag and name segment."
 
   validation {
@@ -83,57 +83,13 @@ variable "model_deployment_name" {
 }
 
 # ---------------------------------------------------------------------------
-# GitHub OIDC federation
-# ---------------------------------------------------------------------------
-
-variable "github_owner" {
-  type        = string
-  description = "GitHub user or org that owns the sandbox repo."
-}
-
-variable "github_repo" {
-  type        = string
-  description = "Sandbox repository name (without owner)."
-}
-
-variable "github_owner_id" {
-  type        = number
-  default     = null
-  description = "Numeric owner id. Set together with github_repo_id when the repo uses immutable OIDC subjects (default for repos created after 2026-07-15). Get it with: gh api repos/OWNER/REPO --jq .owner.id"
-}
-
-variable "github_repo_id" {
-  type        = number
-  default     = null
-  description = "Numeric repository id. Get it with: gh api repos/OWNER/REPO --jq .id"
-}
-
-variable "github_default_branch" {
-  type        = string
-  default     = "main"
-  description = "Branch whose workflows (issues, issue_comment, workflow_run, schedule, workflow_dispatch) may log in to Azure."
-}
-
-variable "github_allow_pull_request" {
-  type        = bool
-  default     = true
-  description = "Add a federated credential for the pull_request subject (needed by the PR review stage). SECURITY GAP: any same-repo PR author can obtain a token; set false to remove it (see docs/findings.md)."
-}
-
-variable "github_environment" {
-  type        = string
-  default     = null
-  description = "Optional GitHub environment name. When a job declares an environment, the OIDC subject becomes environment:<name>."
-}
-
-# ---------------------------------------------------------------------------
 # Cost guardrails
 # ---------------------------------------------------------------------------
 
 variable "budget_amount" {
   type        = number
-  default     = 100
-  description = "Monthly resource-group budget in the billing currency (USD). Alerts lag usage by up to about 72 hours on pay-as-you-go style offers, so keep it well under the 200 USD credit."
+  default     = 5
+  description = "Monthly resource-group budget in USD. The demo hard cap is 5 USD in total. Alerts lag usage by up to about 72 hours, so the TPM cap and the per-issue cost cap in the agents are the real brakes."
 }
 
 variable "budget_alert_thresholds" {

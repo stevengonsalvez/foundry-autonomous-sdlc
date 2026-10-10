@@ -15,14 +15,15 @@ locals {
   base   = "${var.name_prefix}-${var.environment}"
 
   tags = merge({
-    project     = "foundry-sdlc-poc"
+    project     = "foundry-autonomous-sdlc"
     environment = var.environment
     managed_by  = "terraform"
   }, var.tags)
 }
 
 # Single resource group: one destroy removes everything billable.
-resource "azurerm_resource_group" "poc" {
+# Never reuse the earlier proof-of-concept group; this stack is independent.
+resource "azurerm_resource_group" "demo" {
   name     = "rg-${local.base}"
   location = var.location
   tags     = local.tags
@@ -33,8 +34,8 @@ module "observability" {
 
   name                = local.base
   name_suffix         = local.suffix
-  resource_group_name = azurerm_resource_group.poc.name
-  location            = azurerm_resource_group.poc.location
+  resource_group_name = azurerm_resource_group.demo.name
+  location            = azurerm_resource_group.demo.location
   daily_quota_gb      = var.log_daily_quota_gb
   tags                = local.tags
 }
@@ -45,8 +46,8 @@ module "foundry" {
   name                = local.base
   name_suffix         = local.suffix
   subscription_id     = var.subscription_id
-  resource_group_name = azurerm_resource_group.poc.name
-  location            = azurerm_resource_group.poc.location
+  resource_group_name = azurerm_resource_group.demo.name
+  location            = azurerm_resource_group.demo.location
   local_auth_enabled  = var.foundry_local_auth_enabled
   tags                = local.tags
 
@@ -61,32 +62,27 @@ module "foundry" {
   deployer_principal_id = data.azurerm_client_config.current.object_id
 }
 
-module "github_oidc" {
-  source = "./modules/github-oidc"
+module "keyvault" {
+  source = "./modules/keyvault"
 
   name                = local.base
-  subscription_id     = var.subscription_id
-  resource_group_name = azurerm_resource_group.poc.name
-  location            = azurerm_resource_group.poc.location
+  name_suffix         = local.suffix
+  resource_group_name = azurerm_resource_group.demo.name
+  location            = azurerm_resource_group.demo.location
+  tenant_id           = data.azurerm_client_config.current.tenant_id
   tags                = local.tags
 
-  github_owner          = var.github_owner
-  github_repo           = var.github_repo
-  github_owner_id       = var.github_owner_id
-  github_repo_id        = var.github_repo_id
-  github_default_branch = var.github_default_branch
-  allow_pull_request    = var.github_allow_pull_request
-  github_environment    = var.github_environment
-
-  foundry_project_id      = module.foundry.project_id
-  application_insights_id = module.observability.application_insights_id
+  secrets_officer_principal_id = data.azurerm_client_config.current.object_id
+  secrets_reader_principal_ids = {
+    foundry_project = module.foundry.project_principal_id
+  }
 }
 
 module "budget" {
   source = "./modules/budget"
 
   name              = "budget-${local.base}"
-  resource_group_id = azurerm_resource_group.poc.id
+  resource_group_id = azurerm_resource_group.demo.id
   amount            = var.budget_amount
   alert_thresholds  = var.budget_alert_thresholds
   contact_emails    = var.budget_contact_emails

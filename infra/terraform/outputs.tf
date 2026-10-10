@@ -1,5 +1,5 @@
 output "resource_group_name" {
-  value       = azurerm_resource_group.poc.name
+  value       = azurerm_resource_group.demo.name
   description = "Single resource group holding everything billable."
 }
 
@@ -10,7 +10,7 @@ output "foundry_account_name" {
 
 output "foundry_project_endpoint" {
   value       = module.foundry.project_endpoint
-  description = "Set as GitHub variable FOUNDRY_PROJECT_ENDPOINT."
+  description = "Foundry project endpoint used by the deploy scripts as FOUNDRY_PROJECT_ENDPOINT."
 }
 
 output "foundry_project_endpoints" {
@@ -20,7 +20,7 @@ output "foundry_project_endpoints" {
 
 output "model_deployment_name" {
   value       = module.foundry.model_deployment_name
-  description = "Deployment name agents should reference (GitHub variable MODEL_DEPLOYMENT_NAME)."
+  description = "Deployment name agents should reference (MODEL_DEPLOYMENT_NAME for the agents)."
 }
 
 output "selected_model" {
@@ -28,24 +28,29 @@ output "selected_model" {
   description = "Model, version, SKU and TPM capacity actually deployed."
 }
 
-output "azure_client_id" {
-  value       = module.github_oidc.client_id
-  description = "GitHub variable AZURE_CLIENT_ID for azure/login (not a secret)."
-}
-
 output "azure_tenant_id" {
-  value       = module.github_oidc.tenant_id
-  description = "GitHub variable AZURE_TENANT_ID."
+  value       = data.azurerm_client_config.current.tenant_id
+  description = "Entra tenant id."
 }
 
 output "azure_subscription_id" {
   value       = var.subscription_id
-  description = "GitHub variable AZURE_SUBSCRIPTION_ID."
+  description = "Subscription the stack lives in."
 }
 
-output "github_oidc_subjects" {
-  value       = module.github_oidc.oidc_subjects
-  description = "Subjects trusted by the GitHub identity. Must match the token sub claim exactly."
+output "key_vault_name" {
+  value       = module.keyvault.name
+  description = "Key Vault that holds the GitHub token and the agy credentials."
+}
+
+output "key_vault_uri" {
+  value       = module.keyvault.vault_uri
+  description = "Vault URI the agents read secrets from."
+}
+
+output "foundry_project_principal_id" {
+  value       = module.foundry.project_principal_id
+  description = "Project managed identity object id."
 }
 
 output "application_insights_name" {

@@ -8,6 +8,7 @@ provider "azurerm" {
     "Microsoft.CognitiveServices",
     "Microsoft.Consumption",
     "Microsoft.Insights",
+    "Microsoft.KeyVault",
     "Microsoft.ManagedIdentity",
     "Microsoft.OperationalInsights",
   ]
