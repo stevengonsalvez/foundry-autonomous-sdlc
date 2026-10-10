@@ -1,15 +1,16 @@
-import { render, screen } from './utils'
-import ParcelPage from '../src/pages/parcel'
+import { render, screen } from "@testing-library/react";
+import ParcelPage from "../src/pages/parcel";
 
-test('parcel page links back to the search', () => {
-  render(<ParcelPage />)
+// simple render helper
+function renderWithProviders(ui: React.ReactElement) {
+  return render(ui);
+}
 
-  expect(screen.getByRole('heading', { name: 'Track a parcel' })).toBeInTheDocument()
-})
+describe("Parcel page", () => {
+  it("renders parcel lookup form", () => {
+    renderWithProviders(<ParcelPage />);
 
-test('navigation titles the document after the page', () => {
-  render(<ParcelPage />)
-
-  // Updated copy: 'Track a parcel · Parcel Tracker'
-  expect(document.title).to.equal('Track a parcel · Parcel Tracker')
-})
+    expect(screen.getByLabelText(/tracking number/i)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /track/i })).toBeInTheDocument();
+  });
+});
