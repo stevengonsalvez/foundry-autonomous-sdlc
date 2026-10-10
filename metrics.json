@@ -5,16 +5,16 @@
       "fail": 0,
       "first_fail": 0,
       "first_pass": 8,
-      "pass": 8
+      "pass": 9
     },
     "coverage": {
       "fail": 3,
       "first_fail": 3,
       "first_pass": 5,
-      "pass": 5
+      "pass": 6
     },
     "e2e": {
-      "fail": 4,
+      "fail": 5,
       "first_fail": 4,
       "first_pass": 4,
       "pass": 4
@@ -23,22 +23,22 @@
       "fail": 0,
       "first_fail": 0,
       "first_pass": 8,
-      "pass": 8
+      "pass": 9
     },
     "tdd-order": {
       "fail": 0,
       "first_fail": 0,
       "first_pass": 8,
-      "pass": 8
+      "pass": 9
     },
     "test": {
       "fail": 4,
       "first_fail": 4,
       "first_pass": 4,
-      "pass": 4
+      "pass": 5
     }
   },
-  "generated_at": "2026-10-10T19:50:18Z",
+  "generated_at": "2026-10-10T19:55:18Z",
   "issues": [
     {
       "closed_at": "2026-10-10T12:28:43Z",
@@ -1333,39 +1333,45 @@
         "usd": 0.06731
       },
       "deferred": null,
-      "escalation": null,
+      "escalation": "escalated:build-failed",
       "gate_attempts": {
         "agent-scope": [
+          "success",
           "success"
         ],
         "coverage": [
-          "failure"
+          "failure",
+          "success"
         ],
         "e2e": [
+          "failure",
           "failure"
         ],
         "gitleaks": [
+          "success",
           "success"
         ],
         "tdd-order": [
+          "success",
           "success"
         ],
         "test": [
-          "failure"
+          "failure",
+          "success"
         ]
       },
       "gates": {
         "agent-scope": "success",
-        "coverage": "failure",
+        "coverage": "success",
         "e2e": "failure",
         "gitleaks": "success",
         "tdd-order": "success",
-        "test": "failure"
+        "test": "success"
       },
       "kind": "pr",
       "number": null,
       "opened_at": "2026-10-10T19:24:18Z",
-      "outcome": "open",
+      "outcome": "escalated",
       "owner": null,
       "pr": 36,
       "quality_score": null,
@@ -1381,9 +1387,13 @@
         },
         {
           "entered_at": "2026-10-10T19:50:16Z",
-          "in_progress": true,
-          "seconds": 0,
+          "seconds": 300,
           "stage": "stage:in-review"
+        },
+        {
+          "entered_at": "2026-10-10T19:55:16Z",
+          "seconds": 0,
+          "stage": "escalated:build-failed"
         }
       ],
       "title": "Update the home page heading copy",
@@ -1393,11 +1403,11 @@
   "repo": "stevengonsalvez/foundry-autonomous-sdlc",
   "totals": {
     "deferred": 0,
-    "escalated": 15,
+    "escalated": 16,
     "issues": 20,
-    "orchestrator_usd": 0.626391,
+    "orchestrator_usd": 0.631297,
     "released": 4,
-    "usd": 1.618725
+    "usd": 1.623631
   },
   "version": 1
 }
