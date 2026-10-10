@@ -1,0 +1,21 @@
+{
+  "name": "@parcel/api",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "HTTP API exposing /api/parcels on top of the carrier.",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "start": "tsx src/main.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@parcel/core": "0.1.0"
+  },
+  "devDependencies": {
+    "@parcel/carrier-mock": "0.1.0",
+    "@parcel/contracts": "0.1.0"
+  }
+}
