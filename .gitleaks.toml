@@ -4,9 +4,12 @@ title = "foundry-autonomous-sdlc"
 useDefault = true
 
 [allowlist]
-description = "Azure built-in role definition GUIDs are public identifiers, not credentials"
+description = "Public Azure role GUIDs and fake test literals, none of them credentials"
 regexes = [
   '''b86a8fe4-44ce-4948-aee5-eccb2c155cd7''',
   '''b86a8fe4-44ce-4948-aee5-eccb2d9d5ee5''',
   '''4633458b-17de-408a-b874-0445c86b69e6''',
+  # Obviously fake literals used to prove secrets are redacted from coder logs
+  '''ya29\.SECRETAGY987654321''',
+  '''github_pat_SECRETPAT0123456789''',
 ]
