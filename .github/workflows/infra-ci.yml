@@ -1,0 +1,194 @@
+name: Infra CI
+
+# Static checks only: no Azure credentials, no secrets, no remote state.
+# Terraform runs with -backend=false and never plans or applies.
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'infra/**'
+      - 'agents/**'
+      - 'reference/**'
+      - '.github/workflows/**'
+  push:
+    branches: [main]
+    paths:
+      - 'infra/**'
+      - 'agents/**'
+      - 'reference/**'
+      - '.github/workflows/**'
+  workflow_dispatch:
+
+# Superseded PR runs are cancelled; runs on main always complete so every
+# merged commit has a result.
+concurrency:
+  group: infra-ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+defaults:
+  run:
+    shell: bash -euo pipefail {0}
+
+permissions:
+  contents: read
+
+env:
+  TERRAFORM_VERSION: "1.16.5"
+  TFLINT_VERSION: "v0.64.0"
+  UV_VERSION: "0.12.24"
+  PYTHON_VERSION: "3.12"
+  PYTEST_VERSION: "9.1.1"
+  PYYAML_VERSION: "6.0.3"
+  CHECKOV_VERSION: "3.3.26"
+  ACTIONLINT_VERSION: "1.7.12"
+  ACTIONLINT_SHA256: "8aca8db96f1b94770f1b0d72b6dddcb1ebb8123cb3712530b08cc387b349a3d8"
+  TF_ROOT: infra/terraform
+
+jobs:
+  terraform:
+    name: Terraform fmt, validate and tflint
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4.0.1
+        with:
+          terraform_version: ${{ env.TERRAFORM_VERSION }}
+          terraform_wrapper: false
+
+      - name: Check formatting
+        run: terraform -chdir="$TF_ROOT" fmt -check -recursive -diff
+
+      - name: Validate root, bootstrap and every module
+        run: |
+          export TF_PLUGIN_CACHE_DIR="$RUNNER_TEMP/tf-plugin-cache"
+          mkdir -p "$TF_PLUGIN_CACHE_DIR"
+
+          dirs=("$TF_ROOT" "$TF_ROOT/bootstrap")
+          for dir in "$TF_ROOT"/modules/*/; do
+            if [[ -d "$dir" ]]; then
+              dirs+=("${dir%/}")
+            fi
+          done
+
+          for dir in "${dirs[@]}"; do
+            echo "::group::$dir"
+            if [[ ! -d "$dir" ]]; then
+              echo "::error::Expected Terraform configuration is missing: $dir"
+              exit 1
+            fi
+            # A committed lock file is the contract; CI must not rewrite it.
+            lockfile_flag=()
+            if [[ -f "$dir/.terraform.lock.hcl" ]]; then
+              lockfile_flag=(-lockfile=readonly)
+            fi
+            terraform -chdir="$dir" init -backend=false -input=false "${lockfile_flag[@]}"
+            terraform -chdir="$dir" validate -no-color
+            echo "::endgroup::"
+          done
+
+      - uses: terraform-linters/setup-tflint@6ffdbaa3be476b3431f7275c26966ef32ff60337 # v6.3.2
+        with:
+          tflint_version: ${{ env.TFLINT_VERSION }}
+          tflint_config_path: ${{ env.TF_ROOT }}/.tflint.hcl
+          cache: true
+
+      - name: Install tflint plugins
+        working-directory: ${{ env.TF_ROOT }}
+        env:
+          # Avoids anonymous GitHub API rate limits when fetching plugins.
+          GITHUB_TOKEN: ${{ github.token }}
+        run: tflint --init --config "$GITHUB_WORKSPACE/$TF_ROOT/.tflint.hcl"
+
+      - name: Run tflint
+        working-directory: ${{ env.TF_ROOT }}
+        # Absolute config path: in recursive mode a relative path would be
+        # resolved inside each module directory.
+        run: tflint --recursive --format compact --config "$GITHUB_WORKSPACE/$TF_ROOT/.tflint.hcl"
+
+  python-tests:
+    name: Python tests (agents, reference sandbox)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+        with:
+          version: ${{ env.UV_VERSION }}
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Run agents tests
+        working-directory: agents
+        run: uv run --locked --with "pytest==$PYTEST_VERSION" python -m pytest -q
+
+      - name: Run reference sandbox tests
+        working-directory: reference/actions-sandbox
+        run: >-
+          uv run --locked
+          --with "pytest==$PYTEST_VERSION"
+          --with "pyyaml==$PYYAML_VERSION"
+          python -m pytest -q
+
+  security-scan:
+    name: Checkov (Terraform)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+        with:
+          version: ${{ env.UV_VERSION }}
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      # Any failed check fails the job. Accepted findings are suppressed inline
+      # in the HCL with a reasoned checkov:skip comment, never here.
+      - name: Run checkov
+        run: >-
+          uvx --from "checkov==$CHECKOV_VERSION" checkov
+          --directory "$TF_ROOT"
+          --framework terraform
+          --compact
+          --output cli --output sarif
+          --output-file-path console,checkov.sarif
+
+      # Code scanning upload needs security-events: write, which this repo does
+      # not grant to CI. Keep the SARIF as a run artifact instead.
+      - name: Retain checkov SARIF
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: checkov-sarif
+          path: checkov.sarif
+          if-no-files-found: warn
+
+  workflow-lint:
+    name: actionlint
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install actionlint
+        run: |
+          archive="actionlint_${ACTIONLINT_VERSION}_linux_amd64.tar.gz"
+          curl -fsSL -o "$RUNNER_TEMP/$archive" \
+            "https://github.com/rhysd/actionlint/releases/download/v${ACTIONLINT_VERSION}/$archive"
+          echo "$ACTIONLINT_SHA256  $RUNNER_TEMP/$archive" | sha256sum --check --strict
+          tar -xzf "$RUNNER_TEMP/$archive" -C "$RUNNER_TEMP" actionlint
+          echo "$RUNNER_TEMP" >> "$GITHUB_PATH"
+
+      # shellcheck is preinstalled on ubuntu-latest, so run: blocks are linted too.
+      - name: Lint repository and sandbox workflows
+        run: actionlint -color .github/workflows/*.yml reference/actions-sandbox/.github/workflows/*.yml
