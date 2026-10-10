@@ -1,0 +1,29 @@
+# dependencies and build output
+node_modules/
+dist/
+coverage/
+playwright-report/
+test-results/
+__pycache__/
+.pytest_cache/
+.venv/
+*.egg-info/
+
+# terraform state and local variable files
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfplan
+*.tfvars
+!terraform.tfvars.example
+backend.hcl
+backend.tf
+
+# credentials and local agent scratch: never commit
+.env
+.env.*
+*.pem
+*.key
+.agents/
+*secret*
+*token*
