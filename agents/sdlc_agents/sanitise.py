@@ -124,6 +124,31 @@ def sanitise_markdown(text: str) -> str:
     return _FIXES_RE.sub(lambda m: f"`{m.group(1)}` [keyword defanged]", text)
 
 
+_SECRET_RES = (
+    re.compile(r"\b(?:gh[pousr]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,})"),        # GitHub tokens
+    re.compile(r"\beyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]+"),             # JWTs (Entra, agy)
+    re.compile(r"(?i)(?<=bearer )[A-Za-z0-9._~+/=-]+"),
+    re.compile(r"(?<=://)[^/\s:@]+:[^/\s@]+(?=@)"),                                       # user:secret@ in URLs
+    re.compile(r"(?i)(?<=AccountKey=)[^;\s]+|(?<=SharedAccessSignature=)[^;\s]+|(?<=sig=)[^&\s]+"),
+)
+
+
+def redact_secrets(text: str) -> str:
+    """Replace token-shaped strings with [REDACTED] before coder output is persisted on GitHub. The
+    coder already redacts the secrets it knows by value; this catches the well-known shapes."""
+    for pattern in _SECRET_RES:
+        text = pattern.sub("[REDACTED]", text)
+    return text
+
+
+def fenced(text: str, info: str = "text") -> str:
+    """A code fence longer than any backtick run in `text`: its content renders as literal text
+    (no markup, links, HTML, mentions) and cannot close the fence."""
+    longest = max((len(run) for run in re.findall(r"`+", text)), default=0)
+    fence = "`" * max(3, longest + 1)
+    return f"{fence}{info}\n{text}\n{fence}"
+
+
 def one_line(text: str, limit: int = 300) -> str:
     """Collapse whitespace and cap length, for short model text shown in summaries."""
     flat = " ".join(text.split())

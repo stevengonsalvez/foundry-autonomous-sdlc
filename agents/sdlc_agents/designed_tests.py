@@ -37,7 +37,9 @@ _DECLARED = re.compile(
     r"\bexport\s+(?:declare\s+)?(?:async\s+)?(?:function\*?|const|let|var|class|abstract\s+class|type|interface|enum)"
     r"\s+([A-Za-z_$][\w$]*)"
 )
-_EXPORT_LIST = re.compile(r"\bexport\s+(?:type\s+)?\{([^}]*)\}")
+_EXPORT_LIST_FULL = re.compile(r"\b(export\s+(?:type\s+)?)\{([^}]*)\}")
+_DECLARED_TYPE = re.compile(r"\bexport\s+(?:declare\s+)?(?:type|interface)\s+([A-Za-z_$][\w$]*)")
+_BRANDED = re.compile(r"\bexport\s+type\s+([A-Za-z_$][\w$]*)\s*=\s*(string|number)\s*&\s*\{[^}]*__brand")
 _EXPORT_STAR = re.compile(r"""\bexport\s*\*\s*from\s*["']([^"']+)["']""")
 _EXPORT_STAR_AS = re.compile(r"""\bexport\s*\*\s*as\s+([A-Za-z_$][\w$]*)\s+from""")
 _EXPORT_DEFAULT = re.compile(r"\bexport\s+default\b")
@@ -69,21 +71,13 @@ def _resolve(base: str, spec: str, known: set[str], read: Reader) -> str | None:
     return None
 
 
-def exports_of(path: str, read: Reader, known: set[str] | None = None, depth: int = 3) -> set[str] | None:
-    """Names a module exports (following `export * from`), or None when the module cannot be read."""
+def module_files(path: str, read: Reader, known: set[str] | None = None, depth: int = 3) -> list[str] | None:
+    """The module and every module it re-exports with `export * from`; None if one cannot be read."""
     text = read(path)
     if text is None:
         return None
-    text = _COMMENTS.sub("", text)
-    names = set(_DECLARED.findall(text)) | set(_EXPORT_STAR_AS.findall(text))
-    for group in _EXPORT_LIST.findall(text):
-        for item in group.split(","):
-            item = item.strip().removeprefix("type ").strip()
-            if item:
-                names.add(item.split(" as ")[-1].strip())
-    if _EXPORT_DEFAULT.search(text):
-        names.add("default")
-    for spec in _EXPORT_STAR.findall(text):
+    files = [path]
+    for spec in _EXPORT_STAR.findall(_COMMENTS.sub("", text)):
         if depth <= 0:
             return None
         target = None
@@ -91,29 +85,104 @@ def exports_of(path: str, read: Reader, known: set[str] | None = None, depth: in
             if (known is not None and candidate in known) or (known is None and read(candidate) is not None):
                 target = candidate
                 break
-        inner = exports_of(target, read, known, depth - 1) if target else None
+        inner = module_files(target, read, known, depth - 1) if target else None
         if inner is None:
             return None
-        names |= inner
-    return names
+        files += [f for f in inner if f not in files]
+    return files
 
 
-def _imported_names(clause: str) -> list[str]:
-    """Names an import clause needs from the module: 'default' for a default import, the original
-    name of each named import; nothing for a namespace import."""
-    clause = clause.strip().removeprefix("type ").strip()
-    names: list[str] = []
+def _declared(text: str) -> tuple[set[str], set[str]]:
+    """(every exported name, the names that are types only) declared in one module's text."""
+    names = set(_DECLARED.findall(text)) | set(_EXPORT_STAR_AS.findall(text))
+    types = set(_DECLARED_TYPE.findall(text))
+    for whole, group in _EXPORT_LIST_FULL.findall(text):
+        for item in group.split(","):
+            item = item.strip()
+            is_type = whole.startswith("export type") or item.startswith("type ")
+            item = item.removeprefix("type ").strip()
+            if item:
+                name = item.split(" as ")[-1].strip()
+                names.add(name)
+                if is_type:
+                    types.add(name)
+    if _EXPORT_DEFAULT.search(text):
+        names.add("default")
+    return names, types
+
+
+def exports_with_types(path: str, read: Reader, known: set[str] | None = None) -> tuple[set[str], set[str]] | None:
+    files = module_files(path, read, known)
+    if files is None:
+        return None
+    names: set[str] = set()
+    types: set[str] = set()
+    for file in files:
+        file_names, file_types = _declared(_COMMENTS.sub("", read(file) or ""))
+        names |= file_names
+        types |= file_types
+    return names, types
+
+
+def exports_of(path: str, read: Reader, known: set[str] | None = None) -> set[str] | None:
+    """Names a module exports (following `export * from`), or None when the module cannot be read."""
+    found = exports_with_types(path, read, known)
+    return found[0] if found else None
+
+
+def branded(path: str, read: Reader, known: set[str] | None = None) -> tuple[dict[str, str], dict[str, str]]:
+    """({branded type: its base type}, {field name: branded type}) declared in a module and its re-exports.
+    A branded type is `export type X = string & { readonly __brand: ... }` (nominal: a plain string
+    literal is not assignable to it)."""
+    types: dict[str, str] = {}
+    texts = [_COMMENTS.sub("", read(f) or "") for f in module_files(path, read, known) or []]
+    for text in texts:
+        types.update(dict(_BRANDED.findall(text)))
+    fields: dict[str, str] = {}
+    if types:
+        field_re = re.compile(rf"\b([A-Za-z_$][\w$]*)\??\s*:\s*({'|'.join(map(re.escape, types))})\b")
+        for text in texts:
+            fields.update(dict(field_re.findall(text)))
+    return types, fields
+
+
+def _named_imports(clause: str) -> list[tuple[str, bool]]:
+    """(name, imported as a type) for each name an import clause needs: 'default' for a default
+    import, the original name of each named import; nothing for a namespace import."""
+    clause = clause.strip()
+    all_types = clause.startswith("type ")
+    clause = clause.removeprefix("type ").strip()
+    names: list[tuple[str, bool]] = []
     named = re.search(r"\{([^}]*)\}", clause)
     head = clause[: named.start()] if named else clause
     head = head.strip().rstrip(",").strip()
     if head and not head.startswith("*"):
-        names.append("default")
+        names.append(("default", all_types))
     if named:
         for item in named.group(1).split(","):
-            item = item.strip().removeprefix("type ").strip()
+            item = item.strip()
+            is_type = all_types or item.startswith("type ")
+            item = item.removeprefix("type ").strip()
             if item:
-                names.append(item.split(" as ")[0].strip())
+                names.append((item.split(" as ")[0].strip(), is_type))
     return names
+
+
+def _imported_names(clause: str) -> list[str]:
+    return [name for name, _ in _named_imports(clause)]
+
+
+def _import_problems(path: str, clause: str, label: str, found: tuple[set[str], set[str]] | None) -> list[str]:
+    if found is None:
+        return []
+    names, types = found
+    errors = []
+    for name, as_type in _named_imports(clause):
+        if name not in names:
+            errors.append(f"{path}: {name} is not exported by {label}")
+        elif name in types and not as_type:
+            errors.append(f"{path}: {name} is a type: import it with `import type` (verbatimModuleSyntax)")
+    return errors
 
 
 def _check_file(path: str, content: str, known: set[str], read: Reader) -> list[str]:
@@ -132,10 +201,8 @@ def _check_file(path: str, content: str, known: set[str], read: Reader) -> list[
             if target is None:
                 errors.append(f"{path}: import {spec} does not resolve to a file on main or a designed file")
                 continue
-            wanted = _imported_names(clause)
-            exported = exports_of(target, read, known) if wanted else set()
-            if exported is not None:
-                errors += [f"{path}: {name} is not exported by {target}" for name in wanted if name not in exported]
+            if _imported_names(clause):
+                errors += _import_problems(path, clause, target, exports_with_types(target, read, known))
             continue
         package = _package(spec)
         if package not in ALLOWED_PACKAGES and not spec.startswith(ALLOWED_SCOPES):
@@ -145,13 +212,27 @@ def _check_file(path: str, content: str, known: set[str], read: Reader) -> list[
         if package == "vitest":
             vitest_names |= set(_imported_names(clause))
         elif spec in PACKAGE_ENTRIES:
-            exported = exports_of(PACKAGE_ENTRIES[spec], read, known)
-            if exported is not None:
-                errors += [f"{path}: {name} is not exported by {spec}"
-                           for name in _imported_names(clause) if name not in exported]
+            errors += _import_problems(path, clause, spec, exports_with_types(PACKAGE_ENTRIES[spec], read, known))
     for name in VITEST_NAMES:
         if name not in vitest_names and _uses(code, name):
             errors.append(f"{path}: uses {name} without importing it from vitest")
+    errors += _branded_literals(path, code, known, read)
+    return errors
+
+
+def _branded_literals(path: str, code: str, known: set[str], read: Reader) -> list[str]:
+    """A string literal written straight into a field typed with a branded type fails tsc; the cheap
+    case (`trackingNumber: "PK..."` with no `as` cast) is caught here."""
+    errors = []
+    for entry in PACKAGE_ENTRIES.values():
+        if entry not in known:
+            continue
+        _, fields = branded(entry, read, known)
+        for field, brand in sorted(fields.items()):
+            for match in re.finditer(rf"\b{re.escape(field)}\s*:\s*([\"'`])[^\"'`]*\1(?!\s*as\b)", code):
+                errors.append(f"{path}: {field} is a {brand}: write {match.group(0).split(':', 1)[1].strip()} "
+                              f"as {brand} (import type {{ {brand} }} from \"@parcel/core\")")
+                break
     return errors
 
 

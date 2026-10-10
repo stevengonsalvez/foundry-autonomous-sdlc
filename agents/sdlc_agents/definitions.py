@@ -380,6 +380,13 @@ RULES FOR EVERY TEST FILE:
   "@parcel/core" by its exact exported names. Import nothing else except @testing-library/*, react
   and the page or module under test by its relative path. Use only functions, props and texts that
   exist in the provided files.
+- Every test file must pass `tsc --noEmit` under the repo's strict tsconfig: no implicit any, no
+  unused imports or variables, every value of the declared type. Import types with
+  `import type {{ ... }}` (verbatimModuleSyntax), values with a plain import.
+- Branded types (listed in the "Branded types in" line; TrackingNumber is branded) do not accept a
+  plain string literal: write "PK1000000001" as TrackingNumber, with
+  import type {{ TrackingNumber }} from "@parcel/core"; (parseTrackingNumber returns
+  TrackingNumber | null, so do not pass its result where a TrackingNumber is required).
 - Each test must fail on an ASSERTION when the feature is absent (an expect that does not hold),
   never on a missing import, a missing export or an exception.
 - Use await screen.findBy* (or findAllBy*) for anything that appears after loading; getBy* only

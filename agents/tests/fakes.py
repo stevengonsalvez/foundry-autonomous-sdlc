@@ -437,6 +437,7 @@ class FakeCoder:
         self.invalid_detail = "app/web/tests/x.test.tsx: ReferenceError: expect is not defined"
         self.start_status = "running"
         self.status_override: dict[str, Any] | None = None
+        self.extra_status: dict[str, Any] = {}          # merged into every status reply (log_tail, engine_events, ...)
         self.cancel_error: Exception | None = None
 
     def _new_session(self) -> str:
@@ -479,7 +480,7 @@ class FakeCoder:
         if record["status"] == "running" and record["polls"] >= self.polls_to_finish:
             self._finish(record)
         response = {"job_id": body["job_id"], "status": record["status"], "phase": "pr", "iterations": 2,
-                    "engine": "agy", "elapsed_s": 300 * record["polls"], "log_tail": "ok"}
+                    "engine": "agy", "elapsed_s": 300 * record["polls"], "log_tail": "ok", **self.extra_status}
         for key in ("reason", "detail"):
             if record.get(key):
                 response[key] = record[key]

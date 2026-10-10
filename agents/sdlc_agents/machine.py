@@ -41,7 +41,9 @@ from sdlc_agents.state import (
 )
 
 MAX_REVIEW_REJECTIONS = 2
-MAX_CODER_ATTEMPTS = 5            # first build, up to two rebuilds after test repairs, revisions
+MAX_CODER_ATTEMPTS = 8            # first build, two rebuilds after test repairs, two CI revisions, a review one
+MAX_CI_REVISIONS = 2              # red required checks on an agent PR: coder revise rounds before build-failed
+CI_REVISABLE = ("test", "coverage", "e2e")   # code failures; gitleaks, tdd-order, agent-scope escalate at once
 MAX_TEST_REPAIRS = 2              # coder reported tests-invalid: designer repairs before agent-error
 CODER_DEADLINE_S = 7_200           # sent in every job; the coder stops itself at this point
 MAX_CODER_RESUMES = 3              # restarts of an interrupted job before giving up
@@ -304,6 +306,13 @@ def _review_action(ctx: Context, *, revise_mode: str) -> Action:
     if grace:
         return grace
     failed = gates.failed(ctx.checks)
+    code_failures = [name for name in failed if ctx.checks[name] != "cancelled"]
+    if code_failures and ctx.kind == "issue" and set(code_failures) <= set(CI_REVISABLE):
+        # An agent PR that fails CI is worked on (tick.py: designer repair or coder revise), not dropped.
+        ci = state.get("ci_revise") if state else None
+        if ci and ci.get("head") == pr.head_sha and ci.get("action") == "revise":
+            return _start_coder(state, revise_mode)
+        return Action(Kind.CI_TRIAGE, f"required checks failed on {pr.head_sha[:7]}: {', '.join(code_failures)}")
     if failed:
         return Action(Kind.ESCALATE, f"required checks failed on {pr.head_sha[:7]}: {', '.join(failed)}",
                       label=ESC_BUILD_FAILED)
