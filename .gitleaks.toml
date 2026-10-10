@@ -12,4 +12,5 @@ regexes = [
   # Obviously fake literals used to prove secrets are redacted from coder logs
   '''ya29\.SECRETAGY987654321''',
   '''github_pat_SECRETPAT0123456789''',
+  '''Zm9vYmFyYmF6cXV4MTIzNDU2Nzg5MA''',
 ]
