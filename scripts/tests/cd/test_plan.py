@@ -11,6 +11,7 @@ from scripts.cd.deploy_state import Include
 from scripts.cd.ghcli import GhError
 
 REPO = "Owner/Repo"
+OWNER = "Owner"
 
 
 @pytest.mark.parametrize(
@@ -57,6 +58,31 @@ def test_select_pr_prefers_the_pr_whose_merge_commit_is_the_sha() -> None:
     assert plan.select_pr([], sha(1)) is None
 
 
+def test_only_the_owners_pull_requests_steer_the_pipeline() -> None:
+    prs = [
+        {"number": 1, "merged_at": "t", "merge_commit_sha": sha(1), "user": {"login": "stranger"}},
+        {"number": 2, "merged_at": "t", "merge_commit_sha": sha(1), "user": {"login": "Owner"}},
+    ]
+    assert plan.select_pr(prs, sha(1), "Owner")["number"] == 2
+    assert plan.select_pr(prs[:1], sha(1), "Owner") is None
+    assert plan.select_pr(prs[:1], sha(1))["number"] == 1  # no owner given: any merged PR
+
+
+def test_an_issue_number_that_does_not_check_out_is_dropped() -> None:
+    gh = FakeGitHub()
+    gh.prs[sha(5)] = [pr(50, 5, "Closes #9001")]
+    assert build(gh).issue is None  # 404
+    gh.issues[600] = {"user": {"login": "stranger"}}
+    gh.prs[sha(5)] = [pr(50, 5, "Closes #600")]
+    assert build(gh).issue is None  # someone else's issue
+    gh.issues[601] = {"user": {"login": "Owner"}, "pull_request": {}}
+    gh.prs[sha(5)] = [pr(50, 5, "Closes #601")]
+    assert build(gh).issue is None  # a pull request, not an issue
+    gh.prs[sha(5)] = [{**pr(50, 5, "Closes #7"), "user": {"login": "stranger"}}]
+    result = build(gh)
+    assert (result.pr, result.issue) == (None, None)  # a stranger's PR is ignored entirely
+
+
 def test_compute_includes_lists_merged_prs_oldest_first_and_skips_direct_commits() -> None:
     prs = {
         sha(3): {"number": 30, "body": "Closes #300", "head": {"ref": "x"}},
@@ -76,6 +102,7 @@ class FakeGitHub:
         self.tag_appears_after: int | None = None  # number of tag lookups before the tag exists
         self.compare_status = "ahead"
         self.calls: list[str] = []
+        self.issues: dict[int, dict] = {}  # number -> issue json; unlisted numbers are owner issues
 
     def __call__(self, args: list[str], stdin: str | None = None) -> str:
         path = args[1]
@@ -88,6 +115,11 @@ class FakeGitHub:
         if rest.startswith("commits/"):
             ref = rest.split("/")[1]
             return json.dumps({"sha": self.head if ref == "main" else ref.ljust(40, "0")})
+        if rest.startswith("issues/"):
+            number = int(rest.split("/")[1])
+            if number not in self.issues and number >= 9000:
+                raise GhError(args, "gh: Not Found (HTTP 404)")
+            return json.dumps(self.issues.get(number, {"user": {"login": OWNER}}))
         if rest.startswith("compare/"):
             return json.dumps({"status": self.compare_status})
         if rest.startswith("tags"):
@@ -111,6 +143,7 @@ def pr(number: int, sha_n: int, body: str = "", branch: str = "x") -> dict:
         "merge_commit_sha": sha(sha_n),
         "body": body,
         "head": {"ref": branch},
+        "user": {"login": OWNER},
     }
 
 

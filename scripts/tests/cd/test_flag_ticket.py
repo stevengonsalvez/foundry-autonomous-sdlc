@@ -80,7 +80,12 @@ def test_the_same_run_updates_its_comment_in_place() -> None:
         rollback_ok=True,
         restored_version="v0.3.1",
     )
-    fake = FakeGh(comments=[{"id": 555, "body": old}, {"id": 556, "body": "<!-- other -->"}])
+    fake = FakeGh(
+        comments=[
+            {"id": 555, "user": {"login": "github-actions[bot]"}, "body": old},
+            {"id": 556, "body": "<!-- other -->"},
+        ]
+    )
     result = flag(fake)
     patch = [c for c in fake.writes() if c[0] == "PATCH"]
     assert patch == [("PATCH", "repos/o/r/issues/comments/555", patch[0][2])]
@@ -98,14 +103,14 @@ def test_an_identical_comment_is_left_alone() -> None:
         rollback_ok=True,
         restored_version="v0.3.1",
     )
-    fake = FakeGh(comments=[{"id": 1, "body": body}])
+    fake = FakeGh(comments=[{"id": 1, "user": {"login": "github-actions[bot]"}, "body": body}])
     assert flag(fake).endswith("comment unchanged")
     assert [c[0] for c in fake.writes()] == ["POST"]  # only the (idempotent) label
 
 
 def test_another_run_gets_its_own_comment() -> None:
     old = ft.marker(98) + "\nold"
-    fake = FakeGh(comments=[{"id": 1, "body": old}])
+    fake = FakeGh(comments=[{"id": 1, "user": {"login": "github-actions[bot]"}, "body": old}])
     assert flag(fake).endswith("comment created")
 
 
@@ -148,3 +153,11 @@ def test_cli_reports_a_gh_failure_with_a_non_zero_exit() -> None:
     assert ft.main(argv, FakeGh(fail_on="/labels")) == 1
     assert ft.main(argv, FakeGh()) == 0
     assert ft.main([*argv[:2], "--issue", "", *argv[4:]], FakeGh()) == 0  # empty means none
+
+
+def test_a_strangers_comment_with_the_marker_is_neither_edited_nor_trusted() -> None:
+    marker = f"<!-- cd-rollback:{99} -->"
+    fake = FakeGh(comments=[{"id": 7, "user": {"login": "stranger"}, "body": f"{marker}\nspoof"}])
+    flag(fake)
+    assert [c for c in fake.writes() if c[0] == "PATCH"] == []
+    assert [c for c in fake.writes() if c[0] == "POST" and c[1].endswith("/comments")]

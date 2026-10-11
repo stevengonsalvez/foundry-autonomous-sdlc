@@ -4,14 +4,20 @@ from __future__ import annotations
 
 from .ghcli import Runner, api_list, api_send
 
+BOT = "github-actions[bot]"
+
 
 def upsert_comment(run: Runner, repo: str, number: int, marker: str, body: str) -> str:
-    """Post `body` (which must start with `marker`) or update the comment that already has it."""
+    """Post `body` (which must start with `marker`) or update the comment that already has it.
+
+    Only this workflow's own comments count: on a public repository anyone can post a comment that
+    contains a marker, and that must neither be edited nor hide the real one."""
     existing = next(
         (
             c
             for c in api_list(run, f"repos/{repo}/issues/{number}/comments?per_page=100")
-            if marker in (c.get("body") or "")
+            if (c.get("user") or {}).get("login") == BOT
+            and (c.get("body") or "").startswith(marker)
         ),
         None,
     )

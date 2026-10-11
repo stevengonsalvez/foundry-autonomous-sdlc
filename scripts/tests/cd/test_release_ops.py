@@ -122,7 +122,11 @@ def test_comment_release_comments_once_on_every_ticket_and_updates_on_rerun() ->
     # a re-run finds each marker comment and writes nothing
     for number in (13, 12, 11, 10):
         fake.comments[number] = [
-            {"id": number, "body": ro.release_comment(sha(3), "v0.4.0", URL, 10)[1]}
+            {
+                "id": number,
+                "user": {"login": "github-actions[bot]"},
+                "body": ro.release_comment(sha(3), "v0.4.0", URL, 10)[1],
+            }
         ]
     fake.writes.clear()
     assert set(ro.comment_release(fake, REPO, **kwargs)) == {

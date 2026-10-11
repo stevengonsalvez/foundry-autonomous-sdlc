@@ -57,28 +57,46 @@ def pick_version(tags_at_sha: list[str], short: str) -> str:
     return max(found)[1] if found else f"main-{short}"
 
 
-def select_pr(prs: list[dict[str, Any]], sha: str) -> dict[str, Any] | None:
-    """The merged PR that produced `sha`: the one whose merge commit it is, else any merged PR."""
-    merged = [pr for pr in prs if pr.get("merged_at")]
+def select_pr(
+    prs: list[dict[str, Any]], sha: str, owner: str | None = None
+) -> dict[str, Any] | None:
+    """The merged PR that produced `sha`: the one whose merge commit it is, else any merged PR.
+
+    With `owner`, only that user's PRs count: the ticket a PR points at is flagged and commented on
+    by this pipeline, so a PR written by anyone else must never steer it."""
+    merged = [
+        pr
+        for pr in prs
+        if pr.get("merged_at") and (owner is None or (pr.get("user") or {}).get("login") == owner)
+    ]
     exact = [pr for pr in merged if pr.get("merge_commit_sha") == sha]
     chosen = exact or merged
     return chosen[0] if chosen else None
 
 
-def include_for(pr: dict[str, Any], sha: str) -> Include:
+def include_for(
+    pr: dict[str, Any], sha: str, verify: Callable[[int], bool] | None = None
+) -> Include:
+    """The PR and the issue it closes. `verify` confirms the issue is a real, owner authored issue:
+    the body text is parsed here, GitHub parses closing keywords its own way, and a number that
+    does not check out is dropped rather than trusted."""
     issue = parse_issue(pr.get("body"), (pr.get("head") or {}).get("ref"))
+    if issue is not None and verify is not None and not verify(issue):
+        issue = None
     return Include(pr=int(pr["number"]), issue=issue, sha=sha)
 
 
 def compute_includes(
-    shas_newest_first: list[str], lookup: Callable[[str], dict[str, Any] | None]
+    shas_newest_first: list[str],
+    lookup: Callable[[str], dict[str, Any] | None],
+    verify: Callable[[int], bool] | None = None,
 ) -> list[Include]:
     """One entry per merged PR among `shas` (first-parent merges since prod), oldest first."""
     includes = []
     for sha in reversed(shas_newest_first):
         pr = lookup(sha)
         if pr is not None:
-            includes.append(include_for(pr, sha))
+            includes.append(include_for(pr, sha, verify))
     return includes
 
 
@@ -129,6 +147,15 @@ def first_parent_shas(prod: str, sha: str) -> list[str]:
     return done.stdout.split()[:MAX_INCLUDES]
 
 
+def is_owner_issue(run: Runner, repo: str, number: int, owner: str) -> bool:
+    """A real issue (not a pull request) opened by the repository owner."""
+    try:
+        item = api_get(run, f"repos/{repo}/issues/{number}")
+    except GhError:
+        return False
+    return "pull_request" not in item and (item.get("user") or {}).get("login") == owner
+
+
 def resolve_sha(run: Runner, repo: str, requested: str) -> str:
     if not _SHA_INPUT.fullmatch(requested):
         raise ValueError(f"not a commit sha or main: {requested!r}")
@@ -176,9 +203,17 @@ def build_plan(
     if event != "workflow_dispatch" and sha != head:
         proceed, reason = False, f"main has moved on to {head[:7]}; a newer run deploys it"
 
+    owner = repo.split("/", 1)[0]
+    checked: dict[int, bool] = {}
+
+    def verify(number: int) -> bool:
+        if number not in checked:
+            checked[number] = is_owner_issue(run, repo, number, owner)
+        return checked[number]
+
     prs = _pulls(run, repo, sha)
-    pr = select_pr(prs, sha)
-    issue = include_for(pr, sha).issue if pr else None
+    pr = select_pr(prs, sha, owner)
+    issue = include_for(pr, sha, verify).issue if pr else None
 
     tags = tags_at(run, repo, sha)
     for _ in range(TAG_RETRIES if sha == head and proceed else 0):
@@ -193,10 +228,10 @@ def build_plan(
 
     def lookup(commit: str) -> dict[str, Any] | None:
         if commit not in cache:
-            cache[commit] = select_pr(_pulls(run, repo, commit), commit)
+            cache[commit] = select_pr(_pulls(run, repo, commit), commit, owner)
         return cache[commit]
 
-    includes = compute_includes(shas, lookup)
+    includes = compute_includes(shas, lookup, verify)
     return Plan(
         sha,
         short,
