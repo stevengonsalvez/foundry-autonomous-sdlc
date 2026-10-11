@@ -117,8 +117,14 @@ def test_comment_release_comments_once_on_every_ticket_and_updates_on_rerun() ->
         "includes": [{"pr": 11, "issue": 10}, {"pr": 13, "issue": 12}],
     }
     first = ro.comment_release(fake, REPO, **kwargs)
-    assert first == ["#13: created", "#12: created", "#11: created", "#10: created"]
-    assert len(fake.writes) == 4
+    flag = ", escalated:deploy-failed cleared"
+    assert first == [
+        f"#13: created{flag}",
+        f"#12: created{flag}",
+        f"#11: created{flag}",
+        f"#10: created{flag}",
+    ]
+    assert len([w for w in fake.writes if w[0] != "DELETE"]) == 4
     # a re-run finds each marker comment and writes nothing
     for number in (13, 12, 11, 10):
         fake.comments[number] = [
@@ -130,6 +136,48 @@ def test_comment_release_comments_once_on_every_ticket_and_updates_on_rerun() ->
         ]
     fake.writes.clear()
     assert set(ro.comment_release(fake, REPO, **kwargs)) == {
-        f"#{n}: unchanged" for n in (13, 12, 11, 10)
+        f"#{n}: unchanged{flag}" for n in (13, 12, 11, 10)
     }
-    assert fake.writes == []
+    assert [w for w in fake.writes if w[0] != "DELETE"] == []
+
+
+def test_a_ticket_that_failed_before_and_is_live_now_loses_its_failure_flag() -> None:
+    fake = FakeGh()
+    out = ro.comment_release(
+        fake,
+        REPO,
+        sha=sha(3),
+        version="v0.4.0",
+        run_url=URL,
+        soak_minutes=10,
+        pr=13,
+        issue=12,
+        includes=[],
+    )
+    deletes = [w for w in fake.writes if w[0] == "DELETE"]
+    assert [w[1] for w in deletes] == [
+        "issues/13/labels/escalated:deploy-failed",
+        "issues/12/labels/escalated:deploy-failed",
+    ]
+    assert all(line.endswith("escalated:deploy-failed cleared") for line in out)
+
+
+def test_clearing_the_flag_is_quiet_when_there_was_none() -> None:
+    class NotFound(FakeGh):
+        def __call__(self, args: list[str], stdin: str | None = None) -> str:
+            if "-X" in args and args[args.index("-X") + 1] == "DELETE":
+                raise GhError(args, "gh: Label does not exist (HTTP 404)")
+            return super().__call__(args, stdin)
+
+    out = ro.comment_release(
+        NotFound(),
+        REPO,
+        sha=sha(3),
+        version="v0.4.0",
+        run_url=URL,
+        soak_minutes=10,
+        pr=13,
+        issue=None,
+        includes=[],
+    )
+    assert out == ["#13: created"]
