@@ -101,7 +101,8 @@ def board_stage(sdlc_stage: str | None, escalation: str | None, env: str, *, lab
     if is_escalation(escalation) or env == "rolled-back" or DEPLOY_FAILED_LABEL in labels:
         return "escalated"
     if sdlc_stage is None:
-        return "backlog"
+        # An object with no SDLC stage (a plain PR the CD workflow flagged) sits wherever its release is.
+        return env if env in ("staging", "prod") else "backlog"
     stage = _STAGE_TO_BOARD.get(sdlc_stage)
     if stage is None:
         raise TicketError(f"unknown stage {sdlc_stage!r}")

@@ -103,6 +103,7 @@ def reconcile(
             item.is_pull_request
             and MAINTENANCE_LABEL not in item.labels
             and model.DEPLOY_FAILED_LABEL not in item.labels
+            and item.number not in known  # a PR once flagged stays a ticket, so its recovery shows too
         ):
             continue
         if item.author != OWNER:
