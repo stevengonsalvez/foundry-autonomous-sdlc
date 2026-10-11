@@ -1,7 +1,9 @@
 import react from "@vitejs/plugin-react";
 import { defineConfig } from "vite";
 
-const PAGES_BASE = "/foundry-autonomous-sdlc/";
+// Relative, so one artifact serves from /foundry-autonomous-sdlc/ (prod) and /foundry-autonomous-sdlc/staging/.
+// Safe because the app uses a hash router: it never needs to know its own path.
+const PAGES_BASE = "./";
 
 export default defineConfig(({ mode }) => {
   const pages = mode === "pages";
