@@ -15,6 +15,9 @@ An issue is filed. Agents on Azure AI Foundry score and refine the requirement, 
                          │ hosted agent     │  typecheck and lint until green
                          └──────────────────┘
 CI is plain tests and gates. It never drives an agent.
+
+  every tick ─events─▶ sdlc-ledger (hosted, scales to zero) ─one commit─▶ branch `state` ─▶ /control-center/
+  merge ─▶ CI ─▶ /staging/ ─▶ Playwright smoke ─▶ 10 min soak ─▶ prod (site root) | rollback + flag
 ```
 
 ## What it shows
@@ -32,6 +35,8 @@ CI is plain tests and gates. It never drives an agent.
 ## Live demo
 
 - App: <https://stevengonsalvez.github.io/foundry-autonomous-sdlc/>
+- Control center (every ticket from backlog to prod with cost per ticket, gates, environment hops, agent health, escalations, flow metrics, the questions-back trail, and Azure's billed spend next to the ledger's estimate): <https://stevengonsalvez.github.io/foundry-autonomous-sdlc/control-center/>
+- Staging (the build waiting for smoke and soak): <https://stevengonsalvez.github.io/foundry-autonomous-sdlc/staging/>
 - Metrics dashboard (cycle time per stage, defect owner and resolution time, cost per issue, gate pass rates): <https://stevengonsalvez.github.io/foundry-autonomous-sdlc/dashboard/>
 - Traces of every scenario, from issue to release: [`docs/evidence.md`](docs/evidence.md)
 - Final report with the success criteria and their evidence: [`docs/final-report.md`](docs/final-report.md)
@@ -58,7 +63,8 @@ On top of that the orchestrator requires a review marker from the independent re
 | A stranger files an issue to spend money | Only issues and PRs by the repo owner are acted on |
 | Prompt injection through issue text | All issue, PR and file text is delimited untrusted data; outputs are schema checked and sanitised; labels, paths and commands are allow-listed |
 | The coding CLI is tricked into stealing secrets | It runs as an unprivileged user with an environment built from nothing; the GitHub token exists only in short-lived git subprocesses owned by the coder process; checkouts are scanned for links, nested repos and out-of-scope paths before every push |
-| Runaway spend | 1 USD per issue, 4.50 USD total (fail closed), 2 hour coder deadline, minimum idle timeouts |
+| Runaway spend | 1 USD per issue, 4.50 USD total (fail closed), 2 hour coder deadline, minimum idle timeouts. The ledger's estimate undercounts hosted compute, so the control center shows Azure's billed figure beside it (see the cost view and `docs/runbook.md`, "Spend finding") |
+| A bad release reaches users | Staging first, Playwright smoke on the live staging URL, a 10 minute soak, then the same artifact is promoted; any failure restores the artifact prod already serves and flags the ticket |
 | Secrets in the repo | None. Credentials live in Key Vault; gitleaks runs in CI and over full history before every push |
 
 Design decisions are in [`docs/decisions.md`](docs/decisions.md), measured facts and the problems found while running it are in [`docs/findings.md`](docs/findings.md), the contracts are in [`docs/architecture.md`](docs/architecture.md).
@@ -72,6 +78,9 @@ Design decisions are in [`docs/decisions.md`](docs/decisions.md), measured facts
 | `infra/terraform/` | Foundry, Key Vault, observability and budget modules, plus a remote-state bootstrap |
 | `scripts/` | Deploy script, repo setup, merge gate scripts, scenario runner, evidence collector, Pages assembly |
 | `dashboard/` | The static metrics dashboard |
+| `apps/control-center/` | The read-only control center (8 views, no build, no token) |
+| `agents/sdlc_agents/ledger/` | The state-keeper: events, ticket model, fold, reconcile, branch writer; hosted as `sdlc-ledger` or run inline |
+| `scripts/cd/`, `.github/workflows/cd.yml` | Continuous deployment: staging, smoke, soak, promote or rollback (see [`docs/cd.md`](docs/cd.md)) |
 | `scenarios/` | The four scripted scenarios |
 | `reference/` | The earlier Actions-driven version, kept for comparison |
 
