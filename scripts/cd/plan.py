@@ -3,6 +3,9 @@
     python -m scripts.cd.plan resolve        # sha, version, pr, issue, includes, proceed
     python -m scripts.cd.plan failed-job     # first failed job among NEEDS_JSON
 
+CI is judged by its required checks, read from the check-runs API for the sha, never by the
+conclusion of the whole CI workflow (an optional job going red must not block a release).
+
 Everything attacker-influenced (PR title, body, branch name) is read here, inside Python, and only
 digits, a 40 hex sha or a validated version string leave through the step outputs.
 Inputs arrive through the environment: REPO, EVENT_NAME, SHA_INPUT, RUN_SHA, GH_TOKEN.
@@ -27,6 +30,10 @@ from .ghcli import GhError, Runner, api_get, fail, gh, set_output
 from .soak import minutes_arg
 
 JOB_ORDER = ("build", "stage", "smoke", "soak", "promote")
+# The checks the branch ruleset requires on main (scripts/setup_repo.py REQUIRED_CHECKS). CD waits
+# for exactly these, not for the CI workflow as a whole, so a red optional job cannot block it.
+REQUIRED_CHECKS = ("test", "coverage", "e2e", "gitleaks", "tdd-order", "agent-scope")
+CHECKS_APP_SLUG = "github-actions"  # a commit status or another app cannot stand in for a check
 MAX_INCLUDES = 50
 TAG_RETRIES = 5
 TAG_RETRY_WAIT_S = 15
@@ -100,6 +107,30 @@ def compute_includes(
     return includes
 
 
+def failing_checks(check_runs: list[dict[str, Any]]) -> list[str]:
+    """Required checks that are not green, as `name=how` (`missing`, a status or a conclusion)."""
+    latest: dict[str, dict[str, Any]] = {}
+    for check in check_runs:
+        name = check.get("name")
+        from_actions = (check.get("app") or {}).get("slug") == CHECKS_APP_SLUG
+        if (
+            name in REQUIRED_CHECKS
+            and from_actions
+            and check["id"] > latest.get(name, {"id": 0})["id"]
+        ):
+            latest[name] = check
+    problems = []
+    for name in REQUIRED_CHECKS:
+        check = latest.get(name)
+        if check is None:
+            problems.append(f"{name}=missing")
+        elif check.get("status") != "completed":
+            problems.append(f"{name}={check.get('status')}")
+        elif check.get("conclusion") != "success":
+            problems.append(f"{name}={check.get('conclusion')}")
+    return problems
+
+
 def failed_job(needs: dict[str, Any]) -> str | None:
     """The first job, in pipeline order, whose result is `failure`."""
     for job in JOB_ORDER:
@@ -114,6 +145,11 @@ def failed_job(needs: dict[str, Any]) -> str | None:
 def _pulls(run: Runner, repo: str, sha: str) -> list[dict[str, Any]]:
     result = api_get(run, f"repos/{repo}/commits/{sha}/pulls")
     return result if isinstance(result, list) else []
+
+
+def check_runs(run: Runner, repo: str, sha: str) -> list[dict[str, Any]]:
+    result = api_get(run, f"repos/{repo}/commits/{sha}/check-runs?filter=latest&per_page=100")
+    return list(result["check_runs"])
 
 
 def tags_at(run: Runner, repo: str, sha: str) -> list[str]:
@@ -203,6 +239,13 @@ def build_plan(
     if event != "workflow_dispatch" and sha != head:
         proceed, reason = False, f"main has moved on to {head[:7]}; a newer run deploys it"
 
+    prod = prod_sha(run, repo)
+    # A sha that already is prod needs no new proof; any other needs the required checks green.
+    if proceed and prod != sha:
+        problems = failing_checks(check_runs(run, repo, sha))
+        if problems:
+            proceed, reason = False, f"required checks are not green: {', '.join(problems)}"
+
     owner = repo.split("/", 1)[0]
     checked: dict[int, bool] = {}
 
@@ -222,7 +265,6 @@ def build_plan(
         sleep(TAG_RETRY_WAIT_S)  # the orchestrator tags the merge commit just after the merge
         tags = tags_at(run, repo, sha)
 
-    prod = prod_sha(run, repo)
     shas = git_log(prod, sha) if prod and prod != sha else [sha]
     cache = {sha: pr}
 

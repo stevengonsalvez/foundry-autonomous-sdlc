@@ -35,7 +35,16 @@ def test_transitions_never_change_their_input() -> None:
     before = promoted(ds.empty_state(), 1)
     snapshot = copy.deepcopy(before)
     staged(before, 2)
-    ds.rollback(before, subject=subject(1), run_id=1001, run_url=RUN_URL, reason="smoke", now=T2)
+    ds.rollback(
+        before,
+        subject=subject(1),
+        run_id=1001,
+        run_attempt=1,
+        promote_failed=False,
+        run_url=RUN_URL,
+        reason="smoke",
+        now=T2,
+    )
     ds.skip(before, subject=subject(1), run_url=RUN_URL, reason="x", now=T2)
     assert before == snapshot
 
@@ -64,6 +73,7 @@ def test_promote_is_idempotent_for_the_sha_that_is_already_prod() -> None:
         state,
         sha=sha(2),
         run_id=1002,
+        run_attempt=2,
         run_url=RUN_URL,
         now="2026-10-11T12:00:00Z",
         tag="prod/other",
@@ -75,10 +85,12 @@ def test_promote_is_idempotent_for_the_sha_that_is_already_prod() -> None:
 
 def test_promote_refuses_a_sha_that_is_not_staged() -> None:
     with pytest.raises(ds.DeployStateError, match="staging holds nothing"):
-        ds.promote(ds.empty_state(), sha=sha(1), run_id=1, run_url="u", now=T1, tag="t")
+        ds.promote(
+            ds.empty_state(), sha=sha(1), run_id=1, run_attempt=1, run_url="u", now=T1, tag="t"
+        )
     state = staged(ds.empty_state(), 1)
     with pytest.raises(ds.DeployStateError, match=f"staging holds {sha(1)}"):
-        ds.promote(state, sha=sha(2), run_id=1, run_url="u", now=T1, tag="t")
+        ds.promote(state, sha=sha(2), run_id=1, run_attempt=1, run_url="u", now=T1, tag="t")
 
 
 def test_includes_travel_from_staging_to_prod_and_rollback_target() -> None:
@@ -87,11 +99,18 @@ def test_includes_travel_from_staging_to_prod_and_rollback_target() -> None:
         release(3, includes=(include(11, 21, 1), include(12, None, 2), include(13, 23, 3))),
         T1,
     )
-    state = ds.promote(state, sha=sha(3), run_id=1003, run_url="u", now=T2, tag="t")
+    state = ds.promote(state, sha=sha(3), run_id=1003, run_attempt=1, run_url="u", now=T2, tag="t")
     assert [i["pr"] for i in state["prod"]["includes"]] == [11, 12, 13]
     assert state["history"][-1]["includes"] == state["prod"]["includes"]
     state = ds.rollback(
-        state, subject=subject(3), run_id=1003, run_url="u", reason="promote", now=T2
+        state,
+        subject=subject(3),
+        run_id=1003,
+        run_attempt=1,
+        promote_failed=True,
+        run_url="u",
+        reason="promote",
+        now=T2,
     )
     assert state["prod"] is None and state["staging"] is None
 
@@ -191,6 +210,7 @@ def test_the_schema_in_the_doc_matches_the_state_keys() -> None:
         "built_at",
         "promoted_at",
         "run_id",
+        "run_attempt",
         "run_url",
         "gates",
         "pr",

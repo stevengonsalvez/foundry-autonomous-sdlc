@@ -1,7 +1,10 @@
+import { randomUUID } from "node:crypto";
 import { expect, test, type Page } from "@playwright/test";
 
 // Every path below is relative on purpose: the same build is served at the site root and under /staging/.
-const HOME = "./";
+// Every request for a page or for build.json carries a query nobody has used before: the CDN ignores the
+// browser's no-cache headers and can serve a copy that is minutes old.
+const home = (hash = "") => `./?cb=${randomUUID()}${hash}`;
 
 function watch(page: Page) {
   const problems: string[] = [];
@@ -18,12 +21,12 @@ function watch(page: Page) {
 
 test.describe("deployed site", () => {
   test("home page shows the heading", async ({ page }) => {
-    await page.goto(HOME);
+    await page.goto(home());
     await expect(page.getByRole("heading", { level: 1, name: "Track a parcel", exact: true })).toBeVisible();
   });
 
   test("tracking PK1000000001 shows a timeline of 5 events", async ({ page }) => {
-    await page.goto(HOME);
+    await page.goto(home());
     await page.getByLabel("Tracking number").fill("PK1000000001");
     await page.getByRole("button", { name: "Track" }).click();
 
@@ -34,7 +37,7 @@ test.describe("deployed site", () => {
   });
 
   test("an unknown tracking number shows the not-found alert", async ({ page }) => {
-    await page.goto(HOME);
+    await page.goto(home());
     await page.getByLabel("Tracking number").fill("PK9999999999");
     await page.keyboard.press("Enter");
 
@@ -47,7 +50,7 @@ test.describe("deployed site", () => {
     const expected = process.env["EXPECTED_SHA"];
     expect(expected, "EXPECTED_SHA must be set to the sha this run deployed").toBeTruthy();
 
-    const response = await request.get(`build.json?nocache=${Date.now()}`);
+    const response = await request.get(`build.json?cb=${randomUUID()}`);
     expect(response.status()).toBe(200);
     const build = (await response.json()) as { sha?: string };
     expect(build.sha).toBe(expected);
@@ -55,9 +58,9 @@ test.describe("deployed site", () => {
 
   test("the page loads and navigates without console errors", async ({ page }) => {
     const problems = watch(page);
-    await page.goto(HOME);
+    await page.goto(home());
     await expect(page.getByRole("heading", { level: 1, name: "Track a parcel", exact: true })).toBeVisible();
-    await page.goto(`${HOME}#/parcel/PK1000000002`);
+    await page.goto(home("#/parcel/PK1000000002"));
     await expect(page.getByRole("heading", { level: 1, name: "PK1000000002" })).toBeVisible();
     expect(problems).toEqual([]);
   });
@@ -68,7 +71,7 @@ test.describe("deployed site", () => {
 
     const loaded = new Map<string, number>();
     page.on("response", (response) => loaded.set(response.url(), response.status()));
-    await page.goto(HOME);
+    await page.goto(home());
     await expect(page.getByRole("heading", { level: 1, name: "Track a parcel", exact: true })).toBeVisible();
 
     const assets = await page.evaluate(() =>

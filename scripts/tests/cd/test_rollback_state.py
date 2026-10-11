@@ -7,11 +7,21 @@ from cd_helpers import RUN_URL, T2, promoted, release, sha, staged, subject
 from scripts.cd import deploy_state as ds
 
 
-def fail_run(state: ds.State, n: int, reason: str, run_id: int | None = None) -> ds.State:
+def fail_run(
+    state: ds.State,
+    n: int,
+    reason: str,
+    run_id: int | None = None,
+    attempt: int = 1,
+    promote_failed: bool | None = None,
+) -> ds.State:
+    """Roll back build n; the promote job is taken to have failed when that is the reason."""
     return ds.rollback(
         state,
         subject=subject(n),
         run_id=run_id or release(n).run_id,
+        run_attempt=attempt,
+        promote_failed=(reason == "promote") if promote_failed is None else promote_failed,
         run_url=f"{RUN_URL}{n}",
         reason=reason,
         now=T2,
@@ -73,7 +83,7 @@ class TestFailureBeforePromote:
 class TestPromoteFailure:
     def test_promote_failing_after_its_push_restores_prod_from_previous(self) -> None:
         state = promoted(good_prod(1), 2)  # promote pushed: prod = 2, previous_prod = 1
-        assert ds.prod_overwritten_by(state, sha(2), release(2).run_id)
+        assert ds.prod_overwritten_by(state, sha(2), release(2).run_id, 1, True)
         after = fail_run(state, 2, "promote")
         assert after["prod"]["sha"] == sha(1)
         assert after["prod"]["tag"] == state["previous_prod"]["tag"]
@@ -107,10 +117,59 @@ class TestPromoteFailure:
     def test_a_rerun_of_an_already_promoted_sha_does_not_roll_prod_back(self) -> None:
         state = promoted(good_prod(1), 2)  # promoted by run 1002
         rerun = ds.stage(state, release(2, run_id=5000), T2)  # same sha, new run
-        assert not ds.prod_overwritten_by(rerun, sha(2), 5000)
+        assert not ds.prod_overwritten_by(rerun, sha(2), 5000, 1, False)
         after = fail_run(rerun, 2, "smoke", run_id=5000)
         assert after["prod"]["sha"] == sha(2)  # prod untouched: this run never overwrote it
         assert after["staging"]["sha"] == sha(2)
+
+
+class TestRunAttempts:
+    """A run id is the same across "Re-run all jobs": only (run id, attempt) names a promote."""
+
+    def test_a_rerun_all_jobs_whose_smoke_flakes_does_not_roll_prod_back(self) -> None:
+        run_id = release(2).run_id
+        state = promoted(good_prod(1), 2, attempt=1)  # attempt 1 promoted build 2 and tagged it
+        tag = state["prod"]["tag"]
+        # attempt 2 re-stages the same sha under the same run id, then smoke fails
+        state = ds.stage(state, release(2), T2)
+        assert not ds.prod_overwritten_by(state, sha(2), run_id, 2, False)
+        after = fail_run(state, 2, "smoke", attempt=2)
+        assert after["prod"]["sha"] == sha(2) and after["prod"]["tag"] == tag
+        assert after["previous_prod"]["sha"] == sha(1)
+        assert [(h["action"], h["env"]) for h in after["history"][-2:]] == [
+            ("fail", "staging"),
+            ("rollback", "staging"),
+        ]
+        assert after["staging"]["sha"] == sha(2)  # staging is restored to what prod holds
+
+    def test_a_rerun_whose_promote_job_fails_before_its_push_keeps_prod(self) -> None:
+        state = promoted(good_prod(1), 2, attempt=1)
+        after = fail_run(state, 2, "promote", attempt=2)  # promote of attempt 2 died early
+        assert after["prod"]["sha"] == sha(2)
+        assert after["previous_prod"]["sha"] == sha(1)
+
+    def test_prod_is_rolled_back_only_when_this_attempt_promoted_and_failed(self) -> None:
+        run_id = release(2).run_id
+        state = promoted(good_prod(1), 2, attempt=2)
+        assert ds.prod_overwritten_by(state, sha(2), run_id, 2, True)
+        assert not ds.prod_overwritten_by(state, sha(2), run_id, 1, True)  # another attempt
+        assert not ds.prod_overwritten_by(state, sha(2), run_id, 2, False)  # promote did not fail
+        assert not ds.prod_overwritten_by(state, sha(2), run_id + 1, 2, True)  # another run
+        assert not ds.prod_overwritten_by(state, sha(3), run_id, 2, True)  # another build
+        after = fail_run(state, 2, "promote", attempt=2)
+        assert after["prod"]["sha"] == sha(1)
+
+    def test_a_state_written_before_attempts_existed_is_never_rolled_back_by_one(self) -> None:
+        state = promoted(good_prod(1), 2)
+        del state["prod"]["run_attempt"]
+        assert ds.validate(state) == []
+        assert not ds.prod_overwritten_by(state, sha(2), release(2).run_id, 1, True)
+
+    def test_run_attempt_is_recorded_on_the_prod_entry(self) -> None:
+        state = promoted(ds.empty_state(), 1, attempt=3)
+        assert state["prod"]["run_attempt"] == 3
+        state["prod"]["run_attempt"] = "x"
+        assert any("run_attempt" in p for p in ds.validate(state))
 
 
 class TestProperties:

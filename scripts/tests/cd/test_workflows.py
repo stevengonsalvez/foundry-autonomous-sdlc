@@ -76,13 +76,14 @@ def test_no_secrets_and_no_credentials_other_than_the_workflow_token() -> None:
 
 def test_cd_grants_nothing_by_default_and_each_job_declares_what_it_needs() -> None:
     assert CD["permissions"] == {"contents": "read"}
-    allowed = {"contents", "actions", "deployments", "issues", "pull-requests"}
+    allowed = {"contents", "actions", "checks", "deployments", "issues", "pull-requests"}
     for name, job in CD["jobs"].items():
         permissions = job["permissions"]
         assert set(permissions) <= allowed, f"{name} asks for {set(permissions) - allowed}"
         assert set(permissions.values()) <= {"read", "write"}
     writers = {n for n, j in CD["jobs"].items() if "write" in j["permissions"].values()}
-    assert writers == {"stage", "promote", "rollback", "superseded"}
+    assert writers == {"stage", "promote", "rollback"}
+    assert CD["jobs"]["plan"]["permissions"]["checks"] == "read"
     assert CD["jobs"]["build"]["permissions"] == {"contents": "read"}  # runs repository code
     assert CD["jobs"]["smoke"]["permissions"] == {"contents": "read"}
     assert CD["jobs"]["soak"]["permissions"] == {"contents": "read"}
@@ -98,16 +99,34 @@ def test_triggers_run_after_a_green_push_ci_on_main_or_on_demand() -> None:
     assert inputs["inject_fault"]["default"] == "none"
     assert inputs["soak_minutes"]["default"] == "10"
     condition = " ".join(CD["jobs"]["plan"]["if"].split())
-    assert "github.event.workflow_run.conclusion == 'success'" in condition
+    # CI's own conclusion is not consulted: plan checks the six required checks of the sha instead
+    assert "conclusion" not in condition
     assert "github.event.workflow_run.event == 'push'" in condition
     assert "github.ref == 'refs/heads/main'" in condition
 
 
-def test_a_newer_run_cancels_an_older_one_but_ignored_runs_cannot() -> None:
+def test_a_running_deploy_is_never_cancelled_and_ignored_runs_cannot_take_its_pending_slot() -> (
+    None
+):
     concurrency = CD["concurrency"]
-    assert concurrency["cancel-in-progress"] is True
-    assert "'cd'" in concurrency["group"] and "cd-ignored-" in concurrency["group"]
+    assert concurrency["cancel-in-progress"] is False
+    group = concurrency["group"]
+    assert "'cd'" in group and "cd-ignored-" in group and "conclusion" not in group
+    assert "github.event.workflow_run.event == 'push'" in group
     assert PAGES["concurrency"] == {"group": "pages", "cancel-in-progress": False}
+    assert "superseded" not in (WORKFLOWS / "cd.yml").read_text().replace("superseded by", "")
+
+
+def test_the_rollback_decision_gets_the_attempt_and_the_promote_result() -> None:
+    promote = steps(CD["jobs"]["promote"])[
+        step_index(CD["jobs"]["promote"], "deploy_branch promote")
+    ]
+    assert '--run-attempt "$GITHUB_RUN_ATTEMPT"' in promote["run"]
+    rollback = CD["jobs"]["rollback"]
+    restore = steps(rollback)[step_index(rollback, "deploy_branch rollback")]
+    assert '--run-attempt "$GITHUB_RUN_ATTEMPT"' in restore["run"]
+    assert '--promote-result "$PROMOTE_RESULT"' in restore["run"]
+    assert restore["env"]["PROMOTE_RESULT"] == "${{ needs.promote.result }}"
 
 
 def test_the_jobs_form_the_agreed_chain() -> None:
@@ -120,7 +139,6 @@ def test_the_jobs_form_the_agreed_chain() -> None:
         "soak",
         "promote",
         "rollback",
-        "superseded",
     }
     assert "build" in jobs["stage"]["needs"]
     assert "stage" in jobs["smoke"]["needs"]
@@ -142,13 +160,12 @@ def test_rollback_triggers_on_every_failing_job_and_never_on_a_cancel() -> None:
         "soak",
         "promote",
     }
-    assert CD["jobs"]["superseded"]["if"].startswith("cancelled()")
 
 
 def test_only_promote_tags_prod_and_only_after_prod_is_live() -> None:
     for name, job in CD["jobs"].items():
         mentions = [s for s in steps(job) if "create-tag" in s.get("run", "")]
-        assert bool(mentions) == (name in ("promote", "superseded")), name
+        assert bool(mentions) == (name == "promote"), name
     promote = CD["jobs"]["promote"]
     order = [
         step_index(promote, "deploy_branch promote"),

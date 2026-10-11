@@ -38,14 +38,15 @@ def staged(state: ds.State, n: int, now: str = T1) -> ds.State:
     return ds.stage(state, release(n), now)
 
 
-def promoted(state: ds.State, n: int, now: str = T2) -> ds.State:
-    """Stage build n and promote it."""
+def promoted(state: ds.State, n: int, now: str = T2, attempt: int = 1) -> ds.State:
+    """Stage build n and promote it (in the given attempt of its run)."""
     state = staged(state, n)
     rel = release(n)
     return ds.promote(
         state,
         sha=rel.sha,
         run_id=rel.run_id,
+        run_attempt=attempt,
         run_url=rel.run_url,
         now=now,
         tag=ds.tag_name(now, rel.short),

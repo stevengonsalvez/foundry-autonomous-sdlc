@@ -25,10 +25,13 @@ class Site:
             BASE + "assets/index-1.js": (200, "console.log(1)"),
             BASE + "assets/index-1.css": (200, "body{}"),
         }
-        self.requests: list[str] = []
+        self.requests: list[str] = []  # without the cache-buster query
+        self.raw_requests: list[str] = []
         self.flaky: dict[int, tuple[int, str]] = {}  # request number -> forced answer
 
     def __call__(self, url: str) -> tuple[int, str]:
+        self.raw_requests.append(url)
+        url = url.split("?")[0]
         self.requests.append(url)
         if len(self.requests) in self.flaky:
             return self.flaky[len(self.requests)]
@@ -129,10 +132,11 @@ def test_a_failure_in_the_middle_of_the_soak_fails_it() -> None:
     state = {"probes": 0}
 
     def breaking(url: str) -> tuple[int, str]:
-        if url == BASE:
+        path = url.split("?")[0]
+        if path == BASE:
             state["probes"] += 1
         # healthy for eight probes, then the sha changes
-        if state["probes"] > 8 and url == BASE + "build.json":
+        if state["probes"] > 8 and path == BASE + "build.json":
             return 200, json.dumps({"sha": sha(9)})
         return original(url)
 
@@ -183,3 +187,12 @@ def test_the_main_entry_point_rejects_bad_arguments() -> None:
 def test_browser_command_runner_reports_exit_status() -> None:
     assert soak.command_runner("true", None)() is True
     assert soak.command_runner("false", None)() is False
+
+
+def test_every_request_carries_its_own_cache_buster() -> None:
+    site = Site()
+    run(site, minutes=1)
+    assert len(site.raw_requests) == 3 * 4 + 0  # three probes of four requests
+    busters = [url.split("?cb=")[1] for url in site.raw_requests]
+    assert len(set(busters)) == len(busters) and all(len(b) == 32 for b in busters)
+    assert all(url.count("?") == 1 for url in site.raw_requests)

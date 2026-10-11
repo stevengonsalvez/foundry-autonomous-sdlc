@@ -93,6 +93,32 @@ def test_compute_includes_lists_merged_prs_oldest_first_and_skips_direct_commits
     assert includes == [Include(10, 100, sha(1)), Include(30, 300, sha(3))]
 
 
+def check(
+    name: str,
+    conclusion: str | None = "success",
+    status: str = "completed",
+    run_id: int = 1,
+    app: str = "github-actions",
+) -> dict:
+    return {
+        "id": run_id,
+        "name": name,
+        "status": status,
+        "conclusion": conclusion,
+        "app": {"slug": app},
+    }
+
+
+def green_checks() -> list[dict]:
+    """The six required checks, green, and the optional CI jobs, one of them red."""
+    required = [check(name, run_id=i) for i, name in enumerate(plan.REQUIRED_CHECKS, 1)]
+    return [
+        *required,
+        check("gates-tests", "failure", run_id=50),
+        check("agents", "failure", run_id=51),
+    ]
+
+
 class FakeGitHub:
     def __init__(self) -> None:
         self.head = sha(5)
@@ -102,6 +128,7 @@ class FakeGitHub:
         self.tag_appears_after: int | None = None  # number of tag lookups before the tag exists
         self.compare_status = "ahead"
         self.calls: list[str] = []
+        self.checks: dict[str, list[dict]] = {}  # sha -> check runs; unlisted shas are green
         self.issues: dict[int, dict] = {}  # number -> issue json; unlisted numbers are owner issues
 
     def __call__(self, args: list[str], stdin: str | None = None) -> str:
@@ -112,6 +139,9 @@ class FakeGitHub:
         rest = path.removeprefix(prefix)
         if rest.startswith("commits/") and rest.endswith("/pulls"):
             return json.dumps(self.prs.get(rest.split("/")[1], []))
+        if rest.startswith("commits/") and "/check-runs" in rest:
+            assert "filter=latest" in rest
+            return json.dumps({"check_runs": self.checks.get(rest.split("/")[1], green_checks())})
         if rest.startswith("commits/"):
             ref = rest.split("/")[1]
             return json.dumps({"sha": self.head if ref == "main" else ref.ljust(40, "0")})
@@ -378,3 +408,100 @@ def test_a_bad_soak_time_fails_the_plan_before_anything_is_staged(
     assert plan.main(["resolve"], FakeGitHub()) == 1
     assert capsys.readouterr().err.startswith("error:")
     assert not (tmp_path / "o").exists()
+
+
+class TestRequiredChecks:
+    """CD waits for the six required checks, not for the CI workflow as a whole."""
+
+    def test_the_list_is_the_one_the_ruleset_requires(self) -> None:
+        from scripts import setup_repo
+
+        assert plan.REQUIRED_CHECKS == setup_repo.REQUIRED_CHECKS
+
+    def test_an_optional_job_going_red_does_not_block_a_release(self) -> None:
+        gh = FakeGitHub()  # gates-tests and agents are red in green_checks()
+        assert build(gh).proceed
+
+    @pytest.mark.parametrize("name", plan.REQUIRED_CHECKS)
+    def test_a_missing_required_check_blocks_it_with_a_clear_reason(self, name: str) -> None:
+        gh = FakeGitHub()
+        gh.checks[gh.head] = [c for c in green_checks() if c["name"] != name]
+        result = build(gh)
+        assert not result.proceed
+        assert result.reason == f"required checks are not green: {name}=missing"
+
+    @pytest.mark.parametrize("conclusion", ["failure", "cancelled", "timed_out", "skipped", None])
+    def test_a_required_check_that_did_not_succeed_blocks_it(self, conclusion) -> None:
+        gh = FakeGitHub()
+        gh.checks[gh.head] = [
+            check("e2e", conclusion) if c["name"] == "e2e" else c for c in green_checks()
+        ]
+        result = build(gh)
+        assert not result.proceed and f"e2e={conclusion}" in result.reason
+
+    def test_a_check_that_is_still_running_blocks_it(self) -> None:
+        gh = FakeGitHub()
+        gh.checks[gh.head] = [
+            check("coverage", None, status="in_progress") if c["name"] == "coverage" else c
+            for c in green_checks()
+        ]
+        assert "coverage=in_progress" in build(gh).reason
+
+    def test_every_problem_is_listed_in_pipeline_order(self) -> None:
+        gh = FakeGitHub()
+        gh.checks[gh.head] = [check("test"), check("gitleaks", "failure")]
+        assert build(gh).reason == (
+            "required checks are not green: coverage=missing, e2e=missing, "
+            "gitleaks=failure, tdd-order=missing, agent-scope=missing"
+        )
+
+    def test_the_newest_attempt_of_a_check_decides(self) -> None:
+        others = [c for c in green_checks() if c["name"] != "test"]
+        gh = FakeGitHub()
+        gh.checks[gh.head] = [
+            check("test", "failure", run_id=10),
+            check("test", run_id=20),
+            *others,
+        ]
+        assert build(gh).proceed  # a rerun went green after the red attempt
+        gh.checks[gh.head] = [
+            check("test", run_id=10),
+            check("test", "failure", run_id=20),
+            *others,
+        ]
+        assert not build(gh).proceed  # a newer red attempt blocks
+
+    def test_a_check_from_another_app_cannot_stand_in_for_a_required_one(self) -> None:
+        gh = FakeGitHub()
+        gh.checks[gh.head] = [
+            check("e2e", app="some-other-app") if c["name"] == "e2e" else c for c in green_checks()
+        ]
+        assert "e2e=success" not in build(gh).reason and "e2e=missing" in build(gh).reason
+
+    def test_a_manual_run_needs_the_same_checks(self) -> None:
+        gh = FakeGitHub()
+        gh.checks[sha(3)] = [check("test")]
+        result = build(gh, event="workflow_dispatch", requested_sha=sha(3))
+        assert not result.proceed and "coverage=missing" in result.reason
+
+    def test_a_manual_run_of_the_sha_prod_already_runs_needs_no_checks(self) -> None:
+        gh = FakeGitHub()
+        gh.prod = sha(3)
+        gh.checks[sha(3)] = []
+        result = build(gh, event="workflow_dispatch", requested_sha=sha(3))
+        assert result.proceed
+
+    def test_a_blocked_run_does_not_wait_for_a_tag(self) -> None:
+        gh = FakeGitHub()
+        gh.checks[gh.head] = []
+        sleeps: list[float] = []
+        result = build(gh, sleep=sleeps.append)
+        assert not result.proceed and sleeps == []
+
+    def test_the_summary_says_which_checks_blocked_the_release(self, monkeypatch, tmp_path) -> None:
+        summary = tmp_path / "s.md"
+        monkeypatch.setenv("GITHUB_STEP_SUMMARY", str(summary))
+        gh = FakeGitHub()
+        gh.checks[gh.head] = [check("test")]
+        plan.write_summary(build(gh))
+        assert "CD skipped" in summary.read_text() and "coverage=missing" in summary.read_text()

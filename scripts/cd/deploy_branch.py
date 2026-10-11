@@ -1,9 +1,9 @@
 """The git side of CD: change the `deploy` branch and push it.
 
     python -m scripts.cd.deploy_branch stage    --artifact DIR --sha S --run-id N --run-url U ...
-    python -m scripts.cd.deploy_branch promote  --sha S --run-id N --run-url U
-    python -m scripts.cd.deploy_branch rollback --sha S --run-id N --run-url U --reason JOB
-    python -m scripts.cd.deploy_branch skip     --sha S --run-id N --run-url U --reason TEXT
+    python -m scripts.cd.deploy_branch promote  --sha S --run-id N --run-attempt A --run-url U
+    python -m scripts.cd.deploy_branch rollback --sha S --run-id N --run-attempt A --run-url U \
+        --reason JOB --promote-result failure
 
 Each command clones the branch (creating it as an orphan when absent), applies one transition to
 the tree and to deploy.json, commits as github-actions[bot] and pushes. A push that loses a race
@@ -139,6 +139,50 @@ def replace_tree(dest: Path, source: Path | None) -> None:
         shutil.copytree(source, dest, symlinks=True)
 
 
+_TEXT_ASSETS = {".html", ".js", ".mjs", ".css"}
+
+
+def reachable_assets(tree: Path) -> set[Path]:
+    """Paths (relative to assets/) of the files this build's own entry points lead to.
+
+    Starts at index.html and follows every asset name that appears in a page, script or style it
+    reaches. Files carried over from an older build are not named by this build, so they drop out.
+    """
+    assets = tree / "assets"
+    index = tree / "index.html"
+    if not assets.is_dir() or not index.is_file():
+        return set()
+    files = {p.relative_to(assets): p for p in assets.rglob("*") if p.is_file()}
+    seen: set[Path] = set()
+    queue = [index]
+    while queue:
+        text = queue.pop().read_text("utf-8", errors="ignore")
+        for rel, path in files.items():
+            if rel not in seen and rel.name in text:
+                seen.add(rel)
+                if rel.suffix in _TEXT_ASSETS:
+                    queue.append(path)
+    return seen
+
+
+def replace_app_tree(dest: Path, source: Path | None) -> None:
+    """Replace a served app tree, keeping the previous build's assets the new one lacks.
+
+    Browsers holding the old index.html still ask for its hashed scripts for a while after a
+    promote or rollback. One generation back is kept; what the old tree itself carried over from
+    before that is dropped, so the folder cannot grow without bound.
+    """
+    carried: dict[Path, bytes] = {}
+    if source is not None and dest.exists():
+        carried = {rel: (dest / "assets" / rel).read_bytes() for rel in reachable_assets(dest)}
+    replace_tree(dest, source)
+    for rel, body in carried.items():
+        target = dest / "assets" / rel
+        if not target.exists():
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_bytes(body)
+
+
 def reject_symlinks(root: Path) -> None:
     for path in root.rglob("*"):
         if path.is_symlink():
@@ -185,7 +229,14 @@ def do_stage(
 
 
 def do_promote(
-    root: Path, state: ds.State, *, sha: str, run_id: int, run_url: str, now: str
+    root: Path,
+    state: ds.State,
+    *,
+    sha: str,
+    run_id: int,
+    run_attempt: int,
+    run_url: str,
+    now: str,
 ) -> ds.State:
     staging = state["staging"]
     if staging is None or staging["sha"] != sha:
@@ -199,8 +250,10 @@ def do_promote(
         tag = ds.tag_name(now, staging["short"])
         prod = root / "prod"
         replace_tree(root / "prod-prev", prod if prod.exists() else None)
-        replace_tree(prod, root / "staging")
-    return ds.promote(state, sha=sha, run_id=run_id, run_url=run_url, now=now, tag=tag)
+        replace_app_tree(prod, root / "staging")
+    return ds.promote(
+        state, sha=sha, run_id=run_id, run_attempt=run_attempt, run_url=run_url, now=now, tag=tag
+    )
 
 
 def do_rollback(
@@ -209,19 +262,28 @@ def do_rollback(
     *,
     subject: ds.Subject,
     run_id: int,
+    run_attempt: int,
+    promote_failed: bool,
     run_url: str,
     reason: str,
     now: str,
 ) -> ds.State:
-    overwritten = ds.prod_overwritten_by(state, subject.sha, run_id)
+    overwritten = ds.prod_overwritten_by(state, subject.sha, run_id, run_attempt, promote_failed)
     new = ds.rollback(
-        state, subject=subject, run_id=run_id, run_url=run_url, reason=reason, now=now
+        state,
+        subject=subject,
+        run_id=run_id,
+        run_attempt=run_attempt,
+        promote_failed=promote_failed,
+        run_url=run_url,
+        reason=reason,
+        now=now,
     )
     if overwritten:
         previous = root / "prod-prev"
         if (new["prod"] is None) == previous.exists():
             raise ds.DeployStateError("prod-prev/ and previous_prod in deploy.json disagree")
-        replace_tree(root / "prod", previous if previous.exists() else None)
+        replace_app_tree(root / "prod", previous if previous.exists() else None)
         replace_tree(previous, None)
     prod = root / "prod"
     if (new["prod"] is None) == prod.exists():
@@ -245,10 +307,16 @@ def load_includes(env_name: str) -> list[ds.Include]:
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.split("\n")[0])
-    parser.add_argument("command", choices=("stage", "promote", "rollback", "skip"))
+    parser.add_argument("command", choices=("stage", "promote", "rollback"))
     parser.add_argument("--remote")
     parser.add_argument("--sha", required=True)
     parser.add_argument("--run-id", type=int, required=True)
+    parser.add_argument("--run-attempt", type=int, default=1)
+    parser.add_argument(
+        "--promote-result",
+        default="",
+        help="result of the promote job of this attempt; prod is rolled back only after `failure`",
+    )
     parser.add_argument("--run-url", required=True)
     parser.add_argument("--version", default="")
     parser.add_argument("--pr", type=optional_int, default=None)
@@ -281,7 +349,13 @@ def main(argv: list[str] | None = None) -> int:
             return do_stage(root, state, artifact=args.artifact, release_meta=meta, now=now)
         if args.command == "promote":
             new = do_promote(
-                root, state, sha=args.sha, run_id=args.run_id, run_url=args.run_url, now=now
+                root,
+                state,
+                sha=args.sha,
+                run_id=args.run_id,
+                run_attempt=args.run_attempt,
+                run_url=args.run_url,
+                now=now,
             )
             outcome.update(
                 tag=new["prod"]["tag"],
@@ -290,12 +364,17 @@ def main(argv: list[str] | None = None) -> int:
             )
             return new
         if args.command == "rollback":
-            overwritten = ds.prod_overwritten_by(state, args.sha, args.run_id)
+            promote_failed = args.promote_result == "failure"
+            overwritten = ds.prod_overwritten_by(
+                state, args.sha, args.run_id, args.run_attempt, promote_failed
+            )
             new = do_rollback(
                 root,
                 state,
                 subject=subject,
                 run_id=args.run_id,
+                run_attempt=args.run_attempt,
+                promote_failed=promote_failed,
                 run_url=args.run_url,
                 reason=args.reason,
                 now=now,
@@ -307,21 +386,13 @@ def main(argv: list[str] | None = None) -> int:
                 restored_version=prod["version"] if prod else "",
             )
             return new
-        staging_subject = subject
-        outcome.update(
-            promoted=str(ds.prod_overwritten_by(state, args.sha, args.run_id)).lower(),
-            tag=(state["prod"] or {}).get("tag") or "",
-        )
-        return ds.skip(
-            state, subject=staging_subject, run_url=args.run_url, reason=args.reason, now=now
-        )
+        raise AssertionError(args.command)
 
     short = args.sha[:7]
     messages = {
         "stage": f"cd: stage {short} ({args.version or 'build'})",
         "promote": f"cd: promote {short} to prod",
         "rollback": f"cd: roll back {short} ({args.reason})",
-        "skip": f"cd: record skipped run for {short}",
     }
     try:
         update(remote, mutate, messages[args.command])

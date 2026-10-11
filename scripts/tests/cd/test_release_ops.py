@@ -78,7 +78,7 @@ def test_failure_statuses_carry_no_environment_url() -> None:
 
 
 def test_deploy_mark_with_no_deployments_marks_nothing() -> None:
-    assert ro.deploy_mark(FakeGh(), REPO, "staging", sha(1), "inactive") == 0
+    assert ro.deploy_mark(FakeGh(), REPO, "staging", sha(1), "failure") == 0
 
 
 def test_create_tag_is_idempotent_on_the_same_sha_and_refuses_another() -> None:

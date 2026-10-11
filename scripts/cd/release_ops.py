@@ -22,7 +22,6 @@ from .comments import upsert_comment
 from .ghcli import GhError, Runner, api_get, api_send, fail, gh, optional_int, set_output
 
 ENVIRONMENTS = ("staging", "production")
-STATES = ("in_progress", "success", "failure", "inactive")
 MAX_TICKETS = 40
 
 
@@ -138,7 +137,7 @@ def main(argv: list[str] | None = None, run: Runner = gh) -> int:
         if name == "deploy-start":
             cmd.add_argument("--state", choices=("in_progress", "success"), default="in_progress")
         if name == "deploy-mark":
-            cmd.add_argument("--state", choices=("failure", "inactive", "success"), required=True)
+            cmd.add_argument("--state", choices=("failure", "success"), required=True)
         if name == "create-tag":
             cmd.add_argument("--tag", required=True)
         if name == "comment-release":

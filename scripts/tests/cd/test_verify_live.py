@@ -68,7 +68,7 @@ def test_every_request_has_its_own_cache_buster() -> None:
     script = Script([body(0), body(0), body(1)])
     wait(script, sha(1))
     queries = [u.split("?")[1] for u in script.urls]
-    assert len(set(queries)) == 3 and all(q.startswith("nocache=") for q in queries)
+    assert len(set(queries)) == 3 and all(q.startswith("cb=") for q in queries)
 
 
 def test_expecting_absence_waits_for_a_404() -> None:

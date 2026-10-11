@@ -1,7 +1,7 @@
 """Poll a live `build.json` until it names the sha we deployed.
 
-GitHub Pages is a CDN: a finished deployment is not instantly what every request sees. A
-cache-busting query string plus no-cache headers asks for the origin copy.
+GitHub Pages is a CDN: a finished deployment is not instantly what every request sees. Every
+request carries a unique `cb=` query string, because the CDN ignores no-cache request headers.
 
     python -m scripts.cd.verify_live --url https://x.github.io/repo/staging/build.json --sha <sha>
     python -m scripts.cd.verify_live --url .../staging/build.json --expect-absent
@@ -16,7 +16,7 @@ import time
 from collections.abc import Callable
 from dataclasses import dataclass
 
-from .fetch import Fetch, http_fetch
+from .fetch import Fetch, cache_busted, http_fetch
 from .ghcli import fail
 
 
@@ -27,9 +27,9 @@ class Outcome:
     attempts: int
 
 
-def _observe(fetch: Fetch, url: str, cache_buster: int) -> tuple[str | None, str]:
+def _observe(fetch: Fetch, url: str) -> tuple[str | None, str]:
     """(the sha served or None, a description of what was seen)."""
-    status, body = fetch(f"{url}?nocache={cache_buster}")
+    status, body = fetch(cache_busted(url))
     if status == 404:
         return None, "404 not found"
     if status != 200:
@@ -57,7 +57,7 @@ def wait_for_build(
     seen = "nothing"
     while True:
         attempts += 1
-        sha, seen = _observe(fetch, url, int(clock() * 1000))
+        sha, seen = _observe(fetch, url)
         if expected_sha is None and seen == "404 not found":
             return Outcome(True, "build.json is gone", attempts)
         if expected_sha is not None and sha == expected_sha:

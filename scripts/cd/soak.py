@@ -5,7 +5,8 @@
 
 Each probe fetches index.html (200 and the root element), build.json (the expected sha), and the
 JS and CSS assets index.html names (200, not empty). The first probe, the middle one and the last
-one also run the browser smoke command. Real traffic is not involved: this is a probe loop.
+one also run the browser smoke command. Every request carries a unique `cb=` query string.
+Real traffic is not involved: this is a probe loop.
 
 Tolerance: none. A failed probe is repeated once, immediately, so one dropped packet does not
 fail a release; if the repeat fails too, the soak fails. The browser command has its own retry
@@ -25,7 +26,7 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from urllib.parse import urljoin
 
-from .fetch import Fetch, http_fetch
+from .fetch import Fetch, cache_busted, http_fetch
 from .ghcli import fail
 
 MAX_MINUTES = 30
@@ -53,7 +54,7 @@ def asset_urls(html: str, base_url: str) -> list[str]:
 def probe(fetch: Fetch, base_url: str, expect_sha: str) -> list[str]:
     """Everything wrong with the site right now; an empty list is a healthy probe."""
     problems: list[str] = []
-    status, html = fetch(base_url)
+    status, html = fetch(cache_busted(base_url))
     if status != 200:
         return [f"index.html answered {status}"]
     if not _ROOT.search(html):
@@ -64,7 +65,7 @@ def probe(fetch: Fetch, base_url: str, expect_sha: str) -> list[str]:
     if not any(url.endswith(".css") for url in assets):
         problems.append("index.html names no stylesheet")
 
-    status, body = fetch(urljoin(base_url, "build.json"))
+    status, body = fetch(cache_busted(urljoin(base_url, "build.json")))
     try:
         served = json.loads(body)["sha"] if status == 200 else None
     except (ValueError, KeyError, TypeError):
@@ -75,7 +76,7 @@ def probe(fetch: Fetch, base_url: str, expect_sha: str) -> list[str]:
         problems.append(f"build.json serves {served}, expected {expect_sha}")
 
     for url in assets:
-        status, body = fetch(url)
+        status, body = fetch(cache_busted(url))
         if status != 200:
             problems.append(f"{url} answered {status}")
         elif not body:

@@ -146,6 +146,8 @@ def _check_entry(where: str, entry: Any, time_key: str, problems: list[str]) -> 
     if where == "staging" and entry.get("status") not in STAGING_STATUSES:
         problems.append(f"staging.status must be one of {', '.join(STAGING_STATUSES)}")
     if where != "staging":
+        if not _is_int_or_none(entry.get("run_attempt")):
+            problems.append(f"{where}.run_attempt must be an integer when present")
         if not isinstance(entry.get("gates"), list):
             problems.append(f"{where}.gates must be a list")
         if entry.get("tag") is not None and not isinstance(entry.get("tag"), str):
@@ -286,7 +288,16 @@ def is_prod(state: State, sha: str) -> bool:
     return prod is not None and prod["sha"] == sha
 
 
-def promote(state: State, *, sha: str, run_id: int, run_url: str, now: str, tag: str) -> State:
+def promote(
+    state: State,
+    *,
+    sha: str,
+    run_id: int,
+    run_attempt: int,
+    run_url: str,
+    now: str,
+    tag: str,
+) -> State:
     """Staging becomes prod, the old prod becomes `previous_prod`.
 
     Running it again for the sha that is already prod changes nothing but the staging status, so
@@ -308,6 +319,7 @@ def promote(state: State, *, sha: str, run_id: int, run_url: str, now: str, tag:
         "built_at": staging["built_at"],
         "promoted_at": now,
         "run_id": run_id,
+        "run_attempt": run_attempt,
         "run_url": run_url,
         "gates": list(GATES),
         "pr": staging["pr"],
@@ -325,14 +337,37 @@ def promote(state: State, *, sha: str, run_id: int, run_url: str, now: str, tag:
     return new
 
 
-def prod_overwritten_by(state: State, sha: str, run_id: int) -> bool:
-    """True when this very run already promoted `sha`, so prod holds the build being rolled back."""
+def prod_overwritten_by(
+    state: State, sha: str, run_id: int, run_attempt: int, promote_failed: bool
+) -> bool:
+    """True when the promote job of THIS attempt failed after writing `sha` to prod.
+
+    A run id is the same across "Re-run all jobs", so it cannot tell attempts apart: a rerun of a
+    release that was promoted in attempt 1 must never roll prod back in attempt 2. Prod is only
+    treated as overwritten when the promote job failed in this attempt and prod's own record
+    names this run id and this attempt (a record without an attempt, written before it existed,
+    never matches).
+    """
     prod = state["prod"]
-    return prod is not None and prod["sha"] == sha and prod["run_id"] == run_id
+    return (
+        promote_failed
+        and prod is not None
+        and prod["sha"] == sha
+        and prod["run_id"] == run_id
+        and prod.get("run_attempt") == run_attempt
+    )
 
 
 def rollback(
-    state: State, *, subject: Subject, run_id: int, run_url: str, reason: str, now: str
+    state: State,
+    *,
+    subject: Subject,
+    run_id: int,
+    run_attempt: int,
+    promote_failed: bool,
+    run_url: str,
+    reason: str,
+    now: str,
 ) -> State:
     """A release failed. `reason` is the failing job.
 
@@ -340,7 +375,7 @@ def rollback(
     to what prod holds (the last known good build), or to nothing when prod has never been set.
     """
     new = copy.deepcopy(state)
-    overwritten = prod_overwritten_by(state, subject.sha, run_id)
+    overwritten = prod_overwritten_by(state, subject.sha, run_id, run_attempt, promote_failed)
     if overwritten:
         new["prod"], new["previous_prod"] = state["previous_prod"], None
     failed_env = "prod" if overwritten else "staging"

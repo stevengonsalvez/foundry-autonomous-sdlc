@@ -23,7 +23,10 @@ class World:
         runs_for: float = 60,
         conclusion: str = "success",
         older: list[dict] | None = None,
+        details: bool = True,
     ) -> None:
+        self.details = details
+        self.listings = 0
         self.t = 1_000_000.0
         self.dispatched_at: float | None = None
         self.appears_after, self.runs_for, self.conclusion = appears_after, runs_for, conclusion
@@ -39,14 +42,23 @@ class World:
     def __call__(self, args: list[str], stdin: str | None = None) -> str:
         if "-X" in args:
             assert args[args.index("-X") + 2].endswith("/workflows/pages.yml/dispatches")
-            assert json.loads(stdin or "") == {"ref": "main"}
+            assert json.loads(stdin or "") == {"ref": "main", "return_run_details": True}
             self.dispatches += 1
             self.dispatched_at = self.t
-            return ""
+            if not self.details:  # an old API answers 204 with no body
+                return ""
+            return json.dumps(
+                {
+                    "workflow_run_id": 77,
+                    "run_url": "https://api/runs/77",
+                    "html_url": "https://run/77",
+                }
+            )
         path = args[1]
         assert self.dispatched_at is not None
         created = self.dispatched_at + self.appears_after
         if "/workflows/pages.yml/runs" in path:
+            self.listings += 1
             runs = list(self.older)
             if self.t >= created:
                 runs.append({"id": 77, "html_url": "https://run/77", "created_at": iso(created)})
@@ -67,15 +79,31 @@ def go(world: World, **kwargs) -> str:
     )
 
 
-def test_dispatches_finds_its_own_run_and_waits_for_success() -> None:
+def test_the_dispatch_response_names_the_run_so_no_search_happens() -> None:
     world = World()
     assert go(world) == "success"
-    assert world.dispatches == 1 and world.t >= 1_000_000 + 12 + 60
+    assert world.dispatches == 1 and world.listings == 0
+    assert world.t >= 1_000_000 + 12 + 60
+
+
+def test_another_dispatch_in_the_same_window_cannot_be_mistaken_for_ours() -> None:
+    rival = {"id": 99, "html_url": "https://run/99", "created_at": iso(1_000_000 + 1)}
+    world = World(older=[rival])  # run 99 is a rival dispatch, created before our own run
+    assert go(world) == "success"
+    assert world.listings == 0  # run 77 was followed by id; run 99 was never looked at
+
+
+def test_without_run_details_the_run_is_found_by_creation_time_and_waited_for() -> None:
+    world = World(details=False)
+    assert go(world) == "success"
+    assert world.dispatches == 1 and world.listings >= 1 and world.t >= 1_000_000 + 12 + 60
 
 
 def test_ignores_runs_created_before_the_dispatch() -> None:
     stale = {"id": 5, "html_url": "https://run/5", "created_at": iso(1_000_000 - 600)}
-    assert go(World(older=[stale])) == "success"  # run 77 was waited for, not the stale run 5
+    assert (
+        go(World(older=[stale], details=False)) == "success"
+    )  # run 77 was waited for, not the stale run 5
 
 
 def test_a_failed_pages_run_is_an_error() -> None:
@@ -89,7 +117,7 @@ def test_a_cancelled_pages_run_is_tolerated_because_the_live_check_decides() -> 
 
 def test_no_run_appearing_is_an_error_after_the_find_timeout() -> None:
     with pytest.raises(RuntimeError, match=r"no pages\.yml run appeared"):
-        go(World(appears_after=10_000), find_timeout_s=60)
+        go(World(appears_after=10_000, details=False), find_timeout_s=60)
 
 
 def test_a_run_that_never_finishes_is_an_error_at_the_hard_cap() -> None:

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import shutil
 import subprocess
 from pathlib import Path
 
@@ -38,9 +39,14 @@ def outputs(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
 def artifact(tmp_path: Path, n: int, marker: str | None = None) -> Path:
     """A built app for build n; `marker` makes its files differ from other builds."""
     path = tmp_path / f"artifact-{n}"
+    shutil.rmtree(path, ignore_errors=True)
     (path / "assets").mkdir(parents=True)
-    (path / "index.html").write_text(f'<div id="root"></div> {marker or n}')
+    (path / "index.html").write_text(
+        f'<div id="root"></div> {marker or n}'
+        f'<script src="./assets/app-{n}.js"></script><link href="./assets/style-{n}.css">'
+    )
     (path / "assets" / f"app-{n}.js").write_text(f"console.log({n})")
+    (path / "assets" / f"style-{n}.css").write_text(f"body{{order:{n}}}")
     info = {
         "sha": sha(n),
         "short": sha(n)[:7],
@@ -76,13 +82,31 @@ def stage(remote: Path, tmp_path: Path, n: int, monkeypatch: pytest.MonkeyPatch)
     )
 
 
-def promote(remote: Path, n: int) -> int:
-    return run_cd("promote", *common(n), remote=remote)
+def promote(remote: Path, n: int, attempt: int = 1) -> int:
+    return run_cd("promote", *common(n), "--run-attempt", str(attempt), remote=remote)
 
 
-def rollback(remote: Path, n: int, reason: str, run_id: int | None = None) -> int:
+def rollback(
+    remote: Path, n: int, reason: str, attempt: int = 1, promote_result: str | None = None
+) -> int:
+    """Roll back build n. The promote job counts as failed when the reason says so."""
+    result = (
+        ("failure" if reason == "promote" else "skipped")
+        if promote_result is None
+        else promote_result
+    )
     return run_cd(
-        "rollback", *common(n, run_id), "--reason", reason, "--version", f"v0.{n}.0", remote=remote
+        "rollback",
+        *common(n),
+        "--run-attempt",
+        str(attempt),
+        "--promote-result",
+        result,
+        "--reason",
+        reason,
+        "--version",
+        f"v0.{n}.0",
+        remote=remote,
     )
 
 
@@ -131,7 +155,12 @@ class TestStage:
         stage(remote, tmp_path, 2, monkeypatch)
         root, state = view(remote, tmp_path)
         assert build_of(root, "staging") == sha(2)
-        assert sorted(tree(root, "staging")) == ["assets/app-2.js", "build.json", "index.html"]
+        assert sorted(tree(root, "staging")) == [
+            "assets/app-2.js",
+            "assets/style-2.css",
+            "build.json",
+            "index.html",
+        ]
         assert state["history"][-1]["action"] == "stage"
 
     def test_refuses_an_artifact_that_is_another_build(self, remote, tmp_path) -> None:
@@ -302,29 +331,6 @@ class TestRollback:
         assert state["previous_prod"]["sha"] == sha(1)
 
 
-class TestSkip:
-    def test_records_a_superseded_run(self, remote, tmp_path, monkeypatch, outputs) -> None:
-        stage(remote, tmp_path, 1, monkeypatch)
-        assert (
-            run_cd("skip", *common(1), "--reason", "superseded by a newer run", remote=remote) == 0
-        )
-        root, state = view(remote, tmp_path)
-        assert state["staging"]["status"] == "superseded"
-        assert state["history"][-1]["action"] == "skip"
-        assert build_of(root, "staging") == sha(1)  # the tree is untouched
-        assert "promoted=false" in outputs.read_text()
-
-    def test_reports_a_promotion_that_was_cancelled_after_its_push(
-        self, remote, tmp_path, monkeypatch, outputs
-    ) -> None:
-        stage(remote, tmp_path, 1, monkeypatch)
-        promote(remote, 1)
-        outputs.write_text("")
-        run_cd("skip", *common(1), "--reason", "superseded", remote=remote)
-        text = outputs.read_text()
-        assert "promoted=true" in text and "tag=prod/" in text
-
-
 class TestPushRaces:
     def test_a_lost_race_starts_over_from_a_fresh_clone(
         self, remote, tmp_path, monkeypatch
@@ -386,7 +392,18 @@ class TestPushRaces:
         def racing(dest: Path, message: str) -> None:
             if not pushed["done"]:  # a rival skip lands just before our push
                 pushed["done"] = True
-                run_cd("skip", *common(1), "--reason", "rival", remote=remote)
+                db.update(
+                    str(remote),
+                    lambda _root, state: ds.skip(
+                        state,
+                        subject=ds.Subject(sha(1)),
+                        run_url="u",
+                        reason="rival",
+                        now="2026-10-11T09:00:00Z",
+                    ),
+                    "rival",
+                    sleep=lambda _s: None,
+                )
             real(dest, message)
 
         monkeypatch.setattr(db, "commit_and_push", racing)
@@ -396,3 +413,138 @@ class TestPushRaces:
         actions = [(h["action"], h["sha"]) for h in state["history"]]
         assert ("skip", sha(1)) in actions and ("stage", sha(2)) in actions
         assert ds.validate(state) == []
+
+
+class TestRunAttempts:
+    def test_a_rerun_all_jobs_whose_smoke_flakes_leaves_prod_and_its_tag_alone(
+        self, remote, tmp_path, monkeypatch, outputs
+    ) -> None:
+        stage(remote, tmp_path, 1, monkeypatch)
+        promote(remote, 1)
+        stage(remote, tmp_path, 2, monkeypatch)
+        assert promote(remote, 2, attempt=1) == 0  # attempt 1 promoted build 2
+        before, state_before = view(remote, tmp_path)
+        stage(remote, tmp_path, 2, monkeypatch)  # "Re-run all jobs": same run id, attempt 2
+        outputs.write_text("")
+        assert rollback(remote, 2, "smoke", attempt=2) == 0
+        root, state = view(remote, tmp_path)
+        assert "prod_overwritten=false" in outputs.read_text()
+        assert build_of(root, "prod") == sha(2) and build_of(root, "prod-prev") == sha(1)
+        assert state["prod"] == state_before["prod"]  # tag and all
+        assert state["previous_prod"]["sha"] == sha(1)
+        assert tree(root, "staging") == tree(root, "prod")
+        assert tree(before, "prod") == tree(root, "prod")
+
+    def test_the_attempt_that_promoted_and_then_failed_does_roll_prod_back(
+        self, remote, tmp_path, monkeypatch
+    ) -> None:
+        stage(remote, tmp_path, 1, monkeypatch)
+        promote(remote, 1)
+        stage(remote, tmp_path, 2, monkeypatch)
+        promote(remote, 2, attempt=2)
+        assert rollback(remote, 2, "promote", attempt=2) == 0
+        root, state = view(remote, tmp_path)
+        assert build_of(root, "prod") == sha(1) and state["previous_prod"] is None
+
+    def test_a_promote_job_that_failed_in_another_attempt_does_not_count(
+        self, remote, tmp_path, monkeypatch
+    ) -> None:
+        stage(remote, tmp_path, 1, monkeypatch)
+        promote(remote, 1)
+        stage(remote, tmp_path, 2, monkeypatch)
+        promote(remote, 2, attempt=1)
+        assert rollback(remote, 2, "promote", attempt=2) == 0
+        root, _ = view(remote, tmp_path)
+        assert build_of(root, "prod") == sha(2)
+
+
+def assets_of(root: Path, name: str) -> set[str]:
+    return {p for p in tree(root, name) if p.startswith("assets/")}
+
+
+class TestPreviousGenerationAssets:
+    def test_promote_keeps_the_previous_builds_assets_for_clients_with_a_cached_page(
+        self, remote, tmp_path, monkeypatch
+    ) -> None:
+        stage(remote, tmp_path, 1, monkeypatch)
+        promote(remote, 1)
+        stage(remote, tmp_path, 2, monkeypatch)
+        promote(remote, 2)
+        root, _ = view(remote, tmp_path)
+        assert assets_of(root, "prod") == {
+            "assets/app-1.js",
+            "assets/style-1.css",
+            "assets/app-2.js",
+            "assets/style-2.css",
+        }
+        assert "app-2.js" in (root / "prod" / "index.html").read_text()
+        assert assets_of(root, "staging") == {"assets/app-2.js", "assets/style-2.css"}
+        assert assets_of(root, "prod-prev") == {"assets/app-1.js", "assets/style-1.css"}
+
+    def test_assets_older_than_one_generation_are_dropped(
+        self, remote, tmp_path, monkeypatch
+    ) -> None:
+        for n in (1, 2, 3):
+            stage(remote, tmp_path, n, monkeypatch)
+            promote(remote, n)
+        root, _ = view(remote, tmp_path)
+        assert assets_of(root, "prod") == {
+            "assets/app-2.js",
+            "assets/style-2.css",
+            "assets/app-3.js",
+            "assets/style-3.css",
+        }
+
+    def test_a_file_the_new_build_also_has_is_the_new_one(
+        self, remote, tmp_path, monkeypatch
+    ) -> None:
+        stage(remote, tmp_path, 1, monkeypatch)
+        promote(remote, 1)
+        art = artifact(tmp_path, 2)
+        (art / "assets" / "app-1.js").write_text("same name, new bytes")
+        monkeypatch.setenv("CD_INCLUDES", "[]")
+        args = ["--artifact", str(art), "--pr", "12", "--issue", "22"]
+        assert run_cd("stage", *common(2), *args, remote=remote) == 0
+        promote(remote, 2)
+        root, _ = view(remote, tmp_path)
+        assert (root / "prod" / "assets" / "app-1.js").read_text() == "same name, new bytes"
+
+    def test_rollback_keeps_the_failed_builds_assets_too(
+        self, remote, tmp_path, monkeypatch
+    ) -> None:
+        stage(remote, tmp_path, 1, monkeypatch)
+        promote(remote, 1)
+        stage(remote, tmp_path, 2, monkeypatch)
+        promote(remote, 2)
+        assert rollback(remote, 2, "promote") == 0
+        root, state = view(remote, tmp_path)
+        assert state["prod"]["sha"] == sha(1)
+        assert "app-1.js" in (root / "prod" / "index.html").read_text()
+        assert {"assets/app-1.js", "assets/app-2.js"} <= assets_of(root, "prod")
+        assert not (root / "prod-prev").exists()
+        assert tree(root, "staging") == tree(root, "prod")
+
+    def test_reachable_assets_follow_the_pages_scripts_and_styles(self, tmp_path) -> None:
+        (tmp_path / "assets").mkdir()
+        (tmp_path / "index.html").write_text('<script src="./assets/main-a1.js">')
+        (tmp_path / "assets" / "main-a1.js").write_text('import("./chunk-b2.js")')
+        (tmp_path / "assets" / "chunk-b2.js").write_text("x")
+        (tmp_path / "assets" / "main-a1.css").write_text("@font-face{src:url(font-c3.woff2)}")
+        (tmp_path / "assets" / "font-c3.woff2").write_text("f")
+        (tmp_path / "assets" / "stale-d4.js").write_text("carried over")
+        reached = {p.name for p in db.reachable_assets(tmp_path)}
+        assert reached == {"main-a1.js", "chunk-b2.js"}
+        (tmp_path / "index.html").write_text(
+            '<script src="./assets/main-a1.js"><link href="./assets/main-a1.css">'
+        )
+        reached = {p.name for p in db.reachable_assets(tmp_path)}
+        assert reached == {"main-a1.js", "chunk-b2.js", "main-a1.css", "font-c3.woff2"}
+
+    def test_nothing_is_carried_when_there_is_no_old_tree_or_no_new_tree(self, tmp_path) -> None:
+        new = tmp_path / "new"
+        (new / "assets").mkdir(parents=True)
+        (new / "index.html").write_text("x")
+        db.replace_app_tree(tmp_path / "prod", new)
+        assert (tmp_path / "prod" / "index.html").exists()
+        db.replace_app_tree(tmp_path / "prod", None)
+        assert not (tmp_path / "prod").exists()
