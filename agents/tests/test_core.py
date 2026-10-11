@@ -230,17 +230,17 @@ def test_maintenance_pr_decisions() -> None:
 
 def test_caps_override_spending_steps() -> None:
     st = make_state()
-    st.data["cost"]["usd"] = 1.0
+    st.data["cost"]["usd"] = 3.0
     capped = machine.next_action(ctx(st))
     assert capped.kind is Kind.ESCALATE and capped.label == state.ESC_COST_CAP
     building = make_state(state.BUILDING)
     building.data["coder"] = {"job_id": "j", "started_at": NOW}
-    building.data["cost"]["usd"] = 1.2
+    building.data["cost"]["usd"] = 3.2
     assert machine.next_action(ctx(building)).cancel_coder
-    halted = machine.next_action(ctx(make_state(), budget=Budget(usd_total=4.5)))
+    halted = machine.next_action(ctx(make_state(), budget=Budget(usd_total=22.0)))
     assert halted.kind is Kind.HALT
     waiting = make_state(state.IN_REVIEW)
-    assert machine.next_action(ctx(waiting, budget=Budget(usd_total=9), pr=pull(),
+    assert machine.next_action(ctx(waiting, budget=Budget(usd_total=23), pr=pull(),
                                    checks={**GREEN, "e2e": "pending"})).kind is Kind.WAIT
 
 
