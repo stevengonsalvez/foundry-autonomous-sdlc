@@ -49,6 +49,9 @@ from sdlc_agents.foundry import (
     call_with_retry,
     run_agent,
 )
+from sdlc_agents.ledger import events as ledger_events
+from sdlc_agents.ledger import model as ledger_model
+from sdlc_agents.ledger.emitter import Emitter, NullEmitter
 from sdlc_agents.machine import Action, Context, Kind
 from sdlc_agents.paths import is_test_path
 from sdlc_agents.ports import (
@@ -102,6 +105,9 @@ CODER_MAX_ITERATIONS = 5
 RESERVE_S = 45                    # wall time kept back for metrics and unlocking
 COMMENT_LIMIT = 65_000            # GitHub rejects comment bodies over 65,536 chars
 PAGES_WORKFLOW = "pages.yml"
+LEDGER_HEARTBEAT_S = 540          # no activity: still tell the ledger every ~2 ticks that the loop is alive
+LEDGER_RECONCILE_S = 3600         # ask the ledger to rebuild from GitHub about hourly (repairs missed events)
+QUIET_ACTIONS = frozenset({"none", "noop", "wait", "halt", "ignore"})
 
 TESTS_MARKER = "<!-- sdlc-tests:v1\n"
 _TESTS_RE = re.compile(r"\A<!-- sdlc-tests:v1\n(.*?)\n-->", re.DOTALL)
@@ -143,6 +149,8 @@ class TickReport:
     orchestrator_usd: float = 0.0       # this tick's own hosted compute
     total_usd: float = 0.0
     metrics_written: bool = False
+    ledger_usd: float = 0.0             # this tick's call to the state-keeper agent
+    ledger: str = ""                    # emitted | quiet | error
     errors: list[str] = field(default_factory=list)
 
     def to_dict(self) -> dict[str, Any]:
@@ -184,6 +192,7 @@ def run_tick(
     *,
     budget: Budget | None = None,
     sleep: Callable[[float], None] = time.sleep,
+    emitter: Emitter | None = None,
 ) -> TickReport:
     """Run one bounded tick and return its report. Never raises. `sleep` waits out retry backoff.
 
@@ -206,7 +215,7 @@ def run_tick(
         return report
     report.lock = "took-over-stale" if held.took_over_stale else "acquired"
     try:
-        _Tick(github, foundry, clock, report, budget or Budget(), budget_wall_s, sleep).run()
+        _Tick(github, foundry, clock, report, budget or Budget(), budget_wall_s, sleep, emitter or NullEmitter()).run()
     except Exception as exc:
         report.errors.append(f"tick: {type(exc).__name__}: {exc}")
     finally:
@@ -272,8 +281,10 @@ def _scenario(body: str) -> str | None:
 
 class _Tick:
     def __init__(self, github: GitHubPort, foundry: FoundryPort, clock: ClockPort, report: TickReport,
-                 budget: Budget, budget_wall_s: int, sleep: Callable[[float], None]):
+                 budget: Budget, budget_wall_s: int, sleep: Callable[[float], None], emitter: Emitter):
         self.sleep = sleep
+        self.emitter = emitter
+        self.pending_events: dict[int, dict[str, Any]] = {}     # one ticket.updated per object, the latest
         self.deferred: dict[int, str] = {}
         self.streaks: dict[int, int] = {}       # consecutive ticks each object was deferred
         self.github = github
@@ -297,7 +308,8 @@ class _Tick:
             self.report.errors.append("metrics.json is unreadable: spend unknown, spending steps halted")
         self.previous = ledger or metrics.Ledger()
         objects_usd = sum(self._object_usd(o) for o in self.objects)
-        self.budget.usd_total = max(objects_usd + self.previous.orchestrator_usd, self.previous.usd)
+        self.budget.usd_total = max(objects_usd + self.previous.orchestrator_usd + self.previous.ledger_usd,
+                                    self.previous.usd)
         # Coder polls first: they are cheap and keep the coder's sandbox session alive.
         self.objects.sort(key=lambda o: (0 if o.state and o.state.stage == state.BUILDING else 1, o.item.number))
         for obj in self.objects:
@@ -307,11 +319,13 @@ class _Tick:
                     self.streaks[obj.item.number] = self.previous.deferrals[obj.item.number]
                 continue
             self._step(obj)
+        ledger_usd, marks = self._emit_ledger()
         tick_usd = round(cost.orchestrator_tick_usd(self.clock.monotonic() - self.started), 6)
         self.report.orchestrator_usd = tick_usd
-        self.budget.usd_total += tick_usd
+        self.report.ledger_usd = ledger_usd
+        self.budget.usd_total += tick_usd + ledger_usd
         self.report.total_usd = round(self.budget.usd_total, 6)
-        self._write_metrics(tick_usd)
+        self._write_metrics(tick_usd, ledger_usd, marks)
 
     def _load(self) -> None:
         for item in sorted(self.github.list_issues(state="all"), key=lambda i: i.number):
@@ -465,6 +479,7 @@ class _Tick:
                                         obj.state_comment.created_at)
         obj.committed = copy.deepcopy(obj.st.data)
         self._sync_labels(obj)
+        self._queue_ticket(obj)
 
     def _sync_labels(self, obj: _Object) -> None:
         st = obj.st
@@ -1350,14 +1365,67 @@ class _Tick:
 
     # -- metrics --------------------------------------------------------------------
 
-    def _write_metrics(self, tick_usd: float) -> None:
+    # -- ledger ---------------------------------------------------------------------
+
+    def _queue_ticket(self, obj: _Object) -> None:
+        """Remember the object's ticket record as it stands now; the tick sends the latest one per object."""
+        try:
+            comment_ids = {"state": obj.state_comment.id} if obj.state_comment else {}
+            ticket = ledger_model.ticket(
+                number=obj.item.number, kind=obj.kind, title=obj.item.title, author=obj.item.author,
+                opened_at=obj.item.created_at, closed_at=obj.item.closed_at, labels=obj.item.labels,
+                state_data=obj.st.data, comment_ids=comment_ids)
+            self.pending_events[obj.item.number] = ledger_events.make(
+                "ticket.updated", ticket["updated_at"], {"ticket": ticket}, issue=obj.item.number)
+        except Exception as exc:        # the ledger must never break a transition
+            self.report.errors.append(f"ledger: #{obj.item.number}: {type(exc).__name__}: {exc}")
+
+    def _emit_ledger(self) -> tuple[float, dict[str, str | None]]:
+        """Send this tick's events to the state-keeper. Best effort: a failure is noted and the next call
+        (or its hourly reconcile from GitHub) repairs it. Returns the call's compute USD and the marks."""
+        now = self.clock.now_iso()
+        marks: dict[str, str | None] = {"emitted_at": self.previous.ledger_emitted_at,
+                                        "reconciled_at": self.previous.ledger_reconciled_at}
+        active = bool(self.pending_events) or bool(self.report.errors) or any(
+            o.action not in QUIET_ACTIONS or o.result != "ok" for o in self.report.objects)
+        heartbeat_due = marks["emitted_at"] is None or seconds_between(marks["emitted_at"], now) >= LEDGER_HEARTBEAT_S
+        if not active and not heartbeat_due:
+            self.report.ledger = "quiet"
+            return 0.0, marks
+        reconcile = marks["reconciled_at"] is None or seconds_between(marks["reconciled_at"], now) >= LEDGER_RECONCILE_S
+        batch = list(self.pending_events.values())
+        try:
+            batch.append(ledger_events.make("tick.finished", now, {
+                "started_at": self.report.started_at, "finished_at": now, "lock": self.report.lock,
+                "objects": [asdict(o) for o in self.report.objects][:400], "errors": list(self.report.errors)[:50],
+                "model_calls": self.report.model_calls, "calls": self.report.calls[:100],
+                "usd_this_tick": self.report.usd_this_tick, "orchestrator_usd": cost.orchestrator_tick_usd(
+                    self.clock.monotonic() - self.started)}))
+            batch.append(ledger_events.make("metrics.observed", now, {
+                "usd": round(self.budget.usd_total, 6), "orchestrator_usd": self.previous.orchestrator_usd,
+                "issues": len(self.objects), "generated_at": now}))
+        except Exception as exc:
+            self.report.errors.append(f"ledger: could not build events: {type(exc).__name__}: {exc}")
+        result = self.emitter.emit(batch, reconcile=reconcile)
+        if result.error:
+            self.report.ledger = "error"
+            self.report.errors.append(result.error)
+            return 0.0, marks
+        self.report.ledger = "emitted"
+        marks["emitted_at"] = now
+        if reconcile:
+            marks["reconciled_at"] = now
+        return round(result.usd, 6), marks
+
+    def _write_metrics(self, tick_usd: float, ledger_usd: float = 0.0,
+                       marks: dict[str, str | None] | None = None) -> None:
         try:
             pairs = [(o.item, o.state) for o in self.objects if o.state is not None]
             doc = metrics.build(
                 pairs, self.clock.now_iso(),
                 orchestrator_usd=self.previous.orchestrator_usd + tick_usd, deferred=self.deferred,
-                deferrals=self.streaks,
-                floor_usd=self.previous.usd + self.report.usd_this_tick + tick_usd,
+                deferrals=self.streaks, ledger_usd=self.previous.ledger_usd + ledger_usd, ledger_marks=marks,
+                floor_usd=self.previous.usd + self.report.usd_this_tick + tick_usd + ledger_usd,
             )
             written = metrics.publish(self.github, doc)
             self.report.metrics_written = written != metrics.UNCHANGED

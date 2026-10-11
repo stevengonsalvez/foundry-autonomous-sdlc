@@ -358,8 +358,8 @@ def test_run_once_needs_its_environment() -> None:
 def test_run_once_wires_key_vault_github_and_foundry_into_a_tick() -> None:
     seen: dict[str, Any] = {}
 
-    def fake_tick(github: Any, foundry: Any, secrets: Any, clock: Any, budget_wall_s: int) -> Any:
-        seen.update(github=github, foundry=foundry, budget=budget_wall_s)
+    def fake_tick(github: Any, foundry: Any, secrets: Any, clock: Any, budget_wall_s: int, emitter: Any) -> Any:
+        seen.update(github=github, foundry=foundry, budget=budget_wall_s, emitter=emitter)
         return types.SimpleNamespace(to_dict=lambda: {"lock": "acquired"})
 
     with (patch.object(runtime, "run_tick", fake_tick),
@@ -367,6 +367,7 @@ def test_run_once_wires_key_vault_github_and_foundry_into_a_tick() -> None:
         report = runtime.run_once({"FOUNDRY_PROJECT_ENDPOINT": ENDPOINT, "KEY_VAULT_URI": "https://kv.vault.azure.net",
                                    "TICK_BUDGET_S": "120"}, credential_factory=Token)
     assert report == {"lock": "acquired"} and seen["budget"] == 120
+    assert type(seen["emitter"]).__name__ == "NullEmitter"      # LEDGER_MODE defaults to off
     get_secret.assert_called_once_with("github-pat")
     assert repr(seen["github"]) == "GitHubClient(stevengonsalvez/foundry-autonomous-sdlc)"
     assert runtime._default_credential() is not None
