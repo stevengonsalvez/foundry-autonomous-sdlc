@@ -137,6 +137,12 @@ class TestProtectedConfiguration:
             "app/web/vitest.config.ts",
             "app/web/vite.config.ts",
             "app/e2e/playwright.config.ts",
+            "app/e2e/playwright.smoke.config.ts",
+            "app/e2e/playwright.other.config.mjs",
+            "app/web/playwright.component.config.ts",
+            "app/e2e/smoke/site.spec.ts",
+            "app/e2e/smoke/helpers/wait.ts",
+            "app/e2e/smoke/new.spec.ts",
             "app/eslint.config.js",
             "app/tsconfig.base.json",
             "app/web/tsconfig.json",
@@ -155,11 +161,31 @@ class TestProtectedConfiguration:
             "app/web/src/App.tsx",
             "app/api/tests/parcel.test.ts",
             "app/e2e/tests/home.spec.ts",
+            "app/e2e/smokeish/home.spec.ts",
+            "app/e2e/tests/playwright.notes.ts",
             "app/contracts/carrier.openapi.yaml",
         ],
     )
     def test_ordinary_files_are_not(self, path: str) -> None:
         assert agent_scope.violation(Change("M", "100644", "100644", path)) is None
+
+    def test_weakening_the_smoke_gate_fails_the_gate(self, agent_repo: Repo) -> None:
+        agent_repo.commit(
+            {
+                "app/e2e/smoke/site.spec.ts": "// no checks\n",
+                "app/e2e/playwright.smoke.config.ts": "export default {};\n",
+                "app/core/src/ok.ts": "x\n",
+            },
+            "test: soften smoke",
+        )
+        result = gate(agent_repo)
+        assert not result.passed
+        report = offenders(result)
+        assert (
+            "'app/e2e/playwright.smoke.config.ts': protected test or build configuration" in report
+        )
+        assert "'app/e2e/smoke/site.spec.ts': protected test or build configuration" in report
+        assert "app/core/src/ok.ts" not in report
 
     def test_editing_the_test_script_fails_the_gate(self, agent_repo: Repo) -> None:
         agent_repo.commit({"app/package.json": '{"scripts": {"test": "true"}}\n'}, "chore: x")
