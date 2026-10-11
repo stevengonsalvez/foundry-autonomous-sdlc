@@ -38,7 +38,7 @@
       "pass": 7
     }
   },
-  "generated_at": "2026-10-11T23:43:15Z",
+  "generated_at": "2026-10-11T23:44:44Z",
   "issues": [
     {
       "closed_at": "2026-10-10T12:28:43Z",
@@ -1661,11 +1661,11 @@
       "coder_engine": null,
       "coder_sessions_lost": 0,
       "cost": {
-        "calls": 1,
+        "calls": 2,
         "coder_model_usd": 0.0,
         "coder_usd": 0.0,
-        "model_usd": 0.001345,
-        "usd": 0.001345
+        "model_usd": 0.002443,
+        "usd": 0.002443
       },
       "deferred": null,
       "escalation": null,
@@ -1685,9 +1685,14 @@
       "stages": [
         {
           "entered_at": "2026-10-11T23:42:40Z",
+          "seconds": 103,
+          "stage": "stage:ready"
+        },
+        {
+          "entered_at": "2026-10-11T23:44:23Z",
           "in_progress": true,
           "seconds": 0,
-          "stage": "stage:ready"
+          "stage": "stage:feasible"
         }
       ],
       "title": "Show how many tracking events a parcel has",
@@ -1695,7 +1700,7 @@
     }
   ],
   "ledger": {
-    "emitted_at": "2026-10-11T23:42:42Z",
+    "emitted_at": "2026-10-11T23:44:25Z",
     "reconciled_at": "2026-10-11T23:42:42Z"
   },
   "repo": "stevengonsalvez/foundry-autonomous-sdlc",
@@ -1703,10 +1708,10 @@
     "deferred": 0,
     "escalated": 18,
     "issues": 24,
-    "ledger_usd": 0.024522,
-    "orchestrator_usd": 0.82718,
+    "ledger_usd": 0.029388,
+    "orchestrator_usd": 0.839526,
     "released": 5,
-    "usd": 1.959237
+    "usd": 1.977547
   },
   "version": 1
 }
