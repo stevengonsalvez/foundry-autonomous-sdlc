@@ -323,3 +323,39 @@ def test_a_pull_request_flagged_by_cd_becomes_a_ticket_and_shows_the_rolled_back
     t = next(t for t in state_of(store)["tickets"] if t["issue"] == n)
     assert t["kind"] == "pr" and t["type"] == "maintenance" and t["stage"] == "escalated" and t["env"] == "rolled-back"
     assert any(h["status"] == "rolled_back" for h in t["hops"])
+
+
+def test_a_flagged_pull_request_shows_its_recovery_once_a_later_release_is_live() -> None:
+    gh = FakeGitHub(Clock())
+    n = gh.open_pr(
+        "Tweak the footer",
+        "no issue",
+        "chore/footer",
+        [("chore: footer", ("docs/x.md",))],
+        labels=("escalated:deploy-failed",),
+    )
+    sha = "e" * 40
+    gh.pulls[n]["merge_sha"], gh.pulls[n]["merged"] = sha, True
+    hop = {"sha": sha, "version": "main-eeeeeee", "pr": n, "includes": [{"pr": n, "issue": None, "sha": sha}]}
+    history = [
+        {"at": "2026-10-11T21:00:00Z", "action": "stage", "env": "staging", **hop},
+        {"at": "2026-10-11T21:05:00Z", "action": "rollback", "env": "staging", "reason": "smoke", **hop},
+    ]
+    gh.files[("deploy", "deploy.json")] = json.dumps(
+        {"version": 1, "staging": None, "prod": None, "previous_prod": None, "history": history}
+    )
+    led, store = ledger(github=gh)
+    led.handle({"op": "reconcile"})
+    assert next(t for t in state_of(store)["tickets"] if t["issue"] == n)["stage"] == "escalated"
+    history += [
+        {"at": "2026-10-11T22:00:00Z", "action": "stage", "env": "staging", **hop},
+        {"at": "2026-10-11T22:05:00Z", "action": "promote", "env": "prod", **hop},
+    ]
+    gh.files[("deploy", "deploy.json")] = json.dumps(
+        {"version": 1, "staging": None, "prod": None, "previous_prod": None, "history": history}
+    )
+    gh.issues[n]["labels"] = []  # CD took the flag off when the release went live
+    gh.issues[n]["state"] = "closed"  # the PR was merged long ago
+    led.handle({"op": "reconcile"})
+    t = next(t for t in state_of(store)["tickets"] if t["issue"] == n)
+    assert t["env"] == "prod" and t["stage"] == "prod" and t["flags"] == [] and t["escalation"] is None

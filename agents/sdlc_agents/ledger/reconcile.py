@@ -103,12 +103,17 @@ def reconcile(
             item.is_pull_request
             and MAINTENANCE_LABEL not in item.labels
             and model.DEPLOY_FAILED_LABEL not in item.labels
+            and item.number not in known  # a PR once flagged stays a ticket, so its recovery shows too
         ):
             continue
         if item.author != OWNER:
             ignored += 1
             continue
-        if item.state == "closed" and not any(lbl.startswith(("stage:", "escalated:")) for lbl in item.labels):
+        if (
+            item.state == "closed"
+            and item.number not in known  # a merged PR whose flag CD took off must still update
+            and not any(lbl.startswith(("stage:", "escalated:")) for lbl in item.labels)
+        ):
             continue
         if item.number in archived:
             continue

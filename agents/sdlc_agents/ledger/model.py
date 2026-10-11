@@ -101,7 +101,8 @@ def board_stage(sdlc_stage: str | None, escalation: str | None, env: str, *, lab
     if is_escalation(escalation) or env == "rolled-back" or DEPLOY_FAILED_LABEL in labels:
         return "escalated"
     if sdlc_stage is None:
-        return "backlog"
+        # An object with no SDLC stage (a plain PR the CD workflow flagged) sits wherever its release is.
+        return env if env in ("staging", "prod") else "backlog"
     stage = _STAGE_TO_BOARD.get(sdlc_stage)
     if stage is None:
         raise TicketError(f"unknown stage {sdlc_stage!r}")
@@ -154,19 +155,22 @@ def cost_block(data: dict[str, Any], *, ledger_usd: float = 0.0) -> dict[str, An
     coder_model = round(float(raw.get("coder_model_usd", 0) or 0), 6)
     # The state comment's usd is the orchestrator's own total (it is the number the 1 USD cap checks).
     state_usd = round(float(raw.get("usd", 0) or 0), 6)
-    total = round(max(state_usd, model_usd + coder_usd + coder_model) + ledger_usd, 6)
+    # `usd` is what the agents spent, the figure the orchestrator's own ledger holds, so the two can be compared;
+    # the state-keeper's compute share sits beside it and counts toward the cap in `total_usd`.
+    total = round(max(state_usd, model_usd + coder_usd + coder_model), 6)
     return {
         "usd": total,
         "model_usd": model_usd,
         "coder_usd": coder_usd,
         "coder_model_usd": coder_model,
         "ledger_usd": round(ledger_usd, 6),
+        "total_usd": round(total + ledger_usd, 6),
         "tokens_in": tokens_in,
         "tokens_out": tokens_out,
         "calls": sum(r["calls"] for r in by_agent.values()),
         "coder_seconds": int(raw.get("coder_seconds", 0) or 0),
         "cap_usd": ISSUE_CAP_USD,
-        "cap_used_pct": round(100.0 * total / ISSUE_CAP_USD, 2),
+        "cap_used_pct": round(100.0 * (total + ledger_usd) / ISSUE_CAP_USD, 2),
         "by_agent": sorted(by_agent.values(), key=lambda r: (-r["usd"], r["agent"])),
     }
 

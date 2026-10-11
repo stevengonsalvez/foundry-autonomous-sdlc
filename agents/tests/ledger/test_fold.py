@@ -235,7 +235,9 @@ def test_billed_spend_is_shown_next_to_the_ledger_estimate_and_the_gap_is_never_
         and cost["totals"]["ledger_usd"] == 0.004
     )
     t12 = next(t for t in doc["tickets"] if t["issue"] == 12)
-    assert t12["cost"]["ledger_usd"] == 0.004 and t12["cost"]["usd"] == pytest.approx(0.077015, abs=1e-6)
+    assert t12["cost"]["ledger_usd"] == 0.004 and t12["cost"]["usd"] == pytest.approx(0.073015, abs=1e-6)
+    assert t12["cost"]["total_usd"] == pytest.approx(0.077015, abs=1e-6)  # agents plus the state-keeper share
+    assert t12["cost"]["cap_used_pct"] == pytest.approx(7.7, abs=0.05)
 
 
 def test_finished_tickets_older_than_30_days_move_to_the_archive(real) -> None:
@@ -311,3 +313,36 @@ def test_summaries_and_archives_survive_a_rebuild_from_the_log(real) -> None:
         ),
     )
     assert 12 not in [t["issue"] for t in doc["tickets"]]
+
+
+def test_a_release_flagged_by_cd_without_a_state_comment_still_says_why_and_links_the_run(real) -> None:
+    item = copy.deepcopy(real[40])
+    item["state_data"] = None
+    item["labels"] = ["escalated:deploy-failed"]
+    item["is_pr"] = True
+    t = ticket_event(item)["data"]["ticket"]
+    t["pr"] = {"number": 40, "url": "u", "branch": "b", "head": "h", "merge_sha": "d" * 40, "title": None}
+    hop = {
+        "sha": "d" * 40,
+        "version": "main-ddddddd",
+        "run_url": "https://github.com/stevengonsalvez/foundry-autonomous-sdlc/actions/runs/7",
+        "pr": 40,
+        "includes": [{"pr": 40, "issue": None, "sha": "d" * 40}],
+    }
+    history = [
+        {"at": "2026-10-11T22:00:00Z", "action": "stage", "env": "staging", **hop},
+        {"at": "2026-10-11T22:05:00Z", "action": "rollback", "env": "staging", "reason": "smoke", **hop},
+    ]
+    doc = fold.fold(
+        [
+            events.make("ticket.updated", t["updated_at"], {"ticket": t}, issue=40),
+            env_event(deploy_doc(history), "2026-10-11T22:05:00Z"),
+        ],
+        NOW,
+    )
+    esc = doc["tickets"][0]["escalation"]
+    assert (
+        esc["reasons"] == ["Release main-ddddddd rolled back: smoke"]
+        and esc["evidence_url"].endswith("/runs/7")
+        and esc["tried"]
+    )

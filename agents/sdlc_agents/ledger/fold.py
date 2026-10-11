@@ -329,6 +329,20 @@ def overlay(ticket: dict[str, Any], deploy: dict[str, Any] | None) -> dict[str, 
         t["gates"]["soak"] = soak
     esc = t.get("escalation")
     label = (esc or {}).get("label") if esc else None
+    if env == "rolled-back" and esc is not None and not esc.get("reasons"):
+        # Flagged by CD with no state comment of its own: the reason and evidence are the failed run's.
+        last = next((h for h in reversed(hops) if h["status"] in ("rolled_back", "failed")), None)
+        if last is not None:
+            esc["reasons"] = [
+                f"Release {last.get('version') or ''} rolled back: {last.get('detail') or 'a gate failed'}".replace(
+                    "  ", " "
+                )
+            ]
+            esc["evidence_url"] = last.get("run_url") or esc.get("evidence_url")
+            esc["tried"] = esc.get("tried") or [
+                "CD built the release, deployed it to staging and ran the smoke tests.",
+                "The failed gate triggered the automatic rollback to the previous artifact.",
+            ]
     if env == "rolled-back" and esc is None:
         last = next((h for h in reversed(hops) if h["status"] in ("rolled_back", "failed")), hops[-1])
         t["escalation"] = {
@@ -481,7 +495,7 @@ def _cost(doc: dict[str, Any]) -> dict[str, Any]:
     led = cost["ledger"]
     tickets = doc["tickets"]
     by_issue = led.get("by_issue", {})
-    issues_usd = round(sum(t["cost"]["usd"] - t["cost"]["ledger_usd"] for t in tickets), 6)
+    issues_usd = round(sum(t["cost"]["usd"] for t in tickets), 6)
     ledger_usd = round(led["usd"], 6)
     metrics = cost.get("metrics") or {}
     # The orchestrator's own estimate covers its issues and its compute; the ledger's compute is added.
@@ -614,10 +628,9 @@ def finalise(doc: dict[str, Any], now: str) -> dict[str, Any]:
         if saved and saved.get("digest") == t.get("digest"):
             t["summary"] = saved["text"]
         share = round(float(led_by_issue.get(str(t["issue"]), 0.0)), 6)
-        base = t["cost"]["usd"] - t["cost"]["ledger_usd"]
         t["cost"]["ledger_usd"] = share
-        t["cost"]["usd"] = round(base + share, 6)
-        t["cost"]["cap_used_pct"] = round(100.0 * t["cost"]["usd"] / model.ISSUE_CAP_USD, 2)
+        t["cost"]["total_usd"] = round(t["cost"]["usd"] + share, 6)
+        t["cost"]["cap_used_pct"] = round(100.0 * t["cost"]["total_usd"] / model.ISSUE_CAP_USD, 2)
         tickets.append(t)
     doc["tickets"] = sorted(tickets, key=lambda t: t["issue"])
     doc["environments"] = environments(doc.get("deploy"))
