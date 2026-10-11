@@ -111,6 +111,9 @@ main:focus { outline: none; }
 .strong { font-weight: 600; }
 .num { font-variant-numeric: tabular-nums; }
 .wrap { overflow-wrap: anywhere; }
+/* Text that came from GitHub or a model may be one very long unbroken word: every text element may break anywhere. */
+.view :is(p, dd, dt, li, td, th, h1, h2, h3, h4, code, a, span, summary, label, button) { overflow-wrap: anywhere; min-inline-size: 0; }
+.agent-head, .agent-line { min-inline-size: 0; }
 .clamp-1, .clamp-2, .clamp-3, .clamp-4, .clamp-5, .clamp-6, .clamp-8 {
   display: -webkit-box; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; min-inline-size: 0; white-space: normal;
 }
