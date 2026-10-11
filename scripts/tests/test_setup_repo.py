@@ -211,6 +211,38 @@ class TestBootstrap:
         assert "rolled back" in description
 
 
+class TestProtectDeploy:
+    def test_only_the_actions_app_may_move_the_deploy_branch(self) -> None:
+        fake = FakeGitHub()
+        run_phase(fake, "protect-deploy")
+        ruleset = fake.rulesets[1]
+        assert ruleset["name"] == "deploy-branch" and ruleset["enforcement"] == "active"
+        assert ruleset["conditions"]["ref_name"]["include"] == ["refs/heads/deploy"]
+        assert ruleset["bypass_actors"] == [
+            {
+                "actor_id": sr.GITHUB_ACTIONS_APP_ID,
+                "actor_type": "Integration",
+                "bypass_mode": "always",
+            }
+        ]
+        assert {rule["type"] for rule in ruleset["rules"]} == {
+            "deletion",
+            "non_fast_forward",
+            "update",
+        }
+
+    def test_it_is_idempotent_and_not_part_of_all(self) -> None:
+        fake = FakeGitHub()
+        run_phase(fake, "protect-deploy")
+        run_phase(fake, "protect-deploy")
+        assert len(fake.rulesets) == 1
+        run_phase(FakeGitHub(), "all")
+        assert "protect-deploy" not in sr.PHASES["all"] and sr.PHASES["all"] == [
+            *sr.PHASES["bootstrap"],
+            *sr.PHASES["protect"],
+        ]
+
+
 class TestProtect:
     def test_creates_the_ruleset(self) -> None:
         fake = FakeGitHub()

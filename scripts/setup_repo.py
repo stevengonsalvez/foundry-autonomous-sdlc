@@ -257,11 +257,50 @@ def plan_ruleset(run: Gh) -> list[Step]:
     return [Step(f"ruleset {RULESET_NAME}: update", "PUT", path, RULESET)]
 
 
+# Branch `deploy` is published to the live site by pages.yml without review, so only the CD
+# workflow (the GitHub Actions app, through GITHUB_TOKEN) may move it. Without this, any
+# credential with contents write on the repository could push straight to prod. Apply it after
+# the first CD run has created the branch, then confirm the next CD run still passes.
+DEPLOY_RULESET_NAME = "deploy-branch"
+DEPLOY_RULESET: dict[str, Any] = {
+    "name": DEPLOY_RULESET_NAME,
+    "target": "branch",
+    "enforcement": "active",
+    "bypass_actors": [
+        {"actor_id": GITHUB_ACTIONS_APP_ID, "actor_type": "Integration", "bypass_mode": "always"}
+    ],
+    "conditions": {"ref_name": {"include": ["refs/heads/deploy"], "exclude": []}},
+    "rules": [{"type": "deletion"}, {"type": "non_fast_forward"}, {"type": "update"}],
+}
+
+
+def plan_deploy_ruleset(run: Gh) -> list[Step]:
+    listed = api_get(run, f"repos/{REPO}/rulesets?per_page=100")
+    found = next((r for r in listed if r["name"] == DEPLOY_RULESET_NAME), None)
+    if found is None:
+        return [
+            Step(
+                f"ruleset {DEPLOY_RULESET_NAME}: create",
+                "POST",
+                f"repos/{REPO}/rulesets",
+                DEPLOY_RULESET,
+            )
+        ]
+    path = f"repos/{REPO}/rulesets/{found['id']}"
+    if covers(api_get(run, path), DEPLOY_RULESET):
+        return [Step(f"ruleset {DEPLOY_RULESET_NAME}: ok")]
+    return [Step(f"ruleset {DEPLOY_RULESET_NAME}: update", "PUT", path, DEPLOY_RULESET)]
+
+
 PHASES: dict[str, list[Callable[[Gh], list[Step]]]] = {
     "bootstrap": [plan_repo_settings, plan_labels, plan_pages, plan_actions],
     "protect": [plan_ruleset],
+    "protect-deploy": [plan_deploy_ruleset],
 }
-PHASES["all"] = [*PHASES["bootstrap"], *PHASES["protect"]]
+PHASES["all"] = [
+    *PHASES["bootstrap"],
+    *PHASES["protect"],
+]  # protect-deploy is applied separately, after CD ran once
 
 
 def apply_phase(phase: str, dry_run: bool, run: Gh, out: TextIO) -> list[Step]:
