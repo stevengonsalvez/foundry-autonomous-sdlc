@@ -288,3 +288,38 @@ def test_archived_tickets_are_not_brought_back_by_reconcile_and_the_archive_has_
     late.handle({"op": "rebuild"})
     archive = json.loads(store.files["archive.json"])["tickets"]
     assert [t["issue"] for t in archive] == [n] and state_of(store)["tickets"] == []
+
+
+def test_a_pull_request_flagged_by_cd_becomes_a_ticket_and_shows_the_rolled_back_release() -> None:
+    gh = FakeGitHub(Clock())
+    n = gh.open_pr(
+        "Tweak the footer",
+        "no issue here",
+        "chore/footer",
+        [("chore: footer", ("docs/x.md",))],
+        labels=("escalated:deploy-failed",),
+    )
+    merge_sha = "c" * 40
+    gh.pulls[n]["merge_sha"], gh.pulls[n]["merged"] = merge_sha, True
+    hop = {
+        "sha": merge_sha,
+        "version": "main-ccccccc",
+        "pr": n,
+        "includes": [{"pr": n, "issue": None, "sha": merge_sha}],
+    }
+    deploy = {
+        "version": 1,
+        "staging": None,
+        "prod": None,
+        "previous_prod": None,
+        "history": [
+            {"at": "2026-10-11T21:00:00Z", "action": "stage", "env": "staging", **hop},
+            {"at": "2026-10-11T21:05:00Z", "action": "rollback", "env": "staging", "reason": "smoke", **hop},
+        ],
+    }
+    gh.files[("deploy", "deploy.json")] = json.dumps(deploy)
+    led, store = ledger(github=gh)
+    led.handle({"op": "reconcile"})
+    t = next(t for t in state_of(store)["tickets"] if t["issue"] == n)
+    assert t["kind"] == "pr" and t["type"] == "maintenance" and t["stage"] == "escalated" and t["env"] == "rolled-back"
+    assert any(h["status"] == "rolled_back" for h in t["hops"])

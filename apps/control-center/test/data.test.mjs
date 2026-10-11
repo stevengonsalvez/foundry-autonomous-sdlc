@@ -65,17 +65,18 @@ test('first tick reads all three sources with GET only, no credentials, no body'
   assert.equal(r.events.rounds, 1);
 });
 
-test('schedule: raw every 30 s, API calls every 60 s', async () => {
+test('schedule: raw and the issue list every 30 s, the API state every 60 s', async () => {
   const r = rig({ routes: okRoutes() });
   await r.poller.tick();
   r.advance(RAW_INTERVAL_MS);
   await r.poller.tick();
   assert.equal(r.callsTo(RAW_STATE_URL).length, 2);
   assert.equal(r.callsTo(API_STATE_URL).length, 1, 'not due yet');
+  assert.equal(r.callsTo(API_ISSUES_URL).length, 2, 'new issues are the thing a viewer waits for: asked every 30 s');
   r.advance(API_INTERVAL_MS - RAW_INTERVAL_MS);
   await r.poller.tick();
   assert.equal(r.callsTo(API_STATE_URL).length, 2);
-  assert.equal(r.callsTo(API_ISSUES_URL).length, 2);
+  assert.equal(r.callsTo(API_ISSUES_URL).length, 3);
 });
 
 test('ETag: remembered and sent back, and a 304 changes nothing', async () => {

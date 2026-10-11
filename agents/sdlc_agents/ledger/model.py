@@ -445,10 +445,12 @@ def ticket(
         "issue": number,
         "kind": kind,
         "title": clean(title, 200),
-        "type": str(data.get("type") or "feature"),
+        "type": str(data.get("type") or ("maintenance" if kind == "pr" else "feature")),
         "scenario": data.get("scenario")
         or infer_scenario(
-            str(data.get("type") or "feature"), esc_label, int((data.get("quality") or {}).get("rounds", 0) or 0)
+            str(data.get("type") or ("maintenance" if kind == "pr" else "feature")),
+            esc_label,
+            int((data.get("quality") or {}).get("rounds", 0) or 0),
         ),
         "author": clean(author, 60),
         "url": url,

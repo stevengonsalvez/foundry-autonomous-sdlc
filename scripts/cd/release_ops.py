@@ -120,7 +120,22 @@ def comment_release(
     results = []
     for number in ticket_numbers(pr, issue, includes):
         results.append(f"#{number}: {upsert_comment(run, repo, number, marker, body)}")
+        results[-1] += clear_failed_flag(run, repo, number)
     return results
+
+
+FAILED_LABEL = "escalated:deploy-failed"
+
+
+def clear_failed_flag(run: Runner, repo: str, number: int) -> str:
+    """A ticket whose earlier release was rolled back is live now: take the failure flag off it."""
+    try:
+        run(["api", "-X", "DELETE", f"repos/{repo}/issues/{number}/labels/{FAILED_LABEL}"], None)
+    except GhError as err:
+        if err.not_found:
+            return ""  # it was never flagged
+        raise
+    return f", {FAILED_LABEL} cleared"
 
 
 def main(argv: list[str] | None = None, run: Runner = gh) -> int:

@@ -19,6 +19,8 @@ import { API_ISSUES_URL, API_STATE_URL, OWNER, RAW_STATE_URL, positiveInt } from
 
 export const RAW_INTERVAL_MS = 30_000;
 export const API_INTERVAL_MS = 60_000;
+// New issues are the thing a viewer waits for, so while the budget is healthy the issue list is asked twice as often.
+export const ISSUES_INTERVAL_MS = 30_000;
 export const RESERVE = 15;
 export const SCARCE = 40;
 export const FAILURE_BASE_MS = 30_000;
@@ -179,7 +181,9 @@ export function createPoller({ fetchFn, now, isVisible, sources, handlers }) {
 
   const intervalFor = (name, t) => {
     if (name === 'state') return RAW_INTERVAL_MS;
-    return usesApi(name) ? budget.intervalMs(t) : RAW_INTERVAL_MS;
+    if (!usesApi(name)) return RAW_INTERVAL_MS;
+    const spaced = budget.intervalMs(t);
+    return name === 'issues' && spaced === API_INTERVAL_MS ? ISSUES_INTERVAL_MS : spaced;
   };
 
   const urlFor = (name) => (name === 'state' ? sources.state.url : sources[name].url);
