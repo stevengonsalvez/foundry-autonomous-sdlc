@@ -1,0 +1,39 @@
+[
+  {
+    "number": 99,
+    "title": "Add a dark mode toggle to the parcel page",
+    "state": "open",
+    "user": { "login": "stevengonsalvez" },
+    "labels": [{ "name": "enhancement" }],
+    "created_at": "2026-10-11T20:04:30Z",
+    "updated_at": "2026-10-11T20:04:30Z"
+  },
+  {
+    "number": 98,
+    "title": "Pull requests never count as waiting tickets",
+    "state": "open",
+    "user": { "login": "stevengonsalvez" },
+    "labels": [],
+    "pull_request": { "url": "https://api.github.com/repos/stevengonsalvez/foundry-autonomous-sdlc/pulls/98" },
+    "created_at": "2026-10-11T20:04:00Z",
+    "updated_at": "2026-10-11T20:04:00Z"
+  },
+  {
+    "number": 97,
+    "title": "Someone else filed this one",
+    "state": "open",
+    "user": { "login": "not-the-owner" },
+    "labels": [{ "name": "bug" }],
+    "created_at": "2026-10-11T20:03:00Z",
+    "updated_at": "2026-10-11T20:03:00Z"
+  },
+  {
+    "number": 24,
+    "title": "Make the parcel tracker better",
+    "state": "open",
+    "user": { "login": "stevengonsalvez" },
+    "labels": [],
+    "created_at": "2026-10-10T16:42:39Z",
+    "updated_at": "2026-10-10T16:42:39Z"
+  }
+]
