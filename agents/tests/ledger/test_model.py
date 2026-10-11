@@ -27,7 +27,7 @@ def test_released_feature_walks_the_board_in_order_with_seconds_per_stage(real) 
     assert t["sdlc_stage"] == "stage:released" and t["release"]["tag"] == "v0.1.0"
     assert t["pr"]["number"] == 13 and t["pr"]["merge_sha"].startswith("00ad430")
     assert t["cost"]["usd"] == pytest.approx(0.073015, abs=1e-6)
-    assert t["cost"]["cap_used_pct"] == pytest.approx(7.3, abs=0.05)
+    assert t["cost"]["cap_used_pct"] == pytest.approx(2.43, abs=0.05)
 
 
 def test_numbers_come_from_the_state_comment_and_agree_with_it(real) -> None:

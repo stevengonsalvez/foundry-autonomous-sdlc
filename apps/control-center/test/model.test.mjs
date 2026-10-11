@@ -130,9 +130,15 @@ test('billing story: the gap in plain words, honest when unread', () => {
   const state = sampleState();
   const s = billingSummary(state.cost);
   assert.equal(s.sentence, 'Azure billed 13.02 USD; the ledger estimated 1.87 USD; the ledger undercounts hosted compute by 7.0x.');
-  assert.equal(s.tone, 'danger');
-  assert.equal(s.overCap, true);
-  assert.equal(s.overHalt, true);
+  assert.equal(s.tone, 'info', '13.02 USD is under the 22 USD halt line');
+  assert.equal(s.overCap, false);
+  assert.equal(s.overHalt, false);
+  const over = structuredClone(state.cost);
+  over.billing.billed_usd = 26;
+  const o = billingSummary(over);
+  assert.equal(o.tone, 'danger');
+  assert.equal(o.overCap, true);
+  assert.equal(o.overHalt, true);
   const calm = structuredClone(state.cost);
   calm.billing.billed_usd = 1.5;
   calm.gap = null;

@@ -229,15 +229,25 @@ def test_billed_spend_is_shown_next_to_the_ledger_estimate_and_the_gap_is_never_
     assert cost["gap"]["gap_usd"] == pytest.approx(11.157, abs=3e-3) and cost["gap"]["ratio"] == pytest.approx(
         6.98, abs=0.02
     )
+    # 13.02 USD is inside the 25 USD cap and the 22 USD halt line
     assert (
-        cost["totals"]["over_cap"] is True
-        and cost["totals"]["halted"] is True
+        cost["totals"]["over_cap"] is False
+        and cost["totals"]["halted"] is False
         and cost["totals"]["ledger_usd"] == 0.004
     )
+    later = "2026-10-11T23:00:00Z"
+    over = events.make(
+        "billing.observed",
+        later,
+        {"source": "azure-cost-management", "billed_usd": 26.0, "currency": "USD", "as_of": later, "by_meter": []},
+        source="ledger",
+    )
+    past = fold.fold([*all_tickets(real), billed, metrics, invoked, over], later)["cost"]["totals"]
+    assert past["over_cap"] is True and past["halted"] is True
     t12 = next(t for t in doc["tickets"] if t["issue"] == 12)
     assert t12["cost"]["ledger_usd"] == 0.004 and t12["cost"]["usd"] == pytest.approx(0.073015, abs=1e-6)
     assert t12["cost"]["total_usd"] == pytest.approx(0.077015, abs=1e-6)  # agents plus the state-keeper share
-    assert t12["cost"]["cap_used_pct"] == pytest.approx(7.7, abs=0.05)
+    assert t12["cost"]["cap_used_pct"] == pytest.approx(2.57, abs=0.05)  # of the 3 USD issue cap
 
 
 def test_finished_tickets_older_than_30_days_move_to_the_archive(real) -> None:

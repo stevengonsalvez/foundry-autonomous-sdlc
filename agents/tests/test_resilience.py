@@ -336,12 +336,12 @@ def test_coder_failure_reason_and_model_spend_are_recorded(world: World) -> None
 
 def test_coder_job_budget_is_what_is_left_under_the_cap(world: World) -> None:
     gh, foundry = world.gh, world.foundry
-    foundry.usage = (1_000_000, 300_000)        # 0.85 USD per call
+    foundry.usage = (1_400_000, 1_250_000)      # 2.85 USD per call, 0.15 USD left under the 3 USD cap
     n = gh.open_issue("Show the estimated delivery date", A_BODY)
     gh.issues[n]["labels"] = ["type:feature"]
     st = state.State.new(n, "feature", "a")
     st.enter(state.TESTS_WRITTEN, "2026-10-10T11:00:00Z")
-    cost.record_call(st, "sdlc-test-designer", 1_000_000, 300_000)
+    cost.record_call(st, "sdlc-test-designer", 1_400_000, 1_250_000)
     gh.add_comment_as(n, "stevengonsalvez", state.render(st))
     tests = '{"tests":[{"path":"app/a.test.ts","content":"vitest"}]}'
     gh.add_comment_as(n, "stevengonsalvez", f"<!-- sdlc-tests:v1\n{tests}\n-->")

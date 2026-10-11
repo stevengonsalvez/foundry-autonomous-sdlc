@@ -64,7 +64,7 @@ terraform apply tfplan
 cd ../..
 ```
 
-The apply creates the resource group `rg-fsdlcd-demo`, the Foundry account and project, the `sdlc-default` model deployment (gpt-5-mini, 10k tokens per minute), Key Vault, App Insights and a 5 USD budget with alerts. Check the outputs the deploy script reads:
+The apply creates the resource group `rg-fsdlcd-demo`, the Foundry account and project, the `sdlc-default` model deployment (gpt-5-mini, 10k tokens per minute), Key Vault, App Insights and a 25 USD budget with alerts. Check the outputs the deploy script reads:
 
 ```bash
 terraform -chdir=infra/terraform output
@@ -246,23 +246,23 @@ The state branch is the ledger's alone. If anything else ever writes to it, the 
 
 Control center: published with the rest of the site at `/control-center/` by `pages.yml`; it needs no secret and no Azure access. Develop it with `cd apps/control-center && npm run dev`, see its README.
 
-**Spend finding (2026-10-11).** Azure Cost Management for `rg-fsdlcd-demo`, month to date, read at 20:00 UTC: 13.02 USD (9.83 GBP, all of it on 2026-10-10: Container Apps 6.74, Foundry Tools 5.97, models 0.30). The final report of the first run said 4.80 USD because Cost Management lags. The 5 USD cap was therefore already exceeded before the control center was built, and the 4.50 USD halt, which reads the orchestrator's own estimate, never protected it. This work deployed no coder job and no orchestrator tick; the only new compute is the ledger (see `docs/control-center-report.md` for the measured amount). The routine stays disabled.
+**Spend finding (2026-10-11).** Azure Cost Management for `rg-fsdlcd-demo`, month to date, read at 20:00 UTC: 13.02 USD (9.83 GBP, all of it on 2026-10-10: Container Apps 6.74, Foundry Tools 5.97, models 0.30). The final report of the first run said 4.80 USD because Cost Management lags. The original 5 USD cap was therefore already exceeded before the control center was built, and the halt, which reads the orchestrator's own estimate, never protected it. On 2026-10-12 the owner set the caps to 25 USD total, 22 USD halt and 3 USD per issue; 13.02 USD is inside them, but the halt still reads the estimate, so check the bill before each session. This work deployed no coder job and no orchestrator tick; the only new compute is the ledger (see `docs/control-center-report.md` for the measured amount). The routine stays disabled.
 
 ## 8. Cost caps
 
 | Cap | Value | Enforced by |
 |-----|-------|-------------|
 | Per issue | 1.00 USD of model and coder compute | Orchestrator, label `escalated:cost-cap` |
-| All work | New work halts at 4.50 USD total (`metrics.json` `totals.usd`) | Orchestrator |
-| Monthly budget | 5 USD, alerts only, data lags up to 72 hours | Terraform budget on the resource group |
+| All work | New work halts at 22 USD total (25 USD hard cap) (`metrics.json` `totals.usd`) | Orchestrator |
+| Monthly budget | 25 USD, alerts only, data lags up to 72 hours | Terraform budget on the resource group |
 | Model throughput | 10k tokens per minute on `sdlc-default` | Model deployment capacity |
-| Coder job | `max_iterations` 5, `deadline_s` 7200 (default and maximum: two hours of coder compute is about 1.15 USD at the real hosted rate, so the 1 USD issue cap stops a job after about 100 minutes), model loop spend 0.50 USD | Coder runtime hard stops |
-| Ledger | Counts toward both the 4.50 USD halt (`metrics.json` `totals.usd` includes `totals.ledger_usd`) and, as a share per ticket, the 1 USD issue cap in the control center | `cost.ledger_call_usd`; shown in the cost view |
+| Coder job | `max_iterations` 5, `deadline_s` 7200 (default and maximum: two hours of coder compute is about 1.15 USD at the real hosted rate, so the 3 USD issue cap does not stop a two hour job; the deadline does), model loop spend 0.50 USD | Coder runtime hard stops |
+| Ledger | Counts toward both the 22 USD halt (`metrics.json` `totals.usd` includes `totals.ledger_usd`) and, as a share per ticket, the 3 USD issue cap in the control center | `cost.ledger_call_usd`; shown in the cost view |
 | Hosted compute | Billed twice while a session is active: Foundry 'Hosted vCPU/Memory Usage' (0.10934 USD per vCPU-hour, 0.01298 per GiB-hour) and Azure Container Apps 'Standard vCPU/Memory Active Usage' (0.000034 USD per vCPU-second, 0.000004 per GiB-second), together 0.2318 USD per vCPU-hour and 0.0274 per GiB-hour | Idle timeouts: orchestrator 2 minutes (0.2865 USD per active hour at 1 vCPU, 2 GiB; a one minute tick plus the 2 minute idle tail is about 0.014 USD), coder 10 minutes (0.5730 USD per active hour at 2 vCPU, 4 GiB, and one 10 minute tail per finished job, about 0.095 USD) |
 
 agy usage is billed to the Antigravity plan behind the token and is not metered by the demo.
 
-Check the real spend against Azure, not against the ledger. The ledger (`metrics.json`) is an estimate; on 2026-10-10 it said 1.86 USD while Azure billed 4.80 USD. Cost Management lags by hours, so leave a margin below the 5 USD limit:
+Check the real spend against Azure, not against the ledger. The ledger (`metrics.json`) is an estimate; on 2026-10-10 it said 1.86 USD while Azure billed 4.80 USD. Cost Management lags by hours, so leave a margin below the 25 USD limit:
 
 ```bash
 SUB=$(az account show --query id -o tsv)
@@ -330,7 +330,7 @@ Findings from the security review of the coder (2026-10-10) that remain by desig
 
 Orchestrator findings (fail-open spend, trust boundary; 2026-10-10) that remain by design:
 
-- A per-issue spend floor from `metrics.json` only covers objects still listed: if a human both strips an issue's pipeline labels and deletes its state comment, its per-issue figure restarts, but `totals.usd` (and so the 4.50 USD halt) never decreases, and the issue gets no further spend unless it is relabelled.
+- A per-issue spend floor from `metrics.json` only covers objects still listed: if a human both strips an issue's pipeline labels and deletes its state comment, its per-issue figure restarts, but `totals.usd` (and so the 22 USD halt) never decreases, and the issue gets no further spend unless it is relabelled.
 - The `checks` and `head` sections of the reviewer input are trusted: they hold only the head sha, the PR number, the six check names and GitHub's own conclusion values; branch names, titles, bodies, commits, diffs and logs are passed as untrusted data.
 - MCP agents can ask `get_file_contents` for any repository the `github-mcp` PAT can read, which is every repository of the account: the orchestrator only narrows this (one read-only tool, a two to four call budget, a prompt rule naming this repository, schema validation and sanitising before anything is posted); it cannot technically prevent a cross-repository read.
 - A coder status that cannot be read is billed as estimated time (wall clock since start, less 15 minutes of normal poll gap), which can over-count briefly; over-counting only stops spend earlier.

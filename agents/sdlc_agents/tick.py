@@ -1388,7 +1388,7 @@ class _Tick:
 
     def _emit_ledger(self) -> tuple[float, dict[str, str | None]]:
         """Never raises: whatever goes wrong here is a note in the report, and the tick goes on to write
-        metrics.json (the spend record the 4.50 USD halt reads)."""
+        metrics.json (the spend record the 22 USD halt reads)."""
         try:
             return self._emit_ledger_unchecked()
         except Exception as exc:

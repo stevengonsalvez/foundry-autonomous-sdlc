@@ -57,8 +57,8 @@ def test_per_issue_spend_falls_back_to_metrics_when_the_state_comment_was_lost(w
     world.tick()
     assert state.READY in world.gh.labels(n)
     doc = json.loads(world.gh.files[("metrics", "metrics.json")])
-    doc["issues"][0]["cost"]["usd"] = 1.25              # what the state comment said before it was lost
-    doc["totals"]["usd"] = 1.25
+    doc["issues"][0]["cost"]["usd"] = 3.25              # what the state comment said before it was lost
+    doc["totals"]["usd"] = 3.25
     world.gh.files[("metrics", "metrics.json")] = json.dumps(doc)
     world.gh.comments[n] = []                            # the state comment is gone
     world.gh.issues[n]["labels"] = ["type:feature"]
@@ -68,24 +68,24 @@ def test_per_issue_spend_falls_back_to_metrics_when_the_state_comment_was_lost(w
 
 
 def test_repair_retry_is_not_made_past_the_issue_cap(world: World) -> None:
-    world.foundry.usage = (4_000_000, 1)                 # one answer costs just over 1 USD
+    world.foundry.usage = (13_000_000, 1)                # one answer costs just over 3 USD
     world.foundry.script("sdlc-req-gate", "not json", "not json")
     n = world.gh.open_issue("Show the estimated delivery date", A_BODY)
     report = world.tick()[0]
     assert len(world.foundry.calls) == 1 and actions(report, n) == ["gate:capped"]
     st = world.gh.state_of(n)
-    assert st["failures"] is None and st["cost"]["usd"] > 1.0
+    assert st["failures"] is None and st["cost"]["usd"] > 3.0
     world.tick()
     assert state.ESC_COST_CAP in world.gh.labels(n) and len(world.foundry.calls) == 1
 
 
 def test_transient_retries_are_not_made_past_the_issue_cap(world: World) -> None:
-    expensive = AgentRunError("not completed: rate_limit_exceeded", 4_000_000, 1, transient=True)
+    expensive = AgentRunError("not completed: rate_limit_exceeded", 13_000_000, 1, transient=True)
     world.foundry.fail_next["sdlc-req-gate"] = [expensive, expensive]
     n = world.gh.open_issue("Show the estimated delivery date", A_BODY)
     report = world.tick()[0]
     assert len(world.foundry.calls) == 1 and actions(report, n) == ["gate:capped"]
-    assert world.gh.state_of(n)["cost"]["usd"] > 1.0
+    assert world.gh.state_of(n)["cost"]["usd"] > 3.0
 
 
 def test_retries_stop_at_the_total_cap(world: World) -> None:

@@ -220,11 +220,11 @@ test('gateRates: empty input has no rates', () => {
 test('costSummary: totals, cap and per issue line', () => {
   const c = costSummary(parsedFixture.metrics);
   assert.equal(c.total, 1.9915);
-  assert.equal(c.cap, 5);
-  assert.ok(Math.abs(c.percentOfCap - 39.83) < 0.01);
-  assert.ok(Math.abs(c.remaining - 3.0085) < 1e-9);
+  assert.equal(c.cap, 25);
+  assert.ok(Math.abs(c.percentOfCap - 7.966) < 0.01);
+  assert.ok(Math.abs(c.remaining - 23.0085) < 1e-9);
   assert.equal(c.haltReached, false);
-  assert.deepEqual(c.rows.filter((r) => r.overLine).map((r) => r.ref), [10]);
+  assert.deepEqual(c.rows.filter((r) => r.overLine).map((r) => r.ref), []); // none is over the 3 USD line
   assert.equal(c.callsTotal, 82);
   assert.ok(Math.abs(c.rowTotal - 1.9503) < 1e-9);
   assert.equal(c.orchestrator, 0.0412);
@@ -242,10 +242,10 @@ test('costSummary: sums rows when totals.usd is missing, tolerates issues withou
 });
 
 test('costSummary: over the cap is clamped for the bar but not for the figure', () => {
-  const m = ok({ version: 1, totals: { usd: 6 }, issues: [{ number: 1, cost: { usd: 6 } }] });
+  const m = ok({ version: 1, totals: { usd: 30 }, issues: [{ number: 1, cost: { usd: 30 } }] });
   const c = costSummary(m);
   assert.equal(c.fractionOfCap, 1);
-  assert.equal(c.total, 6);
+  assert.equal(c.total, 30);
   assert.equal(c.remaining, 0);
   assert.equal(c.haltReached, true);
 });

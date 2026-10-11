@@ -88,8 +88,8 @@ variable "model_deployment_name" {
 
 variable "budget_amount" {
   type        = number
-  default     = 5
-  description = "Monthly resource-group budget in USD. The demo hard cap is 5 USD in total. Alerts lag usage by up to about 72 hours, so the TPM cap and the per-issue cost cap in the agents are the real brakes."
+  default     = 25
+  description = "Monthly resource-group budget in USD. The demo hard cap is 25 USD in total. Alerts lag usage by up to about 72 hours, so the TPM cap and the per-issue cost cap in the agents are the real brakes."
 }
 
 variable "budget_alert_thresholds" {

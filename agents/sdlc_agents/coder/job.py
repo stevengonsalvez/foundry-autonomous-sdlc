@@ -27,11 +27,11 @@ from sdlc_agents.ports import REPO
 
 DEFAULT_MAX_ITERATIONS = 5
 MAX_ITERATIONS_CAP = 20
-# Two hours: coder compute costs about 0.27 USD per hour and the per-issue cap is 1 USD.
+# Two hours: coder compute costs about 0.27 USD per hour and the per-issue cap is 3 USD.
 DEFAULT_DEADLINE_S = 7200
 MIN_DEADLINE_S = 60
 DEFAULT_MAX_MODEL_USD = 0.50
-MAX_MODEL_USD_CAP = 1.00   # the per-issue cost cap; one job can never be allowed more
+MAX_MODEL_USD_CAP = 3.00   # the per-issue cost cap; one job can never be allowed more
 LOG_TAIL_CHARS = 4000
 
 _JOB_ID = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,63}")

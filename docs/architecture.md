@@ -119,7 +119,7 @@ A routine fires `sdlc-orchestrator` every five minutes (cron `*/5 * * * *`, the 
 3. Calls the coder (`start` or `status`) when an object is `stage:building`. The status call also keeps the coder session alive (sandbox idle timeout is at most 60 minutes).
 4. Writes `metrics.json` to branch `metrics` and dispatches `pages.yml`.
 
-Every LLM call is made with the cumulative issue cost checked first. Cost over 1 USD per issue puts the object in `escalated:cost-cap`. Total spend is tracked in `metrics.json` (`totals.usd`, which never decreases) and the loop halts new work at 4.50 USD. Issue cost counts prompt agent tokens, coder compute (2 vCPU, 4 GiB: 0.2706 USD per hour of reported job time) and the coder's own model spend; each tick also adds the orchestrator's compute (1 vCPU, 2 GiB, tick seconds plus the 2 minute idle timeout) to `totals.orchestrator_usd` and `totals.usd`. Merged work is always released: past a cap the notes are written without a model call. Every coder job carries `deadline_s` 7200 and `max_model_usd` = what is left under the issue cap (at most 0.50); a job reported `interrupted` is started again with the same job id (at most three times).
+Every LLM call is made with the cumulative issue cost checked first. Cost over 3 USD per issue puts the object in `escalated:cost-cap`. Total spend is tracked in `metrics.json` (`totals.usd`, which never decreases) and the loop halts new work at 22 USD. Issue cost counts prompt agent tokens, coder compute (2 vCPU, 4 GiB: 0.2706 USD per hour of reported job time) and the coder's own model spend; each tick also adds the orchestrator's compute (1 vCPU, 2 GiB, tick seconds plus the 2 minute idle timeout) to `totals.orchestrator_usd` and `totals.usd`. Merged work is always released: past a cap the notes are written without a model call. Every coder job carries `deadline_s` 7200 and `max_model_usd` = what is left under the issue cap (at most 0.50); a job reported `interrupted` is started again with the same job id (at most three times).
 
 GitHub port additions used by the orchestrator: `create_commit(message, *, parent_sha)` (the lock ref points at a fresh empty commit, so its tip time is the lock time), `get_check_log(sha, name)` (ci-triage input), `list_pull_files(number)` (merge gate), and `CheckRun.pull_requests` (runs GitHub ties to a PR).
 
@@ -220,7 +220,7 @@ After a merge: the release-notes agent writes notes from the PR title, body and 
 
 Additions to schema version 1 (all optional for readers): `totals.escalated`, `totals.orchestrator_usd`; per entry `kind` (`issue` or `pr`; the maintenance PR has `number: null`, `pr` set and scenario `d-maintenance`), `escalation`, `cost.coder_model_usd`, `deferred` (the transient error that deferred the object this tick, else null; `totals.deferred` counts them), `gate_attempts` (each gate's conclusions per evaluated head sha, oldest first: first element is the first attempt, last is the eventual result); per gate in `gate_pass_rates`, `first_pass` and `first_fail`. The stage the object is in now has `seconds: 0` and `in_progress: true`.
 
-Dashboard panels: cycle time per stage (median and per issue), defect owner and resolution time, cost per issue (table plus total against the 5 USD cap), gate pass rates (first-attempt and eventual).
+Dashboard panels: cycle time per stage (median and per issue), defect owner and resolution time, cost per issue (table plus total against the 25 USD cap), gate pass rates (first-attempt and eventual).
 
 ## Ledger and control center
 

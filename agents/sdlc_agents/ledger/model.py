@@ -28,9 +28,9 @@ from sdlc_agents.ports import REPO
 from sdlc_agents.sanitise import one_line, redact_secrets
 
 VERSION = 1
-ISSUE_CAP_USD = 1.0
-HALT_USD = 4.5
-TOTAL_CAP_USD = 5.0
+ISSUE_CAP_USD = 3.0
+HALT_USD = 22.0
+TOTAL_CAP_USD = 25.0
 
 BOARD_STAGES = ("backlog", "refining", "feasible", "tests", "building", "review", "staging", "prod", "escalated")
 
@@ -153,7 +153,7 @@ def cost_block(data: dict[str, Any], *, ledger_usd: float = 0.0) -> dict[str, An
     model_usd = round(sum(r["usd"] for r in by_agent.values()), 6)
     coder_usd = round(float(raw.get("coder_usd", 0) or 0), 6)
     coder_model = round(float(raw.get("coder_model_usd", 0) or 0), 6)
-    # The state comment's usd is the orchestrator's own total (it is the number the 1 USD cap checks).
+    # The state comment's usd is the orchestrator's own total (it is the number the 3 USD cap checks).
     state_usd = round(float(raw.get("usd", 0) or 0), 6)
     # `usd` is what the agents spent, the figure the orchestrator's own ledger holds, so the two can be compared;
     # the state-keeper's compute share sits beside it and counts toward the cap in `total_usd`.
