@@ -112,7 +112,7 @@ class TestBootstrap:
         fake = FakeGitHub()
         run_phase(fake, "bootstrap")
 
-        assert set(fake.labels) == set(sr.LABELS) and len(sr.LABELS) == 27
+        assert set(fake.labels) == set(sr.LABELS) and len(sr.LABELS) == 28
         assert fake.repo["allow_merge_commit"] is True
         assert fake.repo["allow_squash_merge"] is False
         assert fake.repo["allow_rebase_merge"] is False
@@ -199,13 +199,16 @@ class TestBootstrap:
     def test_labels_match_the_architecture_doc(self) -> None:
         doc = (ROOT / "docs/architecture.md").read_text()
         section = doc.split("Label set", 1)[1].split("### State comment", 1)[0]
-        documented = set(
-            re.findall(
-                r"`((?:stage|escalated|type|bug|severity|owner|agent|maintenance):[a-z0-9-]+)`",
-                section,
-            )
-        )
+        label = r"`((?:stage|escalated|type|bug|severity|owner|agent|maintenance):[a-z0-9-]+)`"
+        documented = set(re.findall(label, section))
+        # The release pipeline owns one label of its own; docs/cd.md documents it.
+        documented |= set(re.findall(label, (ROOT / "docs/cd.md").read_text()))
         assert documented == set(sr.LABELS)
+
+    def test_the_deploy_failed_label_is_terminal_red(self) -> None:
+        color, description = sr.LABELS["escalated:deploy-failed"]
+        assert color == sr.LABELS["escalated:build-failed"][0]
+        assert "rolled back" in description
 
 
 class TestProtect:
