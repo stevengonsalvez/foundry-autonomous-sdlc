@@ -2,9 +2,9 @@
 // No DOM, no I/O: everything here is a function of its arguments so it can be unit tested.
 
 export const SCHEMA_VERSION = 1;
-export const COST_CAP_USD = 5;
-export const ISSUE_COST_LINE_USD = 1;
-export const HALT_USD = 4.5;
+export const COST_CAP_USD = 25;
+export const ISSUE_COST_LINE_USD = 3;
+export const HALT_USD = 22;
 
 export const STAGE_ORDER = [
   'stage:needs-refinement',
