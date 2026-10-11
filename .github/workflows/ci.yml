@@ -322,7 +322,8 @@ jobs:
         run: >-
           uvx --from "ruff==$RUFF_VERSION" ruff check
           --isolated --target-version py312 --line-length 100 --select E,F,I,UP,B,SIM,RUF
-          scripts/gates scripts/tests/gates scripts/setup_repo.py scripts/tests/test_setup_repo.py
+          scripts/gates scripts/tests/gates scripts/cd scripts/tests/cd
+          scripts/setup_repo.py scripts/tests/test_setup_repo.py
 
   # Not a required check: the Python agents package.
   agents:

@@ -1,0 +1,580 @@
+name: CD
+
+# Continuous deployment: a merged PR reaches /staging/ of the site, and the site root (prod)
+# only after Playwright smoke on staging plus a soak with no new failure. No human step.
+#
+#   plan ─▶ build ─▶ stage ─▶ smoke ─▶ soak ─▶ promote
+#                      any failure ─▶ rollback (flags the ticket, creates no prod tag)
+#                      a newer run cancels this one ─▶ superseded
+#
+# See docs/cd.md. State lives on the `deploy` branch (deploy.json plus the built apps), written
+# only by this workflow with GITHUB_TOKEN; pages.yml renders it into the live site. No secrets
+# and no Azure credentials, ever.
+#
+# `workflow_run` workflows always run from the default branch, so a pull request can never change
+# the CD that deploys it. PR titles, bodies and branch names are read inside scripts/cd/plan.py
+# and never reach a shell: this file passes values to scripts only through `env:`.
+
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      sha:
+        description: "Commit on main to deploy (empty: main HEAD)"
+        type: string
+        default: ""
+      inject_fault:
+        description: "Break the built artifact on purpose to rehearse the rollback"
+        type: choice
+        options: [none, smoke]
+        default: none
+      soak_minutes:
+        description: "Minutes of soak on staging before prod (0 to 30)"
+        type: string
+        default: "10"
+
+# A newer merge supersedes a soaking older one. Runs that will do nothing (CI failed, or CI ran
+# for something other than a push) get their own group so they cannot cancel a real deployment.
+concurrency:
+  group: ${{ (github.event_name == 'workflow_dispatch' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && 'cd' || format('cd-ignored-{0}', github.run_id) }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    shell: bash -euo pipefail {0}
+
+# Jobs ask for what they need; nothing is granted here.
+permissions:
+  contents: read
+
+env:
+  NODE_VERSION: "22"
+  PYTHON_VERSION: "3.12"
+  RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+
+jobs:
+  plan:
+    name: plan
+    if: >-
+      github.ref == 'refs/heads/main' &&
+      (github.event_name == 'workflow_dispatch' ||
+      (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push'))
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      sha: ${{ steps.plan.outputs.sha }}
+      short: ${{ steps.plan.outputs.short }}
+      version: ${{ steps.plan.outputs.version }}
+      pr: ${{ steps.plan.outputs.pr }}
+      issue: ${{ steps.plan.outputs.issue }}
+      includes: ${{ steps.plan.outputs.includes }}
+      proceed: ${{ steps.plan.outputs.proceed }}
+      reason: ${{ steps.plan.outputs.reason }}
+      prod_url: ${{ steps.plan.outputs.prod_url }}
+      staging_url: ${{ steps.plan.outputs.staging_url }}
+    steps:
+      # The tooling is the version this workflow was defined with, the same in every job of the run.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          path: tools
+          fetch-depth: 0
+          sparse-checkout: scripts
+          persist-credentials: false
+
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Resolve the commit, its PR and issue, its version and what it carries
+        id: plan
+        working-directory: tools
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          EVENT_NAME: ${{ github.event_name }}
+          SHA_INPUT: ${{ inputs.sha }}
+          RUN_SHA: ${{ github.event.workflow_run.head_sha }}
+          SOAK_MINUTES: ${{ inputs.soak_minutes || '10' }}
+        run: python -m scripts.cd.plan resolve
+
+  build:
+    name: build
+    needs: plan
+    if: needs.plan.outputs.proceed == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    env:
+      SHA: ${{ needs.plan.outputs.sha }}
+      SHORT: ${{ needs.plan.outputs.short }}
+      VERSION: ${{ needs.plan.outputs.version }}
+      INJECT_FAULT: ${{ inputs.inject_fault || 'none' }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          path: tools
+          sparse-checkout: scripts
+          persist-credentials: false
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.plan.outputs.sha }}
+          path: src
+          persist-credentials: false
+
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: src/app/package-lock.json
+
+      - name: Install
+        working-directory: src/app
+        run: npm ci
+
+      - name: Build the app for Pages, with a relative base so one artifact serves prod and /staging/
+        working-directory: src/app
+        run: npm run build:pages
+
+      # The fault is applied to the BUILT files, never to the source, and recorded in build.json.
+      - name: Stamp the artifact
+        working-directory: tools
+        run: |
+          dist="$GITHUB_WORKSPACE/src/app/web/dist-pages"
+          if [[ "$INJECT_FAULT" == "smoke" ]]; then
+            python -m scripts.cd.artifact fault-smoke --dist "$dist"
+            echo "Fault injected on purpose (inject_fault=smoke): the smoke test is expected to fail and roll back." >> "$GITHUB_STEP_SUMMARY"
+          fi
+          python -m scripts.cd.artifact stamp --dist "$dist" --sha "$SHA" --short "$SHORT" \
+            --run-id "$GITHUB_RUN_ID" --version "$VERSION" --fault "$INJECT_FAULT"
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: site-${{ needs.plan.outputs.sha }}
+          path: src/app/web/dist-pages
+          if-no-files-found: error
+          retention-days: 7
+          overwrite: true
+
+  stage:
+    name: stage
+    needs: [plan, build]
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: write
+      actions: write
+      deployments: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      SHA: ${{ needs.plan.outputs.sha }}
+      VERSION: ${{ needs.plan.outputs.version }}
+      PR: ${{ needs.plan.outputs.pr }}
+      ISSUE: ${{ needs.plan.outputs.issue }}
+      STAGING_URL: ${{ needs.plan.outputs.staging_url }}
+      CD_INCLUDES: ${{ needs.plan.outputs.includes }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          path: tools
+          sparse-checkout: scripts
+          persist-credentials: false
+
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: site-${{ needs.plan.outputs.sha }}
+          path: artifact
+
+      # Git pushes to the deploy branch use this credential helper; the token never lands in a URL.
+      - name: Let git push with the workflow token
+        run: gh auth setup-git
+
+      - name: Open the staging deployment
+        working-directory: tools
+        run: >-
+          python -m scripts.cd.release_ops deploy-start --repo "$GITHUB_REPOSITORY" --env staging
+          --sha "$SHA" --log-url "$RUN_URL" --env-url "$STAGING_URL"
+
+      - name: Copy the build to staging/ on the deploy branch
+        working-directory: tools
+        run: >-
+          python -m scripts.cd.deploy_branch stage --sha "$SHA" --run-id "$GITHUB_RUN_ID"
+          --run-url "$RUN_URL" --version "$VERSION" --pr "$PR" --issue "$ISSUE"
+          --artifact "$GITHUB_WORKSPACE/artifact"
+
+      - name: Publish the site and wait for it
+        working-directory: tools
+        run: python -m scripts.cd.pages_deploy --repo "$GITHUB_REPOSITORY"
+
+      - name: Wait until staging serves this build
+        working-directory: tools
+        run: >-
+          python -m scripts.cd.verify_live --url "${STAGING_URL}build.json" --sha "$SHA"
+          --timeout 360 --interval 15
+
+      - name: Mark the staging deployment successful
+        working-directory: tools
+        run: >-
+          python -m scripts.cd.release_ops deploy-mark --repo "$GITHUB_REPOSITORY" --env staging
+          --sha "$SHA" --state success --log-url "$RUN_URL" --env-url "$STAGING_URL"
+
+  smoke:
+    name: smoke
+    needs: [plan, stage]
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    steps:
+      # The specs at the commit being deployed, so they match the app they test.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.plan.outputs.sha }}
+          path: src
+          persist-credentials: false
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: src/app/package-lock.json
+
+      - name: Install
+        working-directory: src/app
+        run: npm ci
+
+      - name: Install Chromium
+        working-directory: src/app
+        run: npx playwright install --with-deps chromium
+
+      - name: Smoke tests against live staging
+        working-directory: src/app
+        env:
+          SMOKE_URL: ${{ needs.plan.outputs.staging_url }}
+          EXPECTED_SHA: ${{ needs.plan.outputs.sha }}
+        run: npm run smoke --workspace @parcel/e2e
+
+      - name: Keep the Playwright report and traces
+        if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: smoke-report
+          path: |
+            src/app/e2e/playwright-report
+            src/app/e2e/test-results
+          if-no-files-found: ignore
+          retention-days: 7
+
+  soak:
+    name: soak
+    needs: [plan, smoke]
+    runs-on: ubuntu-latest
+    timeout-minutes: 50
+    permissions:
+      contents: read
+    env:
+      SMOKE_URL: ${{ needs.plan.outputs.staging_url }}
+      EXPECTED_SHA: ${{ needs.plan.outputs.sha }}
+      SOAK_MINUTES: ${{ inputs.soak_minutes || '10' }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          path: tools
+          sparse-checkout: scripts
+          persist-credentials: false
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.plan.outputs.sha }}
+          path: src
+          persist-credentials: false
+
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: src/app/package-lock.json
+
+      - name: Install
+        working-directory: src/app
+        run: npm ci
+
+      - name: Install Chromium
+        working-directory: src/app
+        run: npx playwright install --with-deps chromium
+
+      # Probes every 30 seconds; the first, middle and last also run the browser smoke.
+      # Any failed probe (after one immediate repeat) fails the release.
+      - name: Soak staging
+        working-directory: tools
+        run: >-
+          python -m scripts.cd.soak --url "$SMOKE_URL" --expect-sha "$EXPECTED_SHA"
+          --minutes "$SOAK_MINUTES" --interval 30
+          --browser-cmd "npm run smoke --workspace @parcel/e2e"
+          --browser-cwd "$GITHUB_WORKSPACE/src/app"
+
+  promote:
+    name: promote
+    needs: [plan, stage, smoke, soak]
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: write
+      actions: write
+      deployments: write
+      issues: write
+      pull-requests: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      SHA: ${{ needs.plan.outputs.sha }}
+      VERSION: ${{ needs.plan.outputs.version }}
+      PR: ${{ needs.plan.outputs.pr }}
+      ISSUE: ${{ needs.plan.outputs.issue }}
+      PROD_URL: ${{ needs.plan.outputs.prod_url }}
+      SOAK_MINUTES: ${{ inputs.soak_minutes || '10' }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          path: tools
+          sparse-checkout: scripts
+          persist-credentials: false
+
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Let git push with the workflow token
+        run: gh auth setup-git
+
+      # prod-prev/ gets the old prod, prod/ gets staging/. A re-run for the sha that is already
+      # prod changes nothing here, so prod-prev/ never ends up holding the build just promoted.
+      - name: Promote staging to prod on the deploy branch
+        id: promote
+        working-directory: tools
+        run: >-
+          python -m scripts.cd.deploy_branch promote --sha "$SHA" --run-id "$GITHUB_RUN_ID"
+          --run-url "$RUN_URL" --version "$VERSION"
+
+      - name: Publish the site and wait for it
+        working-directory: tools
+        run: python -m scripts.cd.pages_deploy --repo "$GITHUB_REPOSITORY"
+
+      - name: Wait until the site root serves this build
+        working-directory: tools
+        run: >-
+          python -m scripts.cd.verify_live --url "${PROD_URL}build.json" --sha "$SHA"
+          --timeout 360 --interval 15
+
+      # The tag is created only now, after prod is live and verified, so a failure before this
+      # point can never leave a prod tag behind.
+      - name: Tag the release
+        working-directory: tools
+        env:
+          TAG: ${{ steps.promote.outputs.tag }}
+        run: python -m scripts.cd.release_ops create-tag --repo "$GITHUB_REPOSITORY" --tag "$TAG" --sha "$SHA"
+
+      # Bookkeeping after the release is live: a failure here must not roll prod back.
+      - name: Record the production deployment
+        continue-on-error: true
+        working-directory: tools
+        run: >-
+          python -m scripts.cd.release_ops deploy-start --repo "$GITHUB_REPOSITORY"
+          --env production --sha "$SHA" --log-url "$RUN_URL" --env-url "$PROD_URL" --state success
+
+      - name: Tell the pull requests and issues
+        continue-on-error: true
+        working-directory: tools
+        env:
+          CD_INCLUDES: ${{ steps.promote.outputs.includes }}
+        run: >-
+          python -m scripts.cd.release_ops comment-release --repo "$GITHUB_REPOSITORY"
+          --sha "$SHA" --version "$VERSION" --run-url "$RUN_URL" --soak-minutes "$SOAK_MINUTES"
+          --pr "$PR" --issue "$ISSUE"
+
+  rollback:
+    name: rollback
+    needs: [plan, build, stage, smoke, soak, promote]
+    if: >-
+      !cancelled() &&
+      (needs.build.result == 'failure' || needs.stage.result == 'failure' ||
+      needs.smoke.result == 'failure' || needs.soak.result == 'failure' ||
+      needs.promote.result == 'failure')
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: write
+      actions: write
+      deployments: write
+      issues: write
+      pull-requests: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      SHA: ${{ needs.plan.outputs.sha }}
+      VERSION: ${{ needs.plan.outputs.version }}
+      PR: ${{ needs.plan.outputs.pr }}
+      ISSUE: ${{ needs.plan.outputs.issue }}
+      PROD_URL: ${{ needs.plan.outputs.prod_url }}
+      STAGING_URL: ${{ needs.plan.outputs.staging_url }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          path: tools
+          sparse-checkout: scripts
+          persist-credentials: false
+
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Let git push with the workflow token
+        run: gh auth setup-git
+
+      - name: Name the failed job
+        id: failed
+        working-directory: tools
+        env:
+          NEEDS_JSON: ${{ toJSON(needs) }}
+        run: python -m scripts.cd.plan failed-job
+
+      # staging/ goes back to what prod holds; prod/ goes back to prod-prev/ only if this run
+      # had already overwritten it. No prod tag exists yet for a failure before the tag step.
+      - name: Restore the last good build on the deploy branch
+        id: restore
+        working-directory: tools
+        env:
+          FAILED_JOB: ${{ steps.failed.outputs.job }}
+        run: >-
+          python -m scripts.cd.deploy_branch rollback --sha "$SHA" --run-id "$GITHUB_RUN_ID"
+          --run-url "$RUN_URL" --version "$VERSION" --pr "$PR" --issue "$ISSUE"
+          --reason "$FAILED_JOB"
+
+      - name: Record the failure and the restored build as deployments
+        working-directory: tools
+        env:
+          PROD_OVERWRITTEN: ${{ steps.restore.outputs.prod_overwritten }}
+          RESTORED_SHA: ${{ steps.restore.outputs.restored_sha }}
+        run: |
+          ops=(python -m scripts.cd.release_ops)
+          "${ops[@]}" deploy-mark --repo "$GITHUB_REPOSITORY" --env staging --sha "$SHA" \
+            --state failure --log-url "$RUN_URL"
+          if [[ "$PROD_OVERWRITTEN" == "true" ]]; then
+            "${ops[@]}" deploy-mark --repo "$GITHUB_REPOSITORY" --env production --sha "$SHA" \
+              --state failure --log-url "$RUN_URL"
+          fi
+          if [[ -n "$RESTORED_SHA" ]]; then
+            "${ops[@]}" deploy-start --repo "$GITHUB_REPOSITORY" --env staging --sha "$RESTORED_SHA" \
+              --log-url "$RUN_URL" --env-url "$STAGING_URL" --state success
+            if [[ "$PROD_OVERWRITTEN" == "true" ]]; then
+              "${ops[@]}" deploy-start --repo "$GITHUB_REPOSITORY" --env production \
+                --sha "$RESTORED_SHA" --log-url "$RUN_URL" --env-url "$PROD_URL" --state success
+            fi
+          fi
+
+      - name: Publish the restored site and wait for it
+        working-directory: tools
+        run: python -m scripts.cd.pages_deploy --repo "$GITHUB_REPOSITORY"
+
+      # Both build.json files must name the build prod holds (or be gone when there is none),
+      # which also proves the site root did not change.
+      - name: Check the live site is back on the last good build
+        working-directory: tools
+        env:
+          RESTORED_SHA: ${{ steps.restore.outputs.restored_sha }}
+        run: |
+          for url in "${STAGING_URL}build.json" "${PROD_URL}build.json"; do
+            if [[ -n "$RESTORED_SHA" ]]; then
+              python -m scripts.cd.verify_live --url "$url" --sha "$RESTORED_SHA" --timeout 360 --interval 15
+            else
+              python -m scripts.cd.verify_live --url "$url" --expect-absent --timeout 360 --interval 15
+            fi
+          done
+
+      # Last, and whatever happened above, so the ticket is flagged even if the live check failed.
+      - name: Flag the ticket
+        if: always()
+        working-directory: tools
+        env:
+          FAILED_JOB: ${{ steps.failed.outputs.job || 'unknown' }}
+          ROLLBACK_OK: ${{ job.status == 'success' }}
+          RESTORED_VERSION: ${{ steps.restore.outputs.restored_version }}
+        run: >-
+          python -m scripts.cd.flag_ticket --repo "$GITHUB_REPOSITORY" --issue "$ISSUE" --pr "$PR"
+          --run-id "$GITHUB_RUN_ID" --run-url "$RUN_URL" --reason "$FAILED_JOB"
+          --version "$VERSION" --rollback-ok "$ROLLBACK_OK" --restored-version "$RESTORED_VERSION"
+
+  superseded:
+    name: superseded
+    needs: [plan, build, stage, smoke, soak, promote, rollback]
+    if: cancelled() && needs.plan.outputs.sha != ''
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+      deployments: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      SHA: ${{ needs.plan.outputs.sha }}
+      VERSION: ${{ needs.plan.outputs.version }}
+      PR: ${{ needs.plan.outputs.pr }}
+      ISSUE: ${{ needs.plan.outputs.issue }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          path: tools
+          sparse-checkout: scripts
+          persist-credentials: false
+
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Let git push with the workflow token
+        run: gh auth setup-git
+
+      - name: Record the run as skipped
+        id: skip
+        working-directory: tools
+        run: >-
+          python -m scripts.cd.deploy_branch skip --sha "$SHA" --run-id "$GITHUB_RUN_ID"
+          --run-url "$RUN_URL" --version "$VERSION" --pr "$PR" --issue "$ISSUE"
+          --reason "superseded by a newer run or cancelled"
+
+      - name: Close its staging deployment
+        working-directory: tools
+        run: >-
+          python -m scripts.cd.release_ops deploy-mark --repo "$GITHUB_REPOSITORY" --env staging
+          --sha "$SHA" --state inactive --log-url "$RUN_URL"
+
+      # A cancel that landed after the promote push left prod promoted without its tag.
+      - name: Tag a promotion that was cancelled after its push
+        if: steps.skip.outputs.promoted == 'true' && steps.skip.outputs.tag != ''
+        working-directory: tools
+        env:
+          TAG: ${{ steps.skip.outputs.tag }}
+        run: python -m scripts.cd.release_ops create-tag --repo "$GITHUB_REPOSITORY" --tag "$TAG" --sha "$SHA"
