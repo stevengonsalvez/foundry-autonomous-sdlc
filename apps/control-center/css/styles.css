@@ -301,6 +301,8 @@ h3 { font-size: var(--fs-sm); font-weight: 650; color: var(--ink-2); letter-spac
   font-size: var(--fs-xs); font-weight: 650; line-height: 1.5; white-space: nowrap; max-inline-size: 100%;
 }
 .badge-type { text-transform: capitalize; }
+/* A badge holds a short word, but its text can come from outside: let it wrap rather than push the page wide. */
+.badge { max-inline-size: 100%; white-space: normal; overflow-wrap: anywhere; }
 .tone-good { background: var(--good-bg); color: var(--good-ink); }
 .tone-bad { background: var(--bad-bg); color: var(--bad-ink); }
 .tone-warn { background: var(--warn-bg); color: var(--warn-ink); }
