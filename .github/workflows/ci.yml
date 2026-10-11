@@ -296,6 +296,35 @@ jobs:
           --head "$HEAD_SHA"
           --branch "$BRANCH"
 
+  # Not a required check: the control center's unit, browser and accessibility tests. The browser
+  # tests use the Playwright install of the app workspace.
+  control-center:
+    name: control-center
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+
+      - name: Install the app workspace (Playwright and axe live there)
+        working-directory: app
+        run: npm ci
+
+      - name: Install Chromium
+        working-directory: app
+        run: npx playwright install --with-deps chromium
+
+      - name: Test the control center
+        working-directory: apps/control-center
+        run: npm test
+
   # Not a required check: tests for the gate scripts and the repo setup script.
   gates-tests:
     name: gates-tests
