@@ -235,7 +235,9 @@ def test_billed_spend_is_shown_next_to_the_ledger_estimate_and_the_gap_is_never_
         and cost["totals"]["ledger_usd"] == 0.004
     )
     t12 = next(t for t in doc["tickets"] if t["issue"] == 12)
-    assert t12["cost"]["ledger_usd"] == 0.004 and t12["cost"]["usd"] == pytest.approx(0.077015, abs=1e-6)
+    assert t12["cost"]["ledger_usd"] == 0.004 and t12["cost"]["usd"] == pytest.approx(0.073015, abs=1e-6)
+    assert t12["cost"]["total_usd"] == pytest.approx(0.077015, abs=1e-6)  # agents plus the state-keeper share
+    assert t12["cost"]["cap_used_pct"] == pytest.approx(7.7, abs=0.05)
 
 
 def test_finished_tickets_older_than_30_days_move_to_the_archive(real) -> None:

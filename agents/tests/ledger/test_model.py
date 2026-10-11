@@ -108,3 +108,13 @@ def test_every_real_ticket_validates_as_an_event(real) -> None:
         t = ticket_of(item)
         events.validate(events.make("ticket.updated", t["updated_at"], {"ticket": t}, issue=t["issue"]))
         assert t["stage"] in model.BOARD_STAGES
+
+
+def test_a_tickets_cost_is_the_orchestrators_figure_and_the_ledger_share_sits_beside_it(real) -> None:
+    from sdlc_agents.ledger import fold
+    from tests.ledger.conftest import ticket_event
+
+    doc = fold.fold([ticket_event(item) for item in real.values()], "2026-10-11T20:00:00Z")
+    for t in doc["tickets"]:
+        assert t["cost"]["usd"] == pytest.approx(real[t["issue"]]["state_data"]["cost"]["usd"], rel=0.05)
+        assert t["cost"]["total_usd"] == pytest.approx(t["cost"]["usd"] + t["cost"]["ledger_usd"], abs=1e-6)

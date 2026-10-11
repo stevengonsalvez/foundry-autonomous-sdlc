@@ -194,6 +194,7 @@
   }
  ],
  "archived": 0,
+ "archived_ids": [],
  "board_stages": [
   "backlog",
   "refining",
@@ -239,7 +240,7 @@
   "gap": {
    "billed_usd": 13.0194,
    "gap_usd": 11.1525,
-   "ledger_usd": 1.866893,
+   "ledger_usd": 1.866899,
    "note": "Azure billed spend lags by hours and counts every meter; the ledger estimates from list prices.",
    "ratio": 6.97
   },
@@ -267,7 +268,7 @@
    "ledger_usd": 0.006,
    "orchestrator_usd": 0.761619,
    "over_cap": true,
-   "usd": 1.866893
+   "usd": 1.866899
   }
  },
  "deploy": {
@@ -908,28 +909,28 @@
   },
   "mode": "hosted",
   "recent_ids": [
-   "ee98a64148f7482d",
-   "bbe6d61e4ca635c8",
-   "d682b001fbc22847",
-   "5e6f5f241a290c97",
-   "fb61748e219ad795",
-   "93efc8193f33b827",
-   "2e27a21a774d0e7c",
-   "3593a51cdd631fbd",
-   "c85d770dcd4dac65",
-   "7866f3cda5453fa4",
-   "688cf7c2a21fda2c",
-   "a6630246161c55e6",
-   "5b01cf405da2abf6",
-   "6bf92d9d7f95b2ed",
-   "70e20dcf7c30a281",
-   "45115892a67f2088",
-   "4d2ad6cc32b24403",
-   "4c7cef3d8eebef6d",
-   "6bf169d5ed38e64c",
-   "4821a5aa8aab0cf6",
-   "34ad6450403d144a",
-   "83ab884a3ab6e065",
+   "9d320691a7b56ecb",
+   "4effb29edb398811",
+   "b281779a39fe75dc",
+   "b882be62031bd69c",
+   "5cf21f208f9e0a76",
+   "09291c3754fd8370",
+   "4a61b4591b551074",
+   "fa43d61beec7f097",
+   "7c136b7ae26c35a4",
+   "d7f635dca9bf5ea9",
+   "3e9445f1f887699c",
+   "bb4ab73596946efb",
+   "46beb985083678f2",
+   "35bc929d982cfd03",
+   "5b71e866797baf6d",
+   "1722affc72d1fc5f",
+   "1ef3f76cca3da359",
+   "c5223cc440dddf87",
+   "f6f8a0ee666b9e36",
+   "fa071c9121f6baab",
+   "2ef07d316883cd35",
+   "67571ed0933e970f",
    "3ce8bbe0b06b03d7",
    "354bec80b474ed08",
    "109a09fc55afe7c8",
@@ -976,9 +977,10 @@
     "model_usd": 0.001248,
     "tokens_in": 1463,
     "tokens_out": 441,
+    "total_usd": 0.001248,
     "usd": 0.001248
    },
-   "digest": "b08549be3f71",
+   "digest": "e8fee67f1d1e",
    "env": "none",
    "escalation": {
     "at": "2026-10-10T12:27:47Z",
@@ -1108,9 +1110,10 @@
     "model_usd": 0.007515,
     "tokens_in": 11301,
     "tokens_out": 2345,
+    "total_usd": 0.017287,
     "usd": 0.017287
    },
-   "digest": "11c52baed938",
+   "digest": "078a87a086ed",
    "env": "none",
    "escalation": {
     "at": "2026-10-10T12:59:33Z",
@@ -1289,9 +1292,10 @@
     "model_usd": 0.014183,
     "tokens_in": 14005,
     "tokens_out": 5341,
+    "total_usd": 0.02651,
     "usd": 0.02651
    },
-   "digest": "2e12acdbed09",
+   "digest": "cb9a6cad044c",
    "env": "none",
    "escalation": {
     "at": "2026-10-10T13:16:01Z",
@@ -1490,9 +1494,10 @@
     "model_usd": 0.007688,
     "tokens_in": 6135,
     "tokens_out": 3077,
+    "total_usd": 0.007688,
     "usd": 0.007688
    },
-   "digest": "05944ab0bb40",
+   "digest": "df72613ec3e7",
    "env": "none",
    "escalation": {
     "at": "2026-10-10T12:54:01Z",
@@ -1690,9 +1695,10 @@
     "model_usd": 0.007875,
     "tokens_in": 10527,
     "tokens_out": 2621,
+    "total_usd": 0.017121,
     "usd": 0.017121
    },
-   "digest": "11b484113236",
+   "digest": "db5c62957282",
    "env": "none",
    "escalation": {
     "at": "2026-10-10T12:59:36Z",
@@ -1855,9 +1861,10 @@
     "model_usd": 0.007853,
     "tokens_in": 11265,
     "tokens_out": 2518,
+    "total_usd": 0.036404,
     "usd": 0.036404
    },
-   "digest": "cd783452765f",
+   "digest": "f03e0ce833c9",
    "env": "none",
    "escalation": {
     "at": "2026-10-10T13:23:29Z",
@@ -2048,9 +2055,10 @@
     "model_usd": 0.011822,
     "tokens_in": 14920,
     "tokens_out": 4046,
+    "total_usd": 0.032339,
     "usd": 0.032339
    },
-   "digest": "77957ab977a6",
+   "digest": "35107b8c2c4d",
    "env": "none",
    "escalation": {
     "at": "2026-10-10T13:24:32Z",
@@ -2250,9 +2258,10 @@
     "model_usd": 0.007364,
     "tokens_in": 9094,
     "tokens_out": 2545,
+    "total_usd": 0.083069,
     "usd": 0.083069
    },
-   "digest": "721968cc5c9f",
+   "digest": "2eeda5761dc3",
    "env": "none",
    "escalation": {
     "at": "2026-10-10T14:12:50Z",
@@ -2412,9 +2421,10 @@
     "model_usd": 0.007217,
     "tokens_in": 11097,
     "tokens_out": 2221,
+    "total_usd": 0.00857,
     "usd": 0.00857
    },
-   "digest": "174153e4533b",
+   "digest": "5d5593f85da2",
    "env": "none",
    "escalation": {
     "at": "2026-10-10T14:42:42Z",
@@ -2600,9 +2610,10 @@
     "model_usd": 0.012957,
     "tokens_in": 20027,
     "tokens_out": 3975,
-    "usd": 0.074565
+    "total_usd": 0.074565,
+    "usd": 0.073015
    },
-   "digest": "822fe0149f99",
+   "digest": "f428433d93aa",
    "env": "prod",
    "escalation": null,
    "feasibility": {
@@ -2857,9 +2868,10 @@
     "model_usd": 0.00853,
     "tokens_in": 11079,
     "tokens_out": 2880,
+    "total_usd": 0.045963,
     "usd": 0.045963
    },
-   "digest": "68d634f1e628",
+   "digest": "bb1471689cc1",
    "env": "none",
    "escalation": {
     "at": "2026-10-10T15:55:16Z",
@@ -3069,9 +3081,10 @@
     "model_usd": 0.014366,
     "tokens_in": 16786,
     "tokens_out": 5085,
+    "total_usd": 0.091895,
     "usd": 0.091895
    },
-   "digest": "aaa8f9bef54d",
+   "digest": "638bac210513",
    "env": "none",
    "escalation": {
     "at": "2026-10-10T16:05:14Z",
@@ -3276,9 +3289,10 @@
     "model_usd": 0.015304,
     "tokens_in": 7934,
     "tokens_out": 6661,
+    "total_usd": 0.015305,
     "usd": 0.015305
    },
-   "digest": "0aa5075aed92",
+   "digest": "a99626b60858",
    "env": "none",
    "escalation": {
     "at": "2026-10-10T15:45:50Z",
@@ -3494,9 +3508,10 @@
     "model_usd": 0.016825,
     "tokens_in": 23706,
     "tokens_out": 5449,
+    "total_usd": 0.123206,
     "usd": 0.123206
    },
-   "digest": "37cb506e7bc7",
+   "digest": "64fcaeb1f9c3",
    "env": "none",
    "escalation": {
     "at": "2026-10-10T16:20:14Z",
@@ -3738,9 +3753,10 @@
     "model_usd": 0.027489,
     "tokens_in": 36240,
     "tokens_out": 9215,
+    "total_usd": 0.066426,
     "usd": 0.066426
    },
-   "digest": "758b1847f5fd",
+   "digest": "172823f7c1e9",
    "env": "none",
    "escalation": null,
    "feasibility": {
@@ -4013,9 +4029,10 @@
     "model_usd": 0.021113,
     "tokens_in": 27312,
     "tokens_out": 7142,
-    "usd": 0.083172
+    "total_usd": 0.083172,
+    "usd": 0.081622
    },
-   "digest": "7931a83668a3",
+   "digest": "4162081520f8",
    "env": "prod",
    "escalation": null,
    "feasibility": {
@@ -4348,9 +4365,10 @@
     "model_usd": 0.010404,
     "tokens_in": 14825,
     "tokens_out": 3349,
+    "total_usd": 0.036788,
     "usd": 0.036788
    },
-   "digest": "38ea3608bb41",
+   "digest": "2c76f243405f",
    "env": "rolled-back",
    "escalation": {
     "at": "2026-10-10T17:15:00Z",
@@ -4589,9 +4607,10 @@
     "model_usd": 0.007901,
     "tokens_in": 27149,
     "tokens_out": 557,
+    "total_usd": 0.137488,
     "usd": 0.137488
    },
-   "digest": "5fecc96b6c26",
+   "digest": "c64704065672",
    "env": "none",
    "escalation": {
     "at": "2026-10-10T18:10:17Z",
@@ -4725,9 +4744,10 @@
     "model_usd": 0.007717,
     "tokens_in": 28690,
     "tokens_out": 272,
+    "total_usd": 0.023086,
     "usd": 0.023086
    },
-   "digest": "7262c770c34a",
+   "digest": "edf662b0c5fd",
    "env": "none",
    "escalation": {
     "at": "2026-10-10T18:35:16Z",
@@ -4861,9 +4881,10 @@
     "model_usd": 0.007703,
     "tokens_in": 28667,
     "tokens_out": 268,
+    "total_usd": 0.06731,
     "usd": 0.06731
    },
-   "digest": "afa16aae3eb5",
+   "digest": "c6f723ba1654",
    "env": "none",
    "escalation": {
     "at": "2026-10-10T19:55:16Z",
@@ -5027,9 +5048,10 @@
     "model_usd": 0.00925,
     "tokens_in": 31343,
     "tokens_out": 707,
+    "total_usd": 0.06352,
     "usd": 0.06352
    },
-   "digest": "31ce24768cee",
+   "digest": "6841197b4fe7",
    "env": "none",
    "escalation": {
     "at": "2026-10-10T21:20:18Z",
@@ -5300,9 +5322,10 @@
     "model_usd": 0.011023,
     "tokens_in": 32020,
     "tokens_out": 1509,
-    "usd": 0.04632
+    "total_usd": 0.04632,
+    "usd": 0.04342
    },
-   "digest": "c95f75504832",
+   "digest": "47f3bd1c9a2e",
    "env": "prod",
    "escalation": null,
    "feasibility": null,
