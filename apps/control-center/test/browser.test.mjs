@@ -344,6 +344,7 @@ describe('security', { skip }, () => {
       badEls: document.querySelectorAll('img, iframe, object, embed, form, input[type="image"], base, meta[http-equiv="refresh"]').length,
       hrefs: [...document.querySelectorAll('a[href]')].map((a) => ({ href: a.getAttribute('href'), target: a.target, rel: a.rel })),
       overflow: document.documentElement.scrollWidth - window.innerWidth,
+      wide: [...document.querySelectorAll('body *')].filter((e) => !e.closest('nav') && e.getBoundingClientRect().right > window.innerWidth + 0.5).slice(0, 6).map((e) => `${e.tagName}.${e.className} right=${Math.round(e.getBoundingClientRect().right)} "${(e.textContent || '').slice(0, 30)}"`),
     }));
 
   const hostileRoutes = ['#/', '#/ticket/24', '#/ticket/25', '#/ticket/5', '#/ticket/27', '#/cost', '#/environments', '#/agents', '#/escalations', '#/flow', '#/trail'];
@@ -373,7 +374,7 @@ describe('security', { skip }, () => {
           if (a.target === '_blank') assert.match(a.rel, /noopener/);
           if (a.target === '_blank') assert.match(a.rel, /noreferrer/);
         }
-        assert.ok(p.overflow <= 0, `${where}: scrolls sideways by ${p.overflow}px`);
+        assert.ok(p.overflow <= 0, `${where}: scrolls sideways by ${p.overflow}px; wide: ${JSON.stringify(p.wide)}`);
         assert.deepEqual(seen.errors, [], `${where}: console errors`);
         await context.close();
       }
