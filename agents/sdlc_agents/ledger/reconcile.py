@@ -97,7 +97,13 @@ def reconcile(
     for item in sorted(github.list_issues(state="all"), key=lambda i: i.number):
         if issue is not None and item.number != issue:
             continue
-        if item.is_pull_request and MAINTENANCE_LABEL not in item.labels:
+        # Agent PRs are driven through their issue; a PR is its own ticket when it is the maintenance flow's, or
+        # when a release of it was rolled back (the CD workflow flags it, there being no issue to flag).
+        if (
+            item.is_pull_request
+            and MAINTENANCE_LABEL not in item.labels
+            and model.DEPLOY_FAILED_LABEL not in item.labels
+        ):
             continue
         if item.author != OWNER:
             ignored += 1
