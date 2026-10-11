@@ -24,7 +24,8 @@ PROJECT_SCOPE = (f"/subscriptions/{SUB}/resourceGroups/rg-fsdlcd-demo/providers/
 KV_SCOPE = f"/subscriptions/{SUB}/resourceGroups/rg-fsdlcd-demo/providers/Microsoft.KeyVault/vaults/kv-fsdlcd-demo-x1"
 # Fake role ids: the script must resolve real ones by name through az, never from a table.
 ROLE_GUIDS = {"Key Vault Secrets User": "00000000-0000-4000-8000-00000000a001",
-              "Azure AI User": "00000000-0000-4000-8000-00000000a002"}
+              "Azure AI User": "00000000-0000-4000-8000-00000000a002",
+              "Cost Management Reader": "00000000-0000-4000-8000-00000000a003"}
 
 CONFIG = da.Config(project_endpoint=ENDPOINT, key_vault_uri=KV, subscription_id=SUB,
                    resource_group="rg-fsdlcd-demo", github_owner="stevengonsalvez")
@@ -142,7 +143,8 @@ def make(dry_run: bool = False, foundry: FakeFoundry | None = None, az: FakeAz |
     deployer = da.Deployer(
         config=CONFIG, foundry=record.foundry, az=record.az, http=record.http, token=token, run=run,
         console=da.Console(out), dry_run=dry_run, sleep=record.sleeps.append,
-        zip_builders={da.ORCHESTRATOR: lambda: b"orchestrator-zip", da.CODER: lambda: b"coder-zip"},
+        zip_builders={da.ORCHESTRATOR: lambda: b"orchestrator-zip", da.CODER: lambda: b"coder-zip",
+                      da.LEDGER: lambda: b"ledger-zip"},
     )
     return deployer, out, record
 
@@ -241,19 +243,22 @@ def test_prompt_agents_failure_raises() -> None:
 
 # -- hosted ------------------------------------------------------------------------------------
 
-def test_hosted_creates_both_agents_with_sizes_and_env_and_waits_for_active() -> None:
+def test_hosted_creates_all_agents_with_sizes_and_env_and_waits_for_active() -> None:
     deployer, out, rec = make(foundry=FakeFoundry(polls_until_active=3))
     deployer.hosted(da.DEFAULT_SIZES, timeout_s=600)
     by_name = {c["name"]: c for c in rec.foundry.created}
-    orchestrator, coder = by_name["sdlc-orchestrator"], by_name["sdlc-coder"]
+    orchestrator, coder, ledger = by_name["sdlc-orchestrator"], by_name["sdlc-coder"], by_name["sdlc-ledger"]
     assert (orchestrator["cpu"], orchestrator["memory"], orchestrator["idle"]) == ("1", "2Gi", 2)
     assert (coder["cpu"], coder["memory"], coder["idle"]) == ("2", "4Gi", 10)
+    assert (ledger["cpu"], ledger["memory"], ledger["idle"]) == ("0.25", "0.5Gi", 2)
+    assert ledger["env"]["AZURE_RESOURCE_GROUP"] == "rg-fsdlcd-demo" and "LEDGER_MODE" not in ledger["env"]
+    assert orchestrator["env"]["LEDGER_MODE"] == "hosted"
     assert coder["env"] == {
         "KEY_VAULT_URI": KV, "FOUNDRY_PROJECT_ENDPOINT": ENDPOINT, "FOUNDRY_MODEL_DEPLOYMENT": "sdlc-default",
         "REPO": "stevengonsalvez/foundry-autonomous-sdlc", "GITHUB_OWNER": "stevengonsalvez",
         "HOSTED_CPU": "2", "HOSTED_MEMORY": "4Gi"}
     assert orchestrator["env"]["HOSTED_CPU"] == "1"
-    assert len(rec.sleeps) == 4
+    assert len(rec.sleeps) == 6
     assert "sdlc-coder version 1 active" in out.getvalue()
 
 
@@ -262,8 +267,20 @@ def test_hosted_is_idempotent_for_an_unchanged_zip() -> None:
     deployer, out, _ = make(foundry=foundry)
     deployer.hosted(da.DEFAULT_SIZES, timeout_s=600)
     deployer.hosted(da.DEFAULT_SIZES, timeout_s=600)
-    assert len(foundry.created) == 2
+    assert len(foundry.created) == 3
     assert "sdlc-coder version 1 unchanged" in out.getvalue()
+
+
+def test_inline_ledger_mode_deploys_no_ledger_agent_and_tells_the_orchestrator() -> None:
+    args = da.parse_args(["hosted", "--ledger-mode", "inline"])
+    sizes = da.sizes_from(args)
+    assert da.LEDGER not in sizes
+    deployer, _, rec = make()
+    deployer.hosted(sizes, timeout_s=600, ledger_mode=args.ledger_mode)
+    assert {c["name"] for c in rec.foundry.created} == {"sdlc-orchestrator", "sdlc-coder"}
+    assert next(c for c in rec.foundry.created if c["name"] == "sdlc-orchestrator")["env"]["LEDGER_MODE"] == "inline"
+    with pytest.raises(da.DeployError, match="ledger mode"):
+        deployer.hosted(sizes, timeout_s=600, ledger_mode="sometimes")
 
 
 def test_hosted_failure_surfaces_the_error_message() -> None:
@@ -294,9 +311,9 @@ def test_real_zip_builders_load_from_the_repo() -> None:
 
 # -- roles -------------------------------------------------------------------------------------
 
-def _deployed_foundry() -> FakeFoundry:
+def _deployed_foundry(ledger: bool = False) -> FakeFoundry:
     foundry = FakeFoundry()
-    for name in (da.ORCHESTRATOR, da.CODER):
+    for name in (da.ORCHESTRATOR, da.CODER, *((da.LEDGER,) if ledger else ())):
         foundry.create_hosted_version(name, cpu="1", memory="2Gi", idle_minutes=2, env={}, code=b"", sha256="x",
                                       description="")
     return foundry
@@ -335,6 +352,22 @@ def test_roles_need_the_agents_to_exist() -> None:
     deployer, _, _ = make()
     with pytest.raises(da.DeployError, match="deploy hosted first"):
         deployer.roles()
+
+
+def test_the_ledger_gets_only_what_it_needs_and_no_roles_when_it_is_not_deployed() -> None:
+    az = FakeAz()
+    deployer, out, _ = make(foundry=_deployed_foundry(ledger=True), az=az)
+    deployer.roles()
+    got = {(a["principalId"], a["scope"], a["roleDefinitionId"].rsplit("/", 1)[-1]) for a in az.assignments
+           if a["principalId"] == "pid-sdlc-ledger"}
+    assert got == {
+        ("pid-sdlc-ledger", f"{KV_SCOPE}/secrets/github-pat", ROLE_GUIDS["Key Vault Secrets User"]),
+        ("pid-sdlc-ledger", PROJECT_SCOPE, ROLE_GUIDS["Azure AI User"]),
+        ("pid-sdlc-ledger", f"/subscriptions/{SUB}/resourceGroups/rg-fsdlcd-demo", ROLE_GUIDS["Cost Management Reader"]),
+    }
+    quiet, out2, _ = make(foundry=_deployed_foundry(), az=FakeAz())
+    quiet.roles()
+    assert "sdlc-ledger: not deployed" in out2.getvalue()
 
 
 def test_roles_dry_run_lists_what_it_would_assign() -> None:

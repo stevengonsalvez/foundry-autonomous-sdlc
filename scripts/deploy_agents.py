@@ -3,9 +3,11 @@ Deploy the agent side of the demo onto the Foundry project. Idempotent; every st
 
   connection     project connection github-mcp (RemoteTool, CustomKeys, Authorization: Bearer <PAT>)
   prompt-agents  prompt agent versions (python -m sdlc_agents.create_agents)
-  hosted         hosted agents sdlc-orchestrator and sdlc-coder from zips, waits for status active
-                 (idle timeout: orchestrator 2 minutes so compute stops between ticks, coder 10 minutes)
-  roles          Key Vault Secrets User per secret, Foundry User on the project for both hosted agents
+  hosted         hosted agents sdlc-orchestrator, sdlc-coder and sdlc-ledger from zips, waits for status active
+                 (idle timeout: orchestrator 2 minutes so compute stops between ticks, coder 10 minutes,
+                 ledger 2 minutes at 0.25 vCPU and 0.5 GiB: it wakes only when events arrive)
+  roles          Key Vault Secrets User per secret, Foundry User on the project for the hosted agents,
+                 Cost Management Reader on the resource group for the ledger
   routine        routine sdlc-tick: every five minutes, invocations {"op":"tick"} to sdlc-orchestrator
   status         agent versions, identities, routine state and the last routine runs
   smoke          two coder status calls (no job, so 404 expected) proving the endpoint and session reuse
@@ -52,6 +54,8 @@ from sdlc_agents.transport import HttpRequest, Transport, urllib_transport  # no
 
 ORCHESTRATOR = "sdlc-orchestrator"
 CODER = "sdlc-coder"
+LEDGER = "sdlc-ledger"
+LEDGER_MODES = ("hosted", "inline", "off")
 
 
 @dataclass(frozen=True)
@@ -63,7 +67,8 @@ class HostedSize:
 
 # Hosted compute bills while a session is active. The orchestrator idles out between five minute ticks;
 # the coder stays up between the orchestrator's status polls.
-DEFAULT_SIZES: dict[str, HostedSize] = {ORCHESTRATOR: HostedSize("1", "2Gi", 2), CODER: HostedSize("2", "4Gi", 10)}
+DEFAULT_SIZES: dict[str, HostedSize] = {ORCHESTRATOR: HostedSize("1", "2Gi", 2), CODER: HostedSize("2", "4Gi", 10),
+                                         LEDGER: HostedSize("0.25", "0.5Gi", 2)}
 MODEL_DEPLOYMENT = "sdlc-default"
 CONNECTION_NAME = "github-mcp"
 MCP_TARGET = "https://api.githubcopilot.com/mcp/"
@@ -78,10 +83,12 @@ ROUTINE_DESCRIPTION = "Wakes sdlc-orchestrator every five minutes to advance iss
 POLL_S = 5
 KV_SECRETS_USER = "Key Vault Secrets User"
 FOUNDRY_USER = "Foundry User"
+COST_READER = "Cost Management Reader"
 # Foundry roles were renamed; the old name is tried when the new one is not visible yet.
 ROLE_NAMES: dict[str, tuple[str, ...]] = {
     KV_SECRETS_USER: (KV_SECRETS_USER,),
     FOUNDRY_USER: (FOUNDRY_USER, "Azure AI User"),
+    COST_READER: (COST_READER,),
 }
 _ENDPOINT = re.compile(r"https://([a-z0-9-]+)\.services\.ai\.azure\.com/api/projects/([A-Za-z0-9_.-]+)/?")
 
@@ -136,6 +143,10 @@ class Config:
     def project_scope(self) -> str:
         return (f"/subscriptions/{self.subscription_id}/resourceGroups/{self.resource_group}/providers/"
                 f"Microsoft.CognitiveServices/accounts/{self.account}/projects/{self.project}")
+
+    @property
+    def group_scope(self) -> str:
+        return f"/subscriptions/{self.subscription_id}/resourceGroups/{self.resource_group}"
 
     def secret_scope(self, secret: str) -> str:
         return (f"/subscriptions/{self.subscription_id}/resourceGroups/{self.resource_group}/providers/"
@@ -321,7 +332,8 @@ def _load_zip_builder(path: Path) -> Callable[[], bytes]:
 
 def default_zip_builders() -> dict[str, Callable[[], bytes]]:
     return {ORCHESTRATOR: _load_zip_builder(AGENTS_DIR / "hosted/orchestrator/build_zip.py"),
-            CODER: _load_zip_builder(AGENTS_DIR / "hosted/coder/build_zip.py")}
+            CODER: _load_zip_builder(AGENTS_DIR / "hosted/coder/build_zip.py"),
+            LEDGER: _load_zip_builder(AGENTS_DIR / "hosted/ledger/build_zip.py")}
 
 
 @dataclass
@@ -377,10 +389,20 @@ class Deployer:
 
     # -- hosted agents ---------------------------------------------------------------------
 
-    def hosted(self, sizes: dict[str, HostedSize], timeout_s: int) -> None:
+    def hosted(self, sizes: dict[str, HostedSize], timeout_s: int, ledger_mode: str = "hosted") -> None:
+        """Deploy the hosted agents. `ledger_mode` tells the orchestrator how to reach the state-keeper:
+        hosted (the sdlc-ledger agent), inline (the same code in its own process, the documented fallback
+        that deploys no ledger agent) or off."""
+        if ledger_mode not in LEDGER_MODES:
+            raise DeployError(f"ledger mode must be one of {', '.join(LEDGER_MODES)}")
         builders = self.zip_builders or default_zip_builders()
         for name, size in sizes.items():
             env = {**self.config.hosted_env(), "HOSTED_CPU": size.cpu, "HOSTED_MEMORY": size.memory}
+            if name == ORCHESTRATOR:
+                env["LEDGER_MODE"] = ledger_mode
+            if name == LEDGER:
+                env.update({"AZURE_SUBSCRIPTION_ID": self.config.subscription_id,
+                            "AZURE_RESOURCE_GROUP": self.config.resource_group})
             code = builders[name]()
             sha = hashlib.sha256(code).hexdigest()
             if self.dry_run:
@@ -422,8 +444,18 @@ class Deployer:
             # Model calls from the fallback engine; the implicit project access is not relied on.
             (CODER, FOUNDRY_USER, self.config.project_scope),
         ]
-        principals = {name: self._principal(name) for name in (ORCHESTRATOR, CODER)}
-        guids = {role: self._role_guid(role) for role in ROLE_NAMES}
+        names = [ORCHESTRATOR, CODER]
+        if self.foundry.get_agent(LEDGER) is not None:
+            names.append(LEDGER)
+            plan += [
+                (LEDGER, KV_SECRETS_USER, self.config.secret_scope("github-pat")),
+                (LEDGER, FOUNDRY_USER, self.config.project_scope),      # model summaries on sdlc-default
+                (LEDGER, COST_READER, self.config.group_scope),         # what Azure billed, read only
+            ]
+        else:
+            self.say(f"{LEDGER}: not deployed, no roles assigned (inline or off mode)")
+        principals = {name: self._principal(name) for name in names}
+        guids = {role: self._role_guid(role) for role in {r for _, r, _ in plan}}
         for name, role, scope in plan:
             pid, guid = principals[name], guids[role]
             existing = json.loads(self.az(["role", "assignment", "list", "--scope", scope, "-o", "json"]) or "[]")
@@ -546,13 +578,15 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     parser = argparse.ArgumentParser(prog="deploy_agents.py", description=__doc__.split("\n\n")[0])
     parser.add_argument("--dry-run", action="store_true", help="print what would change, change nothing")
     hosted = argparse.ArgumentParser(add_help=False)
-    for agent, flag in ((ORCHESTRATOR, "orchestrator"), (CODER, "coder")):
+    for agent, flag in ((ORCHESTRATOR, "orchestrator"), (CODER, "coder"), (LEDGER, "ledger")):
         default = DEFAULT_SIZES[agent]
         hosted.add_argument(f"--{flag}-cpu", default=default.cpu)
         hosted.add_argument(f"--{flag}-memory", default=default.memory)
         hosted.add_argument(f"--{flag}-idle-minutes", type=_idle_minutes, default=default.idle_minutes,
                             help="session idle timeout in minutes (2 to 60)")
-    hosted.add_argument("--only", choices=(ORCHESTRATOR, CODER), help="deploy one hosted agent")
+    hosted.add_argument("--only", choices=(ORCHESTRATOR, CODER, LEDGER), help="deploy one hosted agent")
+    hosted.add_argument("--ledger-mode", choices=LEDGER_MODES, default="hosted",
+                        help="how the orchestrator reaches the state-keeper; inline deploys no sdlc-ledger agent")
     hosted.add_argument("--timeout", type=int, default=900, help="seconds to wait for status active")
     routine = argparse.ArgumentParser(add_help=False)
     toggle = routine.add_mutually_exclusive_group()
@@ -580,8 +614,13 @@ def _idle_minutes(value: str) -> int:
 
 def sizes_from(args: argparse.Namespace) -> dict[str, HostedSize]:
     sizes = {ORCHESTRATOR: HostedSize(args.orchestrator_cpu, args.orchestrator_memory, args.orchestrator_idle_minutes),
-             CODER: HostedSize(args.coder_cpu, args.coder_memory, args.coder_idle_minutes)}
-    return {args.only: sizes[args.only]} if args.only else sizes
+             CODER: HostedSize(args.coder_cpu, args.coder_memory, args.coder_idle_minutes),
+             LEDGER: HostedSize(args.ledger_cpu, args.ledger_memory, args.ledger_idle_minutes)}
+    if args.only:
+        return {args.only: sizes[args.only]}
+    if args.ledger_mode != "hosted":
+        del sizes[LEDGER]
+    return sizes
 
 
 def dispatch(deployer: Deployer, args: argparse.Namespace) -> None:
@@ -591,7 +630,7 @@ def dispatch(deployer: Deployer, args: argparse.Namespace) -> None:
     if command in ("all", "prompt-agents"):
         deployer.prompt_agents()
     if command in ("all", "hosted"):
-        deployer.hosted(sizes_from(args), args.timeout)
+        deployer.hosted(sizes_from(args), args.timeout, args.ledger_mode)
     if command in ("all", "roles"):
         deployer.roles()
     if command in ("all", "routine"):
