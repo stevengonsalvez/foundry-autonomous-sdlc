@@ -161,9 +161,9 @@ describe('views', { skip }, () => {
 
   test('cost: the gap in plain words, the danger banner, sortable table', async () => {
     const { context, page } = await open('normal', { hash: '#/cost' });
-    const banner = page.locator('.callout-danger');
+    const banner = page.locator('.callout');
     assert.match(await banner.innerText(), /Azure billed 13\.02 USD; the ledger estimated 1\.87 USD; the ledger undercounts hosted compute by 7\.0x\./);
-    assert.equal(await page.locator('.callout-danger[role="alert"]').count(), 1);
+    assert.equal(await page.locator('.callout-danger').count(), 0, '13.02 USD is under the 22 USD halt line');
     assert.match(await banner.innerText(), /as of/);
     assert.ok(await page.locator('#estimate-vs-billed svg.chart').count());
     assert.equal(await page.locator('#meters .c-label').count(), 4);
@@ -174,6 +174,20 @@ describe('views', { skip }, () => {
     assert.match(await first(), /#2\b/);
     await page.getByRole('button', { name: /Sort by Ticket/ }).click();
     assert.match(await first(), /#40/);
+    await context.close();
+  });
+
+  test('cost: billed spend past the halt line raises the danger banner', async () => {
+    const context = await browser.newContext();
+    const page = await context.newPage();
+    const doc = structuredClone(rawSample);
+    doc.cost.billing.billed_usd = 23.5;
+    doc.cost.totals.halted = true;
+    await page.route('**/state.json', (route) => route.fulfill({ json: doc }));
+    await page.goto(`${servers.normal.url}?data=state.json#/cost`);
+    await page.waitForSelector('#app[aria-busy="false"] .view');
+    assert.equal(await page.locator('.callout-danger[role="alert"]').count(), 1);
+    assert.match(await text(page, '.callout-danger'), /halt line/);
     await context.close();
   });
 

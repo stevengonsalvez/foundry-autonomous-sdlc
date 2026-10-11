@@ -233,9 +233,9 @@
    "source": "azure-cost-management"
   },
   "caps": {
-   "halt_usd": 4.5,
-   "issue_usd": 1.0,
-   "total_usd": 5.0
+   "halt_usd": 22.0,
+   "issue_usd": 3.0,
+   "total_usd": 25.0
   },
   "gap": {
    "billed_usd": 13.0194,
@@ -968,7 +968,7 @@
      }
     ],
     "calls": 1,
-    "cap_usd": 1.0,
+    "cap_usd": 3.0,
     "cap_used_pct": 0.12,
     "coder_model_usd": 0.0,
     "coder_seconds": 0,
@@ -1101,7 +1101,7 @@
      }
     ],
     "calls": 3,
-    "cap_usd": 1.0,
+    "cap_usd": 3.0,
     "cap_used_pct": 1.73,
     "coder_model_usd": 0.0,
     "coder_seconds": 130,
@@ -1283,7 +1283,7 @@
      }
     ],
     "calls": 5,
-    "cap_usd": 1.0,
+    "cap_usd": 3.0,
     "cap_used_pct": 2.65,
     "coder_model_usd": 0.0,
     "coder_seconds": 164,
@@ -1485,7 +1485,7 @@
      }
     ],
     "calls": 4,
-    "cap_usd": 1.0,
+    "cap_usd": 3.0,
     "cap_used_pct": 0.77,
     "coder_model_usd": 0.0,
     "coder_seconds": 0,
@@ -1686,7 +1686,7 @@
      }
     ],
     "calls": 4,
-    "cap_usd": 1.0,
+    "cap_usd": 3.0,
     "cap_used_pct": 1.71,
     "coder_model_usd": 0.0,
     "coder_seconds": 123,
@@ -1852,7 +1852,7 @@
      }
     ],
     "calls": 3,
-    "cap_usd": 1.0,
+    "cap_usd": 3.0,
     "cap_used_pct": 3.64,
     "coder_model_usd": 0.005099,
     "coder_seconds": 312,
@@ -2046,7 +2046,7 @@
      }
     ],
     "calls": 6,
-    "cap_usd": 1.0,
+    "cap_usd": 3.0,
     "cap_used_pct": 3.23,
     "coder_model_usd": 0.012925,
     "coder_seconds": 101,
@@ -2249,7 +2249,7 @@
      }
     ],
     "calls": 3,
-    "cap_usd": 1.0,
+    "cap_usd": 3.0,
     "cap_used_pct": 8.31,
     "coder_model_usd": 0.01046,
     "coder_seconds": 868,
@@ -2412,7 +2412,7 @@
      }
     ],
     "calls": 3,
-    "cap_usd": 1.0,
+    "cap_usd": 3.0,
     "cap_used_pct": 0.86,
     "coder_model_usd": 0.0,
     "coder_seconds": 18,
@@ -2601,7 +2601,7 @@
      }
     ],
     "calls": 5,
-    "cap_usd": 1.0,
+    "cap_usd": 3.0,
     "cap_used_pct": 7.46,
     "coder_model_usd": 0.0,
     "coder_seconds": 799,
@@ -2859,7 +2859,7 @@
      }
     ],
     "calls": 3,
-    "cap_usd": 1.0,
+    "cap_usd": 3.0,
     "cap_used_pct": 4.6,
     "coder_model_usd": 0.0,
     "coder_seconds": 498,
@@ -3072,7 +3072,7 @@
      }
     ],
     "calls": 5,
-    "cap_usd": 1.0,
+    "cap_usd": 3.0,
     "cap_used_pct": 9.19,
     "coder_model_usd": 0.013035,
     "coder_seconds": 858,
@@ -3280,7 +3280,7 @@
      }
     ],
     "calls": 5,
-    "cap_usd": 1.0,
+    "cap_usd": 3.0,
     "cap_used_pct": 1.53,
     "coder_model_usd": 0.0,
     "coder_seconds": 0,
@@ -3499,7 +3499,7 @@
      }
     ],
     "calls": 7,
-    "cap_usd": 1.0,
+    "cap_usd": 3.0,
     "cap_used_pct": 12.32,
     "coder_model_usd": 0.011596,
     "coder_seconds": 1261,
@@ -3744,7 +3744,7 @@
      }
     ],
     "calls": 8,
-    "cap_usd": 1.0,
+    "cap_usd": 3.0,
     "cap_used_pct": 6.64,
     "coder_model_usd": 0.0,
     "coder_seconds": 518,
@@ -4020,7 +4020,7 @@
      }
     ],
     "calls": 8,
-    "cap_usd": 1.0,
+    "cap_usd": 3.0,
     "cap_used_pct": 8.32,
     "coder_model_usd": 0.0,
     "coder_seconds": 805,
@@ -4356,7 +4356,7 @@
      }
     ],
     "calls": 6,
-    "cap_usd": 1.0,
+    "cap_usd": 3.0,
     "cap_used_pct": 3.68,
     "coder_model_usd": 0.0,
     "coder_seconds": 351,
@@ -4598,7 +4598,7 @@
      }
     ],
     "calls": 1,
-    "cap_usd": 1.0,
+    "cap_usd": 3.0,
     "cap_used_pct": 13.75,
     "coder_model_usd": 0.0,
     "coder_seconds": 1724,
@@ -4735,7 +4735,7 @@
      }
     ],
     "calls": 1,
-    "cap_usd": 1.0,
+    "cap_usd": 3.0,
     "cap_used_pct": 2.31,
     "coder_model_usd": 0.007476,
     "coder_seconds": 105,
@@ -4872,7 +4872,7 @@
      }
     ],
     "calls": 1,
-    "cap_usd": 1.0,
+    "cap_usd": 3.0,
     "cap_used_pct": 6.73,
     "coder_model_usd": 0.0,
     "coder_seconds": 793,
@@ -5039,7 +5039,7 @@
      }
     ],
     "calls": 2,
-    "cap_usd": 1.0,
+    "cap_usd": 3.0,
     "cap_used_pct": 6.35,
     "coder_model_usd": 0.0,
     "coder_seconds": 722,
@@ -5313,7 +5313,7 @@
      }
     ],
     "calls": 3,
-    "cap_usd": 1.0,
+    "cap_usd": 3.0,
     "cap_used_pct": 4.63,
     "coder_model_usd": 0.0,
     "coder_seconds": 431,
