@@ -29,6 +29,7 @@ from sdlc_agents.ports import ClockPort, GitHubPort
 MAX_ATTEMPTS = 4
 BILLING_EVERY_S = 6 * 3600
 MAX_SUMMARIES_PER_CALL = 3
+SUMMARY_RETRY_S = 6 * 3600
 MAX_ERRORS = 20
 SUMMARY_STAGES = ("prod", "escalated")
 OPS = ("ingest", "reconcile", "rebuild", "status")
@@ -127,6 +128,10 @@ class Ledger:
         rebuild: bool,
     ) -> dict[str, Any]:
         started = self.clock.monotonic()
+        reconciled: list[dict[str, Any]] | None = None  # computed once, reused when the write must be retried
+        reconcile_problems: list[str] = []
+        reconcile_ok = not reconcile_now
+        spent_model = 0.0
         for attempt in range(1, MAX_ATTEMPTS + 1):
             now = self.clock.now_iso()
             snap = self.store.read()
@@ -136,14 +141,27 @@ class Ledger:
             if reconcile_now:
                 if self.github is None:
                     raise LedgerError("reconcile needs a GitHub client")
-                events_, found = reconcile.reconcile(self.github, doc, now, issue=issue)
-                new += events_
-                problems += found
+                if reconciled is None:
+                    try:
+                        reconciled, reconcile_problems = reconcile.reconcile(self.github, doc, now, issue=issue)
+                        reconcile_ok = True
+                    except Exception as exc:
+                        # The events we were handed are still committed; only the rebuild from GitHub failed.
+                        reconciled, reconcile_problems = (
+                            [],
+                            [f"reconcile failed: {type(exc).__name__}: {str(exc)[:160]}"],
+                        )
+                new += reconciled
+                problems += reconcile_problems
             new += self._billing_events(doc, now, force=force_billing, problems=problems)
             appended = [e for e in new if fold.apply(doc, e)]
             old = fold.archive_old(doc, now)
             fold.finalise(doc, now)
-            model_usd, summarised = self._summaries(doc, now, appended)
+            summary_events, model_usd = self._summaries(doc, now)
+            spent_model += model_usd
+            for e in summary_events:
+                if fold.apply(doc, e):
+                    appended.append(e)
             elapsed = max(self.clock.monotonic() - started, 0.0)
             usd = round(cost.ledger_call_usd(elapsed), 6) if self.mode == "hosted" else 0.0
             touched = sorted({e["issue"] for e in appended if e["issue"]})
@@ -153,13 +171,13 @@ class Ledger:
                 {
                     "op": op,
                     "seconds": round(elapsed, 3),
-                    "usd": round(usd + model_usd, 6),
+                    "usd": round(usd + spent_model, 6),
                     "compute_usd": usd,
-                    "model_usd": model_usd,
+                    "model_usd": round(spent_model, 6),
                     "events": len(appended),
                     "issues": touched,
                     "mode": self.mode,
-                    "summaries": summarised,
+                    "summaries": sum(1 for e in summary_events if e["type"] == "summary.written"),
                 },
                 source="ledger",
             )
@@ -179,7 +197,9 @@ class Ledger:
                     if ARCHIVE_FILE in snap.files
                     else {"version": 1, "tickets": []}
                 )
-                archive["tickets"] = [*archive["tickets"], *old]
+                by_issue = {t["issue"]: t for t in archive["tickets"]}
+                by_issue.update({t["issue"]: t for t in old})  # a rebuild re-archives: no duplicates
+                archive["tickets"] = [by_issue[k] for k in sorted(by_issue)]
                 files[ARCHIVE_FILE] = _dumps(archive)
             try:
                 head = self.store.write(
@@ -197,8 +217,9 @@ class Ledger:
                 "tickets": len(doc["tickets"]),
                 "seq": doc["seq"],
                 "seconds": round(elapsed, 3),
-                "usd": round(usd + model_usd, 6),
+                "usd": round(usd + spent_model, 6),
                 "problems": problems,
+                "reconciled": reconcile_ok,
                 "mode": self.mode,
             }
         raise AssertionError("unreachable")  # pragma: no cover
@@ -217,17 +238,26 @@ class Ledger:
             problems.append(f"billing: {type(exc).__name__}: {str(exc)[:120]}")
             return []
 
-    def _summaries(self, doc: dict[str, Any], now: str, appended: list[dict[str, Any]]) -> tuple[float, int]:
-        """Ask the model for a summary of up to a few finished tickets that have none for their current facts."""
+    def _summaries(self, doc: dict[str, Any], now: str) -> tuple[list[dict[str, Any]], float]:
+        """Ask the model for a summary of up to a few finished tickets that have none for their current facts.
+
+        A ticket whose answer was unusable is recorded as failed for that digest and not asked again for a while,
+        so one stubborn ticket cannot make every call spend model money."""
         if self.summariser is None:
-            return 0.0, 0
-        todo = [
-            t
-            for t in doc["tickets"]
-            if t["stage"] in SUMMARY_STAGES and doc["summaries"].get(str(t["issue"]), {}).get("digest") != t["digest"]
-        ][:MAX_SUMMARIES_PER_CALL]
-        spent, done = 0.0, 0
-        for t in todo:
+            return [], 0.0
+        todo = []
+        for t in doc["tickets"]:
+            if t["stage"] not in SUMMARY_STAGES:
+                continue
+            seen = doc["summaries"].get(str(t["issue"]))
+            if seen and seen.get("digest") == t["digest"]:
+                failed_at = seen.get("failed_at")
+                if seen.get("text") or (failed_at and seconds_between(failed_at, now) < SUMMARY_RETRY_S):
+                    continue
+            todo.append(t)
+        out: list[dict[str, Any]] = []
+        spent = 0.0
+        for t in todo[:MAX_SUMMARIES_PER_CALL]:
             try:
                 text, usage = self.summariser.summarise(t)
             except Exception as exc:
@@ -235,11 +265,12 @@ class Ledger:
                     {"at": now, "message": f"summary #{t['issue']}: {type(exc).__name__}"},
                     *doc["ledger"]["errors"],
                 ][:MAX_ERRORS]
-                continue
+                text, usage = None, {"in": 0, "out": 0}
             spent += cost.token_usd(usage["in"], usage["out"])
-            if text:
-                doc["summaries"][str(t["issue"])] = {"digest": t["digest"], "text": text}
-                done += 1
-        if done:
-            fold.finalise(doc, now)
-        return round(spent, 6), done
+            kind, data = (
+                ("summary.written", {"digest": t["digest"], "text": text})
+                if text
+                else ("summary.failed", {"digest": t["digest"]})
+            )
+            out.append(ev.make(kind, now, data, issue=t["issue"], source="ledger"))
+        return out, round(spent, 6)

@@ -18,7 +18,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from sdlc_agents import cost, gates, schema_check, state
-from sdlc_agents.clock import seconds_between
+from sdlc_agents.clock import parse_iso, seconds_between
 from sdlc_agents.ports import REPO, GitHubPort, Issue
 from sdlc_agents.state import State
 
@@ -241,6 +241,18 @@ def _number(value: Any) -> float:
     return float(value)
 
 
+def _mark(value: Any) -> str | None:
+    """A timestamp mark as written by the orchestrator, or None when it is not one (a hand edit must not
+    stop the tick that reads it)."""
+    try:
+        if isinstance(value, str):
+            parse_iso(value)
+            return value
+    except ValueError:
+        pass
+    return None
+
+
 def previous_totals(github: GitHubPort) -> Ledger | None:
     """The published ledger; an empty one when nothing was published yet; None when the file exists
     but cannot be read as a ledger (the caller must then fail closed)."""
@@ -255,7 +267,8 @@ def previous_totals(github: GitHubPort) -> Ledger | None:
             number = entry["pr"] if entry.get("kind") == "pr" else entry["number"]
             objects[int(number)] = _number(entry["cost"]["usd"])
         deferrals = {int(k): int(v) for k, v in (doc.get("deferrals") or {}).items()}
-        marks = doc.get("ledger") or {}
+        raw_marks = doc.get("ledger") if isinstance(doc.get("ledger"), dict) else {}
+        marks = {k: _mark(v) for k, v in raw_marks.items()}
         return Ledger(_number(totals["usd"]), _number(totals.get("orchestrator_usd", 0.0)), objects, deferrals,
                       _number(totals.get("ledger_usd", 0.0)), marks.get("emitted_at"), marks.get("reconciled_at"))
     except (ValueError, KeyError, TypeError, AttributeError):

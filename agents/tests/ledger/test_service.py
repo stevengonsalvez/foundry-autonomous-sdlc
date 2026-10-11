@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import copy
 import json
 from typing import Any
 
@@ -147,7 +148,8 @@ def test_a_model_summary_replaces_the_sentence_only_while_its_facts_hold(real) -
     assert by[12]["summary"] == "Ticket 12 reached production." and by[17]["summary"] == "Ticket 17 reached production."
     assert reply["usd"] > 0.0026 and state["cost"]["ledger"]["usd"] == reply["usd"]
     led.handle({"op": "ingest", "events": []})
-    assert led.summariser is not None and sum(1 for _ in store.files[EVENTS_FILE].splitlines()) == 4  # not asked again
+    types = [json.loads(line)["type"] for line in store.files[EVENTS_FILE].splitlines()]
+    assert led.summariser is not None and types.count("summary.written") == 2  # not asked again
 
 
 def test_reconcile_rebuilds_tickets_from_github_and_is_quiet_when_nothing_changed(real) -> None:
@@ -212,3 +214,77 @@ def test_reconcile_also_reads_the_cd_record_and_the_orchestrators_spend_estimate
     led.handle({"op": "reconcile"})
     types = [json.loads(line)["type"] for line in store.files[EVENTS_FILE].splitlines()]
     assert types.count("env.changed") == 1 and types.count("metrics.observed") == 1
+
+
+def test_one_poisoned_issue_cannot_stop_reconcile_or_the_events_sent_with_it(real) -> None:
+    gh = FakeGitHub(Clock())
+    good = gh.open_issue("fine", "body", labels=("type:feature",))
+    gh.create_comment(good, state.render(state.State(real[17]["state_data"] | {"issue": good})))
+    bad = gh.open_issue("poisoned", "body", labels=("type:feature",))
+    poisoned = copy.deepcopy(real[24]["state_data"]) | {"issue": bad}
+    poisoned["quality"]["history"] = [{"round": i, "questions": ["q"], "answers": ["a"]} for i in range(150)]
+    gh.create_comment(bad, state.render(state.State(poisoned)))
+    led, store = ledger(github=gh)
+    reply = led.handle({"op": "ingest", "events": [ticket_event(real[12])], "reconcile": True})
+    assert reply["ok"] and reply["reconciled"] is True
+    assert {t["issue"] for t in state_of(store)["tickets"]} == {12, good}
+    assert any("skipped" in p and f"#{bad}" in p for p in reply["problems"])
+
+
+def test_a_reconcile_that_dies_still_commits_the_events_it_was_handed(real) -> None:
+    class Dead(FakeGitHub):
+        def list_issues(self, **kw: Any) -> list[Any]:
+            raise OSError("GitHub unreachable")
+
+    led, store = ledger(github=Dead(Clock()))
+    reply = led.handle({"op": "ingest", "events": [ticket_event(real[12])], "reconcile": True})
+    assert reply["ok"] and reply["reconciled"] is False and 12 in {t["issue"] for t in state_of(store)["tickets"]}
+    assert any(p.startswith("reconcile failed") for p in reply["problems"])
+
+
+def test_a_summary_the_model_cannot_give_is_not_asked_for_again_for_hours(real) -> None:
+    calls: list[int] = []
+
+    class Stubborn:
+        def summarise(self, ticket: dict[str, Any]) -> tuple[str | None, dict[str, int]]:
+            calls.append(ticket["issue"])
+            return None, {"in": 100, "out": 20}
+
+    led, store = ledger(summariser=Stubborn())
+    led.handle({"op": "ingest", "events": [ticket_event(real[12]), ticket_event(real[17])]})
+    first = len(calls)
+    led.handle({"op": "ingest", "events": []})
+    assert first == 2 and len(calls) == 2
+    later = Ledger(store, FakeClock("2026-10-12T08:00:00Z", step_s=2.0), summariser=Stubborn())
+    later.handle({"op": "ingest", "events": []})
+    assert len(calls) == 4  # six hours on, one more try each
+
+
+def test_model_spend_of_every_attempt_is_counted_when_the_write_is_retried(real) -> None:
+    class Cheap:
+        def summarise(self, ticket: dict[str, Any]) -> tuple[str | None, dict[str, int]]:
+            return f"Ticket {ticket['issue']} is finished.", {"in": 1000, "out": 200}
+
+    led, store = ledger(summariser=Cheap())
+    store.fail_next = [StoreConflict("moved")]
+    reply = led.handle({"op": "ingest", "events": [ticket_event(real[12])]})
+    one = 1000 * 0.25 / 1e6 + 200 * 2.0 / 1e6
+    assert reply["usd"] >= 2 * one - 1e-9  # both attempts asked the model
+
+
+def test_archived_tickets_are_not_brought_back_by_reconcile_and_the_archive_has_no_duplicates(real) -> None:
+    gh = FakeGitHub(Clock())
+    n = gh.open_issue("old", "body", labels=("type:feature", "escalated:not-agent-suitable"))
+    gh.create_comment(n, state.render(state.State(real[17]["state_data"] | {"issue": n})))
+    gh.issues[n]["state"] = "closed"
+    gh.issues[n]["closed_at"] = "2026-10-01T00:00:00Z"
+    led, store = ledger(github=gh)
+    led.handle({"op": "reconcile"})
+    store.files[STATE_FILE] = json.dumps(json.loads(store.files[STATE_FILE]))
+    late = Ledger(store, FakeClock("2026-12-20T00:00:00Z", step_s=2.0), github=gh)
+    late.handle({"op": "reconcile"})
+    assert json.loads(store.files["archive.json"])["tickets"][0]["issue"] == n
+    late.handle({"op": "reconcile"})
+    late.handle({"op": "rebuild"})
+    archive = json.loads(store.files["archive.json"])["tickets"]
+    assert [t["issue"] for t in archive] == [n] and state_of(store)["tickets"] == []

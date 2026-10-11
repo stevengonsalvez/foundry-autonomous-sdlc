@@ -92,6 +92,7 @@ def reconcile(
     out: list[dict[str, Any]] = []
     problems: list[str] = []
     known = {t["issue"]: t for t in doc["tickets"]}
+    archived = set(doc.get("archived_ids", []))
     ignored = 0
     for item in sorted(github.list_issues(state="all"), key=lambda i: i.number):
         if issue is not None and item.number != issue:
@@ -103,17 +104,27 @@ def reconcile(
             continue
         if item.state == "closed" and not any(lbl.startswith(("stage:", "escalated:")) for lbl in item.labels):
             continue
-        ticket, problem = build_ticket(github, item, known.get(item.number), now)
-        if problem:
-            problems.append(problem)
+        if item.number in archived:
             continue
-        assert ticket is not None
-        if known.get(item.number, {}).get("digest") != ticket["digest"]:
-            out.append(
-                events.make(
-                    "ticket.updated", ticket["updated_at"], {"ticket": ticket}, issue=item.number, source="reconcile"
+        try:
+            # One bad issue (an oversized state comment, an unknown stage) must not stop the others.
+            ticket, problem = build_ticket(github, item, known.get(item.number), now)
+            if problem:
+                problems.append(problem)
+                continue
+            assert ticket is not None
+            if known.get(item.number, {}).get("digest") != ticket["digest"]:
+                out.append(
+                    events.make(
+                        "ticket.updated",
+                        ticket["updated_at"],
+                        {"ticket": ticket},
+                        issue=item.number,
+                        source="reconcile",
+                    )
                 )
-            )
+        except Exception as exc:
+            problems.append(f"#{item.number}: skipped: {type(exc).__name__}: {model.clean(exc, 160)}")
     doc["ledger"]["ignored"] = ignored
     if issue is None:
         out += _deploy_event(github, doc, now) + _metrics_event(github, doc, now)

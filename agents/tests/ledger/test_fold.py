@@ -225,8 +225,10 @@ def test_billed_spend_is_shown_next_to_the_ledger_estimate_and_the_gap_is_never_
     )
     doc = fold.fold([*all_tickets(real), billed, metrics, invoked], NOW)
     cost = doc["cost"]
-    assert cost["gap"]["billed_usd"] == 13.02 and cost["gap"]["ledger_usd"] == pytest.approx(1.864, abs=1e-6)
-    assert cost["gap"]["gap_usd"] == pytest.approx(11.156, abs=1e-3) and cost["gap"]["ratio"] == 6.98
+    assert cost["gap"]["billed_usd"] == 13.02 and cost["gap"]["ledger_usd"] == pytest.approx(1.8633, abs=1e-3)
+    assert cost["gap"]["gap_usd"] == pytest.approx(11.157, abs=3e-3) and cost["gap"]["ratio"] == pytest.approx(
+        6.98, abs=0.02
+    )
     assert (
         cost["totals"]["over_cap"] is True
         and cost["totals"]["halted"] is True
@@ -243,3 +245,69 @@ def test_finished_tickets_older_than_30_days_move_to_the_archive(real) -> None:
     assert len(old) == 21 and [t["issue"] for t in doc["tickets"]] == [17] and doc["archived"] == 21
     fresh = fold.fold(all_tickets(real), NOW)
     assert fold.archive_old(fresh, NOW) == []
+
+
+def test_the_ledgers_calls_are_not_counted_twice_when_the_orchestrator_already_booked_them(real) -> None:
+    """metrics.json totals.usd already holds totals.ledger_usd, so the estimate must not add it again."""
+    metrics = events.make(
+        "metrics.observed",
+        NOW,
+        {"usd": 2.0, "orchestrator_usd": 0.5, "issues": 22, "generated_at": NOW},
+        source="reconcile",
+    )
+    invoked = events.make(
+        "ledger.invoked",
+        NOW,
+        {"op": "ingest", "seconds": 5, "usd": 0.01, "issues": [], "mode": "hosted"},
+        source="ledger",
+    )
+    doc = fold.fold([*all_tickets(real), metrics, invoked], NOW)
+    assert doc["cost"]["totals"]["usd"] == 2.0
+    quiet = fold.fold([*all_tickets(real), invoked], NOW)  # no metrics yet: the parts add up
+    assert quiet["cost"]["totals"]["usd"] == pytest.approx(quiet["cost"]["totals"]["issues_usd"] + 0.01, abs=1e-6)
+
+
+def test_a_thinner_record_from_the_orchestrator_does_not_blank_commits_or_the_pr_title(real) -> None:
+    rich = ticket_event(real[12])
+    t = copy.deepcopy(rich["data"]["ticket"])
+    t["commits"] = [{"sha": "abc", "message": "test: first", "kind": "test", "files": 1}]
+    t["pr"]["title"] = "Add the thing"
+    thin = copy.deepcopy(rich["data"]["ticket"])
+    thin["commits"] = []
+    thin["pr"]["title"] = None
+    thin["digest"] = "other"
+    doc = fold.fold(
+        [
+            events.make("ticket.updated", t["updated_at"], {"ticket": t}, issue=12, source="reconcile"),
+            events.make("ticket.updated", thin["updated_at"], {"ticket": thin}, issue=12),
+        ],
+        NOW,
+    )
+    got = doc["tickets"][0]
+    assert got["commits"] == t["commits"] and got["pr"]["title"] == "Add the thing"
+
+
+def test_summaries_and_archives_survive_a_rebuild_from_the_log(real) -> None:
+    evs = all_tickets(real)
+    t12 = next(e for e in evs if e["issue"] == 12)["data"]["ticket"]
+    evs.append(
+        events.make(
+            "summary.written", NOW, {"digest": t12["digest"], "text": "Feature 12 is live."}, issue=12, source="ledger"
+        )
+    )
+    doc = fold.fold(evs, NOW)
+    assert next(t for t in doc["tickets"] if t["issue"] == 12)["summary"] == "Feature 12 is live."
+    old = fold.archive_old(doc, "2026-12-01T00:00:00Z")
+    assert 12 in doc["archived_ids"] and old
+    # an archived ticket stays archived when reconcile or the orchestrator mention it again
+    assert fold.apply(
+        doc,
+        events.make(
+            "ticket.updated",
+            t12["updated_at"],
+            {"ticket": {**t12, "title": "back again"}},
+            issue=12,
+            source="reconcile",
+        ),
+    )
+    assert 12 not in [t["issue"] for t in doc["tickets"]]

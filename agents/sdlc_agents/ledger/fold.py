@@ -81,6 +81,7 @@ def empty(now: str) -> dict[str, Any]:
         },
         "flow": {},
         "archived": 0,
+        "archived_ids": [],
         "summaries": {},
         "ledger": {
             "events": 0,
@@ -117,9 +118,17 @@ def apply(doc: dict[str, Any], event: dict[str, Any]) -> bool:
     if kind == "ticket.updated":
         ticket = data["ticket"]
         current = _find(doc, ticket["issue"])
+        if ticket["issue"] in doc.get("archived_ids", []):
+            return True  # archived tickets stay in archive.json, whatever reconcile says
         # Older facts never overwrite newer ones (events from a retried invocation can arrive late).
         if current is None or ticket.get("updated_at", "") >= current.get("updated_at", ""):
+            if current is not None:
+                _keep_richer(ticket, current)
             doc["tickets"] = [t for t in doc["tickets"] if t["issue"] != ticket["issue"]] + [ticket]
+    elif kind == "summary.written":
+        doc["summaries"][str(event["issue"])] = {"digest": data["digest"], "text": data["text"], "at": event["at"]}
+    elif kind == "summary.failed":
+        doc["summaries"][str(event["issue"])] = {"digest": data["digest"], "text": None, "failed_at": event["at"]}
     elif kind == "env.changed":
         doc["deploy"] = data["deploy"]
     elif kind == "tick.finished":
@@ -143,6 +152,24 @@ def apply(doc: dict[str, Any], event: dict[str, Any]) -> bool:
         doc["ledger"]["last_ingest_at"] = event["at"]
         doc["ledger"]["mode"] = data.get("mode", doc["ledger"]["mode"])
     return True
+
+
+def _keep_richer(new: dict[str, Any], old: dict[str, Any]) -> None:
+    """The orchestrator's record has no commits, PR title or coder-log link; reconcile's has. A thinner
+    record for the same head must not blank them."""
+    if (
+        not new.get("commits")
+        and old.get("commits")
+        and (new.get("pr") or {}).get("head") == (old.get("pr") or {}).get("head")
+    ):
+        new["commits"] = old["commits"]
+    if (
+        new.get("pr")
+        and old.get("pr")
+        and not new["pr"].get("title")
+        and new["pr"].get("number") == old["pr"].get("number")
+    ):
+        new["pr"]["title"] = old["pr"].get("title")
 
 
 def _find(doc: dict[str, Any], issue: int) -> dict[str, Any] | None:
@@ -458,8 +485,10 @@ def _cost(doc: dict[str, Any]) -> dict[str, Any]:
     ledger_usd = round(led["usd"], 6)
     metrics = cost.get("metrics") or {}
     # The orchestrator's own estimate covers its issues and its compute; the ledger's compute is added.
-    orchestrator_total = float(metrics.get("usd", issues_usd))
-    estimate = round(orchestrator_total + ledger_usd, 6)
+    # metrics.json's total already holds the ledger calls the orchestrator made (its totals.ledger_usd), so it
+    # is not added again; calls nobody booked (a manual reconcile) can only make the sum larger.
+    own = issues_usd + float(metrics.get("orchestrator_usd", 0) or 0) + ledger_usd
+    estimate = round(max(float(metrics.get("usd", 0) or 0), own), 6)
     billing = cost.get("billing")
     gap = None
     if billing and billing.get("billed_usd") is not None:
@@ -571,6 +600,7 @@ def archive_old(doc: dict[str, Any], now: str, days: int = ARCHIVE_AFTER_DAYS) -
         keep = {t["issue"] for t in old}
         doc["tickets"] = [t for t in doc["tickets"] if t["issue"] not in keep]
         doc["archived"] += len(old)
+        doc["archived_ids"] = sorted({*doc.get("archived_ids", []), *keep})
     return old
 
 

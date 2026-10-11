@@ -109,6 +109,7 @@ LEDGER_HEARTBEAT_S = 540          # no activity: still tell the ledger every ~2 
 LEDGER_RECONCILE_S = 3600         # ask the ledger to rebuild from GitHub about hourly (repairs missed events)
 QUIET_ACTIONS = frozenset({"none", "noop", "wait", "halt", "ignore"})
 
+CODER_LOG_MARKER = "<!-- sdlc-coder-log:v1"
 TESTS_MARKER = "<!-- sdlc-tests:v1\n"
 _TESTS_RE = re.compile(r"\A<!-- sdlc-tests:v1\n(.*?)\n-->", re.DOTALL)
 _SCENARIO_RE = re.compile(r"<!-- scenario: (a|b|c|d|d-maintenance) -->")
@@ -1371,6 +1372,11 @@ class _Tick:
         """Remember the object's ticket record as it stands now; the tick sends the latest one per object."""
         try:
             comment_ids = {"state": obj.state_comment.id} if obj.state_comment else {}
+            coder_log = next(
+                (c for c in obj.comments if c.author == OWNER and c.body.startswith(CODER_LOG_MARKER)), None
+            )
+            if coder_log:
+                comment_ids["coder_log"] = coder_log.id
             ticket = ledger_model.ticket(
                 number=obj.item.number, kind=obj.kind, title=obj.item.title, author=obj.item.author,
                 opened_at=obj.item.created_at, closed_at=obj.item.closed_at, labels=obj.item.labels,
@@ -1381,6 +1387,19 @@ class _Tick:
             self.report.errors.append(f"ledger: #{obj.item.number}: {type(exc).__name__}: {exc}")
 
     def _emit_ledger(self) -> tuple[float, dict[str, str | None]]:
+        """Never raises: whatever goes wrong here is a note in the report, and the tick goes on to write
+        metrics.json (the spend record the 4.50 USD halt reads)."""
+        try:
+            return self._emit_ledger_unchecked()
+        except Exception as exc:
+            self.report.ledger = "error"
+            self.report.errors.append(f"ledger: {type(exc).__name__}: {str(exc)[:160]}")
+            return 0.0, {
+                "emitted_at": self.previous.ledger_emitted_at,
+                "reconciled_at": self.previous.ledger_reconciled_at,
+            }
+
+    def _emit_ledger_unchecked(self) -> tuple[float, dict[str, str | None]]:
         """Send this tick's events to the state-keeper. Best effort: a failure is noted and the next call
         (or its hourly reconcile from GitHub) repairs it. Returns the call's compute USD and the marks."""
         now = self.clock.now_iso()
@@ -1397,8 +1416,9 @@ class _Tick:
         try:
             batch.append(ledger_events.make("tick.finished", now, {
                 "started_at": self.report.started_at, "finished_at": now, "lock": self.report.lock,
-                "objects": [asdict(o) for o in self.report.objects][:400], "errors": list(self.report.errors)[:50],
-                "model_calls": self.report.model_calls, "calls": self.report.calls[:100],
+                "objects": [{**asdict(o), "detail": one_line(o.detail, 160)} for o in self.report.objects][:150],
+                "errors": [one_line(e, 200) for e in self.report.errors][:20],
+                "model_calls": self.report.model_calls, "calls": self.report.calls[:40],
                 "usd_this_tick": self.report.usd_this_tick, "orchestrator_usd": cost.orchestrator_tick_usd(
                     self.clock.monotonic() - self.started)}))
             batch.append(ledger_events.make("metrics.observed", now, {
@@ -1410,11 +1430,14 @@ class _Tick:
         if result.error:
             self.report.ledger = "error"
             self.report.errors.append(result.error)
-            return 0.0, marks
+            # A call that reached the ledger bills even when its answer was lost: the emitter prices it.
+            return round(result.usd, 6), marks
         self.report.ledger = "emitted"
         marks["emitted_at"] = now
         if reconcile:
-            marks["reconciled_at"] = now
+            marks["reconciled_at"] = now        # retried in an hour either way: no retry storm
+            if result.reply.get("reconciled") is False:
+                self.report.errors.append("ledger: reconcile from GitHub failed, will retry in an hour")
         return round(result.usd, 6), marks
 
     def _write_metrics(self, tick_usd: float, ledger_usd: float = 0.0,

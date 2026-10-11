@@ -113,3 +113,48 @@ def test_the_hosted_emitter_calls_the_ledger_agent_and_reuses_its_session(world:
 
     out = HostedEmitter(Broken()).emit([])
     assert out.error and out.error.startswith("ledger: OSError")
+
+
+def test_a_garbled_mark_in_metrics_json_or_a_crashing_emitter_never_stops_the_spend_record(world: World) -> None:
+    world.tick()
+    doc = json.loads(world.gh.files[("metrics", "metrics.json")])
+    doc["ledger"] = {"emitted_at": "yesterday", "reconciled_at": 12345}
+    world.gh.files[("metrics", "metrics.json")] = json.dumps(doc)
+
+    class Crashing:
+        def emit(self, evs: list[dict[str, Any]], *, reconcile: bool = False) -> EmitResult:
+            raise RuntimeError("boom")
+
+    world.emitter = Crashing()
+    report = world.tick()[0]
+    assert report.metrics_written or report.ledger == "error"
+    assert any("ledger: RuntimeError" in e for e in report.errors) and report.ledger == "error"
+    again = json.loads(world.gh.files[("metrics", "metrics.json")])
+    assert again["totals"]["usd"] >= doc["totals"]["usd"]
+
+
+def test_a_hosted_call_that_waited_and_failed_is_still_priced(monkeypatch) -> None:
+    clock = iter([100.0, 130.0])
+    monkeypatch.setattr("sdlc_agents.ledger.emitter.time.monotonic", lambda: next(clock))
+
+    class Slow:
+        def invoke_hosted(self, *a: Any, **k: Any):
+            raise TimeoutError("read timed out")
+
+    out = HostedEmitter(Slow()).emit([])
+    assert out.error and 0.002 < out.usd < 0.004  # 30 s plus the idle tail at 0.25 vCPU, 0.5 GiB
+    clock2 = iter([100.0, 100.2])
+    monkeypatch.setattr("sdlc_agents.ledger.emitter.time.monotonic", lambda: next(clock2))
+    assert HostedEmitter(Slow()).emit([]).usd == 0.0  # refused at once: it never reached the agent
+
+
+def test_a_reconcile_that_failed_in_the_ledger_is_reported_and_retried_in_an_hour_not_every_tick(world: World) -> None:
+    class Partial:
+        def emit(self, evs: list[dict[str, Any]], *, reconcile: bool = False) -> EmitResult:
+            return EmitResult(usd=0.003, reply={"ok": True, "reconciled": False})
+
+    world.emitter = Partial()
+    first = world.tick()[0]
+    assert any("reconcile from GitHub failed" in e for e in first.errors)
+    marks = json.loads(world.gh.files[("metrics", "metrics.json")])["ledger"]
+    assert marks["reconciled_at"] is not None

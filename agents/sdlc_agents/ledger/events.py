@@ -31,7 +31,16 @@ from sdlc_agents import schema_check
 from sdlc_agents.ledger import model
 
 VERSION = 1
-TYPES = ("ticket.updated", "env.changed", "tick.finished", "billing.observed", "metrics.observed", "ledger.invoked")
+TYPES = (
+    "ticket.updated",
+    "env.changed",
+    "tick.finished",
+    "billing.observed",
+    "metrics.observed",
+    "summary.written",
+    "summary.failed",
+    "ledger.invoked",
+)
 SOURCES = ("orchestrator", "reconcile", "cd", "ledger", "operator")
 MAX_EVENT_BYTES = 96_000
 MAX_BATCH = 500
@@ -166,6 +175,21 @@ def validate(event: Any) -> None:
                 data,
                 "event.data",
             )
+        elif event["type"] in ("summary.written", "summary.failed"):
+            schema_check.check(
+                {
+                    "type": "object",
+                    "required": ["digest"],
+                    "properties": {
+                        "digest": {"type": "string", "maxLength": 40},
+                        "text": {"type": "string", "maxLength": 400},
+                    },
+                },
+                data,
+                "event.data",
+            )
+            if event["issue"] is None:
+                raise ValueError("a summary event needs an issue")
         elif event["type"] == "ledger.invoked":
             schema_check.check(
                 {

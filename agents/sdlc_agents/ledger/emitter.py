@@ -16,11 +16,12 @@ from __future__ import annotations
 import time
 from typing import Any, Protocol
 
+from sdlc_agents import cost
 from sdlc_agents.ledger.service import Ledger
 from sdlc_agents.ports import FoundryPort
 
 LEDGER_AGENT = "sdlc-ledger"
-CALL_TIMEOUT_S = 90
+CALL_TIMEOUT_S = 60
 
 
 class EmitResult:
@@ -46,12 +47,17 @@ class HostedEmitter:
 
     def emit(self, events: list[dict[str, Any]], *, reconcile: bool = False) -> EmitResult:
         body = {"op": "ingest", "events": events, "reconcile": reconcile}
+        started = time.monotonic()
         try:
             reply, self._session = self._foundry.invoke_hosted(
                 LEDGER_AGENT, body, session_id=self._session, timeout_s=CALL_TIMEOUT_S
             )
         except Exception as exc:
-            return EmitResult(error=f"ledger: {type(exc).__name__}: {str(exc)[:160]}")
+            waited = time.monotonic() - started
+            # A request that waited has woken the agent, which bills its idle tail whatever the answer was;
+            # one that failed at once (no route, refused) never reached it.
+            usd = cost.ledger_call_usd(waited) if waited >= 1.0 else 0.0
+            return EmitResult(usd=usd, error=f"ledger: {type(exc).__name__}: {str(exc)[:160]}")
         if not reply.get("ok"):
             return EmitResult(error=f"ledger: {str(reply)[:160]}")
         return EmitResult(usd=float(reply.get("usd", 0.0)), reply=reply)
