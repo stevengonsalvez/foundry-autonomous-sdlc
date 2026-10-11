@@ -112,3 +112,4 @@ Run `python3 scripts/setup_repo.py --phase bootstrap` once so the label `escalat
 - The Actions app can push the `deploy` branch (any other writer is limited by a ruleset). Anyone who can change `cd.yml` on main can change what is served.
 - A rollback does not revert main, and it flags only the newest PR (the ticket of the build it was running), not every PR the build carried.
 - A CI run on main that is red for a required check still takes the pending slot, finds the checks red in `plan` and deploys nothing; the next green merge deploys everything merged since prod.
+- On a personal repository the `deploy` branch cannot be locked to the Actions app: `setup_repo.py --phase protect-deploy` is refused by GitHub (HTTP 422). Anyone or anything with `contents: write` on the repository can push to `deploy`, and `pages.yml` publishes it. On an organization repository, run that phase after the first release.

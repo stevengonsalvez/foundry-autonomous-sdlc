@@ -261,6 +261,9 @@ def plan_ruleset(run: Gh) -> list[Step]:
 # workflow (the GitHub Actions app, through GITHUB_TOKEN) may move it. Without this, any
 # credential with contents write on the repository could push straight to prod. Apply it after
 # the first CD run has created the branch, then confirm the next CD run still passes.
+# Tried on this personal repository on 2026-10-11: GitHub answers HTTP 422 ("Actor GitHub Actions
+# integration must be part of the ruleset source or owner organization"), so the phase only works
+# on a repository owned by an organization. Here the exposure is documented in docs/cd.md.
 DEPLOY_RULESET_NAME = "deploy-branch"
 DEPLOY_RULESET: dict[str, Any] = {
     "name": DEPLOY_RULESET_NAME,
