@@ -38,7 +38,7 @@
       "pass": 7
     }
   },
-  "generated_at": "2026-10-11T23:48:03Z",
+  "generated_at": "2026-10-11T23:49:42Z",
   "issues": [
     {
       "closed_at": "2026-10-10T12:28:43Z",
@@ -1663,9 +1663,9 @@
       "cost": {
         "calls": 3,
         "coder_model_usd": 0.0,
-        "coder_usd": 0.0,
+        "coder_usd": 0.100275,
         "model_usd": 0.009232,
-        "usd": 0.009232
+        "usd": 0.109507
       },
       "deferred": null,
       "escalation": null,
@@ -1700,28 +1700,70 @@
         },
         {
           "entered_at": "2026-10-11T23:47:35Z",
+          "seconds": 96,
+          "stage": "stage:building"
+        },
+        {
+          "entered_at": "2026-10-11T23:49:11Z",
           "in_progress": true,
           "seconds": 0,
-          "stage": "stage:building"
+          "stage": "stage:feasible"
         }
       ],
       "title": "Show how many tracking events a parcel has",
       "type": "feature"
+    },
+    {
+      "closed_at": null,
+      "coder_engine": null,
+      "coder_sessions_lost": 0,
+      "cost": {
+        "calls": 1,
+        "coder_model_usd": 0.0,
+        "coder_usd": 0.0,
+        "model_usd": 0.000985,
+        "usd": 0.000985
+      },
+      "deferred": null,
+      "escalation": null,
+      "gate_attempts": {},
+      "gates": {},
+      "kind": "issue",
+      "number": 52,
+      "opened_at": "2026-10-11T23:48:35Z",
+      "outcome": "open",
+      "owner": null,
+      "pr": null,
+      "quality_score": 5,
+      "release": null,
+      "resolution_seconds": null,
+      "scenario": "b",
+      "severity": null,
+      "stages": [
+        {
+          "entered_at": "2026-10-11T23:49:20Z",
+          "in_progress": true,
+          "seconds": 0,
+          "stage": "stage:needs-refinement"
+        }
+      ],
+      "title": "Intake probe three",
+      "type": "feature"
     }
   ],
   "ledger": {
-    "emitted_at": "2026-10-11T23:47:43Z",
+    "emitted_at": "2026-10-11T23:49:22Z",
     "reconciled_at": "2026-10-11T23:42:42Z"
   },
   "repo": "stevengonsalvez/foundry-autonomous-sdlc",
   "totals": {
     "deferred": 0,
     "escalated": 18,
-    "issues": 24,
-    "ledger_usd": 0.03852,
-    "orchestrator_usd": 0.865846,
+    "issues": 25,
+    "ledger_usd": 0.042983,
+    "orchestrator_usd": 0.878823,
     "released": 5,
-    "usd": 2.019788
+    "usd": 2.138488
   },
   "version": 1
 }
