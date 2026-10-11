@@ -329,6 +329,20 @@ def overlay(ticket: dict[str, Any], deploy: dict[str, Any] | None) -> dict[str, 
         t["gates"]["soak"] = soak
     esc = t.get("escalation")
     label = (esc or {}).get("label") if esc else None
+    if env == "rolled-back" and esc is not None and not esc.get("reasons"):
+        # Flagged by CD with no state comment of its own: the reason and evidence are the failed run's.
+        last = next((h for h in reversed(hops) if h["status"] in ("rolled_back", "failed")), None)
+        if last is not None:
+            esc["reasons"] = [
+                f"Release {last.get('version') or ''} rolled back: {last.get('detail') or 'a gate failed'}".replace(
+                    "  ", " "
+                )
+            ]
+            esc["evidence_url"] = last.get("run_url") or esc.get("evidence_url")
+            esc["tried"] = esc.get("tried") or [
+                "CD built the release, deployed it to staging and ran the smoke tests.",
+                "The failed gate triggered the automatic rollback to the previous artifact.",
+            ]
     if env == "rolled-back" and esc is None:
         last = next((h for h in reversed(hops) if h["status"] in ("rolled_back", "failed")), hops[-1])
         t["escalation"] = {
