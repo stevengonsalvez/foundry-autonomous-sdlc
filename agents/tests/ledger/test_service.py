@@ -355,6 +355,7 @@ def test_a_flagged_pull_request_shows_its_recovery_once_a_later_release_is_live(
         {"version": 1, "staging": None, "prod": None, "previous_prod": None, "history": history}
     )
     gh.issues[n]["labels"] = []  # CD took the flag off when the release went live
+    gh.issues[n]["state"] = "closed"  # the PR was merged long ago
     led.handle({"op": "reconcile"})
     t = next(t for t in state_of(store)["tickets"] if t["issue"] == n)
     assert t["env"] == "prod" and t["stage"] == "prod" and t["flags"] == [] and t["escalation"] is None
