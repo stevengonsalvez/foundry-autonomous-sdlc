@@ -323,6 +323,42 @@ class GitHubClient:
         data = self._call("POST", "/git/commits", body={"message": message, "tree": tree, "parents": [parent_sha]})
         return str(data["sha"])
 
+    # -- whole-branch writes (the ledger's `state` branch) ----------------------
+
+    def read_files(self, branch: str, paths: tuple[str, ...]) -> dict[str, str] | None:
+        """Text of the named files at the tip of `branch` (absent files are left out), or None when the
+        branch does not exist. Reads blobs, so files over the 1 MB contents limit are fine."""
+        sha = self.get_branch_sha(branch)
+        if sha is None:
+            return None
+        commit = self._call("GET", f"/git/commits/{sha}")
+        tree = self._call("GET", f"/git/trees/{commit['tree']['sha']}")
+        wanted = {item["path"]: item["sha"] for item in tree.get("tree") or []
+                  if item.get("type") == "blob" and item["path"] in paths}
+        return {path: base64.b64decode(self._call("GET", f"/git/blobs/{blob}")["content"]).decode("utf-8")
+                for path, blob in wanted.items()}
+
+    def commit_files(self, branch: str, files: dict[str, str], *, message: str, parent_sha: str | None) -> str:
+        """One commit that sets `files` on `branch` and returns its sha. With a parent it moves the ref
+        without force, so a concurrent writer makes this raise GitHubError(422) instead of being lost;
+        without one it creates the branch as an orphan root commit."""
+        entries = []
+        for path, text in files.items():
+            blob = self._call("POST", "/git/blobs", body={"content": text, "encoding": "utf-8"})
+            entries.append({"path": path, "mode": "100644", "type": "blob", "sha": blob["sha"]})
+        tree_body: dict[str, Any] = {"tree": entries}
+        if parent_sha:
+            tree_body["base_tree"] = self._call("GET", f"/git/commits/{parent_sha}")["tree"]["sha"]
+        tree = self._call("POST", "/git/trees", body=tree_body)
+        commit = self._call("POST", "/git/commits", body={
+            "message": message, "tree": tree["sha"], "parents": [parent_sha] if parent_sha else []})
+        if parent_sha:
+            ref = f"/git/refs/heads/{urllib.parse.quote(branch)}"
+            self._call("PATCH", ref, body={"sha": commit["sha"], "force": False})
+        else:
+            self._call("POST", "/git/refs", body={"ref": f"refs/heads/{branch}", "sha": commit["sha"]})
+        return str(commit["sha"])
+
     # -- releases and workflows -----------------------------------------------
 
     def list_tags(self) -> list[str]:
