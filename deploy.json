@@ -8,7 +8,7 @@
     "deployed_at": "2026-10-11T21:53:29Z",
     "run_id": 38178080036,
     "run_url": "https://github.com/stevengonsalvez/foundry-autonomous-sdlc/actions/runs/38178080036",
-    "status": "deployed",
+    "status": "promoted",
     "pr": 44,
     "issue": null,
     "includes": [
@@ -20,6 +20,30 @@
     ]
   },
   "prod": {
+    "sha": "641cb02712ac26d9d2fcb0335df3534504d3fde8",
+    "short": "641cb02",
+    "version": "main-641cb02",
+    "built_at": "2026-10-11T21:53:18Z",
+    "promoted_at": "2026-10-11T22:05:22Z",
+    "run_id": 38178080036,
+    "run_attempt": 1,
+    "run_url": "https://github.com/stevengonsalvez/foundry-autonomous-sdlc/actions/runs/38178080036",
+    "gates": [
+      "smoke",
+      "soak"
+    ],
+    "pr": 44,
+    "issue": null,
+    "tag": "prod/20261011-220522-641cb02",
+    "includes": [
+      {
+        "pr": 44,
+        "issue": null,
+        "sha": "641cb02712ac26d9d2fcb0335df3534504d3fde8"
+      }
+    ]
+  },
+  "previous_prod": {
     "sha": "f516371f651a9794214e7376af1d575cd60e08ca",
     "short": "f516371",
     "version": "main-f516371",
@@ -34,7 +58,6 @@
     "tag": null,
     "includes": []
   },
-  "previous_prod": null,
   "history": [
     {
       "at": "2026-10-11T21:55:00Z",
@@ -68,6 +91,24 @@
       "version": "main-641cb02",
       "run_url": "https://github.com/stevengonsalvez/foundry-autonomous-sdlc/actions/runs/38178080036",
       "reason": "deployed to staging",
+      "issue": null,
+      "pr": 44,
+      "includes": [
+        {
+          "pr": 44,
+          "issue": null,
+          "sha": "641cb02712ac26d9d2fcb0335df3534504d3fde8"
+        }
+      ]
+    },
+    {
+      "at": "2026-10-11T22:05:22Z",
+      "action": "promote",
+      "env": "prod",
+      "sha": "641cb02712ac26d9d2fcb0335df3534504d3fde8",
+      "version": "main-641cb02",
+      "run_url": "https://github.com/stevengonsalvez/foundry-autonomous-sdlc/actions/runs/38178080036",
+      "reason": "smoke and soak passed",
       "issue": null,
       "pr": 44,
       "includes": [
