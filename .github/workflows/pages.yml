@@ -1,8 +1,18 @@
 name: Pages
 
-# Publishes the demo app at the site root and the metrics dashboard at /dashboard/.
-# The orchestrator dispatches this after writing metrics.json to the `metrics` branch;
-# the schedule is the fallback. No secrets and no Azure credentials, ever.
+# The only workflow that deploys GitHub Pages. It renders the desired state of the whole site,
+# because Pages serves one artifact for every path:
+#
+#   /                the app in `prod/` on the `deploy` branch (written by cd.yml); while that
+#                    branch has no prod build yet, the app built from main
+#   /staging/        the app in `staging/` on the `deploy` branch, when there is one
+#   /dashboard/      the metrics dashboard from main, with metrics.json from the `metrics` branch
+#   /control-center/ apps/control-center from main, when it exists
+#
+# cd.yml dispatches this after every change to the deploy branch; the orchestrator dispatches it
+# after writing metrics.json; a push to main and the schedule are the fallbacks. Every run renders
+# the current state of those branches, so two runs in a row can never publish a mixed site.
+# No secrets and no Azure credentials, ever.
 
 on:
   workflow_dispatch:
@@ -56,6 +66,26 @@ jobs:
           path: metrics-checkout
           persist-credentials: false
 
+      # The deploy branch does not exist until cd.yml first stages a build.
+      - name: Look for the deploy branch
+        id: deploy
+        run: |
+          rc=0
+          git ls-remote --exit-code --heads \
+            "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY" refs/heads/deploy >/dev/null || rc=$?
+          case "$rc" in
+            0) echo "exists=true" >> "$GITHUB_OUTPUT" ;;
+            2) echo "exists=false" >> "$GITHUB_OUTPUT" ;;
+            *) echo "::error::git ls-remote failed with exit code $rc"; exit "$rc" ;;
+          esac
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        if: steps.deploy.outputs.exists == 'true'
+        with:
+          ref: deploy
+          path: deploy-checkout
+          persist-credentials: false
+
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: ${{ env.NODE_VERSION }}
@@ -65,10 +95,24 @@ jobs:
       - name: Assemble the site
         env:
           METRICS_EXISTS: ${{ steps.metrics.outputs.exists }}
+          DEPLOY_EXISTS: ${{ steps.deploy.outputs.exists }}
         run: |
           metrics_dir=()
           if [[ "$METRICS_EXISTS" == "true" ]]; then
             metrics_dir=(metrics-checkout)
+          fi
+          # Prod and staging come from the deploy branch when it holds them. Without a prod
+          # build the script builds the app from main for the root, as it always did.
+          if [[ "$DEPLOY_EXISTS" == "true" ]]; then
+            if [[ -f deploy-checkout/prod/index.html ]]; then
+              export PROD_DIST="$PWD/deploy-checkout/prod"
+            fi
+            if [[ -f deploy-checkout/staging/index.html ]]; then
+              export STAGING_DIST="$PWD/deploy-checkout/staging"
+            fi
+          fi
+          if [[ -f apps/control-center/index.html ]]; then
+            export CONTROL_CENTER_SRC="$PWD/apps/control-center"
           fi
           scripts/build_pages.sh _site "${metrics_dir[@]}"
 

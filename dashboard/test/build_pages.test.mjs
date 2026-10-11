@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { cp, mkdir, mkdtemp, readFile, readdir, rm, stat, writeFile } from 'node:fs/promises';
+import { cp, mkdir, mkdtemp, readFile, readdir, rm, stat, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -156,6 +156,182 @@ test('fails when the app build has no index.html', async () => {
     const r = run([sb.out], { APP_DIST: sb.appDist });
     assert.notEqual(r.status, 0);
     assert.match(r.stderr, /no index\.html/);
+  } finally {
+    await sb.cleanup();
+  }
+});
+
+async function builtApp(dir, name, sha) {
+  const dist = join(dir, name);
+  await mkdir(join(dist, 'assets'), { recursive: true });
+  await writeFile(join(dist, 'index.html'), `<!doctype html><title>${name}</title>`);
+  await writeFile(join(dist, 'assets', 'app.js'), `console.log("${name}");`);
+  if (sha) await writeFile(join(dist, 'build.json'), JSON.stringify({ sha, short: sha.slice(0, 7) }));
+  return dist;
+}
+
+async function controlCenter(dir, extra = {}) {
+  const src = join(dir, 'control-center-src');
+  await mkdir(join(src, 'css'), { recursive: true });
+  await mkdir(join(src, 'js'), { recursive: true });
+  await writeFile(join(src, 'index.html'), '<!doctype html><title>Control center</title>');
+  await writeFile(join(src, 'css', 'app.css'), 'body{}');
+  await writeFile(join(src, 'js', 'app.js'), 'export {};');
+  for (const [path, body] of Object.entries(extra)) {
+    await mkdir(join(src, path, '..'), { recursive: true });
+    await writeFile(join(src, path), body);
+  }
+  return src;
+}
+
+test('PROD_DIST is the same as APP_DIST, and setting both is refused', async () => {
+  const sb = await sandbox();
+  try {
+    const ok = run([sb.out], { PROD_DIST: sb.appDist });
+    assert.equal(ok.status, 0, ok.stderr);
+    assert.ok(await exists(join(sb.out, 'assets', 'app.js')));
+
+    const both = run([join(sb.dir, 'out2')], { PROD_DIST: sb.appDist, APP_DIST: sb.appDist });
+    assert.notEqual(both.status, 0);
+    assert.match(both.stderr, /only one of APP_DIST and PROD_DIST/);
+  } finally {
+    await sb.cleanup();
+  }
+});
+
+test('publishes prod at the root and staging under /staging/, each with its own build.json', async () => {
+  const sb = await sandbox();
+  try {
+    const prod = await builtApp(sb.dir, 'prod', 'a'.repeat(40));
+    const staging = await builtApp(sb.dir, 'staging', 'b'.repeat(40));
+    const r = run([sb.out], { PROD_DIST: prod, STAGING_DIST: staging });
+    assert.equal(r.status, 0, r.stderr);
+    const files = await listFiles(sb.out);
+    for (const expected of ['index.html', 'build.json', 'assets/app.js', 'staging/index.html', 'staging/build.json', 'staging/assets/app.js', 'dashboard/index.html']) {
+      assert.ok(files.includes(expected), `missing ${expected}`);
+    }
+    assert.equal(JSON.parse(await readFile(join(sb.out, 'build.json'), 'utf8')).sha, 'a'.repeat(40));
+    assert.equal(JSON.parse(await readFile(join(sb.out, 'staging', 'build.json'), 'utf8')).sha, 'b'.repeat(40));
+    assert.match(r.stdout, /staging published at \/staging\//);
+  } finally {
+    await sb.cleanup();
+  }
+});
+
+test('without STAGING_DIST no /staging/ is published', async () => {
+  const sb = await sandbox();
+  try {
+    const r = run([sb.out], { PROD_DIST: sb.appDist });
+    assert.equal(r.status, 0, r.stderr);
+    assert.ok(!(await exists(join(sb.out, 'staging'))));
+    assert.match(r.stdout, /\/staging\/ is not published/);
+  } finally {
+    await sb.cleanup();
+  }
+});
+
+for (const [name, setup] of [
+  ['an invalid build.json', (dist) => writeFile(join(dist, 'build.json'), '{not json')],
+  ['a build.json without a sha', (dist) => writeFile(join(dist, 'build.json'), '{"short":"abc"}')],
+  ['a staging path inside the artifact', (dist) => mkdir(join(dist, 'staging'))],
+  ['a control-center path inside the artifact', (dist) => mkdir(join(dist, 'control-center'))],
+]) {
+  test(`refuses a built app with ${name}`, async () => {
+    const sb = await sandbox();
+    try {
+      const staging = await builtApp(sb.dir, 'staging', 'b'.repeat(40));
+      await setup(staging);
+      const r = run([sb.out], { PROD_DIST: sb.appDist, STAGING_DIST: staging });
+      assert.notEqual(r.status, 0);
+      assert.match(r.stderr, /staging build/);
+    } finally {
+      await sb.cleanup();
+    }
+  });
+}
+
+test('refuses a staging build without index.html', async () => {
+  const sb = await sandbox();
+  try {
+    const staging = await builtApp(sb.dir, 'staging');
+    await rm(join(staging, 'index.html'));
+    const r = run([sb.out], { PROD_DIST: sb.appDist, STAGING_DIST: staging });
+    assert.notEqual(r.status, 0);
+    assert.match(r.stderr, /staging build has no index\.html/);
+  } finally {
+    await sb.cleanup();
+  }
+});
+
+test('publishes the control center through an allowlist', async () => {
+  const sb = await sandbox();
+  try {
+    const src = await controlCenter(sb.dir, {
+      'assets/logo.svg': '<svg/>',
+      'notes.md': 'dev notes',
+      'package.json': '{}',
+      'tsconfig.json': '{}',
+      'scripts/dev.mjs': 'x',
+    });
+    const r = run([sb.out], { PROD_DIST: sb.appDist, CONTROL_CENTER_SRC: src });
+    assert.equal(r.status, 0, r.stderr);
+    const files = (await listFiles(sb.out)).filter((f) => f.startsWith('control-center/'));
+    assert.deepEqual(files, [
+      'control-center/assets/logo.svg',
+      'control-center/css/app.css',
+      'control-center/index.html',
+      'control-center/js/app.js',
+    ]);
+  } finally {
+    await sb.cleanup();
+  }
+});
+
+test('a missing or empty control center source is skipped without error', async () => {
+  const sb = await sandbox();
+  try {
+    for (const [i, src] of [join(sb.dir, 'nope'), sb.dir.concat('/app-dist/assets'), ''].entries()) {
+      const out = join(sb.dir, `out-${i}`);
+      const r = run([out], { PROD_DIST: sb.appDist, CONTROL_CENTER_SRC: src });
+      assert.equal(r.status, 0, r.stderr);
+      assert.ok(!(await exists(join(out, 'control-center'))));
+      assert.match(r.stdout, /\/control-center\/ is not published/);
+    }
+  } finally {
+    await sb.cleanup();
+  }
+});
+
+for (const [name, extra] of [
+  ['a test file', { 'js/app.test.js': 'x' }],
+  ['a fixture', { 'js/fixture-data.js': 'x' }],
+  ['a sample json', { 'assets/orders.sample.json': '{}' }],
+  ['a README', { 'css/README.md': 'x' }],
+  ['a test directory', { 'js/test/a.js': 'x' }],
+  ['a package.json', { 'js/package.json': '{}' }],
+]) {
+  test(`the leak guard stops the control center from shipping ${name}`, async () => {
+    const sb = await sandbox();
+    try {
+      const src = await controlCenter(sb.dir, extra);
+      const r = run([sb.out], { PROD_DIST: sb.appDist, CONTROL_CENTER_SRC: src });
+      assert.notEqual(r.status, 0);
+      assert.match(r.stderr, /refusing to publish/);
+      assert.match(r.stderr, /control-center output/);
+    } finally {
+      await sb.cleanup();
+    }
+  });
+}
+
+test('the leak guard stops a symlink in the control center from shipping', async () => {
+  const sb = await sandbox();
+  try {
+    const src = await controlCenter(sb.dir);
+    await symlink('/etc/hosts', join(src, 'js', 'hosts.js'));
+    const r = run([sb.out], { PROD_DIST: sb.appDist, CONTROL_CENTER_SRC: src });
+    assert.notEqual(r.status, 0);
+    assert.match(r.stderr, /refusing to publish/);
   } finally {
     await sb.cleanup();
   }
