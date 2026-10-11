@@ -63,3 +63,7 @@
 {"at":"2026-10-11T22:40:55Z","data":{"digest":"5b3a4b1e03ac","text":"Bug in prod release v0.1.1: lowercase tracking numbers are rejected as invalid. All gates (agent-scope, coverage, e2e, gitleaks, tdd-order, test) show success; issue 25, cost USD 0.04, no escalation and zero questions asked."},"id":"3457729cd42a7f7c","issue":25,"source":"ledger","type":"summary.written","v":1}
 {"at":"2026-10-11T22:40:55Z","data":{"digest":"f92a36fbc97e"},"id":"f29f6440ea61fc39","issue":27,"source":"ledger","type":"summary.failed","v":1}
 {"at":"2026-10-11T22:40:55Z","data":{"compute_usd":0.002853,"events":3,"issues":[24,25,27],"mode":"hosted","model_usd":0.002142,"op":"reconcile","seconds":23.406,"summaries":2,"usd":0.004995},"id":"c78c280f302cba11","issue":null,"source":"ledger","type":"ledger.invoked","v":1}
+{"at":"2026-10-11T22:58:36Z","data":{"digest":"32ca297a25be"},"id":"e6c1ce5d57fa7459","issue":33,"source":"ledger","type":"summary.failed","v":1}
+{"at":"2026-10-11T22:58:36Z","data":{"digest":"047fbb638de5"},"id":"1135d5bd378580ec","issue":36,"source":"ledger","type":"summary.failed","v":1}
+{"at":"2026-10-11T22:58:36Z","data":{"digest":"2bb99d6cc998"},"id":"d45f9eddec05a4f7","issue":38,"source":"ledger","type":"summary.failed","v":1}
+{"at":"2026-10-11T22:58:36Z","data":{"compute_usd":0.002599,"events":3,"issues":[33,36,38],"mode":"hosted","model_usd":0.002217,"op":"rebuild","seconds":10.623,"summaries":0,"usd":0.004816},"id":"fd6734b0bac2842b","issue":null,"source":"ledger","type":"ledger.invoked","v":1}
