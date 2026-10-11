@@ -396,7 +396,8 @@ class Deployer:
         if ledger_mode not in LEDGER_MODES:
             raise DeployError(f"ledger mode must be one of {', '.join(LEDGER_MODES)}")
         builders = self.zip_builders or default_zip_builders()
-        for name, size in sizes.items():
+        # The ledger first: the orchestrator is told to use it only once it is there.
+        for name, size in sorted(sizes.items(), key=lambda item: item[0] != LEDGER):
             env = {**self.config.hosted_env(), "HOSTED_CPU": size.cpu, "HOSTED_MEMORY": size.memory}
             if name == ORCHESTRATOR:
                 env["LEDGER_MODE"] = ledger_mode
@@ -585,8 +586,10 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
         hosted.add_argument(f"--{flag}-idle-minutes", type=_idle_minutes, default=default.idle_minutes,
                             help="session idle timeout in minutes (2 to 60)")
     hosted.add_argument("--only", choices=(ORCHESTRATOR, CODER, LEDGER), help="deploy one hosted agent")
-    hosted.add_argument("--ledger-mode", choices=LEDGER_MODES, default="hosted",
-                        help="how the orchestrator reaches the state-keeper; inline deploys no sdlc-ledger agent")
+    hosted.add_argument("--ledger-mode", choices=LEDGER_MODES, default=None,
+                        help="how the orchestrator reaches the state-keeper (hosted when sdlc-ledger is deployed in "
+                             "the same run; required when the orchestrator is deployed alone, so a redeploy never "
+                             "changes it silently); inline deploys no sdlc-ledger agent")
     hosted.add_argument("--timeout", type=int, default=900, help="seconds to wait for status active")
     routine = argparse.ArgumentParser(add_help=False)
     toggle = routine.add_mutually_exclusive_group()
@@ -618,7 +621,7 @@ def sizes_from(args: argparse.Namespace) -> dict[str, HostedSize]:
              LEDGER: HostedSize(args.ledger_cpu, args.ledger_memory, args.ledger_idle_minutes)}
     if args.only:
         return {args.only: sizes[args.only]}
-    if args.ledger_mode != "hosted":
+    if args.ledger_mode in ("inline", "off"):
         del sizes[LEDGER]
     return sizes
 
@@ -630,7 +633,11 @@ def dispatch(deployer: Deployer, args: argparse.Namespace) -> None:
     if command in ("all", "prompt-agents"):
         deployer.prompt_agents()
     if command in ("all", "hosted"):
-        deployer.hosted(sizes_from(args), args.timeout, args.ledger_mode)
+        sizes = sizes_from(args)
+        mode = args.ledger_mode or ("hosted" if LEDGER in sizes else None)
+        if ORCHESTRATOR in sizes and mode is None:
+            raise DeployError("deploying the orchestrator alone: say how it reaches the ledger with --ledger-mode")
+        deployer.hosted(sizes, args.timeout, mode or "hosted")
     if command in ("all", "roles"):
         deployer.roles()
     if command in ("all", "routine"):

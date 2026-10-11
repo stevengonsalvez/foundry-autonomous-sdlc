@@ -271,6 +271,22 @@ def test_hosted_is_idempotent_for_an_unchanged_zip() -> None:
     assert "sdlc-coder version 1 unchanged" in out.getvalue()
 
 
+def test_deploying_the_orchestrator_alone_must_say_how_it_reaches_the_ledger() -> None:
+    args = da.parse_args(["hosted", "--only", "sdlc-orchestrator"])
+    deployer, _, _ = make()
+    with pytest.raises(da.DeployError, match="--ledger-mode"):
+        da.dispatch(deployer, args)
+    ok = da.parse_args(["hosted", "--only", "sdlc-orchestrator", "--ledger-mode", "hosted"])
+    da.dispatch(deployer, ok)
+    assert deployer.foundry.created[0]["env"]["LEDGER_MODE"] == "hosted"
+
+
+def test_the_ledger_is_deployed_before_the_orchestrator_is_told_to_use_it() -> None:
+    deployer, _, rec = make()
+    deployer.hosted(da.DEFAULT_SIZES, timeout_s=600)
+    assert [c["name"] for c in rec.foundry.created][0] == "sdlc-ledger"
+
+
 def test_inline_ledger_mode_deploys_no_ledger_agent_and_tells_the_orchestrator() -> None:
     args = da.parse_args(["hosted", "--ledger-mode", "inline"])
     sizes = da.sizes_from(args)
