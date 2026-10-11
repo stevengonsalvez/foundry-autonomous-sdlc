@@ -49,9 +49,24 @@ def test_read_files_returns_the_named_files_of_the_branch_tip_and_none_for_a_mis
             "GET /git/blobs/b1": ok({"content": b64('{"a":1}'), "encoding": "base64"}),
         }
     )
-    assert gh.read_files("state", ("state.json", "events.jsonl")) == {"state.json": '{"a":1}'}
+    assert gh.read_files("state", ("state.json", "events.jsonl")) == ({"state.json": '{"a":1}'}, "c1")
     gone, _, _ = client({"GET /git/ref/heads/state": HttpResponse(404, {}, b"{}")})
     assert gone.read_files("state", ("state.json",)) is None
+
+
+def test_the_parent_of_a_write_is_the_commit_the_files_were_read_at() -> None:
+    """A branch that moves between the read and the write must make the write fail, not be overwritten."""
+    gh, transport, _ = client(
+        {
+            "GET /git/ref/heads/state": [ok({"object": {"sha": "c1"}}), ok({"object": {"sha": "c2"}})],
+            "GET /git/commits/c1": ok({"tree": {"sha": "t1"}}),
+            "GET /git/trees/t1": ok({"tree": [{"path": "state.json", "type": "blob", "sha": "b1"}]}),
+            "GET /git/blobs/b1": ok({"content": b64("{}"), "encoding": "base64"}),
+        }
+    )
+    snap = GitHubBranchStore(gh).read()
+    assert snap.head == "c1"
+    assert sum(1 for r in transport.requests if "/git/ref/heads/state" in r.url) == 1
 
 
 def test_commit_files_moves_the_ref_without_force_so_a_second_writer_cannot_be_lost() -> None:

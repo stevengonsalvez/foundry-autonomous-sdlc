@@ -43,10 +43,11 @@ class GitHubBranchStore:
         self._branch = branch
 
     def read(self) -> Snapshot:
-        files = self._github.read_files(self._branch, FILES)
-        if files is None:
+        found = self._github.read_files(self._branch, FILES)
+        if found is None:
             return Snapshot()
-        return Snapshot(files, self._github.get_branch_sha(self._branch))
+        files, head = found
+        return Snapshot(files, head)  # the sha the files were read at, never a second lookup
 
     def write(self, files: dict[str, str], *, message: str, parent: str | None) -> str:
         try:

@@ -325,9 +325,10 @@ class GitHubClient:
 
     # -- whole-branch writes (the ledger's `state` branch) ----------------------
 
-    def read_files(self, branch: str, paths: tuple[str, ...]) -> dict[str, str] | None:
-        """Text of the named files at the tip of `branch` (absent files are left out), or None when the
-        branch does not exist. Reads blobs, so files over the 1 MB contents limit are fine."""
+    def read_files(self, branch: str, paths: tuple[str, ...]) -> tuple[dict[str, str], str] | None:
+        """Text of the named files (absent ones are left out) and the commit sha they were read at, or None
+        when the branch does not exist. The sha is the one the files came from, so it is the right parent
+        for a compare-and-swap write. Reads blobs, so files over the 1 MB contents limit are fine."""
         sha = self.get_branch_sha(branch)
         if sha is None:
             return None
@@ -335,8 +336,9 @@ class GitHubClient:
         tree = self._call("GET", f"/git/trees/{commit['tree']['sha']}")
         wanted = {item["path"]: item["sha"] for item in tree.get("tree") or []
                   if item.get("type") == "blob" and item["path"] in paths}
-        return {path: base64.b64decode(self._call("GET", f"/git/blobs/{blob}")["content"]).decode("utf-8")
-                for path, blob in wanted.items()}
+        files = {path: base64.b64decode(self._call("GET", f"/git/blobs/{blob}")["content"]).decode("utf-8")
+                 for path, blob in wanted.items()}
+        return files, sha
 
     def commit_files(self, branch: str, files: dict[str, str], *, message: str, parent_sha: str | None) -> str:
         """One commit that sets `files` on `branch` and returns its sha. With a parent it moves the ref
