@@ -18,7 +18,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from sdlc_agents import cost, gates, schema_check, state
-from sdlc_agents.clock import seconds_between
+from sdlc_agents.clock import parse_iso, seconds_between
 from sdlc_agents.ports import REPO, GitHubPort, Issue
 from sdlc_agents.state import State
 
@@ -39,7 +39,7 @@ METRICS_SCHEMA: dict[str, Any] = {
         "totals": {
             "type": "object",
             "properties": {"usd": _USD, "issues": _COUNT, "released": _COUNT, "escalated": _COUNT,
-                           "orchestrator_usd": _USD, "deferred": _COUNT},
+                           "orchestrator_usd": _USD, "ledger_usd": _USD, "deferred": _COUNT},
             "required": ["usd", "issues", "released"],
         },
         "issues": {"type": "array", "items": {
@@ -85,6 +85,7 @@ METRICS_SCHEMA: dict[str, Any] = {
         }},
         "gate_pass_rates": {"type": "object"},
         "deferrals": {"type": "object"},
+        "ledger": {"type": "object"},
     },
     "required": ["version", "generated_at", "repo", "totals", "issues", "gate_pass_rates"],
 }
@@ -187,9 +188,12 @@ def _gate_pass_rates(states: list[State]) -> dict[str, dict[str, int]]:
 
 def build(objects: list[tuple[Issue, State]], now: str, *, orchestrator_usd: float = 0.0,
           floor_usd: float = 0.0, deferred: dict[int, str] | None = None,
-          deferrals: dict[int, int] | None = None) -> dict[str, Any]:
-    """The metrics document. `orchestrator_usd` is the cumulative orchestrator compute; `floor_usd`
-    keeps totals.usd monotonic when objects drop out of view."""
+          deferrals: dict[int, int] | None = None, ledger_usd: float = 0.0,
+          ledger_marks: dict[str, str | None] | None = None) -> dict[str, Any]:
+    """The metrics document. `orchestrator_usd` is the cumulative orchestrator compute and `ledger_usd`
+    the cumulative compute of the state-keeper agent (both inside totals.usd); `floor_usd` keeps
+    totals.usd monotonic when objects drop out of view. `ledger_marks` records when the ledger was last
+    sent events and last reconciled, so a stateless tick knows when a heartbeat or reconcile is due."""
     deferred = deferred or {}
     entries = [{**_issue_entry(item, st), "deferred": deferred.get(item.number)}
                for item, st in sorted(objects, key=lambda p: p[0].number)]
@@ -199,8 +203,9 @@ def build(objects: list[tuple[Issue, State]], now: str, *, orchestrator_usd: flo
         "generated_at": now,
         "repo": REPO,
         "totals": {
-            "usd": round(max(objects_usd + orchestrator_usd, floor_usd), 6),
+            "usd": round(max(objects_usd + orchestrator_usd + ledger_usd, floor_usd), 6),
             "orchestrator_usd": round(orchestrator_usd, 6),
+            "ledger_usd": round(ledger_usd, 6),
             "deferred": sum(e["deferred"] is not None for e in entries),
             "issues": len(entries),
             "released": sum(e["outcome"] == "released" for e in entries),
@@ -210,6 +215,8 @@ def build(objects: list[tuple[Issue, State]], now: str, *, orchestrator_usd: flo
         "gate_pass_rates": _gate_pass_rates([st for _, st in objects]),
         # Consecutive deferred ticks per object: the tick reads them back to bound transient retries.
         "deferrals": {str(k): v for k, v in sorted((deferrals or {}).items())},
+        "ledger": {"emitted_at": (ledger_marks or {}).get("emitted_at"),
+                   "reconciled_at": (ledger_marks or {}).get("reconciled_at")},
     }
     schema_check.check(METRICS_SCHEMA, doc, "metrics")
     return doc
@@ -223,12 +230,27 @@ class Ledger:
     orchestrator_usd: float = 0.0
     objects: dict[int, float] = field(default_factory=dict)   # issue or PR number -> usd
     deferrals: dict[int, int] = field(default_factory=dict)   # number -> consecutive deferred ticks
+    ledger_usd: float = 0.0
+    ledger_emitted_at: str | None = None
+    ledger_reconciled_at: str | None = None
 
 
 def _number(value: Any) -> float:
     if isinstance(value, bool) or not isinstance(value, int | float) or value < 0:
         raise ValueError(f"not a spend figure: {value!r}")
     return float(value)
+
+
+def _mark(value: Any) -> str | None:
+    """A timestamp mark as written by the orchestrator, or None when it is not one (a hand edit must not
+    stop the tick that reads it)."""
+    try:
+        if isinstance(value, str):
+            parse_iso(value)
+            return value
+    except ValueError:
+        pass
+    return None
 
 
 def previous_totals(github: GitHubPort) -> Ledger | None:
@@ -245,7 +267,10 @@ def previous_totals(github: GitHubPort) -> Ledger | None:
             number = entry["pr"] if entry.get("kind") == "pr" else entry["number"]
             objects[int(number)] = _number(entry["cost"]["usd"])
         deferrals = {int(k): int(v) for k, v in (doc.get("deferrals") or {}).items()}
-        return Ledger(_number(totals["usd"]), _number(totals.get("orchestrator_usd", 0.0)), objects, deferrals)
+        raw_marks = doc.get("ledger") if isinstance(doc.get("ledger"), dict) else {}
+        marks = {k: _mark(v) for k, v in raw_marks.items()}
+        return Ledger(_number(totals["usd"]), _number(totals.get("orchestrator_usd", 0.0)), objects, deferrals,
+                      _number(totals.get("ledger_usd", 0.0)), marks.get("emitted_at"), marks.get("reconciled_at"))
     except (ValueError, KeyError, TypeError, AttributeError):
         return None
 
@@ -277,7 +302,7 @@ def publish(github: GitHubPort, doc: dict[str, Any]) -> str:
         if isinstance(old, dict):
             if _without(old, "generated_at") == _without(doc, "generated_at"):
                 return UNCHANGED
-            if _without(old, "generated_at", "totals") == _without(doc, "generated_at", "totals"):
+            if _without(old, "generated_at", "totals", "ledger") == _without(doc, "generated_at", "totals", "ledger"):
                 kind = TOTALS
     github.put_file(METRICS_PATH, json.dumps(doc, indent=2, sort_keys=True) + "\n",
                     branch=METRICS_BRANCH, message="chore(metrics): update metrics.json")

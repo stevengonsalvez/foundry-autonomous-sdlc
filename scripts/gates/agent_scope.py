@@ -37,6 +37,9 @@ PROTECTED_GLOBS = (
     "app/**/vitest.config.*",
     "app/**/vite.config.*",
     "app/**/playwright.config.*",
+    # The deploy smoke gate: its specs and any Playwright config of its own.
+    "app/**/playwright.*.config.*",
+    "app/e2e/smoke/**",
     "app/eslint.config.*",
     "app/**/tsconfig*.json",
     "app/coverage/**",

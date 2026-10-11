@@ -35,12 +35,16 @@ This is the contract every component is built against. If code and this file dis
 | CI | `.github/workflows/` | `ci.yml` (all gates), `pages.yml` (publish app and dashboard), `infra-ci.yml`. |
 | Dashboard | `dashboard/` | Static site (no build step), reads `metrics.json`. |
 | Metrics | branch `metrics`, file `metrics.json` | Written by the orchestrator, copied into the Pages artifact by `pages.yml`. |
+| Ledger | `agents/sdlc_agents/ledger/`, `agents/hosted/ledger/` | The state-keeper: event schema, fold, reconcile, branch writer. Hosted agent `sdlc-ledger`, or the same code inline in the orchestrator. See "Ledger and control center". |
+| State | branch `state`: `state.json`, `events.jsonl`, `archive.json` | Written only by the ledger. Read by the control center. |
+| Control center | `apps/control-center/` | Read-only static app, 8 views, published at `/control-center/`. |
+| CD | `.github/workflows/cd.yml`, `scripts/cd/`, branch `deploy` | Staging on merge, smoke, 10 minute soak, prod or rollback. See `docs/cd.md`. |
 
 ## Roles and secrets
 
 | Secret | Where it lives | Who reads it |
 |--------|----------------|--------------|
-| `github-pat` | Key Vault secret | Orchestrator and coder, with their own managed identity (secret-scope `Key Vault Secrets User`). Prompt agents reach GitHub only through the `github-mcp` project connection. |
+| `github-pat` | Key Vault secret | Orchestrator, coder and ledger, each with its own managed identity (secret-scope `Key Vault Secrets User`). Prompt agents reach GitHub only through the `github-mcp` project connection. The ledger uses it only to write branch `state` and to read issues, comments, PRs and branches `deploy` and `metrics`. |
 | `agy-cli-token` | Key Vault secret | Coder only. Written to `~/.gemini/antigravity-cli/antigravity-oauth-token`, mode 600. |
 
 The PAT belongs to the repo owner `stevengonsalvez`. It is used only against `stevengonsalvez/foundry-autonomous-sdlc`; every client in this repo hard-codes that repo and refuses any other.
@@ -71,7 +75,7 @@ One object, one `stage:*` label at a time. Transitions are performed only by the
 Label set (created by `scripts/setup_repo.py`; names are exact):
 
 - Stage: `stage:needs-refinement`, `stage:ready`, `stage:feasible`, `stage:tests-written`, `stage:building`, `stage:in-review`, `stage:merged`, `stage:released`
-- Escalation (terminal): `escalated:not-agent-suitable`, `escalated:requirements`, `escalated:review-failed`, `escalated:cost-cap`, `escalated:build-failed`, `escalated:agent-error`
+- Escalation (terminal): `escalated:not-agent-suitable`, `escalated:requirements`, `escalated:review-failed`, `escalated:cost-cap`, `escalated:build-failed`, `escalated:agent-error`, `escalated:deploy-failed` (set by the CD workflow when a release is rolled back, never by the orchestrator)
 - Type: `type:feature`, `type:bug`, `type:maintenance`
 - Bug triage: `bug:triaged`, `severity:s1`, `severity:s2`, `severity:s3`, `severity:s4`, `owner:web`, `owner:api`, `owner:carrier-mock`
 - PR: `agent:pr` (set on every PR the coder opens), `maintenance:test-repair`
@@ -217,6 +221,74 @@ After a merge: the release-notes agent writes notes from the PR title, body and 
 Additions to schema version 1 (all optional for readers): `totals.escalated`, `totals.orchestrator_usd`; per entry `kind` (`issue` or `pr`; the maintenance PR has `number: null`, `pr` set and scenario `d-maintenance`), `escalation`, `cost.coder_model_usd`, `deferred` (the transient error that deferred the object this tick, else null; `totals.deferred` counts them), `gate_attempts` (each gate's conclusions per evaluated head sha, oldest first: first element is the first attempt, last is the eventual result); per gate in `gate_pass_rates`, `first_pass` and `first_fail`. The stage the object is in now has `seconds: 0` and `in_progress: true`.
 
 Dashboard panels: cycle time per stage (median and per issue), defect owner and resolution time, cost per issue (table plus total against the 5 USD cap), gate pass rates (first-attempt and eventual).
+
+## Ledger and control center
+
+```
+┌──────────────┐ ticket.updated   ┌──────────────┐ one commit  ┌───────────────┐ poll 30 s  ┌─────────────┐
+│ orchestrator │ tick.finished    │ sdlc-ledger  │────────────▶│ branch state  │◀───────────│ control     │
+│ (every tick) │─────────────────▶│ hosted agent │             │ state.json    │ raw GitHub │ center      │
+└──────────────┘  Invocations     │ fold + guard │◀── reads ───│ events.jsonl  │ + API      │ (read-only) │
+┌──────────────┐ deploy.json      │ code derives │  GitHub:    │ archive.json  │            └─────────────┘
+│ CD workflow  │ (branch deploy)  │ LLM only     │  issues, PRs│               │
+│ cd.yml       │─ reconciled ────▶│ summarises   │  deploy, metrics            │
+└──────────────┘                  └──────────────┘                             │
+```
+
+**Rule of three.** GitHub is the source of truth, the orchestrator and CD say what happened, the ledger is the only writer of branch `state`. Anything an event missed is repaired by `reconcile`, which rebuilds each ticket from its state comment, PR, commits and the CD record.
+
+### Events (`events.jsonl`, one JSON object per line, schema version 1)
+
+`{"v":1,"id":"<16 hex>","at":"<ISO UTC>","type":"...","issue":12|null,"source":"orchestrator|reconcile|cd|ledger|operator","data":{...}}`. The id is a digest of the content, so the same event sent twice is dropped. Every string is cleaned on the way in (control characters removed, token-shaped strings replaced by `[REDACTED]`, length bounded); an event over 96 KB, a batch over 500 or a payload that fails its schema is rejected whole.
+
+| Type | Data | Sent by |
+|------|------|---------|
+| `ticket.updated` | `ticket`: the full ticket record (below) after any change to the object in the tick | orchestrator (one per object per tick, the latest), reconcile |
+| `tick.finished` | lock, per-object results, errors, model calls, spend of the tick | orchestrator, when something happened or every ~9 minutes as a heartbeat |
+| `metrics.observed` | the orchestrator's own spend estimate (`totals` of `metrics.json`) | orchestrator, reconcile |
+| `env.changed` | the `deploy.json` snapshot written by the CD workflow | reconcile (reads branch `deploy`) |
+| `billing.observed` | what Azure Cost Management billed for the resource group, month to date, by meter, with the read time | ledger (Cost Management Reader), at most every 6 hours |
+| `ledger.invoked` | the ledger's own compute for one call: seconds, USD, issues touched, mode | ledger |
+
+The orchestrator sends the batch once at the end of a tick (`HostedEmitter`: one Invocations call, session reused). It is best effort: a failure is a note in the tick report, never a failed tick. Once an hour (`metrics.json` key `ledger.reconciled_at`) the call carries `reconcile: true`.
+
+### Ticket record and board stages
+
+The record (`ledger/model.py`, pure functions) is derived from the state comment, issue metadata, PR facts and the CD record. Board stage mapping:
+
+| Board stage | `stage:*` label |
+|-------------|-----------------|
+| backlog | none (issue opened, nothing done yet) |
+| refining | `needs-refinement`, `ready` (a scored requirement still waiting for the feasibility call) |
+| feasible | `feasible` |
+| tests | `tests-written` |
+| building | `building` |
+| review | `in-review` |
+| staging | `merged`, `released` while the change is on `/staging/` or waiting for CD |
+| prod | `released` and the CD record says the change is live at the site root |
+| escalated | any `escalated:*` label, or a release rolled back by CD (`escalated:deploy-failed`) |
+
+A change released before CD existed was published to the root by `pages.yml` straight from `main`; the ledger shows it in prod with one hop labelled `legacy-publish`, never as a fake staging pass.
+
+Fields: `issue`, `kind` (`issue` or `pr`), `title`, `type`, `scenario`, `url`, `opened_at`, `closed_at`, `updated_at`, `stage`, `sdlc_stage`, `env` (`none`, `staging`, `prod`, `rolled-back`), `escalation` (`label`, `reasons`, `attempts`, `tried`, `evidence_url`), `stage_history` (backlog first, each with `at` and `seconds`), `pr`, `commits`, `release`, `hops` (environment hops), `gates` (the six CI checks plus `smoke` and `soak`), `gate_history`, `cost` (`usd`, `model_usd`, `coder_usd`, `ledger_usd`, tokens, per-agent rows, `cap_used_pct` against 1 USD), `agent_runs`, `coder`, `qa` (refinement questions and answers, answers labelled as the simulated product owner), `reviews`, `ci_triage`, `quality`, `triage`, `feasibility`, `summary`, `flags`, `digest`. A model writes only `summary`; it is shown only while the ticket's digest still matches, and is dropped when it contains a number, link or markup that the facts do not (`ledger/summary.py`).
+
+### state.json
+
+Top level: `version` (1), `repo`, `generated_at`, `updated_at`, `seq`, `board_stages`, `tickets`, `environments` (`staging`, `prod`, `previous_prod`, `history`, `rollbacks`, `source`), `agents` (the 10 agents and the ledger: state, last activity, calls, tokens, USD, errors, retries, current object, lock holder), `cost` (`totals`, `caps`, `billing`, `gap`, `metrics`, `ledger`), `flow` (lead time issue to prod, stage medians, first-attempt gate pass, defects, change failure rate per release, counts), `archived`, `ledger` (event count, last ingest, mode, last tick, recent problems). Closed tickets older than 30 days move to `archive.json`.
+
+`cost.gap` is the number the demo must not hide: `billed_usd` (Azure Cost Management, with its read time), `ledger_usd` (the orchestrator's estimate plus the ledger's own compute), their difference and ratio. The run of 2026-10-10 is the example: the ledger said 1.86 USD, Azure billed 4.80 USD when first read and 13.02 USD when read again on 2026-10-11, after the lagging usage had posted.
+
+### The hosted agent `sdlc-ledger`
+
+Invocations protocol, 0.25 vCPU, 0.5 GiB, idle timeout 2 minutes (the platform minimum): it is woken by a request and its compute is deprovisioned after the idle timeout, so between events it bills nothing. Ops: `ingest` (`events`, optional `reconcile`, `billing`), `reconcile` (optional `issue`), `rebuild` (state.json from events.jsonl), `status`. Each write is one commit built through the git data API and moved onto `state` without force; a lost race re-reads and folds again (up to 4 attempts). A missing or corrupt `state.json` is rebuilt from `events.jsonl`. Its roles: `Key Vault Secrets User` on `github-pat`, `Foundry User` on the project (model summaries on `sdlc-default`), `Cost Management Reader` on the resource group.
+
+Its own compute is priced like the other hosted agents (`cost.ledger_call_usd`: wall time plus the idle tail at 0.25 vCPU and 0.5 GiB, about 0.0027 USD for a 10 second call), recorded as `ledger.invoked`, added to `metrics.json` `totals.ledger_usd` and `totals.usd` (so the 4.50 USD halt counts it) and shown in the cost view and per ticket.
+
+**Fallback.** `LEDGER_MODE=inline` runs the same `Ledger` class in the orchestrator process (no second agent, no extra compute meter, `mode: "inline"` in `state.json`); `LEDGER_MODE=off` sends nothing. The event and state schema are identical in all three modes. `deploy_agents.py hosted --ledger-mode inline` selects it and deploys no ledger agent.
+
+### Control center (`apps/control-center/`)
+
+Static HTML, CSS and ES modules, inline SVG, no build. Eight views: ticket board, ticket detail, cost, environments, agent activity and health, escalation queue, flow metrics, questions-back and review trail. It holds no token and makes no write call; ticket creation is a link to the GitHub issue form. Freshness: it polls `raw.githubusercontent.com/.../state/state.json` every 30 seconds (that CDN caches for up to 300 seconds, measured) and, while GitHub API budget allows (60 unauthenticated requests per hour per IP), the contents API (cached 60 seconds) and the open-issues list, so a new issue appears as a "waiting for ledger" backlog card within about a minute and the ledger's own record replaces it later. A banner marks the data stale after 10 minutes. All text from GitHub or a model is inserted as text and links are limited to this repository.
 
 ## Prompt agents
 

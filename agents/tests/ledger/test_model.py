@@ -1,0 +1,110 @@
+"""The ticket record, derived from real state comments of the 2026-10-10 run."""
+
+from __future__ import annotations
+
+import json
+
+import pytest
+
+from sdlc_agents.ledger import events, model
+from tests.ledger.conftest import ticket_of
+
+
+def test_released_feature_walks_the_board_in_order_with_seconds_per_stage(real) -> None:
+    t = ticket_of(real[12])
+    assert [h["stage"] for h in t["stage_history"]] == [
+        "backlog",
+        "refining",
+        "feasible",
+        "tests",
+        "building",
+        "review",
+        "staging",
+        "staging",
+    ]
+    assert t["stage_history"][0]["sdlc_stage"] is None and t["stage_history"][-1]["seconds"] is None
+    assert all(h["seconds"] >= 0 for h in t["stage_history"][:-1])
+    assert t["sdlc_stage"] == "stage:released" and t["release"]["tag"] == "v0.1.0"
+    assert t["pr"]["number"] == 13 and t["pr"]["merge_sha"].startswith("00ad430")
+    assert t["cost"]["usd"] == pytest.approx(0.073015, abs=1e-6)
+    assert t["cost"]["cap_used_pct"] == pytest.approx(7.3, abs=0.05)
+
+
+def test_numbers_come_from_the_state_comment_and_agree_with_it(real) -> None:
+    for item in real.values():
+        t = ticket_of(item)
+        data = item["state_data"]
+        assert t["cost"]["usd"] == pytest.approx(data["cost"]["usd"], abs=5e-6)
+        assert t["cost"]["coder_usd"] == pytest.approx(data["cost"]["coder_usd"], abs=1e-6)
+        assert t["cost"]["calls"] == sum(int(c.get("count", 1)) for c in data["cost"]["calls"])
+        assert t["cost"]["model_usd"] == pytest.approx(sum(c["usd"] for c in data["cost"]["calls"]), abs=1e-5)
+
+
+def test_refinement_questions_are_paired_with_labelled_simulated_answers(real) -> None:
+    t = ticket_of(real[24])
+    assert len(t["qa"]) == 4 and t["qa"][0]["round"] == 1
+    assert all(q["answered_by"] == "simulated product owner" for q in t["qa"])
+    assert not any(q["answer"].startswith("[Simulated product owner]") for q in t["qa"])
+    assert t["reviews"][0]["verdict"] == "approve" and t["reviews"][0]["findings"]
+    assert ticket_of(real[12])["qa"] == []
+
+
+def test_escalated_ticket_says_why_what_was_tried_and_where_the_evidence_is(real) -> None:
+    t = ticket_of(real[17])
+    assert t["stage"] == "escalated" and t["escalation"]["label"] == "escalated:not-agent-suitable"
+    assert len(t["escalation"]["reasons"]) == 4
+    assert any("Feasibility: not suitable" in s for s in t["escalation"]["tried"])
+    assert t["escalation"]["evidence_url"].startswith(
+        "https://github.com/stevengonsalvez/foundry-autonomous-sdlc/issues/17#issuecomment-"
+    )
+
+
+def test_bug_keeps_its_triage_and_maintenance_pr_is_its_own_kind(real) -> None:
+    bug = ticket_of(real[25])
+    assert bug["type"] == "bug" and bug["triage"]["severity"] == "s3" and bug["triage"]["owner"] == "api"
+    pr = ticket_of(real[40])
+    assert (
+        pr["kind"] == "pr"
+        and pr["type"] == "maintenance"
+        and pr["url"].endswith("/pull/40")
+        and pr["scenario"] == "d-maintenance"
+    )
+
+
+@pytest.mark.parametrize(
+    ("stage", "esc", "env", "want"),
+    [
+        (None, None, "none", "backlog"),
+        ("stage:needs-refinement", None, "none", "refining"),
+        ("stage:ready", None, "none", "refining"),
+        ("stage:feasible", None, "none", "feasible"),
+        ("stage:tests-written", None, "none", "tests"),
+        ("stage:building", None, "none", "building"),
+        ("stage:in-review", None, "none", "review"),
+        ("stage:merged", None, "none", "staging"),
+        ("stage:released", None, "staging", "staging"),
+        ("stage:released", None, "prod", "prod"),
+        ("stage:released", None, "rolled-back", "escalated"),
+        ("stage:building", "escalated:build-failed", "none", "escalated"),
+    ],
+)
+def test_board_column_follows_stage_escalation_and_environment(stage, esc, env, want) -> None:
+    assert model.board_stage(stage, esc, env) == want
+
+
+def test_text_from_outside_is_cleaned_before_it_is_stored(real) -> None:
+    item = json.loads(json.dumps(real[12]))
+    item["title"] = "<img src=x onerror=alert(1)> ghp_" + "a" * 36 + "\x00 title"
+    item["state_data"]["feasibility"]["reasons"] = ["Authorization: Bearer abc.def.ghi\nnext line"]
+    t = ticket_of(item)
+    dumped = json.dumps(t)
+    assert "ghp_" not in dumped and "\x00" not in t["title"] and "\n" not in json.dumps(t["feasibility"])
+    assert "[REDACTED]" in t["title"]
+    events.validate(events.make("ticket.updated", t["updated_at"], {"ticket": t}, issue=t["issue"]))
+
+
+def test_every_real_ticket_validates_as_an_event(real) -> None:
+    for item in real.values():
+        t = ticket_of(item)
+        events.validate(events.make("ticket.updated", t["updated_at"], {"ticket": t}, issue=t["issue"]))
+        assert t["stage"] in model.BOARD_STAGES

@@ -46,6 +46,9 @@ ORCHESTRATOR_VCPU, ORCHESTRATOR_GIB = 1.0, 2.0
 ORCHESTRATOR_IDLE_S = 120
 CODER_IDLE_S = 600           # the coder's deployed idle timeout: billed once after a job ends
 ORCHESTRATOR_USD_PER_SECOND = hosted_usd_per_hour(ORCHESTRATOR_VCPU, ORCHESTRATOR_GIB) / 3600
+LEDGER_VCPU, LEDGER_GIB = 0.25, 0.5
+LEDGER_IDLE_S = 120          # the ledger's deployed idle timeout (the platform minimum): billed after each call
+LEDGER_USD_PER_SECOND = hosted_usd_per_hour(LEDGER_VCPU, LEDGER_GIB) / 3600
 
 # The call list lives in the state comment (65,536 char limit): older calls fold into one entry.
 MAX_CALL_ENTRIES = 40
@@ -54,6 +57,12 @@ EARLIER = "earlier-calls"
 
 def token_usd(input_tokens: int, output_tokens: int) -> float:
     return (input_tokens * INPUT_USD_PER_MTOK + output_tokens * OUTPUT_USD_PER_MTOK) / 1_000_000
+
+
+def ledger_call_usd(seconds: float) -> float:
+    """One hosted ledger call: its wall time plus the idle tail. Calls inside one idle window share a
+    session, so this over-counts a burst of calls, which only stops spend earlier."""
+    return (max(seconds, 0.0) + LEDGER_IDLE_S) * LEDGER_USD_PER_SECOND
 
 
 def coder_usd(seconds: int) -> float:

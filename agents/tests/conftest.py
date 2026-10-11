@@ -4,6 +4,7 @@ import sys
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -23,6 +24,7 @@ class World:
     foundry: FakeFoundry
     sleeps: list[float]
     budget: Budget | None = None     # a test that needs a different cap sets this; drive() and tick() use it
+    emitter: Any = None              # the state-keeper hand-off; None means the ledger is off
 
     def sleep(self, seconds: float) -> None:
         """Waits inside a tick (retry backoff) pass on the fake clock."""
@@ -33,7 +35,7 @@ class World:
         reports = []
         for _ in range(count):
             reports.append(run_tick(self.gh, self.foundry, NoSecrets(), self.clock, wall_s,
-                                    budget=budget or self.budget, sleep=self.sleep))
+                                    budget=budget or self.budget, sleep=self.sleep, emitter=self.emitter))
             self.clock.advance(300)
         return reports
 

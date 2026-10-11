@@ -114,8 +114,8 @@ uv run --project agents python scripts/deploy_agents.py all
 |------|--------------|
 | `connection` | Creates or updates the project connection `github-mcp` (category RemoteTool, auth CustomKeys, target `https://api.githubcopilot.com/mcp/`, key `Authorization: Bearer <github-pat>`). The PAT is read from Key Vault and never printed. |
 | `prompt-agents` | Registers the prompt agent versions (`python -m sdlc_agents.create_agents`). |
-| `hosted` | Zips and deploys `sdlc-orchestrator` (1 vCPU, 2Gi, idle timeout 2 minutes) and `sdlc-coder` (2 vCPU, 4Gi, idle timeout 10 minutes): `python_3_13`, `remote_build`, Invocations 2.0.0. Waits up to 900 seconds for status `active` and prints `error.message` on failure. An unchanged zip and definition reuse the existing version. |
-| `roles` | Assigns `Key Vault Secrets User` on single secrets (orchestrator: `github-pat`; coder: `github-pat`, `agy-cli-token`) and `Foundry User` on the project to both hosted agents: the orchestrator calls the prompt agents and the coder, the coder's fallback engine calls the model. Role ids are resolved by name with `az role definition list`. |
+| `hosted` | Zips and deploys `sdlc-orchestrator` (1 vCPU, 2Gi, idle timeout 2 minutes), `sdlc-coder` (2 vCPU, 4Gi, idle timeout 10 minutes) and `sdlc-ledger` (0.25 vCPU, 0.5Gi, idle timeout 2 minutes): `python_3_13`, `remote_build`, Invocations 2.0.0. Waits up to 900 seconds for status `active` and prints `error.message` on failure. An unchanged zip and definition reuse the existing version. The orchestrator gets `LEDGER_MODE` from `--ledger-mode` (`hosted` default, `inline`, `off`); `inline` deploys no ledger agent. |
+| `roles` | Assigns `Key Vault Secrets User` on single secrets (orchestrator: `github-pat`; coder: `github-pat`, `agy-cli-token`; ledger: `github-pat`) and `Foundry User` on the project to the hosted agents: the orchestrator calls the prompt agents, the coder and the ledger, the coder's fallback engine calls the model, the ledger asks the model for ticket summaries. The ledger also gets `Cost Management Reader` on the resource group, to read what Azure billed. Role ids are resolved by name with `az role definition list`. |
 | `routine` | Creates the routine `sdlc-tick` (cron `*/5 * * * *`, UTC, Invocations body `{"op":"tick"}` to `sdlc-orchestrator`) disabled. The spike routine `probe-tick` cannot be deleted yet; it is kept disabled. |
 
 The idle timeout decides how long compute stays billed after the last request. The orchestrator's 2 minutes (the platform minimum) is shorter than the five minute tick, so its compute is released between ticks; the coder's 10 minutes keeps a running job alive between the orchestrator's five minute status polls (one missed tick is tolerated; a longer gap evicts the sandbox and the job resumes as `interrupted`). Sizes, idle timeouts (2 to 60 minutes) and the wait can be overridden, for example:
@@ -216,6 +216,38 @@ uv run --project agents python scripts/deploy_agents.py roles
 | `timeout` / `deadline` | `deadline_s` elapsed. If the job was stuck, the watchdog (every 30 s heartbeat) records this 60 s past the deadline and cancels it, `detail` starting `watchdog:`. |
 | `cancelled` | A `cancel` call stopped it. |
 
+## 7a. Ledger, state branch and control center
+
+```
+tick ──events──▶ sdlc-ledger ──one commit──▶ branch state ──raw GitHub, 30 s──▶ /control-center/
+                     ▲   reads: issues, PRs, deploy.json (branch deploy), metrics.json, Azure cost
+```
+
+| Task | Command |
+|------|---------|
+| Deploy the ledger | `uv run --project agents python scripts/deploy_agents.py hosted --only sdlc-ledger`, then `roles` |
+| Check it answers (read only) | invoke `{"op":"status"}` (see below) |
+| Rebuild from GitHub | invoke `{"op":"reconcile"}` |
+| Rebuild state.json from events.jsonl | invoke `{"op":"rebuild"}` |
+| Read Azure's billed spend now | invoke `{"op":"ingest","events":[],"billing":true}` |
+| Run it inline instead (fallback) | `deploy_agents.py hosted --only sdlc-orchestrator --ledger-mode inline` |
+| Turn it off | `deploy_agents.py hosted --only sdlc-orchestrator --ledger-mode off` |
+
+```bash
+ENDPOINT=$(terraform -chdir=infra/terraform output -raw foundry_project_endpoint)
+TOKEN=$(az account get-access-token --resource https://ai.azure.com --query accessToken -o tsv)
+curl -s -X POST "$ENDPOINT/agents/sdlc-ledger/endpoint/protocols/invocations?api-version=v1" \
+  -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" -d '{"op":"reconcile"}' | jq .
+```
+
+Each call costs its wall time plus the 2 minute idle tail at 0.25 vCPU and 0.5 GiB, about 0.0027 USD for a 10 second call, and the reply says so (`usd`). The compute is deprovisioned after the idle timeout, so the ledger bills nothing between calls. Confirm that on your own bill: Cost Management shows `Hosted vCPU Usage` and `Standard vCPU Active Usage` for `sdlc-ledger` only on days it was called.
+
+The state branch is the ledger's alone. If anything else ever writes to it, the ledger's compare-and-swap commit fails and it re-reads, so nothing is lost, but do not do that by hand. To start the data over, delete branch `state` and invoke `reconcile` (events not recoverable from GitHub, such as tick records and billing reads, are gone; `archive.json` goes with it).
+
+Control center: published with the rest of the site at `/control-center/` by `pages.yml`; it needs no secret and no Azure access. Develop it with `cd apps/control-center && npm run dev`, see its README.
+
+**Spend finding (2026-10-11).** Azure Cost Management for `rg-fsdlcd-demo`, month to date, read at 20:00 UTC: 13.02 USD (9.83 GBP, all of it on 2026-10-10: Container Apps 6.74, Foundry Tools 5.97, models 0.30). The final report of the first run said 4.80 USD because Cost Management lags. The 5 USD cap was therefore already exceeded before the control center was built, and the 4.50 USD halt, which reads the orchestrator's own estimate, never protected it. This work deployed no coder job and no orchestrator tick; the only new compute is the ledger (see `docs/control-center-report.md` for the measured amount). The routine stays disabled.
+
 ## 8. Cost caps
 
 | Cap | Value | Enforced by |
@@ -225,6 +257,7 @@ uv run --project agents python scripts/deploy_agents.py roles
 | Monthly budget | 5 USD, alerts only, data lags up to 72 hours | Terraform budget on the resource group |
 | Model throughput | 10k tokens per minute on `sdlc-default` | Model deployment capacity |
 | Coder job | `max_iterations` 5, `deadline_s` 7200 (default and maximum: two hours of coder compute is about 1.15 USD at the real hosted rate, so the 1 USD issue cap stops a job after about 100 minutes), model loop spend 0.50 USD | Coder runtime hard stops |
+| Ledger | Counts toward both the 4.50 USD halt (`metrics.json` `totals.usd` includes `totals.ledger_usd`) and, as a share per ticket, the 1 USD issue cap in the control center | `cost.ledger_call_usd`; shown in the cost view |
 | Hosted compute | Billed twice while a session is active: Foundry 'Hosted vCPU/Memory Usage' (0.10934 USD per vCPU-hour, 0.01298 per GiB-hour) and Azure Container Apps 'Standard vCPU/Memory Active Usage' (0.000034 USD per vCPU-second, 0.000004 per GiB-second), together 0.2318 USD per vCPU-hour and 0.0274 per GiB-hour | Idle timeouts: orchestrator 2 minutes (0.2865 USD per active hour at 1 vCPU, 2 GiB; a one minute tick plus the 2 minute idle tail is about 0.014 USD), coder 10 minutes (0.5730 USD per active hour at 2 vCPU, 4 GiB, and one 10 minute tail per finished job, about 0.095 USD) |
 
 agy usage is billed to the Antigravity plan behind the token and is not metered by the demo.
