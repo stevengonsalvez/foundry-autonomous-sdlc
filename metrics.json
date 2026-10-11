@@ -38,7 +38,7 @@
       "pass": 7
     }
   },
-  "generated_at": "2026-10-11T23:49:42Z",
+  "generated_at": "2026-10-11T23:51:28Z",
   "issues": [
     {
       "closed_at": "2026-10-10T12:28:43Z",
@@ -1661,11 +1661,11 @@
       "coder_engine": null,
       "coder_sessions_lost": 0,
       "cost": {
-        "calls": 3,
+        "calls": 4,
         "coder_model_usd": 0.0,
         "coder_usd": 0.100275,
-        "model_usd": 0.009232,
-        "usd": 0.109507
+        "model_usd": 0.014346,
+        "usd": 0.114621
       },
       "deferred": null,
       "escalation": null,
@@ -1705,16 +1705,21 @@
         },
         {
           "entered_at": "2026-10-11T23:49:11Z",
+          "seconds": 115,
+          "stage": "stage:feasible"
+        },
+        {
+          "entered_at": "2026-10-11T23:51:06Z",
           "in_progress": true,
           "seconds": 0,
-          "stage": "stage:feasible"
+          "stage": "stage:tests-written"
         }
       ],
       "title": "Show how many tracking events a parcel has",
       "type": "feature"
     },
     {
-      "closed_at": null,
+      "closed_at": "2026-10-11T23:50:25Z",
       "coder_engine": null,
       "coder_sessions_lost": 0,
       "cost": {
@@ -1752,7 +1757,7 @@
     }
   ],
   "ledger": {
-    "emitted_at": "2026-10-11T23:49:22Z",
+    "emitted_at": "2026-10-11T23:51:09Z",
     "reconciled_at": "2026-10-11T23:42:42Z"
   },
   "repo": "stevengonsalvez/foundry-autonomous-sdlc",
@@ -1760,10 +1765,10 @@
     "deferred": 0,
     "escalated": 18,
     "issues": 25,
-    "ledger_usd": 0.042983,
-    "orchestrator_usd": 0.878823,
+    "ledger_usd": 0.047469,
+    "orchestrator_usd": 0.892351,
     "released": 5,
-    "usd": 2.138488
+    "usd": 2.161617
   },
   "version": 1
 }
