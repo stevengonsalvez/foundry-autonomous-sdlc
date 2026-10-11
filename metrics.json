@@ -38,7 +38,7 @@
       "pass": 7
     }
   },
-  "generated_at": "2026-10-11T22:00:02Z",
+  "generated_at": "2026-10-11T23:43:15Z",
   "issues": [
     {
       "closed_at": "2026-10-10T12:28:43Z",
@@ -1655,21 +1655,58 @@
       ],
       "title": "Move the live carrier integration to the new vendor and rotate the production keys",
       "type": "feature"
+    },
+    {
+      "closed_at": null,
+      "coder_engine": null,
+      "coder_sessions_lost": 0,
+      "cost": {
+        "calls": 1,
+        "coder_model_usd": 0.0,
+        "coder_usd": 0.0,
+        "model_usd": 0.001345,
+        "usd": 0.001345
+      },
+      "deferred": null,
+      "escalation": null,
+      "gate_attempts": {},
+      "gates": {},
+      "kind": "issue",
+      "number": 51,
+      "opened_at": "2026-10-11T23:42:03Z",
+      "outcome": "open",
+      "owner": null,
+      "pr": null,
+      "quality_score": 100,
+      "release": null,
+      "resolution_seconds": null,
+      "scenario": "a",
+      "severity": null,
+      "stages": [
+        {
+          "entered_at": "2026-10-11T23:42:40Z",
+          "in_progress": true,
+          "seconds": 0,
+          "stage": "stage:ready"
+        }
+      ],
+      "title": "Show how many tracking events a parcel has",
+      "type": "feature"
     }
   ],
   "ledger": {
-    "emitted_at": "2026-10-11T21:59:41Z",
-    "reconciled_at": "2026-10-11T21:56:15Z"
+    "emitted_at": "2026-10-11T23:42:42Z",
+    "reconciled_at": "2026-10-11T23:42:42Z"
   },
   "repo": "stevengonsalvez/foundry-autonomous-sdlc",
   "totals": {
     "deferred": 0,
     "escalated": 18,
-    "issues": 23,
-    "ledger_usd": 0.019411,
-    "orchestrator_usd": 0.813505,
+    "issues": 24,
+    "ledger_usd": 0.024522,
+    "orchestrator_usd": 0.82718,
     "released": 5,
-    "usd": 1.939106
+    "usd": 1.959237
   },
   "version": 1
 }
