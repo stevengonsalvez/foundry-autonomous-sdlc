@@ -1,21 +1,21 @@
 {
   "version": 1,
   "staging": {
-    "sha": "8137c6015abac2033e1962715727bd06618809a7",
-    "short": "8137c60",
-    "version": "main-8137c60",
-    "built_at": "2026-10-11T22:41:09Z",
-    "deployed_at": "2026-10-11T22:41:22Z",
-    "run_id": 38181279359,
-    "run_url": "https://github.com/stevengonsalvez/foundry-autonomous-sdlc/actions/runs/38181279359",
-    "status": "promoted",
-    "pr": 46,
+    "sha": "f6aab6183942489892032a968e7f326cebbffcb6",
+    "short": "f6aab61",
+    "version": "main-f6aab61",
+    "built_at": "2026-10-11T23:22:15Z",
+    "deployed_at": "2026-10-11T23:22:26Z",
+    "run_id": 38183915246,
+    "run_url": "https://github.com/stevengonsalvez/foundry-autonomous-sdlc/actions/runs/38183915246",
+    "status": "deployed",
+    "pr": 49,
     "issue": null,
     "includes": [
       {
-        "pr": 46,
+        "pr": 49,
         "issue": null,
-        "sha": "8137c6015abac2033e1962715727bd06618809a7"
+        "sha": "f6aab6183942489892032a968e7f326cebbffcb6"
       }
     ]
   },
@@ -201,6 +201,24 @@
           "pr": 46,
           "issue": null,
           "sha": "8137c6015abac2033e1962715727bd06618809a7"
+        }
+      ]
+    },
+    {
+      "at": "2026-10-11T23:22:26Z",
+      "action": "stage",
+      "env": "staging",
+      "sha": "f6aab6183942489892032a968e7f326cebbffcb6",
+      "version": "main-f6aab61",
+      "run_url": "https://github.com/stevengonsalvez/foundry-autonomous-sdlc/actions/runs/38183915246",
+      "reason": "deployed to staging",
+      "issue": null,
+      "pr": 49,
+      "includes": [
+        {
+          "pr": 49,
+          "issue": null,
+          "sha": "f6aab6183942489892032a968e7f326cebbffcb6"
         }
       ]
     }
