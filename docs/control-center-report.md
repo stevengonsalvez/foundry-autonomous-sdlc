@@ -17,22 +17,22 @@ What was added to the autonomous SDLC demo, what was proven live on 2026-10-11, 
 | 3b | Billed versus ledger gap shown, not hidden | **Met** | [Cost view](proof/live-cost-billed-vs-ledger.png): Azure billed 13.02 USD, ledger estimate 1.87 USD, 7.0x, billing read time, meter breakdown, banner. Read live by the ledger from Azure Cost Management |
 | 3c | `sdlc-ledger` runs as a hosted Foundry agent writing only to branch `state` | **Met** | Hosted agent, version 7, 0.25 vCPU, 0.5 GiB, 2 minute idle. Its client refuses any repository but this one and it writes through the git data API onto `state` only. Last commits on [branch state](https://github.com/stevengonsalvez/foundry-autonomous-sdlc/commits/state). Whether its compute scales to zero is by platform design (deprovisioned after the idle timeout); Azure has not posted any usage for 2026-10-11 yet, so the bill cannot confirm it today |
 | 3d | gitleaks 0 findings across full history | **Met** | CI `gitleaks` check passes on every PR and on main (8.30.1); a local run (8.11) over the history reports none. Local working-tree hits are only ignored `.pyc` caches |
-| 3e | Total Azure spend stays under 5 USD | **Not met, and not caused by this work** | Azure had billed 13.02 USD for the resource group by 2026-10-11, before work began (the first run's report said 4.80 USD because Cost Management lags). See Spend |
+| 3e | Total Azure spend stays under 25 USD (caps set by the owner on 2026-10-12: 25 total, 22 halt, 3 per issue) | **Met at the last read** | Azure had billed 13.02 USD for the resource group at 2026-10-11 20:00 UTC, before this work began; the original 5 USD cap had already been passed, which is why the owner raised it. Work since then is a few cents of ledger compute and prompt-agent tokens. Re-read the bill before closing (see Spend) |
 | 3f | Explainer system diagrams reflect what shipped | **Met** | [docs/explainer/foundry-autonomous-sdlc.html](explainer/foundry-autonomous-sdlc.html), 10 diagrams including the CD flow, the data plane and the cost gap |
 | 4 | Final deliverable runs without errors | **Met** | 829 agent tests, 461 script tests, 164 app tests, 66 dashboard tests, 92 control center tests, CI green on PRs #44 and #46 and on main, three live CD runs |
 | 5 | Proof | **Met** | Links above, screenshots in [docs/proof/](proof/) |
 
 ## Spend, and the decision behind it
 
-Azure Cost Management, resource group `rg-fsdlcd-demo`, month to date, read 2026-10-11 20:00 UTC: **13.02 USD** (9.83 GBP, all of it on 2026-10-10: Container Apps 6.74, Foundry Tools 5.97, models 0.30). The 4.80 USD in the first run's report was an early read. So the 5 USD cap was already exceeded, and the 4.50 USD halt, which reads the orchestrator's own estimate (1.86 USD), never protected it.
+Azure Cost Management, resource group `rg-fsdlcd-demo`, month to date, read 2026-10-11 20:00 UTC: **13.02 USD** (9.83 GBP, all of it on 2026-10-10: Container Apps 6.74, Foundry Tools 5.97, models 0.30). The 4.80 USD in the first run's report was an early read. So the original 5 USD cap was already exceeded, and its halt, which reads the orchestrator's own estimate (1.86 USD), never protected it. On 2026-10-12 the owner set new caps: 25 USD total, halt new work at 22 USD, 3 USD per issue. 13.02 USD is inside them.
 
-With no human to re-authorise spend, this work:
+Until the new caps arrived there was no way to re-authorise spend, so this work:
 
 - ran no orchestrator tick on the hosted agent and no coder job; the routine `sdlc-tick` stayed disabled;
 - ran four orchestrator ticks on the maintainer's machine for issue #45 only (prompt-agent tokens, about 0.007 USD by the ledger's price list), emitting to the hosted ledger;
 - deployed `sdlc-ledger` at the smallest size and called it only when there was something to say. The ledger's own meter at the end of the work is in `cost.ledger` of [state.json](https://raw.githubusercontent.com/stevengonsalvez/foundry-autonomous-sdlc/state/state.json): about 0.0027 to 0.005 USD per call, a few cents in all.
 
-These are estimates from list prices; Azure's number for 2026-10-11 will post with a lag. Check it with the query in `docs/runbook.md` section 8 before enabling the routine again. If the owner raises the cap, run the scenarios again with the routine enabled to see a new ticket cross every stage live.
+These are estimates from list prices; Azure's number for 2026-10-11 will post with a lag. Check it with the query in `docs/runbook.md` section 8 before enabling the routine again.
 
 ## Files
 
