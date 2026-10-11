@@ -1,0 +1,13 @@
+{
+  "name": "sdlc-control-center",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Read-only static control center for the autonomous SDLC. No build step, no runtime dependencies.",
+  "type": "module",
+  "engines": { "node": ">=22" },
+  "scripts": {
+    "dev": "node test/dev-server.mjs",
+    "test": "node --test \"test/**/*.test.mjs\"",
+    "shots": "node test/shots.mjs"
+  }
+}
