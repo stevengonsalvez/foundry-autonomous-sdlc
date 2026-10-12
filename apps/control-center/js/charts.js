@@ -10,14 +10,19 @@ const COMPACT_BELOW = 520;
 const CHAR_W = 6.4;
 
 function svgRoot(width, height, label) {
-  return s('svg', {
-    class: 'chart',
-    width,
-    height,
-    viewBox: `0 0 ${width} ${height}`,
-    role: 'img',
-    'aria-label': limitText(label, 240),
-  });
+  const safeLabel = limitText(label, 240);
+  return s(
+    'svg',
+    {
+      class: 'chart',
+      width,
+      height,
+      viewBox: `0 0 ${width} ${height}`,
+      role: 'img',
+      'aria-label': safeLabel,
+    },
+    s('title', {}, safeLabel),
+  );
 }
 
 const text = (x, y, cls, content, anchor) => s('text', { x, y, class: cls, 'text-anchor': anchor }, content);
@@ -160,16 +165,93 @@ export function stackedStageChart(width, rows, { label, maxTotal, stageClass }) 
 export function rateChart(width, rows, { label }) {
   return barChart(
     width,
-    rows.map((r) => ({
-      label: r.gate,
-      value: r.total > 0 ? r.pass / r.total : null,
-      text: r.total > 0 ? formatPercent(r.pass / r.total) : 'n/a',
-      sub: r.total > 0 ? `${r.pass}/${r.total}` : '',
-      cls: r.total > 0 && r.pass / r.total < 0.6 ? 'fill-warn' : 'fill-accent',
-      title: `${r.gate}: ${r.pass} of ${r.total} passed on the first attempt`,
-    })),
+    rows.map((r) => {
+      const rate = r.total > 0 ? r.pass / r.total : null;
+      let cls = 'fill-accent';
+      if (rate !== null) {
+        if (rate >= 0.9) cls = 'fill-auto';
+        else if (rate >= 0.7) cls = 'fill-dit';
+        else if (rate >= 0.5) cls = 'fill-assist';
+        else cls = 'fill-gate';
+      }
+      return {
+        label: r.gate,
+        value: rate,
+        text: rate !== null ? formatPercent(rate) : 'n/a',
+        sub: r.total > 0 ? `${r.pass}/${r.total}` : '',
+        cls,
+        title: `${r.gate}: ${r.pass} of ${r.total} passed on the first attempt`,
+      };
+    }),
     { label, labelChars: 12 },
   );
+}
+
+/**
+ * Bug count by owner and resolution time.
+ * rows: [{ owner, count, open, resolved, median }]
+ */
+export function defectsChart(width, rows, { label }) {
+  const compact = width < COMPACT_BELOW;
+  const labelW = compact ? 0 : 110;
+  const valueW = compact ? 0 : 140;
+  const rowH = compact ? 48 : 32;
+  const barH = 12;
+  const barX = labelW;
+  const barW = Math.max(40, width - labelW - valueW);
+  const max = Math.max(...rows.map((r) => r.count ?? 0), 1);
+  const headroom = 20;
+  const svg = svgRoot(width, headroom + rowH * rows.length + 6, label ?? 'Defects by owner');
+
+  svg.append(
+    s('rect', { x: barX, y: 5, width: 8, height: 8, rx: 2, class: 'fill-gate' }),
+    text(barX + 12, 12, 'c-sub', 'open'),
+    s('rect', { x: barX + 56, y: 5, width: 8, height: 8, rx: 2, class: 'fill-auto' }),
+    text(barX + 68, 12, 'c-sub', 'resolved'),
+  );
+
+  rows.forEach((row, i) => {
+    const top = headroom + i * rowH;
+    const barY = compact ? top + 22 : top + (rowH - barH) / 2;
+    svg.append(s('rect', { x: barX, y: barY, width: barW, height: barH, rx: 3, class: 'rail' }));
+
+    const openW = row.open > 0 ? Math.max(2, (row.open / max) * barW) : 0;
+    const resW = row.resolved > 0 ? Math.max(2, (row.resolved / max) * barW) : 0;
+
+    let curX = barX;
+    if (openW > 0) {
+      svg.append(
+        s(
+          'rect',
+          { x: curX, y: barY, width: openW, height: barH, rx: resW > 0 ? 0 : 3, class: 'fill-gate' },
+          s('title', {}, `${row.owner}: ${row.open} open bug${row.open === 1 ? '' : 's'}`),
+        ),
+      );
+      curX += openW;
+    }
+    if (resW > 0) {
+      svg.append(
+        s(
+          'rect',
+          { x: curX, y: barY, width: resW, height: barH, rx: openW > 0 ? 0 : 3, class: 'fill-auto' },
+          s('title', {}, `${row.owner}: ${row.resolved} resolved bug${row.resolved === 1 ? '' : 's'}`),
+        ),
+      );
+    }
+
+    const valueStr = `${row.count} ${row.count === 1 ? 'bug' : 'bugs'}`;
+    const subStr = row.median !== null ? `median ${formatDuration(row.median)}` : (row.open > 0 ? 'all open' : 'none');
+    const valueNode = (x, y, anchor) =>
+      s('text', { x, y, class: 'c-value', 'text-anchor': anchor }, valueStr, s('tspan', { class: 'c-sub', dx: 6 }, subStr));
+
+    if (compact) {
+      svg.append(text(0, top + 15, 'c-label', clip(row.owner, (width - 120) / CHAR_W)), valueNode(width, top + 15, 'end'));
+    } else {
+      svg.append(text(0, barY + barH - 1, 'c-label', clip(row.owner, labelW / CHAR_W)), valueNode(barX + barW + 10, barY + barH - 1, 'start'));
+    }
+  });
+
+  return svg;
 }
 
 // ------------------------------------------------------------------ strips

@@ -39,13 +39,14 @@ export function mountShell({ onRefresh }) {
   const toolsEl = document.getElementById('tools');
   const bannerEl = document.getElementById('banner');
   const repoEl = document.getElementById('repo-name');
+  const beaconEl = document.getElementById('brand-beacon');
 
   // ---- theme
   let theme = readTheme();
   const themeButton = h('button', { type: 'button', class: 'icon-btn', id: 'theme-toggle' });
   const paintTheme = () => {
     const next = THEMES[(THEMES.indexOf(theme) + 1) % THEMES.length];
-    themeButton.replaceChildren(icon(THEME_ICON[theme], { size: 16 }), h('span', { class: 'icon-btn-text' }, theme === 'auto' ? 'Auto' : theme === 'light' ? 'Light' : 'Dark'));
+    themeButton.replaceChildren(icon(THEME_ICON[theme], { size: 14 }), h('span', { class: 'icon-btn-text' }, theme === 'auto' ? 'Auto' : theme === 'light' ? 'Light' : 'Dark'));
     themeButton.setAttribute('aria-label', `Theme: ${theme}. Switch to ${next}.`);
     themeButton.setAttribute('title', `Theme: ${theme}. Click for ${next}.`);
   };
@@ -57,7 +58,7 @@ export function mountShell({ onRefresh }) {
   paintTheme();
 
   // ---- refresh
-  const refreshButton = h('button', { type: 'button', class: 'icon-btn', id: 'refresh', 'aria-label': 'Refresh now', title: 'Refresh now' }, icon('refresh', { size: 16 }), h('span', { class: 'icon-btn-text' }, 'Refresh'));
+  const refreshButton = h('button', { type: 'button', class: 'icon-btn', id: 'refresh', 'aria-label': 'Refresh now', title: 'Refresh now' }, icon('refresh', { size: 14 }), h('span', { class: 'icon-btn-text' }, 'Refresh'));
   refreshButton.addEventListener('click', onRefresh);
 
   const fresh = h('div', { class: 'fresh', id: 'freshness' });
@@ -96,6 +97,20 @@ export function mountShell({ onRefresh }) {
     paint(snap, nowMs, routeName = '') {
       const { state } = snap;
       repoEl.textContent = state?.repo ? state.repo : '';
+
+      // Live status beacon
+      if (beaconEl) {
+        if (state) {
+          const f = freshness(state, nowMs);
+          beaconEl.classList.toggle('is-stale', f.stale);
+          beaconEl.classList.toggle('is-live', !f.stale);
+          beaconEl.setAttribute('title', f.stale ? `Stale snapshot (> ${staleMinutes}m old)` : 'System live: monitoring event stream');
+        } else {
+          beaconEl.classList.remove('is-live', 'is-stale');
+          beaconEl.removeAttribute('title');
+        }
+      }
+
       const parts = [];
       if (state) {
         const f = freshness(state, nowMs);
@@ -119,13 +134,13 @@ export function mountShell({ onRefresh }) {
             ),
           );
         }
-        parts.push(h('span', { class: 'source', title: 'Where the data on screen came from' }, 'source: ', h('strong', null, snap.source ?? '-')));
+        parts.push(h('span', { class: 'source chip-source', title: 'Where the data on screen came from' }, 'source: ', h('strong', null, snap.source ?? '-')));
       } else {
         parts.push(h('span', { class: 'fresh-text' }, snap.phase === 'loading' ? 'Loading' : 'No data'));
       }
       const problems = Object.entries(snap.problems);
       if (problems.length > 0) {
-        parts.push(h('span', { class: 'badge tone-warn', tabindex: '0', title: problems.map(([source, message]) => `${source}: ${message}`).join('\n') }, `${problems.length} source ${problems.length === 1 ? 'problem' : 'problems'}`));
+        parts.push(h('span', { class: 'badge tone-warn problem-pill', tabindex: '0', title: problems.map(([source, message]) => `${source}: ${message}`).join('\n') }, `${problems.length} source ${problems.length === 1 ? 'problem' : 'problems'}`));
       }
       fresh.replaceChildren(...parts);
 
