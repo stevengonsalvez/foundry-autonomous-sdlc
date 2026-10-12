@@ -218,3 +218,7 @@
 {"at":"2026-10-12T00:19:36Z","data":{"digest":"af65807efb15"},"id":"fe381d52c4a7f7cf","issue":7,"source":"ledger","type":"summary.failed","v":1}
 {"at":"2026-10-12T00:19:36Z","data":{"digest":"02cbe561f3cd","text":"Feature request \"Show the estimated delivery date on the parcel page\" (issue 8) is escalated after a build failed due to a coder failure (engines-exhausted) in the implement phase where every engine in the chain failed; environment is none and no release is specified."},"id":"2c8126313f6e8d89","issue":8,"source":"ledger","type":"summary.written","v":1}
 {"at":"2026-10-12T00:19:36Z","data":{"compute_usd":0.002902,"events":4,"issues":[6,7,8],"mode":"hosted","model_usd":0.002146,"op":"reconcile","seconds":25.883,"summaries":1,"usd":0.005048},"id":"751b0d0c10f71c6b","issue":null,"source":"ledger","type":"ledger.invoked","v":1}
+{"at":"2026-10-12T00:27:31Z","data":{"digest":"d0928fe9da22"},"id":"f7fed62796100d22","issue":9,"source":"ledger","type":"summary.failed","v":1}
+{"at":"2026-10-12T00:27:31Z","data":{"digest":"458482445bdd"},"id":"f4cd1bd6017d0c53","issue":10,"source":"ledger","type":"summary.failed","v":1}
+{"at":"2026-10-12T00:27:31Z","data":{"digest":"1691b91fda6b"},"id":"357a51b5525d87b9","issue":11,"source":"ledger","type":"summary.failed","v":1}
+{"at":"2026-10-12T00:27:31Z","data":{"compute_usd":0.002884,"events":3,"issues":[9,10,11],"mode":"hosted","model_usd":0.002341,"op":"reconcile","seconds":24.957,"summaries":0,"usd":0.005225},"id":"75d448d949d6600c","issue":null,"source":"ledger","type":"ledger.invoked","v":1}
