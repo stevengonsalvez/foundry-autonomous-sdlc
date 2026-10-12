@@ -15,20 +15,20 @@
   --surface-active: oklch(0.27 0.026 215);/* Focused interactive element surface */
 
   /* Hairlines and borders (uniform 1px grid strokes) */
-  --edge: oklch(0.29 0.022 215);          /* Container boundary and matrix grid hairlines */
+  --edge: oklch(0.355 0.025 215);         /* Container boundary and matrix grid hairlines */
   --edge-subtle: oklch(0.22 0.018 215);   /* Interior table row and cell divider hairlines */
-  --edge-focus: oklch(0.72 0.16 260);     /* High-visibility keyboard focus outline */
+  --edge-focus: oklch(0.72 0.16 190);     /* High-visibility keyboard focus outline */
 
   /* High-contrast system typography (WCAG AA compliant >= 4.5:1) */
-  --fg: oklch(0.96 0.010 215);            /* Primary high-contrast tabular text */
-  --fg-dim: oklch(0.84 0.018 215);        /* Secondary headers, units, and metrics */
+  --fg: oklch(0.985 0.005 215);           /* Primary high-contrast tabular text */
+  --fg-dim: oklch(0.81 0.018 215);        /* Secondary headers, units, and metrics */
   --fg-muted: oklch(0.72 0.020 215);      /* Tertiary metadata, labels, and timestamps */
 
   /* Custom lifecycle accent tones (independent from flowtron) */
   --tone-run: oklch(0.78 0.16 142);       /* Active execution, healthy state, and pass indicators */
   --tone-wait: oklch(0.78 0.15 52);       /* Waiting items, pending ledger, and sim stage */
   --tone-block: oklch(0.74 0.20 345);     /* Blocked items, failed gates, escalations, rollbacks */
-  --tone-info: oklch(0.75 0.14 260);      /* Informational badges, links, and contracts */
+  --tone-info: oklch(0.76 0.14 190);      /* Informational badges, links, and contracts */
   --tone-agent: oklch(0.76 0.15 325);     /* Agent identity tags and role labels */
   --tone-done: oklch(0.76 0.16 120);      /* Completed stages, production deploys, and shipped items */
 
@@ -44,15 +44,15 @@
   --st-escalated: var(--tone-block);
 
   /* Distinct hue per stage for flow segment fills */
-  --st-fill-backlog: oklch(0.60 0.02 260);
-  --st-fill-refining: oklch(0.68 0.14 50);
-  --st-fill-feasible: oklch(0.68 0.14 115);
-  --st-fill-tests: oklch(0.68 0.14 265);
-  --st-fill-building: oklch(0.68 0.13 140);
-  --st-fill-review: oklch(0.68 0.14 325);
-  --st-fill-staging: oklch(0.68 0.13 256);
-  --st-fill-prod: oklch(0.70 0.15 120);
-  --st-fill-escalated: var(--tone-block);
+  --st-fill-backlog: oklch(0.60 0.04 250);
+  --st-fill-refining: oklch(0.68 0.14 65);
+  --st-fill-feasible: oklch(0.68 0.14 185);
+  --st-fill-tests: oklch(0.68 0.14 285);
+  --st-fill-building: oklch(0.68 0.13 145);
+  --st-fill-review: oklch(0.68 0.14 320);
+  --st-fill-staging: oklch(0.68 0.14 220);
+  --st-fill-prod: oklch(0.70 0.15 110);
+  --st-fill-escalated: oklch(0.74 0.20 355);
 
   /* System font stacks (zero remote network requests) */
   --font-mono: ui-monospace, "SF Mono", Menlo, "JetBrains Mono", Consolas, monospace;
@@ -823,8 +823,8 @@ main {
 
 .band-release {
   grid-column: span 2;
-  border-top: 2px solid var(--tone-agent);
-  color: var(--tone-agent);
+  border-top: 2px solid var(--tone-done);
+  color: var(--tone-done);
 }
 
 .band-escalated {
@@ -885,11 +885,9 @@ main {
 }
 
 .dot-run { background: var(--tone-run); }
-.dot-wait { background: var(--tone-wait); }
 .dot-block { background: var(--tone-block); }
 .dot-info { background: var(--tone-info); }
 .dot-agent { background: var(--tone-agent); }
-.dot-done { background: var(--tone-done); }
 
 .lane-name, .lane-title {
   font-size: 11px;
@@ -2021,13 +2019,13 @@ tr.agent.is-error .agent-name {
 
 .node { cursor: default; }
 .node-todo { fill: var(--surface-1); stroke: var(--edge); stroke-width: 1.5; }
-.node-done { fill: var(--surface-1); stroke: var(--tone-run); stroke-width: 2; }
+.node-done { fill: var(--surface-1); stroke: var(--tone-done); stroke-width: 2; }
 .node-current { fill: var(--surface-2); stroke: var(--tone-info); stroke-width: 2.5; }
 .node-bad { fill: var(--surface-1); stroke: var(--tone-block); stroke-width: 2; }
 .node-core { fill: var(--tone-info); }
 .node-glyph { fill: none; stroke: var(--fg); stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
-.link { stroke: var(--edge); stroke-width: 2; fill: none; }
-.link-done { stroke: var(--tone-run); }
+.link { stroke: var(--fg-muted); stroke-opacity: 0.45; stroke-dasharray: 4 3; stroke-width: 2; fill: none; }
+.link-done { stroke: var(--tone-done); stroke-opacity: 1; stroke-dasharray: none; }
 
 .node-pulse {
   fill: none;

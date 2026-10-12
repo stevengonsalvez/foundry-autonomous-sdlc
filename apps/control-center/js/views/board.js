@@ -78,8 +78,15 @@ function ticketChip(ticket, nowMs, lens) {
     blocked: '!',
     done: '✓',
   };
+  const stateSrText = {
+    active: 'in progress',
+    pending: 'pending',
+    wait: 'waiting',
+    blocked: 'blocked',
+    done: 'done',
+  }[stateTone] ?? stateTone;
   const chipNum = h('span', { class: 'chip-num' }, ticket.kind === 'pr' ? `PR #${ticket.issue}` : `#${ticket.issue}`);
-  const chipDot = h('span', { class: `chip-dot dot-${stateTone}`, 'aria-hidden': 'true', title: stateTone }, stateGlyphs[stateTone]);
+  const chipDot = h('span', { class: `chip-dot dot-${stateTone}`, 'aria-hidden': 'true', title: stateSrText }, stateGlyphs[stateTone]);
   const chipAgent = h('span', { class: 'chip-agent', title: agentName || 'unassigned' }, tag);
 
   let lensContent = null;
@@ -109,14 +116,6 @@ function ticketChip(ticket, nowMs, lens) {
   const flags = flagBadges(ticket.flags);
   const envB = envBadgeFor(ticket);
   const extraBadges = envB ? [envB, ...flags] : flags;
-
-  const stateSrText = {
-    active: 'in progress',
-    pending: 'pending',
-    wait: 'waiting',
-    blocked: 'blocked',
-    done: 'done',
-  }[stateTone] ?? stateTone;
 
   const pill = h(
     'div',

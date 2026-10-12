@@ -9,8 +9,10 @@ import { costBand, stageLabel } from '../model.js';
 
 export const ticketHref = (issue) => `#/ticket/${issue}`;
 
+export const MODE_TONES = Object.freeze(['auto', 'gate', 'sim', 'manual']);
+
 /** CSS class for a board stage: `st-fill-*` (SVG fill), `st-bg-*` (background), `st-text-*` (text). */
-export const stageFill = (stage) => `st-fill-${stage}`;
+export const stageFill = (stage) => `st-fill-${String(stage ?? '').toLowerCase().replace(/[^a-z0-9-]/g, '-')}`;
 
 /** GitHub URL of a ticket: the one in the data when it points into this repo, else built from its number. */
 export function ticketGithubUrl(ticket) {

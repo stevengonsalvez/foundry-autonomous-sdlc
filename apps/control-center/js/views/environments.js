@@ -136,10 +136,11 @@ function historyPanel(state, now) {
       : h(
           'ol',
           { class: 'hops' },
-          ...rows.map((e) =>
-            h(
+          ...rows.map((e) => {
+            const actionCls = String(e.action ?? '').toLowerCase().replace(/[^a-z0-9-]/g, '-');
+            return h(
               'li',
-              { class: `hop hop-${e.action}` },
+              { class: `hop hop-${actionCls}` },
               h('span', { class: 'hop-dot', 'aria-hidden': 'true' }),
               h(
                 'div',
@@ -155,8 +156,8 @@ function historyPanel(state, now) {
                 ),
                 e.reason ? h('p', { class: 'hop-detail clamp-3 wrap' }, e.reason) : null,
               ),
-            ),
-          ),
+            );
+          }),
         ),
   );
 }

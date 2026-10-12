@@ -202,6 +202,8 @@ export function boardSummary(state, pending) {
 
 // ------------------------------------------------------------------ cost
 
+export const COST_BANDS = Object.freeze(['ok', 'high', 'over']);
+
 export function costBand(pct) {
   if (pct > 100) return 'over';
   if (pct >= 75) return 'high';

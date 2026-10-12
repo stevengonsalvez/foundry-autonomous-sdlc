@@ -8,19 +8,69 @@ Flowtron has no open-source license. Consequently, strict implementation indepen
 - **What was taken and adopted**: Structural design principles, layout model, and measured dimensional ratios (lane-by-stage matrix representation, macroband grouping strip, pill chips, dual segmented toggles, tracked uppercase monospace typography, and 1px hairlines).
 - **What was changed and independently redesigned**:
   - **All Names and Tokens**: Zero flowtron token or class names are used. Our system uses an independent token scheme (`--canvas`, `--surface-0..3`, `--edge`, `--edge-subtle`, `--edge-focus`, `--fg`, `--fg-dim`, `--fg-muted`, `--tone-run`, `--tone-wait`, `--tone-block`, `--tone-info`, `--tone-agent`, `--tone-done`) and independent class names (`.band-strip`, `.band-cell`, `.matrix-grid`, `.matrix-spine`, `.lane-head`, `.matrix-cell`, `.chip-*`, etc.).
-  - **Palette**: The color palette was redesigned to ensure strict chromatic separation from flowtron:
-    - Flowtron reference values: ink 0.180, panel 0.224, panel-2 0.253.
-    - Our system uses an independent slate base hue at 215 (at or below 225).
-    - The surface ladder follows an even progression (canvas 0.10, surface-0 0.13, surface-1 0.16, surface-2 0.19, surface-3 0.23, surface-active 0.27, edge 0.29, edge-subtle 0.22) with measured delta differences against flowtron reference steps (flowtron ink 0.180 vs surface-2 0.190, panel 0.224 vs surface-3 0.230, panel-2 0.253 vs surface-active 0.270 with ΔL of 0.006 to 0.017).
-    - Measured hue separation against all reference accents (minimum 20 degrees OKLCH hue):
-      - `--tone-run`: hue 142 (emerald mint) vs auto #2DD4A7 (hue 169.3 deg): 27.3 deg separation (>20 deg).
-      - `--tone-info`: hue 260 (indigo blue) vs info #38BDF8 (hue 232.7 deg): 27.3 deg separation (>20 deg), vs contract #22D3EE (hue 211.5 deg): 48.5 deg separation (>20 deg).
-      - `--tone-wait`: hue 52 (warm gold) vs assist (amber hue 78.4 deg): 26.4 deg separation (>20 deg).
-      - `--tone-block`: hue 345 (crimson ruby) vs app-4 #FB7185 (hue 13.4 deg): 28.4 deg separation (>20 deg), text lightness 0.74 (>= 4.5:1 contrast on surface-3).
-      - `--tone-agent`: hue 325 (magenta violet) vs app-1 #A78BFA (hue 293.5 deg): 31.5 deg separation (>20 deg).
-      - `--tone-done`: hue 120 (lime green) vs auto #2DD4A7 (hue 169.3 deg): 49.3 deg separation (>20 deg), distinct by 22 deg from `--tone-run` (hue 142).
-      - Favicon: #080e1a and #3b82f6 (blue hue 259.8 deg): 27.1 deg separation from info #38BDF8 (hue 232.7 deg), 48.3 deg from contract #22D3EE (hue 211.5 deg), and 33.7 deg from app-1 #A78BFA (hue 293.5 deg) (>20 deg).
-  - **Copy and Visual Assets**: All domain copy was rewritten. Macroband copy uses independent operational categories (ALIGN . PRODUCT, IMPLEMENT . CODE, DELIVER . OPERATIONS, EXCEPTIONS) rather than flowtron phase descriptions. Hatched cell copy is "bypasses stage". Favicon is an independent pulse mark in deep slate and blue (#080e1a and #3b82f6).
+  - **Palette**: The color palette was redesigned to maintain strict chromatic separation from flowtron under the same-role distance standard:
+    - **Governing Rule**: Each token must differ from its same-role flowtron accent (`auto`, `dit`, `gate`, `assist`, `done`, `app-1`, `contract`, etc.) by dE_ok >= 0.06 and at least 12 degrees circular hue when chroma >= 0.03. Proximity to another-role accent within 20 degrees is permitted but explicitly inventoried in the cross-role table.
+    - **Neutral Ladder**: Earlier surfaces were within dE 0.017 to 0.025 of flowtron ink/panel/panel-2/line. The neutrals were recalibrated so every neutral differs from its corresponding flowtron reference neutral by dE_ok >= 0.04. The surface ladder follows a stepped progression with lightness deltas of .03/.03/.03/.04/.04 (`--canvas` 0.10, `--surface-0` 0.13, `--surface-1` 0.16, `--surface-2` 0.19, `--surface-3` 0.23, `--surface-active` 0.27).
+    - **Reference Values**: Flowtron reference tokens from `src/style.css` include neutrals (`ink` #0E1217, `panel` #161C24, `panel-2` #1B232D, `line` #27313D, `line-soft` #1F2832, `text` #CBD6E3, `muted` #697686, `muted-2` #4D596A) and accents (`auto` #2DD4A7, `assist` #F2B23D, `gate` #F0644B, `dit` #6FA8FF, `contract` #22D3EE, `ephem` #C084FC, `dark` #C9A227, `done` #3A4654, `app-1` #A78BFA, `--app-2` #38BDF8, `app-3` #A3E635, `app-4` #FB7185). Note: #38BDF8 is `--app-2` in flowtron (not named info).
+    - **Generated Palette Distance Matrix** (via `scripts/palette-distance.mjs`):
+
+| Our Token | OKLCH | Role | Same-Role Accent | Same-Role dE | Same-Role dh | Min dE Accent | Min dE | Status |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `--tone-run` | 0.78 0.16 142° | auto | auto | 0.0735 | 27.3° | auto | 0.0735 | PASS |
+| `--tone-wait` | 0.78 0.15 52° | assist | assist | 0.0719 | 26.4° | assist | 0.0719 | PASS |
+| `--tone-block` | 0.74 0.20 345° | gate | gate | 0.1656 | 47.1° | app-4 | 0.0977 | PASS |
+| `--tone-info` | 0.76 0.14 190° | dit | dit | 0.1610 | 68.6° | auto | 0.0547 | PASS |
+| `--tone-agent` | 0.76 0.15 325° | app-1 | app-1 | 0.0985 | 31.5° | ephem | 0.0722 | PASS |
+| `--tone-done` | 0.76 0.16 120° | done | done | 0.4124 | 132.5° | dark | 0.0868 | PASS |
+| `--edge-focus` | 0.72 0.16 190° | dit | dit | 0.1705 | 68.6° | auto | 0.0809 | PASS |
+| `--st-fill-backlog` | 0.60 0.04 250° | neutral | - | - | - | dit | 0.1646 | PASS |
+| `--st-fill-refining` | 0.68 0.14 65° | assist | assist | 0.1286 | 13.4° | dark | 0.0765 | PASS |
+| `--st-fill-feasible` | 0.68 0.14 185° | contract | contract | 0.1330 | 26.5° | auto | 0.1055 | PASS |
+| `--st-fill-tests` | 0.68 0.14 285° | gate | gate | 0.2568 | 107.1° | app-1 | 0.0412 | PASS |
+| `--st-fill-building` | 0.68 0.13 145° | auto | auto | 0.1148 | 24.3° | auto | 0.1148 | PASS |
+| `--st-fill-review` | 0.68 0.14 320° | app-1 | app-1 | 0.0766 | 26.5° | ephem | 0.0683 | PASS |
+| `--st-fill-staging` | 0.68 0.14 220° | dit | dit | 0.1052 | 38.6° | app-2 | 0.0797 | PASS |
+| `--st-fill-prod` | 0.70 0.15 110° | auto | auto | 0.1658 | 59.3° | dark | 0.0591 | PASS |
+| `--st-fill-escalated` | 0.74 0.20 355° | gate | gate | 0.1382 | 37.1° | app-4 | 0.0697 | PASS |
+| `favicon-dot` | 0.71 0.13 215° | dit | dit | 0.1005 | 43.4° | app-2 | 0.0573 | PASS |
+
+#### Cross-Role Accents Within 20° Hue (Permitted by Decision)
+
+| Token | Flowtron Accent | Role of Accent | Hue Diff | dE_ok |
+| --- | --- | --- | --- | --- |
+| `--tone-run` | `app-3` | app-3 | 13.2° | 0.0937 |
+| `--tone-wait` | `gate` | gate | 19.9° | 0.1221 |
+| `--tone-agent` | `ephem` | ephem | 19.5° | 0.0722 |
+| `--tone-done` | `app-3` | app-3 | 8.8° | 0.1049 |
+| `--st-fill-backlog` | `dit` | dit | 8.6° | 0.1646 |
+| `--st-fill-backlog` | `app-2` | app-2 | 17.3° | 0.1840 |
+| `--st-fill-feasible` | `auto` | auto | 15.7° | 0.1055 |
+| `--st-fill-tests` | `app-1` | app-1 | 8.5° | 0.0412 |
+| `--st-fill-building` | `app-3` | app-3 | 16.2° | 0.1918 |
+| `--st-fill-review` | `ephem` | ephem | 14.5° | 0.0683 |
+| `--st-fill-staging` | `contract` | contract | 8.5° | 0.1190 |
+| `--st-fill-staging` | `app-2` | app-2 | 12.7° | 0.0797 |
+| `--st-fill-prod` | `app-3` | app-3 | 18.8° | 0.1701 |
+| `--st-fill-escalated` | `app-4` | app-4 | 18.4° | 0.0697 |
+| `favicon-dot` | `contract` | contract | 3.7° | 0.0831 |
+| `favicon-dot` | `app-2` | app-2 | 17.4° | 0.0573 |
+
+#### Neutrals Distance vs Flowtron Neutrals (dE_ok >= 0.04)
+
+| Token | Our OKLCH | Flowtron Token | Flowtron Hex | dE_ok | Status |
+| --- | --- | --- | --- | --- | --- |
+| `--canvas` | 0.10 0.016 215° | `ink` | `#0E1217` | 0.0809 | PASS |
+| `--surface-0` | 0.13 0.018 215° | `ink` | `#0E1217` | 0.0516 | PASS |
+| `--surface-1` | 0.16 0.020 215° | `panel` | `#161C24` | 0.0655 | PASS |
+| `--surface-2` | 0.19 0.022 215° | `panel-2` | `#1B232D` | 0.0647 | PASS |
+| `--surface-3` | 0.23 0.024 215° | `line-soft` | `#1F2832` | 0.0452 | PASS |
+| `--edge` | 0.35 0.025 215° | `line` | `#27313D` | 0.0488 | PASS |
+| `--edge-subtle` | 0.22 0.018 215° | `line-soft` | `#1F2832` | 0.0544 | PASS |
+| `--fg` | 0.98 0.005 215° | `text` | `#CBD6E3` | 0.1148 | PASS |
+| `--fg-dim` | 0.81 0.018 215° | `muted` | `#697686` | 0.2500 | PASS |
+| `--fg-muted` | 0.72 0.020 215° | `muted-2` | `#4D596A` | 0.2607 | PASS |
+
+  - **Copy and Visual Assets**: All domain copy was rewritten. Macroband copy uses independent operational categories (ALIGN . PRODUCT, IMPLEMENT . CODE, DELIVER . OPERATIONS, EXCEPTIONS) rather than flowtron phase descriptions. Hatched cell copy is "bypasses stage". Favicon is an independent pulse mark in deep slate and cyan (#04070d and #06b6d4).
   - **Data Fidelity and Complete Accounting**: Unlike reference designs that collapse tickets into an overflow badge ("+N more"), our system maintains complete data fidelity: every active ticket is rendered as an interactive pill chip, ensuring column card counts strictly equal stage counts without swallowed or dropped items.
   - **Implementation**: Written from scratch in vanilla ES modules and standard CSS with pure dark theme, zero remote requests, and complete data fidelity.
 
