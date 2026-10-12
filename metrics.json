@@ -38,7 +38,7 @@
       "pass": 8
     }
   },
-  "generated_at": "2026-10-12T00:02:17Z",
+  "generated_at": "2026-10-12T00:03:48Z",
   "issues": [
     {
       "closed_at": "2026-10-10T12:28:43Z",
@@ -1657,15 +1657,15 @@
       "type": "feature"
     },
     {
-      "closed_at": null,
+      "closed_at": "2026-10-12T00:02:03Z",
       "coder_engine": "agy-unrestricted",
       "coder_sessions_lost": 0,
       "cost": {
-        "calls": 5,
+        "calls": 6,
         "coder_model_usd": 0.0,
         "coder_usd": 0.25403,
-        "model_usd": 0.016841,
-        "usd": 0.270871
+        "model_usd": 0.018443,
+        "usd": 0.272473
       },
       "deferred": null,
       "escalation": null,
@@ -1700,12 +1700,12 @@
       "kind": "issue",
       "number": 51,
       "opened_at": "2026-10-11T23:42:03Z",
-      "outcome": "open",
+      "outcome": "released",
       "owner": null,
       "pr": 54,
       "quality_score": 100,
-      "release": null,
-      "resolution_seconds": null,
+      "release": "v0.4.0",
+      "resolution_seconds": 1291,
       "scenario": "a",
       "severity": null,
       "stages": [
@@ -1751,9 +1751,13 @@
         },
         {
           "entered_at": "2026-10-12T00:02:03Z",
-          "in_progress": true,
-          "seconds": 0,
+          "seconds": 91,
           "stage": "stage:merged"
+        },
+        {
+          "entered_at": "2026-10-12T00:03:34Z",
+          "seconds": 0,
+          "stage": "stage:released"
         }
       ],
       "title": "Show how many tracking events a parcel has",
@@ -1798,7 +1802,7 @@
     }
   ],
   "ledger": {
-    "emitted_at": "2026-10-12T00:02:05Z",
+    "emitted_at": "2026-10-12T00:03:36Z",
     "reconciled_at": "2026-10-11T23:42:42Z"
   },
   "repo": "stevengonsalvez/foundry-autonomous-sdlc",
@@ -1806,10 +1810,10 @@
     "deferred": 0,
     "escalated": 18,
     "issues": 25,
-    "ledger_usd": 0.066832,
-    "orchestrator_usd": 0.985055,
-    "released": 5,
-    "usd": 2.429933
+    "ledger_usd": 0.069244,
+    "orchestrator_usd": 0.997383,
+    "released": 6,
+    "usd": 2.446275
   },
   "version": 1
 }
