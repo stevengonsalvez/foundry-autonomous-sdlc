@@ -81,6 +81,9 @@ AI_SCOPE = "https://ai.azure.com/.default"
 # Hosted agents that get the egress guardrail. The coder runs untrusted code (agy, npm ci, tests);
 # the orchestrator and ledger run only this repository's code and are left open (docs/architecture.md).
 EGRESS_AGENTS = (CODER,)
+EGRESS_API_VERSION = "2026-05-15-preview"
+_POLICY_ID = re.compile(r"/subscriptions/[^/]+/resourceGroups/[^/]+/providers/Microsoft\.CognitiveServices/"
+                        r"accounts/[A-Za-z0-9_.-]+/raiPolicies/[A-Za-z0-9_.-]+")
 ROUTINE = "sdlc-tick"
 PROBE_ROUTINE = "probe-tick"
 ROUTINE_CRON = "*/5 * * * *"
@@ -122,11 +125,21 @@ class Config:
                   "AZURE_SUBSCRIPTION_ID": "azure_subscription_id", "AZURE_RESOURCE_GROUP": "resource_group_name"}
         values = {var: env.get(var, "") for var in wanted}
         egress = env.get("EGRESS_POLICY_ID", "")
+        outputs: dict[str, Any] = {}
         if not all(values.values()):
             outputs = terraform_outputs()
             for var, output in wanted.items():
                 values[var] = values[var] or str((outputs.get(output) or {}).get("value", ""))
-            egress = egress or str((outputs.get("egress_policy_id") or {}).get("value", ""))
+        if not egress:
+            # Read even when the four variables above are set, or the coder silently loses its guardrail.
+            # No terraform at all (env-only setups) leaves it empty, and hosted() warns.
+            try:
+                outputs = outputs or terraform_outputs()
+            except DeployError:
+                outputs = {}
+            egress = str((outputs.get("egress_policy_id") or {}).get("value") or "")
+        if egress and not _POLICY_ID.fullmatch(egress):
+            raise DeployError(f"EGRESS_POLICY_ID is not a raiPolicies resource id: {egress}")
         missing = [var for var, value in values.items() if not value]
         if missing:
             raise DeployError(f"{', '.join(missing)} not set and not found in terraform outputs")
@@ -274,7 +287,11 @@ class SdkFoundry:
 
     def get_version(self, name: str, version: str) -> dict[str, Any]:
         found = self._client.agents.get_version(agent_name=name, agent_version=version)
-        return {"status": _g(found, "status"), "error": _g(found, "error")}
+        return {"status": _g(found, "status"), "error": _g(found, "error"),
+                "rai_policy": _g(_g(_g(found, "definition"), "rai_config"), "rai_policy_name") or ""}
+
+    def delete_agent(self, name: str) -> None:
+        self._client.agents.delete(name, force=True)
 
     def get_routine(self, name: str) -> dict[str, Any] | None:
         try:
@@ -422,6 +439,9 @@ class Deployer:
             if name in EGRESS_AGENTS and not rai_policy:
                 self.say(f"warning: {name} has no egress policy (set EGRESS_POLICY_ID or terraform output "
                          "egress_policy_id); its outbound traffic is unrestricted")
+            description = f"{name} zip sha256 {sha[:12]}"
+            if rai_policy and not self.dry_run:
+                description += f", egress {self._egress_fingerprint(rai_policy)}"
             if self.dry_run:
                 self.say(f"would create {name} version: cpu={size.cpu} memory={size.memory} "
                          f"idle_timeout={size.idle_minutes}m python_3_13 remote_build invocations 2.0.0, "
@@ -430,11 +450,25 @@ class Deployer:
             before = self.foundry.get_agent(name)
             version = self.foundry.create_hosted_version(
                 name, cpu=size.cpu, memory=size.memory, idle_minutes=size.idle_minutes, env=env, code=code,
-                sha256=sha, description=f"{name} zip sha256 {sha[:12]}", rai_policy=rai_policy)
+                sha256=sha, description=description, rai_policy=rai_policy)
             unchanged = before is not None and before["latest_version"] == version
             self.say(f"{name} version {version} {'unchanged' if unchanged else 'created'}, waiting for active")
             self._wait_active(name, version, timeout_s)
             self.say(f"{name} version {version} active")
+
+    def _egress_fingerprint(self, policy_id: str) -> str:
+        """'<mode> <sha12 of the egress rules>'. It goes into the version description because an unchanged
+        definition reuses the existing version: without it, Audit to Enforced (same policy id) would never
+        reach the coder. A missing policy fails the deploy rather than attaching a dangling reference."""
+        resp = self.http(HttpRequest("GET", f"{ARM}{policy_id}?api-version={EGRESS_API_VERSION}",
+                                     {"Authorization": f"Bearer {self.token(ARM_SCOPE)}"}, None, 60.0))
+        if resp.status != 200:
+            raise DeployError(f"egress policy {policy_id.rsplit('/', 1)[-1]}: GET {resp.status}")
+        egress = (json.loads(resp.body).get("properties") or {}).get("egressPolicy")
+        if not egress:
+            raise DeployError(f"egress policy {policy_id.rsplit('/', 1)[-1]} has no egressPolicy")
+        digest = hashlib.sha256(json.dumps(egress, sort_keys=True).encode()).hexdigest()[:12]
+        return f"{egress.get('mode')} {digest}"
 
     def _wait_active(self, name: str, version: str, timeout_s: int) -> None:
         waited = 0
