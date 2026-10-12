@@ -1,0 +1,788 @@
+/* Ticket detail view styles
+   Flowtron-inspired operational cockpit for ticket lifecycle tracking. */
+
+/* ------------------------------------------------------------ layout and header */
+
+.view-ticket {
+  display: grid;
+  gap: var(--space-5);
+}
+
+.ticket-head {
+  display: grid;
+  gap: var(--space-3);
+  padding-block-end: var(--space-2);
+}
+
+.back-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  color: var(--ink-2);
+  text-decoration: none;
+  justify-self: start;
+  min-block-size: 2rem;
+  padding: 0.2rem 0.6rem;
+  margin-inline-start: -0.6rem;
+  border-radius: var(--radius-sm);
+  transition: color 0.15s ease, background 0.15s ease;
+}
+
+.back-link:hover {
+  color: var(--accent);
+  background: var(--surface-2);
+  text-decoration: none;
+}
+
+.back-link:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+
+.ticket-title-row {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-3);
+  min-inline-size: 0;
+  flex-wrap: wrap;
+}
+
+.ticket-num {
+  font-family: var(--font-mono);
+  color: var(--muted);
+  font-size: var(--fs-lg);
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  flex: none;
+}
+
+.ticket-title {
+  min-inline-size: 0;
+  font-size: var(--fs-xl);
+  font-weight: 700;
+  line-height: 1.25;
+  letter-spacing: -0.02em;
+  color: var(--ink);
+}
+
+.badge-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.link-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-4);
+  font-size: var(--fs-sm);
+  color: var(--ink-2);
+}
+
+.link-row .ext {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  color: var(--accent);
+  text-decoration: none;
+  font-weight: 600;
+}
+
+.link-row .ext:hover {
+  text-decoration: underline;
+}
+
+.summary {
+  color: var(--ink-2);
+  font-size: var(--fs-md);
+  line-height: 1.5;
+  max-inline-size: 75ch;
+}
+
+/* ------------------------------------------------------------ stage timeline */
+
+#timeline .disclosure {
+  margin-block-start: var(--space-3);
+}
+
+/* Stepper node pulse animation */
+.node-pulse {
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 2;
+  opacity: 0;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .node-pulse {
+    transform-box: fill-box;
+    transform-origin: center;
+    animation: ping 1.8s ease-out infinite;
+  }
+
+  @keyframes ping {
+    0% { transform: scale(1); opacity: 0.7; }
+    100% { transform: scale(2.2); opacity: 0; }
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .node-pulse {
+    animation-name: none;
+  }
+}
+
+/* ------------------------------------------------------------ gate verification matrix */
+
+.gate-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(10.5rem, 1fr));
+  gap: var(--space-2);
+}
+
+.gate {
+  display: flex;
+  gap: 0.65rem;
+  align-items: center;
+  padding: 0.6rem 0.75rem;
+  border: 1px solid var(--line);
+  border-radius: 0.65rem;
+  background: var(--surface-2);
+  min-inline-size: 0;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+.gate-icon {
+  flex: none;
+  inline-size: 1.65rem;
+  block-size: 1.65rem;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: var(--neutral-bg);
+  color: var(--neutral-ink);
+}
+
+.gate-text {
+  display: grid;
+  gap: 0.15rem;
+  line-height: 1.25;
+  min-inline-size: 0;
+}
+
+.gate-name {
+  font-weight: 650;
+  font-size: var(--fs-sm);
+  color: var(--ink);
+}
+
+.gate-state {
+  font-size: var(--fs-xs);
+  color: var(--ink-2);
+  display: inline-flex;
+  align-items: center;
+  max-inline-size: fit-content;
+}
+
+.gate-note {
+  font-size: var(--fs-xs);
+  color: var(--muted);
+}
+
+/* Distinct gate verdict chips */
+.gate-pass .gate-icon {
+  background: var(--good-bg);
+  color: var(--good-ink);
+}
+
+.gate-pass .gate-state {
+  color: var(--good-ink);
+  font-weight: 600;
+}
+
+.gate-pass.gate-first-pass {
+  border-color: color-mix(in oklab, var(--good-bg) 50%, var(--line));
+}
+
+.gate-pass.gate-first-pass .gate-state {
+  font-weight: 650;
+}
+
+.gate-fail {
+  border-color: color-mix(in oklab, var(--danger) 40%, var(--line));
+  background: var(--bad-bg);
+}
+
+.gate-fail .gate-icon {
+  background: var(--danger);
+  color: var(--on-fill);
+}
+
+.gate-fail .gate-state {
+  color: var(--bad-ink);
+  font-weight: 700;
+}
+
+.gate-running .gate-icon {
+  background: var(--info-bg);
+  color: var(--info-ink);
+}
+
+.gate-running .gate-state {
+  color: var(--info-ink);
+  font-weight: 600;
+}
+
+.gate-skipped .gate-icon {
+  background: var(--warn-bg);
+  color: var(--warn-ink);
+}
+
+.gate-skipped .gate-state {
+  color: var(--warn-ink);
+  font-weight: 600;
+}
+
+.gate-none {
+  border-style: dashed;
+  background: transparent;
+}
+
+.gate-none .gate-icon {
+  background: var(--rail);
+  color: var(--muted);
+}
+
+.gate-none .gate-name {
+  color: var(--muted);
+}
+
+.gate-none .gate-state {
+  color: var(--muted);
+}
+
+/* ------------------------------------------------------------ environments delivery chain */
+
+.chain {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2) 1.75rem;
+  margin-block-end: var(--space-4);
+}
+
+.chain-node {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.55rem 0.85rem;
+  border: 1px solid var(--line);
+  border-radius: 0.65rem;
+  background: var(--surface-2);
+}
+
+.chain-node + .chain-node::before {
+  content: "";
+  position: absolute;
+  inset-inline-start: -1.5rem;
+  inset-block-start: 50%;
+  inline-size: 1.25rem;
+  block-size: 2px;
+  background: var(--line-strong);
+}
+
+.chain-mark {
+  inline-size: 1.5rem;
+  block-size: 1.5rem;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: var(--neutral-bg);
+  color: var(--neutral-ink);
+  flex: none;
+}
+
+.chain-text {
+  display: grid;
+  line-height: 1.25;
+}
+
+.chain-label {
+  font-weight: 650;
+  font-size: var(--fs-sm);
+  color: var(--ink);
+}
+
+.chain-state {
+  font-size: var(--fs-xs);
+  color: var(--ink-2);
+}
+
+.chain-pass .chain-mark {
+  background: var(--good-bg);
+  color: var(--good-ink);
+}
+
+.chain-fail {
+  background: var(--bad-bg);
+  border-color: color-mix(in oklab, var(--danger) 40%, var(--line));
+}
+
+.chain-fail .chain-mark {
+  background: var(--danger);
+  color: var(--on-fill);
+}
+
+.chain-running .chain-mark {
+  background: var(--info-bg);
+  color: var(--info-ink);
+}
+
+.chain-none {
+  border-style: dashed;
+  background: transparent;
+}
+
+.hops {
+  display: grid;
+  gap: 0;
+}
+
+.hop {
+  display: grid;
+  grid-template-columns: 1rem minmax(0, 1fr);
+  gap: 0.85rem;
+  padding-block-end: 1.2rem;
+  position: relative;
+}
+
+.hop:last-child {
+  padding-block-end: 0;
+}
+
+.hop-dot {
+  inline-size: 0.75rem;
+  block-size: 0.75rem;
+  border-radius: 50%;
+  background: var(--line-strong);
+  margin-block-start: 0.45rem;
+  position: relative;
+  justify-self: center;
+  z-index: 1;
+}
+
+.hop:not(:last-child)::before {
+  content: "";
+  position: absolute;
+  inset-inline-start: calc(0.5rem - 1px);
+  inset-block: 1.15rem 0;
+  inline-size: 2px;
+  background: var(--line);
+}
+
+.hop-success .hop-dot,
+.hop-promote .hop-dot,
+.hop-stage .hop-dot {
+  background: var(--good);
+}
+
+.hop-rolled_back .hop-dot,
+.hop-rollback .hop-dot,
+.hop-failed .hop-dot,
+.hop-fail .hop-dot {
+  background: var(--danger);
+}
+
+.hop-skipped .hop-dot,
+.hop-skip .hop-dot {
+  background: var(--warn-line);
+}
+
+.hop-in_progress .hop-dot {
+  background: var(--accent);
+}
+
+.hop-body {
+  display: grid;
+  gap: 0.2rem;
+  min-inline-size: 0;
+}
+
+.hop-title {
+  font-weight: 650;
+  font-size: var(--fs-base);
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  color: var(--ink);
+}
+
+.hop-meta {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem 1rem;
+  flex-wrap: wrap;
+  color: var(--ink-2);
+  font-size: var(--fs-sm);
+}
+
+.hop-meta .version-tag {
+  font-family: var(--font-mono);
+  font-size: var(--fs-xs);
+  padding: 0.1rem 0.4rem;
+  border-radius: var(--radius-xs);
+  background: var(--surface-3);
+  color: var(--ink);
+}
+
+.hop-detail {
+  color: var(--ink-2);
+  font-size: var(--fs-sm);
+  line-height: 1.45;
+}
+
+/* ------------------------------------------------------------ cost breakdown */
+
+.cost-total {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-3);
+}
+
+.cost-total strong {
+  font-size: var(--fs-xl);
+  letter-spacing: -0.02em;
+  line-height: 1.1;
+  font-family: var(--font-mono);
+  color: var(--ink);
+}
+
+.split {
+  display: flex;
+  block-size: 0.8rem;
+  border-radius: 999px;
+  overflow: hidden;
+  background: var(--rail);
+  gap: 2px;
+}
+
+.split-seg {
+  inline-size: var(--w, 0%);
+  min-inline-size: 3px;
+}
+
+.split-model,
+.swatch.split-model {
+  background: var(--accent);
+}
+
+.split-coder,
+.swatch.split-coder {
+  background: var(--st-staging);
+}
+
+.split-coder-model,
+.swatch.split-coder-model {
+  background: var(--st-tests);
+}
+
+.split-ledger,
+.swatch.split-ledger {
+  background: var(--st-refining);
+}
+
+.split-other,
+.swatch.split-other {
+  background: var(--line-strong);
+}
+
+.legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1) var(--space-4);
+  color: var(--ink-2);
+  font-size: var(--fs-sm);
+}
+
+.legend li {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.swatch {
+  inline-size: 0.75rem;
+  block-size: 0.75rem;
+  border-radius: 0.2rem;
+  flex: none;
+  display: inline-block;
+}
+
+/* Stats grid */
+.stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(7rem, 1fr));
+  gap: var(--space-3) var(--space-4);
+}
+
+.stats-wide {
+  grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));
+}
+
+.stat {
+  min-inline-size: 0;
+}
+
+.stat dt {
+  color: var(--muted);
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  letter-spacing: 0.03em;
+}
+
+.stat dd {
+  font-weight: 650;
+  overflow-wrap: anywhere;
+  color: var(--ink);
+}
+
+/* ------------------------------------------------------------ pull request and commits */
+
+.commits {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.commit {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  flex-wrap: wrap;
+  padding: 0.55rem 0.75rem;
+  border: 1px solid var(--line);
+  border-radius: 0.65rem;
+  background: var(--surface-2);
+  min-inline-size: 0;
+}
+
+.commit-key {
+  border-color: color-mix(in oklab, var(--accent) 45%, var(--line));
+  background: var(--accent-soft);
+}
+
+.commit-order {
+  inline-size: 1.5rem;
+  block-size: 1.5rem;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: var(--surface);
+  border: 1px solid var(--line-strong);
+  font-family: var(--font-mono);
+  font-size: var(--fs-xs);
+  font-weight: 700;
+  color: var(--ink-2);
+  flex: none;
+}
+
+.commit-msg {
+  flex: 1 1 12rem;
+  min-inline-size: 0;
+  font-size: var(--fs-sm);
+  color: var(--ink);
+}
+
+.bullets {
+  display: grid;
+  gap: 0.4rem;
+  padding-inline-start: 1.2rem;
+  list-style: disc;
+  font-size: var(--fs-sm);
+  color: var(--ink-2);
+}
+
+.bullets.steps {
+  list-style: decimal;
+}
+
+/* ------------------------------------------------------------ work panel sub-sections */
+
+#work .sub {
+  display: grid;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+}
+
+#work .sub h3 {
+  font-size: var(--fs-sm);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+}
+
+/* ------------------------------------------------------------ trail and conversations */
+
+.trail-stack {
+  display: grid;
+  gap: var(--space-5);
+}
+
+.trail-block {
+  display: grid;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface-2);
+  min-inline-size: 0;
+}
+
+.trail-head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2) var(--space-3);
+  flex-wrap: wrap;
+}
+
+.trail-head h3 {
+  color: var(--ink);
+  font-size: var(--fs-base);
+}
+
+.qa-round {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.qa-round-head {
+  font-weight: 650;
+  font-size: var(--fs-sm);
+  color: var(--ink);
+}
+
+.qa-list {
+  display: grid;
+  gap: var(--space-3);
+  list-style: none;
+  padding: 0;
+}
+
+.qa {
+  display: grid;
+  gap: 0.5rem;
+}
+
+.bubble {
+  padding: 0.75rem 0.95rem;
+  border-radius: 0.85rem;
+  display: grid;
+  gap: 0.2rem;
+  max-inline-size: 62rem;
+  min-inline-size: 0;
+  font-size: var(--fs-sm);
+  line-height: 1.45;
+}
+
+.bubble p {
+  line-height: 1.45;
+}
+
+.who {
+  font-size: var(--fs-xs);
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+  text-transform: uppercase;
+}
+
+.bubble-q {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  color: var(--ink);
+}
+
+.bubble-a {
+  background: var(--info-bg);
+  color: var(--info-ink);
+  margin-inline-start: clamp(0.5rem, 4vw, 2rem);
+  border: 1px solid color-mix(in oklab, var(--info-bg) 60%, var(--line));
+}
+
+.bubble-a .who {
+  color: inherit;
+  opacity: 0.85;
+}
+
+.findings {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.finding {
+  display: flex;
+  gap: 0.75rem;
+  align-items: baseline;
+  flex-wrap: wrap;
+  padding: 0.6rem 0.8rem;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 0.6rem;
+}
+
+.finding-tags {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  flex: 0 1 auto;
+  min-inline-size: 0;
+  max-inline-size: 100%;
+}
+
+.finding p {
+  flex: 1 1 16rem;
+  min-inline-size: 0;
+  font-size: var(--fs-sm);
+}
+
+.file-list {
+  display: grid;
+  gap: 0.3rem;
+}
+
+/* ------------------------------------------------------------ responsive */
+
+@media (max-width: 48rem) {
+  .ticket-head {
+    gap: var(--space-2);
+  }
+
+  .ticket-title {
+    font-size: 1.35rem;
+  }
+
+  .gate-grid {
+    grid-template-columns: repeat(auto-fill, minmax(8.5rem, 1fr));
+  }
+
+  .chain {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .chain-node + .chain-node::before {
+    display: none;
+  }
+
+  .bubble-a {
+    margin-inline-start: 0.5rem;
+  }
+}

@@ -1,0 +1,556 @@
+/* Cost View Styles
+   Operational financial telemetry for the autonomous SDLC.
+   High-density, instrument-grade styling inspired by Flowtron.
+   WCAG 2.1 AA compliant in light and dark mode. */
+
+.cost-view {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5, 20px);
+}
+
+/* ------------------------------------------------------------ Callout Banner */
+
+.cost-banner {
+  border-radius: var(--radius-md, 8px);
+  padding: var(--space-4, 16px) var(--space-5, 20px);
+  border: 1px solid var(--line);
+  border-inline-start-width: 4px;
+  background: var(--surface);
+  box-shadow: var(--shadow-sm, 0 1px 3px rgba(0, 0, 0, 0.05));
+  transition: border-color 0.2s ease, background-color 0.2s ease;
+}
+
+.cost-banner.callout-info {
+  border-color: light-dark(rgba(37, 99, 235, 0.25), rgba(34, 211, 238, 0.35));
+  border-inline-start-color: var(--color-transit, #22d3ee);
+  background: light-dark(rgba(37, 99, 235, 0.04), rgba(34, 211, 238, 0.06));
+}
+
+.cost-banner.callout-danger {
+  border-color: light-dark(rgba(220, 38, 38, 0.4), rgba(240, 100, 75, 0.5));
+  border-inline-start-color: var(--color-gate, #f0644b);
+  background: light-dark(rgba(220, 38, 38, 0.06), rgba(240, 100, 75, 0.1));
+}
+
+.cost-banner .callout-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  inline-size: 2rem;
+  block-size: 2rem;
+  border-radius: var(--radius-sm, 6px);
+  background: light-dark(rgba(0, 0, 0, 0.05), rgba(255, 255, 255, 0.08));
+  flex-shrink: 0;
+}
+
+.cost-banner.callout-danger .callout-icon {
+  background: light-dark(rgba(220, 38, 38, 0.15), rgba(240, 100, 75, 0.2));
+  color: var(--color-gate, #f0644b);
+}
+
+.cost-banner .callout-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2, 8px);
+  min-inline-size: 0;
+}
+
+.cost-banner .callout-body h2 {
+  font-family: var(--font-sans);
+  font-size: var(--text-md, 15px);
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  margin: 0;
+  color: var(--text-primary, var(--ink));
+}
+
+.cost-banner.callout-danger .callout-body h2 {
+  color: light-dark(#991b1b, #fca5a5);
+}
+
+.cost-banner .callout-lead {
+  font-family: var(--font-mono);
+  font-size: var(--text-base, 13.5px);
+  font-weight: 600;
+  line-height: 1.5;
+  color: var(--text-primary, var(--ink));
+  margin: 0;
+}
+
+.cost-banner .muted {
+  font-size: var(--text-sm, 12px);
+  color: var(--text-muted, var(--muted));
+  margin: 0;
+}
+
+/* ------------------------------------------------------------ KPI Metrics Band */
+
+.cost-kpis {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: var(--space-3, 12px);
+  margin: 0;
+  padding: 0;
+}
+
+.cost-kpis .kpi {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md, 8px);
+  border-inline-start-width: 3px;
+  border-inline-start-style: solid;
+  padding: var(--space-3, 12px) var(--space-4, 16px);
+  box-shadow: var(--shadow-sm, 0 1px 3px rgba(0, 0, 0, 0.04));
+  display: flex;
+  flex-direction: column-reverse;
+  gap: var(--space-1, 4px);
+  min-inline-size: 0;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.cost-kpis .kpi:hover {
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-md, 0 4px 8px rgba(0, 0, 0, 0.08));
+}
+
+.cost-kpis .kpi dt {
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs, 9.5px);
+  font-weight: 650;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--text-muted, var(--muted));
+  margin: 0;
+}
+
+.cost-kpis .kpi dd {
+  font-family: var(--font-mono);
+  font-size: var(--text-xl, 22px);
+  line-height: 1.15;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-primary, var(--ink));
+  margin: 0;
+  overflow-wrap: anywhere;
+  display: flex;
+  flex-direction: column;
+}
+
+.cost-kpis .kpi .kpi-sub {
+  font-family: var(--font-sans);
+  font-size: var(--text-2xs, 10px);
+  font-weight: 500;
+  letter-spacing: normal;
+  color: var(--text-muted, var(--muted));
+  margin-block-start: 2px;
+}
+
+/* KPI Semantic Edge Accents */
+.cost-kpis .kpi-estimate {
+  border-inline-start-color: var(--color-transit, #22d3ee);
+}
+
+.cost-kpis .kpi-billed {
+  border-inline-start-color: var(--color-flow, #2dd4a7);
+}
+
+.cost-kpis .kpi-halt {
+  border-inline-start-color: var(--color-warn, #f2b23d);
+}
+
+.cost-kpis .kpi-cap {
+  border-inline-start-color: var(--color-gate, #f0644b);
+}
+
+.cost-kpis .kpi-tickets {
+  border-inline-start-color: var(--accent, #2563eb);
+}
+
+.cost-kpis .kpi-orch {
+  border-inline-start-color: var(--color-purple, #8b5cf6);
+}
+
+.cost-kpis .kpi-muted {
+  border-inline-start-color: var(--line-strong, #94a3b8);
+}
+
+.cost-kpis .kpi-bad {
+  border-inline-start-color: var(--color-gate, #f0644b) !important;
+  background: light-dark(rgba(220, 38, 38, 0.04), rgba(240, 100, 75, 0.08));
+}
+
+.cost-kpis .kpi-bad dd {
+  color: var(--color-gate, #f0644b);
+}
+
+/* ------------------------------------------------------------ Estimate vs Billed */
+
+#estimate-vs-billed {
+  position: relative;
+}
+
+.telemetry-pills {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2, 8px);
+  flex-wrap: wrap;
+}
+
+.telemetry-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1, 4px);
+  padding: 3px 8px;
+  border-radius: var(--radius-sm, 6px);
+  border: 1px solid var(--line);
+  background: var(--surface-2, rgba(0, 0, 0, 0.03));
+  font-size: var(--text-xs, 11px);
+  font-family: var(--font-mono);
+}
+
+.telemetry-pill .pill-label {
+  color: var(--text-muted, var(--muted));
+  font-size: 9.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.telemetry-pill .pill-value {
+  font-weight: 700;
+  color: var(--text-primary, var(--ink));
+  font-variant-numeric: tabular-nums;
+}
+
+.pill-halt {
+  border-color: light-dark(rgba(242, 178, 61, 0.4), rgba(242, 178, 61, 0.5));
+}
+
+.pill-halt .pill-value {
+  color: light-dark(#b45309, #fbbf24);
+}
+
+.pill-cap {
+  border-color: light-dark(rgba(148, 163, 184, 0.4), rgba(148, 163, 184, 0.5));
+}
+
+.pill-gap {
+  border-color: light-dark(rgba(34, 211, 238, 0.4), rgba(34, 211, 238, 0.5));
+}
+
+.pill-gap .pill-value {
+  color: light-dark(#0369a1, #38bdf8);
+}
+
+/* ------------------------------------------------------------ Meters & Ledger Grid */
+
+.cost-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--space-5, 20px);
+  align-items: start;
+}
+
+@media (min-width: 64rem) {
+  .cost-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+#meters, #ledger-compute {
+  min-inline-size: 0;
+}
+
+/* Ledger Compute Stats */
+#ledger-compute .stats {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-3, 12px);
+  margin: 0;
+  padding: 0;
+}
+
+#ledger-compute .stat {
+  background: var(--surface-2, rgba(0, 0, 0, 0.02));
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm, 6px);
+  border-inline-start: 3px solid var(--color-transit, #22d3ee);
+  padding: var(--space-3, 12px) var(--space-4, 16px);
+  display: flex;
+  flex-direction: column-reverse;
+  gap: 2px;
+  min-inline-size: 0;
+}
+
+#ledger-compute .stat dt {
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs, 9.5px);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-muted, var(--muted));
+  margin: 0;
+}
+
+#ledger-compute .stat dd {
+  font-family: var(--font-mono);
+  font-size: var(--text-lg, 18px);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-primary, var(--ink));
+  margin: 0;
+}
+
+#ledger-compute .footnote {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs, 11px);
+  color: var(--text-muted, var(--muted));
+  margin-block-start: var(--space-2, 8px);
+  margin-block-end: 0;
+}
+
+/* ------------------------------------------------------------ Per-Ticket Table */
+
+#per-ticket {
+  position: relative;
+}
+
+.table-slot {
+  min-inline-size: 0;
+}
+
+.cost-data {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.cost-data thead th {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs, 11px);
+  font-weight: 650;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted, var(--muted));
+  background: var(--surface-2, rgba(0, 0, 0, 0.02));
+  border-block-end: 2px solid var(--line-strong, #94a3b8);
+  padding: var(--space-2, 8px) var(--space-3, 12px);
+  user-select: none;
+}
+
+.cost-data thead th.num {
+  text-align: end;
+}
+
+.cost-data thead th button.sort {
+  appearance: none;
+  background: transparent;
+  border: 0;
+  padding: 0;
+  margin: 0;
+  cursor: pointer;
+  color: inherit;
+  font: inherit;
+  letter-spacing: inherit;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  text-transform: inherit;
+  border-radius: var(--radius-xs, 3px);
+  transition: color 0.15s ease;
+}
+
+.cost-data thead th button.sort:hover {
+  color: var(--text-primary, var(--ink));
+}
+
+.cost-data thead th button.sort:focus-visible {
+  outline: 2px solid var(--accent, #2563eb);
+  outline-offset: 3px;
+}
+
+.cost-data thead th button.sort-active {
+  color: var(--text-primary, var(--ink));
+  font-weight: 700;
+}
+
+.cost-data thead th .sort-arrow {
+  display: inline-block;
+  inline-size: 0.9em;
+  color: var(--accent, #2563eb);
+}
+
+.cost-data tbody tr {
+  border-block-end: 1px solid var(--line);
+  transition: background-color 0.12s ease;
+}
+
+.cost-data tbody tr:hover {
+  background: light-dark(rgba(0, 0, 0, 0.025), rgba(255, 255, 255, 0.03));
+}
+
+.cost-data tbody th,
+.cost-data tbody td {
+  padding: var(--space-2, 8px) var(--space-3, 12px);
+  vertical-align: middle;
+}
+
+.cost-data tbody th {
+  font-weight: 500;
+  text-align: start;
+}
+
+.cost-data .cell-ticket {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2, 8px);
+  max-inline-size: 32rem;
+}
+
+.cost-data .cell-ticket .num-link {
+  font-family: var(--font-mono);
+  font-weight: 700;
+  text-decoration: none;
+  color: var(--accent, #2563eb);
+}
+
+.cost-data .cell-ticket .num-link:hover {
+  text-decoration: underline;
+}
+
+.cost-data .cell-ticket .clamp-1 {
+  max-inline-size: 16rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cost-data .num {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  text-align: end;
+  white-space: nowrap;
+}
+
+.cost-data .num.strong {
+  font-weight: 700;
+  color: var(--text-primary, var(--ink));
+}
+
+/* Cap Column and Bar */
+.cost-data .cell-cap {
+  display: table-cell;
+  white-space: nowrap;
+}
+
+.cost-data .cell-cap .cbar-wrap {
+  display: inline-flex;
+  align-items: center;
+  min-inline-size: 7.5rem;
+  margin-inline-end: 0.6rem;
+  vertical-align: middle;
+}
+
+.cost-data .cell-cap .cbar {
+  flex: 1;
+  block-size: 6px;
+  background: var(--rail, rgba(0, 0, 0, 0.08));
+  border-radius: var(--radius-pill, 9999px);
+  overflow: hidden;
+  min-inline-size: 4rem;
+}
+
+.cost-data .cell-cap .cbar-fill {
+  display: block;
+  block-size: 100%;
+  inline-size: var(--pct, 0%);
+  min-inline-size: 3px;
+  background: var(--color-flow, #2dd4a7);
+  border-radius: var(--radius-pill, 9999px);
+  transition: width 0.3s ease;
+}
+
+.cost-data .band-high .cbar-fill {
+  background: var(--color-warn, #f2b23d);
+}
+
+.cost-data .band-over .cbar-fill {
+  background: var(--color-gate, #f0644b);
+}
+
+.cost-data .cell-cap .pct-text {
+  display: inline-block;
+  min-inline-size: 2.8rem;
+  font-family: var(--font-mono);
+  font-size: var(--text-xs, 11px);
+  font-variant-numeric: tabular-nums;
+  color: var(--text-secondary, var(--ink-2));
+  text-align: end;
+}
+
+/* Over-cap Highlighted Rows */
+.cost-data tbody tr.row-bad {
+  background: light-dark(rgba(220, 38, 38, 0.05), rgba(240, 100, 75, 0.12));
+}
+
+.cost-data tbody tr.row-bad:hover {
+  background: light-dark(rgba(220, 38, 38, 0.08), rgba(240, 100, 75, 0.16));
+}
+
+.cost-data tbody tr.row-bad td.strong {
+  color: var(--color-gate, #f0644b);
+}
+
+/* Table Footer */
+.cost-data tfoot {
+  background: var(--surface-2, rgba(0, 0, 0, 0.03));
+  border-block-start: 2px solid var(--line-strong, #94a3b8);
+}
+
+.cost-data tfoot th,
+.cost-data tfoot td {
+  padding: var(--space-3, 12px);
+  font-family: var(--font-mono);
+  font-size: var(--text-sm, 12px);
+  font-weight: 700;
+  color: var(--text-primary, var(--ink));
+}
+
+/* ------------------------------------------------------------ Responsive Breakpoints */
+
+@media (max-width: 64rem) {
+  .cost-kpis {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 48rem) {
+  .cost-kpis {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .cost-data thead th button.sort {
+    font-size: 10px;
+  }
+
+  .cost-data .cell-ticket {
+    max-inline-size: 18rem;
+  }
+
+  .cost-data .cell-ticket .clamp-1 {
+    max-inline-size: 9rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cost-banner,
+  .cost-kpis .kpi,
+  .cost-data tbody tr,
+  .cost-data .cell-cap .cbar-fill {
+    transition: none !important;
+  }
+
+  .cost-kpis .kpi:hover {
+    transform: none !important;
+  }
+}

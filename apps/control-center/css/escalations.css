@@ -1,0 +1,245 @@
+/* ============================================================
+   Escalations View
+   Observability cockpit for tickets halted for human resolution.
+   Follows Flowtron operational design system specifications.
+   ============================================================ */
+
+.view-escalations {
+  display: grid;
+  gap: var(--space-5);
+  min-inline-size: 0;
+}
+
+.esc-kpis {
+  margin-block-end: var(--space-2);
+}
+
+.esc-list {
+  display: grid;
+  gap: var(--space-4);
+  min-inline-size: 0;
+}
+
+/* Escalation Card */
+.esc-card {
+  display: grid;
+  gap: var(--space-4);
+  background: var(--bg-panel, var(--surface));
+  border: 1px solid color-mix(in oklab, var(--gate, var(--danger)) 30%, var(--line));
+  border-inline-start: 4px solid var(--gate, var(--danger));
+  border-radius: var(--radius-md, var(--radius));
+  padding: var(--space-4) var(--space-5);
+  box-shadow: var(--shadow-sm, var(--shadow));
+  min-inline-size: 0;
+  grid-template-columns: minmax(0, 1fr);
+  transition: border-color var(--trans-fast, 0.15s ease), box-shadow var(--trans-fast, 0.15s ease);
+}
+
+.esc-card:hover {
+  border-color: color-mix(in oklab, var(--gate, var(--danger)) 55%, var(--line-strong));
+  box-shadow: var(--shadow-md, var(--shadow));
+}
+
+/* Escalation Card Header */
+.esc-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+  min-inline-size: 0;
+}
+
+.esc-ticket {
+  min-inline-size: 0;
+  flex: 1 1 18rem;
+  font-size: var(--fs-md, 1.05rem);
+  font-weight: 650;
+  display: flex;
+  align-items: center;
+}
+
+.esc-ticket .ticket-ref {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  color: var(--text-primary, var(--ink));
+  text-decoration: none;
+  min-inline-size: 0;
+  max-inline-size: 100%;
+}
+
+.esc-ticket .ticket-ref:hover {
+  color: var(--accent);
+}
+
+.esc-ticket .ticket-ref .num {
+  font-family: var(--font-mono);
+  font-weight: 700;
+  color: var(--gate, var(--danger));
+  flex-shrink: 0;
+}
+
+.esc-tags {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+.esc-code {
+  font-family: var(--font-mono);
+  font-size: var(--fs-xs, 0.75rem);
+  padding: 0.15rem 0.45rem;
+  background: var(--bg-surface, var(--surface-raised));
+  color: var(--text-secondary, var(--muted));
+  border: 1px solid var(--line-soft, var(--line));
+  border-radius: var(--radius-xs, 4px);
+  white-space: nowrap;
+}
+
+.badge-esc-kind {
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+.badge-rollback {
+  font-weight: 700;
+}
+
+/* Metadata Bar */
+.esc-meta {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));
+  gap: var(--space-3) var(--space-4);
+  background: var(--bg-surface, var(--surface-raised));
+  border: 1px solid var(--line-soft, var(--line));
+  border-radius: var(--radius-sm, 6px);
+  padding: var(--space-3) var(--space-4);
+  margin: 0;
+}
+
+.esc-meta-item {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  min-inline-size: 0;
+}
+
+.esc-meta dt {
+  color: var(--text-muted, var(--muted));
+  font-size: var(--fs-xs, 0.75rem);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin: 0;
+}
+
+.esc-meta dd {
+  font-weight: 650;
+  font-size: var(--fs-sm, 0.8125rem);
+  color: var(--text-primary, var(--ink));
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.esc-meta dd a {
+  color: var(--accent);
+  text-decoration: none;
+}
+
+.esc-meta dd a:hover {
+  text-decoration: underline;
+}
+
+/* Two-column Sections */
+.esc-cols {
+  display: grid;
+  gap: var(--space-4);
+  grid-template-columns: minmax(0, 1fr);
+  min-inline-size: 0;
+}
+
+@media (min-width: 52rem) {
+  .esc-cols {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+.esc-section {
+  display: grid;
+  gap: var(--space-2);
+  align-content: start;
+  min-inline-size: 0;
+  background: var(--bg-subtle, var(--surface));
+  border: 1px solid var(--line-soft, var(--line));
+  border-radius: var(--radius-sm, 6px);
+  padding: var(--space-3) var(--space-4);
+}
+
+.esc-section-title {
+  font-size: var(--fs-xs, 0.75rem);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-secondary, var(--muted));
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.esc-section-stopped .esc-section-title {
+  color: var(--gate, var(--danger));
+}
+
+.esc-section-tried .esc-section-title {
+  color: var(--text-secondary, var(--muted));
+}
+
+.esc-reasons-list,
+.esc-tried-list {
+  margin: 0;
+  padding-inline-start: 1.25rem;
+  display: grid;
+  gap: var(--space-2);
+  font-size: var(--fs-sm, 0.8125rem);
+  line-height: 1.45;
+  color: var(--text-primary, var(--ink));
+  min-inline-size: 0;
+}
+
+.esc-reasons-list li,
+.esc-tried-list li {
+  overflow-wrap: break-word;
+  word-break: break-word;
+  min-inline-size: 0;
+}
+
+.esc-tried-list {
+  padding-inline-start: 1.5rem;
+}
+
+/* Footer Action */
+.esc-foot {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  padding-top: var(--space-2);
+  border-top: 1px solid var(--line-soft, var(--line));
+}
+
+.esc-foot .btn {
+  font-weight: 600;
+}
+
+@media (max-width: 48rem) {
+  .esc-card {
+    padding: var(--space-3) var(--space-4);
+  }
+
+  .esc-meta {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--space-2) var(--space-3);
+  }
+}

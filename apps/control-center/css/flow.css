@@ -1,0 +1,353 @@
+/* Flow Metrics View Styles
+   Operational Cockpit for Cycle Time, Lead Time, Change Failure, WIP, Gates, Defects, and Cost */
+
+/* Semantic Token Fills and Strokes for SVG Charts */
+.fill-auto { fill: var(--auto); }
+.fill-assist { fill: var(--assist); }
+.fill-gate { fill: var(--gate); }
+.fill-dit { fill: var(--dit); }
+
+.stroke-auto { stroke: var(--auto); }
+.stroke-assist { stroke: var(--assist); }
+.stroke-gate { stroke: var(--gate); }
+.stroke-dit { stroke: var(--dit); }
+
+/* Flow View Layout */
+.flow-view {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+}
+
+/* Metric Panels */
+#cycle,
+#lead,
+#change-failure,
+#wip,
+#gates,
+#defects,
+#cost-per-ticket,
+#cost-cap,
+#scenarios {
+  position: relative;
+  min-inline-size: 0;
+}
+
+.cost-cap-inner {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  inline-size: 100%;
+}
+
+/* Small KPI Grid */
+.kpis-small {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(8rem, 1fr));
+  gap: var(--space-3);
+  margin-block-end: var(--space-3);
+}
+
+.kpi {
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  padding: var(--space-2) var(--space-3);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.kpi dt {
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.kpi dd {
+  font-size: var(--text-lg);
+  font-weight: 700;
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  margin: 0;
+}
+
+.kpi-bad {
+  border-color: var(--gate-border);
+  background: var(--gate-bg);
+}
+
+.kpi-bad dd {
+  color: var(--gate);
+}
+
+/* Defects Owner Tiles */
+.owner-tiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(9.5rem, 1fr));
+  gap: var(--space-3);
+  margin-block-end: var(--space-3);
+}
+
+.owner-tile {
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  padding: var(--space-3);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.owner-name {
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.owner-count {
+  font-size: var(--text-md);
+  font-weight: 700;
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+.owner-median {
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+}
+
+/* SVG Chart Typography and Elements */
+.chart {
+  display: block;
+  inline-size: 100%;
+  overflow: visible;
+}
+
+.chart text {
+  font-family: var(--font-sans);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.c-label {
+  fill: var(--text-secondary);
+  font-size: 12px;
+}
+
+.c-strong {
+  font-weight: 650;
+  fill: var(--text-primary);
+}
+
+.c-value {
+  fill: var(--text-primary);
+  font-weight: 650;
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+.c-sub {
+  fill: var(--text-muted);
+  font-size: 11px;
+}
+
+.c-marker {
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.rail {
+  fill: var(--bg-surface);
+}
+
+.seg {
+  stroke: var(--panel);
+  stroke-width: 1px;
+}
+
+.seg-open {
+  opacity: 0.55;
+  stroke-dasharray: 2 2;
+}
+
+.c-line {
+  stroke-width: 1.5px;
+}
+
+.c-halt {
+  stroke: var(--assist);
+  stroke-dasharray: 4 3;
+}
+
+.c-cap {
+  stroke: var(--gate);
+  stroke-dasharray: 4 2;
+}
+
+.c-median {
+  stroke: var(--dit);
+  stroke-dasharray: 3 3;
+}
+
+.c-axis {
+  stroke: var(--line-strong);
+  stroke-width: 1px;
+}
+
+.c-grid {
+  stroke: var(--line-soft);
+  stroke-width: 1px;
+  stroke-dasharray: 2 2;
+}
+
+/* Dot Strip (Lead Time) */
+.dot {
+  fill: var(--dit);
+  fill-opacity: 0.85;
+  stroke: var(--panel);
+  stroke-width: 1.5px;
+}
+
+.dot:hover {
+  fill-opacity: 1;
+}
+
+/* Release Strip (Change Failure Rate) */
+.release-box {
+  stroke-width: 1.5px;
+  fill: var(--bg-surface);
+  stroke: var(--line-strong);
+}
+
+.release-glyph {
+  fill: none;
+  stroke-width: 2.2px;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke: var(--text-secondary);
+}
+
+.release-ok .release-box {
+  fill: var(--auto-bg);
+  stroke: var(--auto);
+}
+
+.release-ok .release-glyph {
+  stroke: var(--auto);
+}
+
+.release-failed .release-box {
+  fill: var(--gate-bg);
+  stroke: var(--gate);
+}
+
+.release-failed .release-glyph {
+  stroke: var(--gate);
+}
+
+.release-skipped .release-box {
+  fill: var(--assist-bg);
+  stroke: var(--assist);
+}
+
+.release-skipped .release-glyph {
+  stroke: var(--assist);
+  stroke-width: 2px;
+}
+
+.release-pending .release-box {
+  fill: var(--dit-bg);
+  stroke: var(--dit);
+}
+
+.release-pending .release-glyph {
+  stroke: var(--dit);
+  stroke-width: 4px;
+}
+
+/* Stage Legends */
+.legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  list-style: none;
+  padding: 0;
+  margin: var(--space-2) 0 0;
+  font-size: var(--text-xs);
+  color: var(--text-secondary);
+}
+
+.legend li {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.swatch {
+  inline-size: 10px;
+  block-size: 10px;
+  border-radius: 2px;
+  display: inline-block;
+}
+
+/* Fallback & Inspection Data Tables in Details */
+.disclosure {
+  border-block-start: 1px solid var(--line);
+  padding-block-start: var(--space-3);
+  margin-block-start: var(--space-3);
+}
+
+.disclosure summary {
+  cursor: pointer;
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--accent);
+  min-block-size: 2.25rem;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  user-select: none;
+}
+
+.disclosure summary:hover {
+  color: var(--accent-hover);
+}
+
+.disclosure summary:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+  border-radius: var(--radius-xs);
+}
+
+.disclosure[open] summary {
+  margin-block-end: var(--space-3);
+}
+
+/* Table Wrappers */
+.table-wrap {
+  overflow-x: auto;
+  max-inline-size: 100%;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--line);
+}
+
+.table-wrap:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+/* Responsive adjustments */
+@media (max-width: 48rem) {
+  .owner-tiles {
+    grid-template-columns: repeat(auto-fit, minmax(7.5rem, 1fr));
+  }
+  .kpis-small {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}

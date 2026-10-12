@@ -1,0 +1,499 @@
+/* Shell and Navigation Styles
+   Calibrated for instrument-grade precision, inspired by Flowtron and DESIGN.md.
+   Supports responsive viewports down to 360px without page-level sideways scroll. */
+
+:root {
+  /* Semantic Flow and Status Colors from DESIGN.md */
+  --color-flow: #2dd4a7;
+  --color-flow-bg: rgba(45, 212, 167, 0.12);
+  --color-flow-line: rgba(45, 212, 167, 0.4);
+  --color-flow-ink: light-dark(#0d6950, #4eedb8);
+
+  --color-warn: #f2b23d;
+  --color-warn-bg: rgba(242, 178, 61, 0.12);
+  --color-warn-line: rgba(242, 178, 61, 0.4);
+  --color-warn-ink: light-dark(#7a5200, #fbd075);
+
+  --color-gate: #f0644b;
+  --color-gate-bg: rgba(240, 100, 75, 0.12);
+  --color-gate-line: rgba(240, 100, 75, 0.4);
+  --color-gate-ink: light-dark(#8c2310, #ff9582);
+
+  --color-transit: #22d3ee;
+  --color-transit-bg: rgba(34, 211, 238, 0.1);
+  --color-transit-line: rgba(34, 211, 238, 0.35);
+  --color-transit-ink: light-dark(#086473, #67e8f9);
+}
+
+/* ------------------------------------------------------------ Skip Link */
+
+a.skip-link {
+  position: absolute;
+  inset-block-start: var(--space-2, 8px);
+  inset-inline-start: var(--space-2, 8px);
+  transform: translateY(-200%);
+  background: var(--bg-panel, #ffffff);
+  color: var(--text-primary, #0f172a);
+  padding: var(--space-2, 8px) var(--space-3, 12px);
+  border: 1px solid var(--line-strong, #94a3b8);
+  border-radius: var(--radius-sm, 6px);
+  font-family: var(--font-mono, monospace);
+  font-size: var(--text-xs, 11px);
+  font-weight: 600;
+  text-decoration: none;
+  z-index: 100;
+  box-shadow: var(--shadow-md, 0 4px 6px rgba(0, 0, 0, 0.1));
+  transition: transform 0.15s ease-out;
+}
+
+a.skip-link:focus {
+  transform: none;
+  outline: 2px solid var(--focus-ring, #2563eb);
+  outline-offset: 2px;
+}
+
+/* ------------------------------------------------------------ Topbar Frame */
+
+header.topbar {
+  position: sticky;
+  inset-block-start: 0;
+  z-index: 30;
+  background: color-mix(in oklab, var(--bg-panel, #ffffff) 92%, transparent);
+  backdrop-filter: blur(12px) saturate(1.5);
+  -webkit-backdrop-filter: blur(12px) saturate(1.5);
+  border-block-end: 1px solid var(--line);
+  box-shadow: 0 1px 0 rgba(0, 0, 0, 0.03);
+}
+
+header.topbar .topbar-inner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3, 12px);
+  min-block-size: 3.25rem;
+  flex-wrap: wrap;
+  padding-block: var(--space-2, 8px);
+}
+
+/* ------------------------------------------------------------ Brand and Status Beacon */
+
+header.topbar .brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.625rem;
+  color: var(--text-primary);
+  text-decoration: none;
+  min-inline-size: 0;
+  max-inline-size: 100%;
+  flex-shrink: 0;
+}
+
+header.topbar .brand:hover {
+  text-decoration: none;
+}
+
+/* Live Status Beacon */
+.beacon {
+  position: relative;
+  display: inline-block;
+  inline-size: 11px;
+  block-size: 11px;
+  border-radius: 50%;
+  background: var(--text-faint, #94a3b8);
+  flex: none;
+  transition: background-color var(--trans-base, 0.22s ease), box-shadow var(--trans-base, 0.22s ease);
+}
+
+.beacon.is-live {
+  background: var(--color-flow, #2dd4a7);
+  animation: beacon-beat 2.4s ease-in-out infinite;
+}
+
+.beacon.is-stale {
+  background: var(--color-warn, #f2b23d);
+  box-shadow: 0 0 0 2px var(--color-warn-line, rgba(242, 178, 61, 0.45));
+  animation: none;
+}
+
+@keyframes beacon-beat {
+  0% {
+    transform: scale(0.95);
+    box-shadow: 0 0 0 0 rgba(45, 212, 167, 0.65);
+  }
+  70% {
+    transform: scale(1.05);
+    box-shadow: 0 0 0 6px rgba(45, 212, 167, 0);
+  }
+  100% {
+    transform: scale(0.95);
+    box-shadow: 0 0 0 0 rgba(45, 212, 167, 0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .beacon.is-live {
+    animation: none !important;
+  }
+}
+
+/* Brand Mark SVG */
+header.topbar .brand-mark {
+  flex: none;
+  inline-size: 24px;
+  block-size: 24px;
+  border-radius: var(--radius-sm, 6px);
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.08));
+}
+
+header.topbar .brand-mark-bg {
+  fill: var(--accent);
+}
+
+/* Brand Text Typography */
+header.topbar .brand-text {
+  font-family: var(--font-mono);
+  font-size: var(--text-sm, 12px);
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text-primary);
+  white-space: nowrap;
+}
+
+/* Repository Badge Chip */
+header.topbar .brand-repo {
+  display: inline-flex;
+  align-items: center;
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs, 9.5px);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  padding: 0.15rem 0.55rem;
+  border-radius: var(--radius-pill, 9999px);
+  background: var(--bg-surface, rgba(125, 140, 160, 0.12));
+  border: 1px solid var(--line);
+  color: var(--text-secondary);
+  white-space: nowrap;
+  max-inline-size: min(24ch, 38vw);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  transition: border-color var(--trans-fast, 0.15s ease), color var(--trans-fast, 0.15s ease), background-color var(--trans-fast, 0.15s ease);
+}
+
+header.topbar .brand-repo:empty {
+  display: none;
+}
+
+header.topbar .brand:hover .brand-repo {
+  border-color: var(--line-strong);
+  color: var(--text-primary);
+  background: var(--bg-surface-hover, rgba(125, 140, 160, 0.2));
+}
+
+/* ------------------------------------------------------------ Tools On The Right */
+
+.topbar-tools {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--space-2, 8px);
+  flex-wrap: wrap;
+  min-inline-size: 0;
+  max-inline-size: 100%;
+}
+
+/* Freshness Readout */
+.fresh {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2, 8px) var(--space-3, 12px);
+  flex-wrap: wrap;
+  font-size: var(--text-xs, 11px);
+  color: var(--text-secondary);
+  margin-inline-end: var(--space-1, 4px);
+  min-inline-size: 0;
+}
+
+.fresh-text {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  font-family: var(--font-mono);
+  font-size: var(--text-xs, 11px);
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
+.fresh-dot {
+  inline-size: 7px;
+  block-size: 7px;
+  border-radius: 50%;
+  background: var(--color-flow, #2dd4a7);
+  box-shadow: 0 0 0 2px var(--color-flow-bg, rgba(45, 212, 167, 0.25));
+  flex: none;
+}
+
+.fresh-dot.is-stale {
+  background: var(--color-gate, #f0644b);
+  box-shadow: 0 0 0 2px var(--color-gate-bg, rgba(240, 100, 75, 0.25));
+}
+
+/* Source Chip */
+.source {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs, 9.5px);
+  padding: 0.15rem 0.5rem;
+  border-radius: var(--radius-pill, 9999px);
+  background: var(--bg-surface, var(--surface-2, rgba(125, 140, 160, 0.1)));
+  border: 1px solid var(--line-soft, var(--line));
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.source strong {
+  color: var(--text-primary);
+  font-weight: 600;
+  text-transform: lowercase;
+}
+
+/* Stale Badge */
+.stale-badge {
+  display: inline-flex;
+  align-items: center;
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs, 9.5px);
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  padding: 0.15rem 0.55rem;
+  border-radius: var(--radius-pill, 9999px);
+  background: var(--bad-bg, rgba(240, 100, 75, 0.14));
+  color: var(--bad-ink, #8c2310);
+  border: 1px solid var(--color-gate-line, rgba(240, 100, 75, 0.4));
+  cursor: help;
+  white-space: nowrap;
+}
+
+/* Problem Pill */
+.problem-pill,
+.fresh .badge.tone-warn {
+  display: inline-flex;
+  align-items: center;
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs, 9.5px);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  padding: 0.15rem 0.55rem;
+  border-radius: var(--radius-pill, 9999px);
+  background: var(--warn-bg, rgba(242, 178, 61, 0.12));
+  color: var(--warn-ink, #7a5200);
+  border: 1px solid var(--color-warn-line, rgba(242, 178, 61, 0.35));
+  cursor: help;
+  white-space: nowrap;
+}
+
+/* Icon Buttons (Refresh, Theme) */
+button.icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem;
+  min-block-size: 2rem;
+  padding: 0 0.7rem;
+  border-radius: var(--radius-sm, 6px);
+  border: 1px solid var(--line);
+  background: var(--bg-panel, #ffffff);
+  color: var(--text-secondary);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs, 11px);
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  cursor: pointer;
+  box-shadow: var(--shadow-sm, 0 1px 2px rgba(0, 0, 0, 0.05));
+  transition: background-color var(--trans-fast, 0.15s ease), border-color var(--trans-fast, 0.15s ease), color var(--trans-fast, 0.15s ease);
+  white-space: nowrap;
+}
+
+button.icon-btn:hover {
+  background: var(--bg-surface-hover, var(--surface-2));
+  color: var(--text-primary);
+  border-color: var(--line-strong);
+}
+
+button.icon-btn:focus-visible {
+  outline: 2px solid var(--focus-ring, #2563eb);
+  outline-offset: 2px;
+}
+
+button.icon-btn.is-busy {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+button.icon-btn.is-busy svg {
+  animation: spin-refresh 0.8s linear infinite;
+}
+
+@keyframes spin-refresh {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  button.icon-btn.is-busy svg {
+    animation: none !important;
+  }
+}
+
+/* ------------------------------------------------------------ Navigation Rail */
+
+nav.nav {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+  padding: 3px 0 0;
+  border-block-end: 1px solid var(--line);
+  margin-block-end: 0;
+  max-inline-size: 100%;
+}
+
+nav.nav::-webkit-scrollbar {
+  display: none;
+}
+
+nav.nav .nav-link {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  white-space: nowrap;
+  min-block-size: 2.25rem;
+  padding: 0 0.85rem;
+  font-family: var(--font-mono);
+  font-size: var(--text-xs, 11px);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+  text-decoration: none;
+  border: 1px solid transparent;
+  border-block-end: none;
+  border-start-start-radius: var(--radius-sm, 6px);
+  border-start-end-radius: var(--radius-sm, 6px);
+  background: transparent;
+  transition: color var(--trans-fast, 0.15s ease), background-color var(--trans-fast, 0.15s ease), border-color var(--trans-fast, 0.15s ease);
+}
+
+nav.nav .nav-link:hover {
+  color: var(--text-primary);
+  background: var(--bg-surface-hover, var(--surface-2));
+}
+
+nav.nav .nav-link[aria-current] {
+  color: var(--text-primary);
+  background: var(--bg-panel, #ffffff);
+  border-color: var(--line);
+  box-shadow: inset 0 2px 0 0 var(--accent);
+  margin-block-end: -1px;
+  padding-block-end: 1px;
+}
+
+nav.nav .nav-link:focus-visible {
+  outline: 2px solid var(--focus-ring, #2563eb);
+  outline-offset: -2px;
+}
+
+/* Escalations Count Badge */
+nav.nav .nav-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-inline-size: 1.15rem;
+  block-size: 1.15rem;
+  padding: 0 0.35rem;
+  border-radius: var(--radius-pill, 9999px);
+  background: var(--bad-bg, rgba(240, 100, 75, 0.15));
+  color: var(--bad-ink, #8c2310);
+  border: 1px solid var(--color-gate-line, rgba(240, 100, 75, 0.4));
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs, 9.5px);
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: 0;
+}
+
+/* ------------------------------------------------------------ Callout Banner */
+
+#banner {
+  display: block;
+  inline-size: 100%;
+}
+
+#banner .spend-banner {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3, 12px);
+  padding: var(--space-3, 12px) var(--space-4, 16px);
+  margin-block-start: var(--space-3, 12px);
+  background: var(--bad-bg, rgba(240, 100, 75, 0.15));
+  color: var(--bad-ink, #8c2310);
+  border: 1px solid var(--color-gate-line, rgba(240, 100, 75, 0.45));
+  border-radius: var(--radius-sm, 6px);
+  font-size: var(--text-sm, 12px);
+  font-weight: 600;
+  text-decoration: none;
+  box-shadow: 0 2px 8px rgba(240, 100, 75, 0.12);
+  transition: background-color var(--trans-fast, 0.15s ease), border-color var(--trans-fast, 0.15s ease);
+  overflow-wrap: anywhere;
+}
+
+#banner .spend-banner:hover {
+  background: color-mix(in oklab, var(--bad-bg, rgba(240, 100, 75, 0.15)) 80%, var(--bad-ink, #8c2310));
+  text-decoration: underline;
+}
+
+#banner .spend-banner svg {
+  flex: none;
+  stroke: currentColor;
+}
+
+/* ------------------------------------------------------------ Responsive Adaptations */
+
+@media (max-width: 820px) {
+  header.topbar .topbar-inner {
+    gap: var(--space-2, 8px);
+  }
+
+  .topbar-tools {
+    justify-content: flex-start;
+  }
+}
+
+@media (max-width: 480px) {
+  header.topbar .brand-repo {
+    max-inline-size: 16ch;
+  }
+
+  header.topbar .brand-text {
+    font-size: var(--text-xs, 11px);
+    letter-spacing: 0.08em;
+  }
+
+  button.icon-btn {
+    padding: 0 0.5rem;
+  }
+
+  nav.nav .nav-link {
+    padding: 0 0.65rem;
+    font-size: var(--text-2xs, 9.5px);
+  }
+}

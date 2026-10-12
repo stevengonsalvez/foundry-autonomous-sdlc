@@ -1,11 +1,23 @@
+@import './tokens.css';
+@import './common.css';
+@import './shell.css';
+@import './board.css';
+@import './ticket.css';
+@import './cost.css';
+@import './environments.css';
+@import './agents.css';
+@import './escalations.css';
+@import './flow.css';
+@import './trail.css';
+
 /* Control Center. Tokens first (light and dark in one declaration via light-dark()), then layout,
    then components. No inline styles are needed anywhere: dynamic sizes arrive as CSS variables. */
 
 :root {
   color-scheme: light dark;
 
-  --font: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-  --font-mono: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, monospace;
+  --font: var(--font-sans);
+  --font-mono: var(--font-mono);
 
   --fs-xs: 0.75rem;
   --fs-sm: 0.8125rem;
