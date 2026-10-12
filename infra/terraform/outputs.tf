@@ -57,3 +57,8 @@ output "application_insights_name" {
   value       = module.observability.application_insights_name
   description = "App Insights resource connected to the project for tracing."
 }
+
+output "egress_policy_id" {
+  value       = try(module.egress_policy[0].policy_id, "")
+  description = "Egress guardrail attached to sdlc-coder (EGRESS_POLICY_ID for the deploy script); empty when coder_egress_mode is Off."
+}

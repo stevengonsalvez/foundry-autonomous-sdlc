@@ -121,3 +121,26 @@ variable "assign_deployer_roles" {
   default     = true
   description = "Grant the principal running Terraform the Foundry User role on the Foundry account so it can create agents from a laptop."
 }
+
+variable "coder_egress_mode" {
+  type        = string
+  default     = "Audit"
+  description = <<-EOT
+    Egress guardrail for the sdlc-coder hosted agent (preview). "Audit" records
+    would-be denials and blocks nothing, "Enforced" refuses every host outside
+    the allow-list with a proxy 403, "Off" creates no policy (the deploy script
+    then warns that the coder's outbound traffic is unrestricted). A change
+    applies to coder versions deployed after it.
+  EOT
+
+  validation {
+    condition     = contains(["Off", "Audit", "Enforced"], var.coder_egress_mode)
+    error_message = "coder_egress_mode must be Off, Audit or Enforced."
+  }
+}
+
+variable "coder_egress_extra_hosts" {
+  type        = list(string)
+  default     = []
+  description = "Exact host names added to the coder's egress allow-list, for example agy API hosts found in Audit."
+}

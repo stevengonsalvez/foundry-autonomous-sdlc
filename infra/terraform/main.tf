@@ -87,3 +87,27 @@ module "budget" {
   alert_thresholds  = var.budget_alert_thresholds
   contact_emails    = var.budget_contact_emails
 }
+
+# Egress allow-list for sdlc-coder (scripts/deploy_agents.py attaches it). Hosts
+# come from the coder's code: git and the GitHub API, npm, the Node and agy
+# downloads, apt, and this stack's Foundry and Key Vault endpoints. agy's own
+# API hosts are not known up front, hence Audit by default: read the would-deny
+# decisions of a real job before switching to Enforced (docs/runbook.md).
+module "egress_policy" {
+  source = "./modules/egress_policy"
+  count  = var.coder_egress_mode == "Off" ? 0 : 1
+
+  account_id = module.foundry.account_id
+  mode       = var.coder_egress_mode
+  allowed_hosts = distinct(concat([
+    "github.com",
+    "api.github.com",
+    "registry.npmjs.org",
+    "nodejs.org",
+    "deb.debian.org",
+    "antigravity.google",
+    "antigravity-cli-auto-updater-974169037036.us-central1.run.app",
+    trimprefix(module.foundry.account_endpoint, "https://"),
+    trimsuffix(trimprefix(module.keyvault.vault_uri, "https://"), "/"),
+  ], var.coder_egress_extra_hosts))
+}
