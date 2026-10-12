@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import pytest
+
 from scripts import verify_egress as ve
 
 OK = {"url": "https://registry.npmjs.org/", "status": 200}
@@ -19,6 +20,8 @@ DNS = {"url": "https://example.com/", "error": "URLError"}
     ("Audit", OK, OPEN, True),
     ("Audit", OK, REFUSED, False),            # Audit must only log
     ("Audit", {**OK, "error": "TimeoutError"}, OPEN, False),
+    ("enforced", OK, OPEN, False),          # an unknown mode never passes
+    (None, OK, OPEN, False),
 ])
-def test_judge(mode: str, allowed: dict, blocked: dict, passes: bool) -> None:
+def test_judge(mode: str | None, allowed: dict, blocked: dict, passes: bool) -> None:
     assert (ve.judge(mode, allowed, blocked) == []) is passes

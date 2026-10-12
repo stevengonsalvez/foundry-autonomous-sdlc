@@ -353,6 +353,7 @@ jobs:
           --isolated --target-version py312 --line-length 100 --select E,F,I,UP,B,SIM,RUF
           scripts/gates scripts/tests/gates scripts/cd scripts/tests/cd
           scripts/setup_repo.py scripts/tests/test_setup_repo.py
+          scripts/verify_egress.py scripts/tests/test_verify_egress.py
 
   # Not a required check: the Python agents package.
   agents:
