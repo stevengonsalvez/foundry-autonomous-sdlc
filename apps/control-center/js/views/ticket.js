@@ -67,7 +67,7 @@ function header(ticket, now) {
   return h(
     'header',
     { class: 'ticket-head' },
-    h('a', { class: 'back-link', href: '#/' }, icon('back', { size: 14 }), 'All tickets'),
+    h('a', { class: 'back-link', href: '#/' }, icon('back', { size: 14 }), 'Back to the board'),
     h(
       'div',
       { class: 'ticket-title-row' },
@@ -82,6 +82,8 @@ function header(ticket, now) {
       stageBadge(ticket.stage),
       envBadgeFor(ticket),
       ...flagBadges(ticket.flags),
+      ticket.author ? badge(`by ${ticket.author}`, 'neutral') : null,
+      ticket.opened_at ? h('span', { class: 'badge tone-neutral' }, 'Opened ', timeEl(ticket.opened_at, now)) : null,
     ),
     h(
       'p',
@@ -135,20 +137,22 @@ function gatesPanel(ticket) {
     h(
       'ul',
       { class: 'gate-grid' },
-      ...items.map((g) =>
-        h(
+      ...items.map((g) => {
+        const isFirstPass = g.status === 'pass' && g.firstPass;
+        const verdictText = isFirstPass ? 'Passed first try' : GATE_TEXT[g.status];
+        return h(
           'li',
-          { class: `gate gate-${g.status}`, title: `${g.gate}${g.derived ? ' (from the reviewer verdict)' : ''}` },
+          { class: `gate gate-${g.status}${isFirstPass ? ' gate-first-pass' : ''}`, title: `${g.gate}${g.derived ? ' (from the reviewer verdict)' : ''}` },
           h('span', { class: 'gate-icon' }, icon(GATE_ICON[g.status], { size: 14 })),
           h(
             'span',
             { class: 'gate-text' },
             h('span', { class: 'gate-name' }, GATE_LABELS[g.gate] ?? titleCase(g.gate)),
-            h('span', { class: 'gate-state' }, GATE_TEXT[g.status], g.status === 'pass' && g.firstPass ? ' first try' : ''),
+            h('span', { class: 'gate-state' }, verdictText),
             g.attempts > 1 ? h('span', { class: 'gate-note' }, `${g.attempts} attempts`) : g.derived ? h('span', { class: 'gate-note' }, 'from verdict') : null,
           ),
-        ),
-      ),
+        );
+      }),
     ),
   );
 }
@@ -229,7 +233,7 @@ function hopsPanel(ticket, now) {
                 'div',
                 { class: 'hop-body' },
                 h('p', { class: 'hop-title' }, hopTitle(hop), ' ', badge(status[0], status[1])),
-                h('p', { class: 'hop-meta' }, hop.at ? timeEl(hop.at, now) : null, hop.version ? h('span', null, hop.version) : null, hop.sha ? shaLink(hop.sha) : null, runAnchor(hop.run_url, 'Run')),
+                h('p', { class: 'hop-meta' }, hop.at ? timeEl(hop.at, now) : null, hop.version ? h('span', { class: 'version-tag' }, hop.version) : null, hop.sha ? shaLink(hop.sha) : null, runAnchor(hop.run_url, 'Run')),
                 hop.detail ? h('p', { class: 'hop-detail clamp-3 wrap' }, hop.detail) : null,
               ),
             );
