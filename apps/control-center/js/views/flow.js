@@ -48,11 +48,15 @@ function cyclePanel(state, now) {
           chartHost((width) =>
             stackedStageChart(
               width,
-              shown.map((r) => ({ label: `#${r.ticket.issue} ${r.ticket.title}`, segments: r.segments, total: r.total })),
+              shown.map((r) => ({
+                label: `#${r.ticket.issue} ${r.ticket.title}`,
+                segments: r.segments.map((seg) => ({ ...seg, label: stageLabel(seg.stage) })),
+                total: r.total,
+              })),
               { label: 'Time per stage for each ticket', maxTotal, stageClass: stageFill },
             ),
           ),
-          h('ul', { class: 'legend' }, ...present.map((s) => h('li', null, h('span', { class: `swatch ${stageFill(s).replace('st-fill-', 'st-bg-')}`, 'aria-hidden': 'true' }), stageLabel(s)))),
+          h('ul', { class: 'legend legend-text' }, ...present.map((s) => h('li', null, h('span', { class: `swatch ${stageFill(s)}`, 'aria-hidden': 'true' }), stageLabel(s)))),
           dataTable(
             'Show cycle time as a table',
             table({
