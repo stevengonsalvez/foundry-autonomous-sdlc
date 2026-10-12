@@ -104,7 +104,7 @@
 /* Semantic Tones for Badges, Chips, and Indicators */
 .tone-good {
   background: light-dark(rgba(5, 150, 105, 0.12), rgba(45, 212, 167, 0.14));
-  color: light-dark(#065f46, #4eedb8);
+  color: light-dark(#044e37, #4eedb8);
   border-color: light-dark(rgba(5, 150, 105, 0.35), rgba(45, 212, 167, 0.4));
 }
 .tone-good .sdot,
@@ -137,7 +137,7 @@
 
 .tone-brand {
   background: light-dark(rgba(37, 99, 235, 0.12), rgba(111, 168, 255, 0.14));
-  color: light-dark(#1e40af, #93c5fd);
+  color: light-dark(#1d4ed8, #93c5fd);
   border-color: light-dark(rgba(37, 99, 235, 0.35), rgba(111, 168, 255, 0.4));
 }
 .tone-brand .sdot,
@@ -159,7 +159,7 @@
 
 .tone-info {
   background: light-dark(rgba(8, 145, 178, 0.12), rgba(34, 211, 238, 0.14));
-  color: light-dark(#0e7490, #67e8f9);
+  color: light-dark(#084c61, #67e8f9);
   border-color: light-dark(rgba(8, 145, 178, 0.35), rgba(34, 211, 238, 0.4));
 }
 .tone-info .sdot,

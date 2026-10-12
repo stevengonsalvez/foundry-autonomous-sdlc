@@ -91,7 +91,7 @@
   font-family: var(--font-mono);
   font-size: var(--fs-xs, 0.75rem);
   padding: 0.15rem 0.45rem;
-  background: var(--bg-surface, var(--surface-raised));
+  background: var(--bg-surface);
   color: var(--text-secondary, var(--muted));
   border: 1px solid var(--line-soft, var(--line));
   border-radius: var(--radius-xs, 4px);
@@ -112,7 +112,7 @@
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));
   gap: var(--space-3) var(--space-4);
-  background: var(--bg-surface, var(--surface-raised));
+  background: var(--bg-surface);
   border: 1px solid var(--line-soft, var(--line));
   border-radius: var(--radius-sm, 6px);
   padding: var(--space-3) var(--space-4);

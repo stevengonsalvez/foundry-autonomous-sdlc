@@ -51,7 +51,7 @@
 
 .trail-chip[aria-pressed="true"] {
   background: var(--accent);
-  color: #ffffff;
+  color: var(--accent-ink);
   border-color: var(--accent);
   box-shadow: 0 1px 3px rgba(37, 99, 235, 0.35);
 }

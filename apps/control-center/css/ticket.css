@@ -718,8 +718,7 @@
 }
 
 .bubble-a .who {
-  color: inherit;
-  opacity: 0.85;
+  color: var(--info-ink);
 }
 
 .findings {

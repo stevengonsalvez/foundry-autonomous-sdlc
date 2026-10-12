@@ -167,7 +167,7 @@
 }
 
 .seg {
-  stroke: var(--panel);
+  stroke: var(--bg-panel);
   stroke-width: 1px;
 }
 
@@ -210,7 +210,7 @@
 .dot {
   fill: var(--dit);
   fill-opacity: 0.85;
-  stroke: var(--panel);
+  stroke: var(--bg-panel);
   stroke-width: 1.5px;
 }
 
