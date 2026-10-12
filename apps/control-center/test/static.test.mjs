@@ -82,3 +82,12 @@ test('no em dashes, no placeholder names, relative asset URLs only', async () =>
   const html = await readFile(join(root, 'index.html'), 'utf8');
   for (const [, url] of html.matchAll(/(?:href|src)="([^"#]+)"/g)) assert.ok(url.startsWith('./') || url.startsWith('data:'), `${url} must be relative`);
 });
+
+test('no stylesheet or script URL is external', async () => {
+  const html = await readFile(join(root, 'index.html'), 'utf8');
+  for (const match of html.matchAll(/<(?:link|script)\b[^>]*(?:href|src)="([^"]+)"/gi)) {
+    const url = match[1];
+    assert.ok(!url.startsWith('http:') && !url.startsWith('https:') && !url.startsWith('//'), `${url} must not be external`);
+    assert.ok(url.startsWith('./') || url.startsWith('data:'), `${url} must be local relative path`);
+  }
+});

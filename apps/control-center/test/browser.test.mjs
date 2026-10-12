@@ -61,7 +61,7 @@ const text = (page, selector) => page.locator(selector).first().innerText();
 const open = (state, opts) => openFixed(browser, servers[state].url, opts);
 
 describe('views', { skip }, () => {
-  for (const [width, height, label] of [[1440, 900, 'desktop'], [390, 800, 'phone']]) {
+  for (const [width, height, label] of [[1440, 900, 'desktop'], [390, 800, 'phone'], [360, 640, '360px']]) {
     test(`all 8 views load at ${label} width with no errors, no failed or external requests, no sideways page scroll`, async () => {
       for (const [name, hash] of VIEWS) {
         const { context, page } = await open('normal', { hash, width, height });
@@ -79,6 +79,24 @@ describe('views', { skip }, () => {
       }
     });
   }
+
+  test('matrix keyboard navigation and axe accessibility', async () => {
+    const { context, page } = await open('normal');
+    await page.keyboard.press('Tab');
+    const firstFocus = await page.evaluate(() => document.activeElement?.className);
+    assert.ok(firstFocus, 'skip link receives keyboard focus');
+
+    const chipLink = page.locator('.view-board article.card .card-link').first();
+    await chipLink.focus();
+    assert.equal(await page.evaluate(() => document.activeElement?.classList.contains('card-link')), true);
+
+    if (pw?.AxeBuilder) {
+      const results = await new pw.AxeBuilder({ page }).include('.view-board').analyze();
+      const violations = results.violations.filter((v) => v.impact === 'serious' || v.impact === 'critical');
+      assert.deepEqual(violations, [], 'axe matrix violations');
+    }
+    await context.close();
+  });
 
   test('board column counts equal the ledger counts, and every card links to its ticket', async () => {
     const { context, page } = await open('normal');
