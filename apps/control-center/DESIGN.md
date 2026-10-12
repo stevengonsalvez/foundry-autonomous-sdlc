@@ -1,326 +1,315 @@
 # Control Center Design Blueprint
 
-This document specifies the design system, visual hierarchy, and UI architecture for the Control Center redesign. It synthesises patterns and architectural techniques borrowed from Flowtron into a cohesive blueprint for monitoring the autonomous SDLC from backlog to production.
+This document specifies the design system, visual hierarchy, and UI architecture for the Control Center. It synthesizes operational dashboard patterns into a blueprint for monitoring the autonomous software delivery lifecycle (SDLC) from backlog to production.
 
 ---
 
-## 1. Executive Summary and Design Philosophy
+## 1. Executive Summary and Architectural Principles
 
-The Control Center is an operational dashboard for autonomous software delivery. It provides complete observability into ticket lifecycles, pipeline execution, gate verifications, environment transitions, agent tasks, financial ledger data, and conversational trails.
+The Control Center is an operational dashboard for automated software delivery. It provides full observability into ticket lifecycles, pipeline stage transitions, quality gate verifications, environment hops, worker agent processes, financial ledger records, and conversational audit trails.
 
-### Core Mission
-- **Operational Clarity:** Present complex autonomous delivery workflows at a glance without sacrificing technical depth.
-- **Instrument-Grade Precision:** Deliver an interface calibrated like an industrial cockpit: dense, metric-first, and deterministic.
-- **Truth in Presentation:** Display raw, verified data from the ledger. When data is unread or pending, the interface states this plainly rather than displaying placeholder values.
-- **Zero-Dependency Security:** Preserve the static architecture: no build step, no npm runtime dependencies, no inline script or style injection, full Content Security Policy adherence, and strict text-only DOM manipulation.
-- **Inclusive Accessibility:** Comply with WCAG 2.1 AA standards across both dark and light modes, honour reduced motion preferences, and support responsive viewports down to 360 px width without horizontal page scroll.
-
----
-
-## 2. Patterns Borrowed from Flowtron and Rationale
-
-Flowtron models delivery flows across multi-stage lifecycles using high-density visual hierarchies. We adapt several core patterns for the Control Center:
-
-### 2.1 Navigation and Header Architecture
-- **Pulsing Brand Beacon:** A compact 11 px status indicator in the top header (`.beacon`) that pulses softly using a scale and opacity animation. This provides immediate visceral confirmation that the system is live and monitoring the event stream. When the snapshot becomes stale (older than 10 minutes), the beacon transitions from active teal to warning amber or error red.
-- **Two-Tier Header Structure:**
-  - *Tier 1 (Top Bar):* Brand title in compact uppercase monospace, repository link, active snapshot freshness indicator, manual refresh button, and theme toggle.
-  - *Tier 2 (Navigation Rail):* Clean tab bar linking hash routes (`#/`, `#/cost`, `#/environments`, `#/agents`, `#/escalations`, `#/flow`, `#/trail`), badged with live counter pills (for example, active escalation counts).
-- **Collapsible Cockpit (Summary Strip):** A high-contrast KPI band placed prominently below the navigation. It displays headline metrics in a single row that can be collapsed to maximize vertical space when inspecting detailed board columns.
-
-### 2.2 Board and Pipeline Visualisation
-- **Macro-Phase Grouping Band:**
-  In Flowtron, individual stages are anchored under macro-phases with distinct domain ownership and color accents. In our 9-stage SDLC board, we group columns into three intuitive macro-phases plus an exception lane:
-  1. **Inception and Scoping (Business / Architecture):** Backlog, Refining, Feasible.
-  2. **Construction and Verification (Engineering):** Tests, Building, Review.
-  3. **Release and Operations (Platform / Reliability):** Staging, Production.
-  4. **Exception Handling:** Escalated.
-  A dedicated macro-phase band sits immediately above the column headers. It spans the respective columns via CSS Grid (`grid-column: span N`), featuring a 2 px top accent border, macro-phase title, category tag, and stage counter.
-- **Column Header Stage Categories:**
-  Each column header communicates the execution nature of that stage using standard category chips:
-  - `Flow` (autonomous execution, unblocked progress: Building, Tests)
-  - `Gate` (verification threshold or policy sign-off: Feasible, Review, Staging)
-  - `Intake / Terminal` (Backlog, Production, Escalated)
-  Headers feature a compact count badge, stage title in clean monospace, and a subtle status accent bar.
-- **Card Tokens and Chips:**
-  Individual ticket cards adapt Flowtron's token styling:
-  - Crisp 1 px borders with rounded corners (8 px radius).
-  - Left edge semantic indicator indicating ticket type or status.
-  - Prominent monospace issue identifier (`#42` or `PR #12`).
-  - Integrated spend meter showing cost against the 3.00 USD per-ticket cap.
-  - Duration-in-stage badge updating relative time since stage entry.
-- **Empty Column Density:**
-  Columns with zero active tickets do not collapse or leave awkward voids. They maintain identical structural footprints with soft dashed borders, muted headers, and subtle zero-count badges, preserving overall grid alignment.
-
-### 2.3 Ticket Detail: End-to-End Flow of Work
-- **Stage Progression Stepper:** A horizontal visual stepper mapping every visit across the 9 stages, displaying active dwell time, loop-back rework visits, and entry timestamps.
-- **Gate Verdict Matrix:** Flowtron verifies quality gates with explicit evidence. The Control Center renders a dedicated gate grid covering all policy gates: Tests, Coverage, End-to-End, Secret Scan, Tests-First order, Agent Scope, Review, Smoke, and Soak. Each gate item displays a distinct badge (Passed, Failed, In Progress, Skipped, Not Run), attempt counts, and first-attempt pass indicators.
-- **Environment Progression Trail:** Explicit visualization of environment transitions (Staging -> Smoke -> Soak -> Production), linking commit SHAs, workflow run URLs, and deploy outcomes.
-- **Financial Ledger Breakdown:** Precise breakdown of ledger compute estimates against actual billed spend, token usage, and meter allocations.
-- **Conversational and Triage Trail:** A threaded timeline recording questions sent to the product owner, automated responses, code review verdicts, CI triage diagnoses, and escalation reasons.
-
-### 2.4 Status Badges and Semantic Accents
-- **Pill Shapes:** Compact badges with `border-radius: 9999px` (or `20px`) and tight internal padding (2 px 8 px).
-- **Status Dots:** 6 px circular indicators providing immediate color cues without relying solely on hue.
-- **Semantic Color Palette:**
-  - *Success / Live / Auto:* Mint green / teal (`#2DD4A7` / oklch 72% 0.16 155)
-  - *Active / In-Progress:* Electric cyan / sky (`#22D3EE` / oklch 74% 0.14 220)
-  - *Warning / Review / Gate:* Warm amber (`#F2B23D` / oklch 76% 0.15 75)
-  - *Danger / Failed / Escalated:* Coral red (`#F0644B` / oklch 65% 0.20 25)
-  - *Neutral / Backlog / Muted:* Cool slate (`#697686` / oklch 55% 0.03 260)
-
-### 2.5 Information Density and Typography
-- **Monospace for Operational Data:** Ticket numbers, commit hashes, currency amounts, percentages, stage codes, and timestamps use a high-legibility monospace stack (`"IBM Plex Mono"`, `ui-monospace`, `Menlo`, `monospace`) with `font-variant-numeric: tabular-nums`.
-- **Sans-Serif for Narrative Text:** Ticket titles, descriptions, review feedback, error traces, and documentation use a clean proportional sans-serif stack (`"Inter"`, `system-ui`, `-apple-system`, `sans-serif`).
-- **Data Tables with Micro-Labels:** Compact tabular presentation with uppercase micro-headers (8.5 px to 10 px, `letter-spacing: 0.08em`), right-aligned numerals, and subtle border dividers.
-
-### 2.6 Spacing, Borders, and Elevation
-- **Unified 4 px Spacing Scale:** Systematic increments from 4 px (`--space-1`) up to 48 px (`--space-7`).
-- **Crisp 1 px Borders:** Clean architectural lines (`border: 1px solid var(--line)`) that give distinct separation between cards, sections, and tables without heavy shadows.
-- **Layered Surfaces:** Highlighting active elements using subtle background gradients and 1 px inset box-shadow rings (`box-shadow: inset 0 0 0 1px ...`) rather than blurry drop shadows.
-
-### 2.7 Responsive and Mobile Ergonomics
-- **No Sideways Root Scroll:** The root page maintains strict vertical scrolling across all screen sizes down to 360 px.
-- **Contained Horizontal Scroll for Wide Grids:** The 9-column board and wide comparison tables sit inside dedicated scrollable containers (`.board-scroll`), with sticky column headers and visual scroll indicators.
-- **Reflowing KPI Bands:** On viewports narrower than 820 px, the 5-to-6 column KPI strip automatically reflows to a 2-column grid.
+### Core Architectural Principles
+- **Operational Clarity:** Present complex multi-stage delivery workflows at a glance without sacrificing technical depth.
+- **Instrument-Grade Precision:** Calibrated like an industrial cockpit: dense, metric-first, and deterministic with tabular numbers for financial figures and timestamps.
+- **Truth in Presentation:** Display raw, verified data directly from ledger events (`state.json`). When data is unread, pending, or stale (> 10 minutes), the interface states this plainly rather than showing invented placeholders.
+- **Zero External Network Dependencies:** Strict Content Security Policy (`font-src 'self'`, `default-src 'none'`) with zero external fonts, zero external CDN scripts, and zero build-step runtime requirements.
+- **Text-Only DOM Construction:** All dynamic strings (titles, logs, commit hashes, notes) are created using `document.createTextNode` or `element.textContent`, eliminating HTML injection vulnerabilities.
+- **Inclusive Accessibility:** WCAG 2.1 AA compliant across light and dark modes, honoring reduced motion preferences (`prefers-reduced-motion: reduce`) and responsive viewports down to 360 px width without horizontal root page scroll.
 
 ---
 
-## 3. Design Token Blueprint
+## 2. Typography and System Font Strategy
 
-The following tokens establish the visual foundation for both dark and light themes using standard CSS custom properties and modern `light-dark()` notation.
+### System Font Philosophy
+The Control Center explicitly avoids loading external fonts (such as Google Fonts or external CDN typefaces) over the network. This design choice provides several key operational guarantees:
+- **Strict CSP Adherence:** The Content Security Policy specifies `font-src 'self'`, which strictly prohibits fetching webfonts from third-party hosts.
+- **Zero Network Latency and Zero FOUT:** Eliminates flash of unstyled text (FOUT) and flash of invisible text (FOIT). The UI paints instantly upon HTML parsing.
+- **Deterministic Offline Support:** Operates seamlessly in air-gapped, offline, or restricted intranet environments.
 
-```css
-:root {
-  color-scheme: light dark;
+### Font Stacks
+1. **Sans-Serif Stack (`--font-sans` in `theme.css`, aliased to `--font` in `styles.css`):**
+   ```css
+   --font-sans: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, system-ui, sans-serif;
+   ```
+   Local "Inter" is listed first and is utilized only if installed on the host system. When "Inter" is not present locally, the browser falls back directly to high-quality native operating system stacks:
+   - `-apple-system` and `BlinkMacSystemFont` on macOS and iOS.
+   - `"Segoe UI"` on Windows.
+   - `Roboto` on Android and ChromeOS.
+   - `system-ui` for modern OS UI font definitions.
+   - `sans-serif` as the generic fallback.
 
-  /* Typography Stacks */
-  --font-sans: "Inter", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-  --font-mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, Monaco, Consolas, monospace;
+2. **Monospace Stack (`--font-mono` in `theme.css` and `styles.css`):**
+   ```css
+   --font-mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+   ```
+   Local "IBM Plex Mono" is utilized only if installed on the local machine. If not installed locally, the browser falls back directly to native platform monospace stacks:
+   - `ui-monospace` and `"SF Mono"` on Apple platforms.
+   - `Menlo` and `Monaco` on macOS.
+   - `Consolas` on Windows.
+   - `"Liberation Mono"` on Linux distributions.
+   - `monospace` as the generic fallback.
 
-  /* Type Scale */
-  --text-2xs: 0.6875rem; /* 11px */
-  --text-xs: 0.75rem;     /* 12px */
-  --text-sm: 0.8125rem;   /* 13px */
-  --text-base: 0.875rem;  /* 14px */
-  --text-md: 1rem;        /* 16px */
-  --text-lg: 1.125rem;    /* 18px */
-  --text-xl: 1.375rem;    /* 22px */
-  --text-2xl: 1.625rem;   /* 26px */
-
-  /* Spacing Scale (4px base) */
-  --space-1: 0.25rem;  /* 4px */
-  --space-2: 0.5rem;   /* 8px */
-  --space-3: 0.75rem;  /* 12px */
-  --space-4: 1rem;     /* 16px */
-  --space-5: 1.25rem;  /* 20px */
-  --space-6: 1.5rem;   /* 24px */
-  --space-7: 2rem;     /* 32px */
-  --space-8: 3rem;     /* 48px */
-
-  /* Border Radii */
-  --radius-xs: 0.25rem; /* 4px */
-  --radius-sm: 0.375rem; /* 6px */
-  --radius-md: 0.5rem;   /* 8px */
-  --radius-lg: 0.75rem;  /* 12px */
-  --radius-pill: 9999px;
-
-  /* Base Surface Tokens */
-  --canvas: light-dark(#F4F6F8, #0E1217);
-  --panel: light-dark(#FFFFFF, #161C24);
-  --panel-elevated: light-dark(#F8FAFC, #1B232D);
-  --panel-sunken: light-dark(#EEF2F6, #11161D);
-
-  /* Border and Line Tokens */
-  --line: light-dark(#DDE3EA, #27313D);
-  --line-soft: light-dark(#E8EDF2, #1F2832);
-  --line-strong: light-dark(#BAC5D1, #3D4A5A);
-
-  /* Typography / Text Tokens */
-  --text-primary: light-dark(#0E1217, #EDF3FA);
-  --text-secondary: light-dark(#3A4654, #CBD6E3);
-  --text-muted: light-dark(#606E7F, #8292A2);
-  --text-subtle: light-dark(#8594A6, #5B6675);
-
-  /* Semantic State Tokens */
-  /* Flow / Success / Live */
-  --color-flow: #2DD4A7;
-  --color-flow-bg: light-dark(rgba(45, 212, 167, 0.12), rgba(45, 212, 167, 0.14));
-  --color-flow-line: light-dark(rgba(45, 212, 167, 0.40), rgba(45, 212, 167, 0.45));
-  --color-flow-ink: light-dark(#0D6950, #4EEDB8);
-
-  /* Assist / Warning / In-Progress */
-  --color-warn: #F2B23D;
-  --color-warn-bg: light-dark(rgba(242, 178, 61, 0.12), rgba(242, 178, 61, 0.14));
-  --color-warn-line: light-dark(rgba(242, 178, 61, 0.40), rgba(242, 178, 61, 0.45));
-  --color-warn-ink: light-dark(#7A5200, #FBD075);
-
-  /* Gate / Escalated / Critical */
-  --color-gate: #F0644B;
-  --color-gate-bg: light-dark(rgba(240, 100, 75, 0.12), rgba(240, 100, 75, 0.16));
-  --color-gate-line: light-dark(rgba(240, 100, 75, 0.40), rgba(240, 100, 75, 0.50));
-  --color-gate-ink: light-dark(#8C2310, #FF9582);
-
-  /* Sync / Environment / Transit */
-  --color-transit: #22D3EE;
-  --color-transit-bg: light-dark(rgba(34, 211, 238, 0.10), rgba(34, 211, 238, 0.14));
-  --color-transit-line: light-dark(rgba(34, 211, 238, 0.35), rgba(34, 211, 238, 0.45));
-  --color-transit-ink: light-dark(#086473, #67E8F9);
-
-  /* Macro Phase Accent Colors */
-  --macro-inception: #8AB4FF;
-  --macro-construction: #7FD1A6;
-  --macro-release: #2DD4A7;
-  --macro-exception: #F0644B;
-
-  /* Shadows and Inset Rings */
-  --focus-ring: 0 0 0 2px var(--canvas), 0 0 0 4px var(--color-transit);
-  --shadow-sm: light-dark(0 1px 2px rgba(0, 0, 0, 0.05), 0 2px 4px rgba(0, 0, 0, 0.30));
-  --shadow-md: light-dark(0 4px 12px rgba(0, 0, 0, 0.08), 0 6px 18px rgba(0, 0, 0, 0.40));
-}
-
-:root[data-theme="light"] {
-  color-scheme: light;
-}
-
-:root[data-theme="dark"] {
-  color-scheme: dark;
-}
-```
+3. **Tabular Figures:**
+   All numerical data, ticket numbers, commit SHAs, currency totals, percentages, stage codes, and timestamps use `font-variant-numeric: tabular-nums` to ensure exact columnar alignment across dense tables and grids.
 
 ---
 
-## 4. Visual Hierarchy and Component Specifications
+## 3. Design Tokens and Theme Architecture
 
-### 4.1 Header Bar and Brand Beacon
-```
-+-----------------------------------------------------------------------------------------+
-| [● BEACON] CONTROL CENTER · REPO_NAME      [Updated 2m ago · raw]  [REFRESH] [THEME: AUTO] |
-|-----------------------------------------------------------------------------------------|
-| [BOARD]  [COST]  [ENVIRONMENTS]  [AGENTS]  [ESCALATIONS (1)]  [FLOW]  [TRAIL]           |
-+-----------------------------------------------------------------------------------------+
-```
-- **Beacon Component (`.beacon`):**
-  - Dimensions: 11 px x 11 px, border radius 50%.
-  - Color: `--color-flow` (`#2DD4A7`) when active; pulses with a 2.4s ease-in-out cycle.
-  - When state is stale (> 10 minutes), beacon changes to `--color-warn` with a static ring.
-- **Repository Eyebrow:** Displayed in uppercase monospace with letter-spacing 0.12em.
-- **Top Actions:** Compact buttons with 1 px borders, uppercase monospace labels, and visible keyboard focus rings.
-- **Navigation Tabs:** Segmented rail with active route highlighting via an accent border and subtle background tint.
+The design token system is established across `css/theme.css` and `css/styles.css`. Core tokens provide semantic color mappings, surface elevations, borders, spacing units, and corner radii.
 
-### 4.2 KPI Cockpit Band (Summary Strip)
-```
-+-----------------------------------------------------------------------------------------+
-| | TICKETS      | IN FLIGHT    | PRODUCTION   | ESCALATED    | LEDGER EST.  | AZURE BILLED |
-| | 18           | 7            | 10           | 1            | $14.82       | $13.50       |
-+-----------------------------------------------------------------------------------------+
-```
-- **Layout:** Grid with 6 equal columns (`grid-template-columns: repeat(6, 1fr)`), wrapping to 2 columns below 820 px.
-- **Card Anatomy:**
-  - 3 px colored vertical indicator along the left edge (`.kpi-edge`).
-  - Metric value (`.v`): 24 px font size, font-weight 600, tabular monospace.
-  - Metric label (`.l`): 9.5 px uppercase monospace, letter-spacing 0.10em, muted text color.
-- **Semantic Accents:**
-  - In-flight: Blue / Cyan edge.
-  - Production: Mint green edge.
-  - Escalated: Coral red edge when > 0, otherwise subtle slate.
-  - Financials: Normal slate, transitioning to warning amber when approaching the halt line.
+### 3.1 Surface and Background Tokens
+- `--bg`: Root canvas background, defined via `light-dark(oklch(98.4% 0.004 265), oklch(15.5% 0.012 265))`.
+- `--bg-app`: Top-level application container background (`#f6f8fa` light, `#0e1217` dark).
+- `--bg-panel`: Primary panel and card surface background (`#ffffff` light, `#161c24` dark).
+- `--bg-panel-elevated`: Elevated card surface background (`#ffffff` light, `#1b232d` dark).
+- `--bg-surface`: Secondary surface tint (`#f1f5f9` light, `#1f2833` dark).
+- `--bg-surface-hover`: Surface hover state background (`#e2e8f0` light, `#27313d` dark).
+- `--bg-subtle`: Subtle recessed background (`#f8fafc` light, `#12171e` dark).
+- `--surface`: Base component surface, defined via `light-dark(oklch(100% 0 0), oklch(20% 0.014 265))`.
+- `--surface-2`: Secondary elevated surface, defined via `light-dark(oklch(97.2% 0.006 265), oklch(23.5% 0.015 265))`.
+- `--surface-3`: Tertiary surface, defined via `light-dark(oklch(94.8% 0.008 265), oklch(27% 0.016 265))`.
 
-### 4.3 Macro-Phases and Board Column Structure
-```
-+---------------------------------------------------------------------------------------------------------+
-| [ INCEPTION & SCOPING ]         | [ CONSTRUCTION & VERIFICATION ] | [ RELEASE & OPS ]  | [ EXCEPTION ]  |
-| 3 STAGES · BUSINESS             | 3 STAGES · ENGINEERING          | 2 STAGES · DEPLOY  | 1 STAGE        |
-|---------------------------------+---------------------------------+--------------------+----------------|
-| BACKLOG  | REFINING | FEASIBLE  | TESTS    | BUILDING | REVIEW    | STAGING  | PROD    | ESCALATED      |
-| [GATE]   | [FLOW]   | [GATE]    | [FLOW]   | [FLOW]   | [GATE]    | [GATE]   | [FLOW]  | [HOLD]         |
-| 2        | 1        | 0         | 1        | 3        | 2         | 1        | 7       | 1              |
-|----------+----------+-----------+----------+----------+-----------+----------+---------+----------------|
-| Card #12 | Card #15 | (empty)   | Card #19 | Card #20 | Card #21  | Card #24 | Card #5 | Card #18       |
-| Card #14 |          |           |          | Card #22 | Card #23  |          | Card #8 |                |
-+---------------------------------------------------------------------------------------------------------+
-```
+### 3.2 Border and Divider Tokens
+- `--line`: Primary structural border delimiter (`#d0d7de` light, `#27313d` dark; also `light-dark(oklch(91% 0.01 265), oklch(29.5% 0.015 265))`).
+- `--line-soft`: Subtle secondary delimiter (`#e2e8f0` light, `#1f2832` dark).
+- `--line-strong`: High-contrast border delimiter (`#94a3b8` light, `#3e4c5e` dark; also `light-dark(oklch(82% 0.014 265), oklch(40% 0.018 265))`).
 
-#### Macro-Phase Mapping
-1. **Inception & Scoping (`--macro-inception: #8AB4FF`):**
-   - Spans Backlog, Refining, Feasible.
-   - Represents problem definition, task classification, and architectural feasibility checks.
-2. **Construction & Verification (`--macro-construction: #7FD1A6`):**
-   - Spans Tests, Building, Review.
-   - Represents test creation, automated code implementation, and reviewer inspections.
-3. **Release & Operations (`--macro-release: #2DD4A7`):**
-   - Spans Staging, Production.
-   - Represents deployment verification, smoke and soak tests, and final production delivery.
-4. **Exception Handling (`--macro-exception: #F0644B`):**
-   - Spans Escalated.
-   - Represents tickets blocked by gate failures, runtime errors, or budget limits.
+### 3.3 Text Ink Tokens
+- `--text-primary`: Primary reading text ink (`#0f172a` light, `#f1f5f9` dark).
+- `--text-secondary`: Secondary text ink (`#334155` light, `#cbd6e3` dark).
+- `--text-muted`: Muted metadata text ink (`#64748b` light, `#8b9bb0` dark).
+- `--text-faint`: De-emphasized or disabled text ink (`#94a3b8` light, `#5a697a` dark).
 
-#### Stage Headers
-- Stage Name: 11 px uppercase monospace, bold.
-- Category Chip: Small pill (`Auto`, `Flow`, `Gate`) indicating execution mode.
-- Count Badge: Monospace numeral with high contrast.
+### 3.4 Interactive and Accent Tokens
+- `--accent`: Primary interactive accent (`#2563eb` light, `#6fa8ff` dark; and `light-dark(oklch(50% 0.19 270), oklch(73% 0.14 270))`).
+- `--focus-ring`: Focus outline indicator (`#2563eb` light, `#6fa8ff` dark).
 
-#### Ticket Card Anatomy
-- **Header:** Issue identifier (`#42` in monospace bold), Type Badge (`Feature`, `Bug`, `Maintenance`), Environment Badge (`Staging`, `Prod`).
-- **Body:** Ticket title clamped to 2-3 lines in readable sans-serif.
-- **Cost Bar:** Compact horizontal progress bar:
-  - Total width: 100%.
-  - Fill percentage: `(cost_usd / 3.00) * 100`.
-  - Normal color: Mint green; turns Amber at > 75%, Coral Red at 100%.
-- **Footer:** Duration in current stage (`4h in building`), flags, and escalation indicators.
+### 3.5 Semantic Status Tokens
+- `--auto`: Autonomous execution status green (`#059669` light, `#2dd4a7` dark), paired with `--auto-bg` and `--auto-border`.
+- `--assist`: Operator guidance status amber (`#d97706` light, `#f2b23d` dark), paired with `--assist-bg` and `--assist-border`.
+- `--gate`: Quality gate threshold status red (`#dc2626` light, `#f0644b` dark), paired with `--gate-bg` and `--gate-border`.
+- `--dit`: Delivery-in-transit status blue (`#2563eb` light, `#6fa8ff` dark), paired with `--dit-bg` and `--dit-border`.
+- `--contract`: Contract and schema status cyan (`#0891b2` light, `#22d3ee` dark), paired with `--contract-bg` and `--contract-border`.
+- `--ephem`: Ephemeral resource status purple (`#7c3aed` light, `#c084fc` dark), paired with `--ephem-bg` and `--ephem-border`.
+- `--done`: Terminal completed status slate (`#475569` light, `#94a3b8` dark), paired with `--done-bg` and `--done-border`.
 
-### 4.4 Ticket Detail Inspector (`#/ticket/<n>`)
-The ticket detail view provides end-to-end trace visibility:
-1. **Header Breadcrumb & Summary:**
-   - Monospace issue key and full title.
-   - Badge row with ticket type, stage badge, cost total, and GitHub link.
-2. **Stage Timeline Stepper:**
-   - Multi-step timeline visualizing visits across all 9 stages.
-   - Identifies loop-back cycles (for example, second attempt in Building after a Review failure).
-   - Shows active duration in each stage.
-3. **Policy Gate Verification Grid:**
-   - 3x3 or 4x2 matrix of policy gates: Tests, Coverage, End-to-End, Secret Scan, Tests-First order, Agent Scope, Review, Smoke, Soak.
-   - Displays verdict icon (`✓`, `✕`, `•`, `-`), attempt count, and first-attempt pass status.
-4. **Environment Deployment Trail:**
-   - Sequential chain of hops: Staging -> Smoke -> Soak -> Production.
-   - Links to run artifacts, commit SHAs, and deployment logs.
-5. **Agent Activity and Conversational Trail:**
-   - Structured accordion cards for Questions Back (queries from coding agents answered by simulated product owner), Review Verdicts, and CI Diagnoses.
+### 3.6 Macro Phase Accent Tokens (`--macro-*`)
+Defined in `css/board.css` for grouping column sets:
+- `--macro-inception`: Inception phase accent (`#8ab4ff` light, `#6fa8ff` dark).
+- `--macro-construction`: Construction phase accent (`#7fd1a6` light, `#7fd1a6` dark).
+- `--macro-release`: Release phase accent (`#2dd4a7` light, `#2dd4a7` dark).
+- `--macro-exception`: Exception phase accent (`#f0644b` light, `#f0644b` dark).
+- `--macro-color`: Dynamically assigned to each column group header bar.
 
-### 4.5 Data Tables and Metric Lists
-- Applied in Cost view, Flow metrics, Agents list, and Trail groups.
-- Column headers: 9 px uppercase monospace with letter spacing.
-- Numerical cells: Tabular digits aligned right.
-- Zebra striping: Subtle alternating background (`rgba(255, 255, 255, 0.015)`).
-- Hover feedback: Crisp highlight on hovered rows without content shifts.
+### 3.7 Stage Status Tone Tokens (`--st-*`)
+Defined in `css/styles.css` using `light-dark()` notation:
+- `--st-backlog`: `light-dark(oklch(60% 0.03 265), oklch(66% 0.03 265))`
+- `--st-refining`: `light-dark(oklch(66% 0.15 75), oklch(76% 0.14 78))`
+- `--st-feasible`: `light-dark(oklch(62% 0.15 140), oklch(74% 0.15 140))`
+- `--st-tests`: `light-dark(oklch(60% 0.12 190), oklch(74% 0.11 190))`
+- `--st-building`: `light-dark(oklch(56% 0.16 245), oklch(72% 0.13 245))`
+- `--st-review`: `light-dark(oklch(52% 0.19 275), oklch(70% 0.16 275))`
+- `--st-staging`: `light-dark(oklch(56% 0.19 310), oklch(72% 0.15 310))`
+- `--st-prod`: `light-dark(oklch(54% 0.15 155), oklch(74% 0.15 155))`
+- `--st-escalated`: `light-dark(oklch(56% 0.2 25), oklch(70% 0.17 25))`
+
+### 3.8 Spacing Scale Tokens (`--space-*`)
+A 4 px base spacing scale configured systematically across components:
+- `--space-1`: 4px (0.25rem)
+- `--space-2`: 8px (0.5rem)
+- `--space-3`: 12px (0.75rem)
+- `--space-4`: 16px (1rem)
+- `--space-5`: 20px (1.5rem in styles.css)
+- `--space-6`: 28px (2rem in styles.css)
+- `--space-7`: 40px (3rem in styles.css)
+
+### 3.9 Border Radius Tokens (`--radius-*`)
+- `--radius-xs`: 3px
+- `--radius-sm`: 6px (0.5rem in styles.css)
+- `--radius-md`: 9px (0.875rem in styles.css)
+- `--radius-lg`: 12px
+- `--radius-pill`: 9999px
 
 ---
 
-## 5. Responsive and Mobile Blueprint
+## 4. Light and Dark Theme Implementation
 
-The layout ensures seamless usability from widescreen monitors down to 360 px viewports:
+The Control Center provides seamless light and dark mode presentation through a unified architecture combining native CSS `light-dark()`, media queries, and manual override persistence.
 
-| Viewport Width | Layout Adaptations |
-|---|---|
-| **> 1200 px (Desktop)** | Full 9-column board visible in widescreen container. KPI band spans 6 columns in a single row. Ticket detail displays side-by-side gate and cost panels. |
-| **820 px - 1199 px (Tablet)** | Board sits in a contained `.board-scroll` wrapper with sticky column headers. KPI band shifts to 3 columns x 2 rows. Toolbar controls stack into logical rows. |
-| **360 px - 819 px (Mobile)** | Root page strictly preserves vertical scroll. The board container permits horizontal scrolling without breaking the header or navigation. KPI band reflows to 2 columns. Cards adopt a slightly more compact layout. Touch targets meet the minimum 44 px size. |
+### 4.1 Implementation Mechanism
+1. **Declaration on Root:**
+   The root stylesheet declares `color-scheme: light dark` on `:root`. This informs the browser rendering engine that the document natively supports both modes.
+2. **`light-dark()` Notation:**
+   Variables defined with `light-dark(lightValue, darkValue)` automatically resolve to the active color scheme without requiring separate stylesheet overrides.
+3. **Media Query and Data Attribute Selectors:**
+   - Default light styles are declared under `:root`.
+   - Dark theme variables are activated by system preference via `@media (prefers-color-scheme: dark)` on `:root:not([data-theme="light"])`.
+   - Explicit manual dark mode is activated via `[data-theme="dark"]`.
+   - Explicit manual light mode is activated via `[data-theme="light"]`.
+
+### 4.2 Flash of Unstyled Content (FOUC) Prevention
+A synchronous, blocking script (`js/theme.js`) is placed directly in the document `<head>`:
+```javascript
+(function () {
+  try {
+    var saved = localStorage.getItem('cc-theme');
+    if (saved === 'light' || saved === 'dark') {
+      document.documentElement.setAttribute('data-theme', saved);
+    }
+  } catch (error) {
+    /* storage can be blocked; system theme applies */
+  }
+})();
+```
+Because this script executes before first paint and before the DOM body begins parsing, the appropriate `data-theme` attribute is set immediately. The page never flickers or flashes the wrong theme on reload.
+
+### 4.3 Three-Way Manual Switcher
+The theme toggle button (`#theme-toggle`) in `js/shell.js` cycles through three states:
+- **Auto (System Match):** Removes the `data-theme` attribute from `document.documentElement` and clears the `cc-theme` key in `localStorage`. The page responds dynamically to the host operating system setting.
+- **Light:** Applies `data-theme="light"` to `document.documentElement` and writes `'light'` to `localStorage`.
+- **Dark:** Applies `data-theme="dark"` to `document.documentElement` and writes `'dark'` to `localStorage`.
+
+All storage operations are safely wrapped in try-catch handlers so that private browsing modes or restricted cookie storage policies do not cause runtime failures.
 
 ---
 
-## 6. Security and Implementation Rules
+## 5. Header Architecture, Status Beacon, Spend Callout, and Navigation
 
-All implementations must uphold the project's strict security guarantees:
+### 5.1 Top Header Bar (`.topbar`)
+The top bar provides brand identity, live status diagnostics, repository naming, and global action controls:
+- **Brand Identity (`.brand`):** Anchors the home view link (`#/`) with an SVG logo mark and application title.
+- **Header Status Beacon (`#brand-beacon`):**
+  - A circular 11 px status indicator situated immediately alongside the brand mark.
+  - Dynamically evaluated by `mountShell` using `freshness(state, nowMs)`.
+  - When the snapshot is fresh (less than 10 minutes old), the beacon has the `.is-live` class and pulses smoothly via CSS animation (`@keyframes beacon-pulse`), indicating an active event stream.
+  - When the snapshot exceeds 10 minutes (`STALE_AFTER_S = 600`), the beacon receives the `.is-stale` class, stops pulsing, transitions to warning tones, and updates its accessible tooltip to warn operators of a stale snapshot.
+- **Repository Eyebrow (`#repo-name`):** Displays the active GitHub repository name as plain text.
+- **Operational Tools (`#tools`):**
+  - Freshness readout (`#freshness`): displays relative update elapsed time, last ledger event timestamp, data source badge (`source: raw` or `source: api`), and problem counters if fetch errors occur.
+  - Manual refresh button (`#refresh`): triggers on-demand ledger updates with an animated busy state (`aria-busy`).
+  - Theme button (`#theme-toggle`): displays active theme icon and status label.
 
+### 5.2 Spend Threshold Callout Banner (`#banner`)
+The spend threshold callout sits directly below the top bar and above the main view container. It provides automated financial protection alerting:
+- **Activation Logic:** Checked on every snapshot paint. If `totals.halted` or `totals.over_cap` is true, and the operator is not currently viewing the Cost view (`route !== 'cost'`), the banner displays.
+- **Presentation:** A prominent warning callout (`.spend-banner` inside `.container`) featuring an alert icon and plain language financial status:
+  - If spend exceeded the hard cap: "Spend is over the cap: Azure billed $X. The loop is halted. See the cost view."
+  - If spend exceeded the soft halt line: "Spend is over the halt line: Azure billed $X. The loop is halted. See the cost view."
+- **Deep Link Navigation:** Clicking the banner navigates directly to `#/cost`.
+- **Automated Dismissal:** Clears completely when spend is below limits or when the operator navigates into the Cost view itself.
+
+### 5.3 Navigation Rail (`#nav`)
+The navigation rail organizes the Control Center into 7 core hash routes and deep-linked subviews:
+1. `#/` (Board: live delivery matrix organizing tickets across macro phases and stages).
+2. `#/environments` (Environments: deployment targets, staging and production release hops, rollback status).
+3. `#/cost` (Cost: compute ledger cost estimates vs billed Azure cloud spend, halt caps, ticket expense tables).
+4. `#/agents` (Agents: registered worker agents, run states, execution heartbeats, last error logs).
+5. `#/escalations` (Escalations: tickets requiring human intervention, with a live numeric badge pill).
+6. `#/flow` (Flow: cycle time distributions, dwell time per stage, throughput, rework loop analytics).
+7. `#/trail` (Trail: questions to product owners, code review feedback, triage diagnoses, chronological traces).
+
+Subviews and fallback routes:
+- `#/ticket/:issue` (Ticket detail inspector showing end-to-end stage timeline, gate matrix, deployment hops, and spend).
+- `#/not-found` (Fallback view for invalid routes or missing ticket identifiers).
+
+The active route is marked with `aria-current="page"` (or `aria-current="true"` for ticket inspector views).
+
+---
+
+## 6. KPI Card Band (Delivery Cockpit)
+
+The KPI cockpit on the Board view is an always-visible, fixed 6-card metric grid (`<dl class="kpis board-kpis">`) positioned above the board toolbar. It maintains consistent vertical structure across visits without any folding controls or drawer toggles.
+
+### The Six KPI Cards
+1. **Total Tickets (`.kpi-edge-total`):**
+   Displays the total count of tickets known to the ledger across all stages.
+2. **In Flight (`.kpi-transit`, `.kpi-edge-flight`):**
+   Displays the count of tickets actively progressing through refining, feasibility, testing, building, review, and staging.
+3. **In Production (`.kpi-good`, `.kpi-edge-prod`):**
+   Displays the count of tickets successfully deployed and running in production.
+4. **Escalated (`.kpi-bad`, `.kpi-edge-escalated`):**
+   Displays the count of tickets halted due to errors, gate failures, or budget limits. Accented with error red when greater than zero.
+5. **Ledger Estimate (`.kpi-edge-ledger`):**
+   Displays the cumulative estimated compute cost in USD computed from token usage and execution models.
+6. **Azure Billed (`.kpi-edge-billed`):**
+   Displays actual billed spend reported by Azure billing integration. Displays "not read yet" if billing data has not been retrieved. Accented with error red if the loop is halted.
+
+### Layout and Responsive Behavior
+- **Desktop (> 820 px):** Rendered as a single row with 6 equal columns (`grid-template-columns: repeat(6, 1fr)`).
+- **Mobile and Tablet (<= 820 px):** Reflows into a 2-column grid (`grid-template-columns: repeat(2, 1fr)`), keeping all 6 cards visible without horizontal scroll.
+
+---
+
+## 7. The Nine-Stage Operational Pipeline and Macro Phases
+
+The autonomous delivery lifecycle organizes work across 9 operational stages structured into 3 sequential macro phases (Inception & Scoping, Construction & Verification, Release & Production), plus an exception lane.
+
+### 7.1 Pipeline Structure Overview
+
+| Macro Phase | Stage Code | Stage Title | Category | Operational Purpose |
+|---|---|---|---|---|
+| **Inception & Scoping** | `backlog` | Backlog | Intake | Raw issues and tasks ingested from GitHub repository. |
+| **Inception & Scoping** | `refining` | Refining | Flow | Autonomous requirements analysis, acceptance criteria, and task decomposition. |
+| **Inception & Scoping** | `feasible` | Feasible | Gate | Verification of technical feasibility, architecture constraints, and budget caps. |
+| **Construction & Verification** | `tests` | Tests | Flow | Authoring test suites and contracts test-first before code implementation. |
+| **Construction & Verification** | `building` | Building | Flow | Autonomous code generation and implementation to fulfill tests. |
+| **Construction & Verification** | `review` | Review | Gate | Validation of tests, lint checks, static analysis, and code review criteria. |
+| **Release & Production** | `staging` | Staging | Gate | Deployment to staging, execution of smoke and soak tests, health verification. |
+| **Release & Production** | `prod` | Prod | Terminal | Deployment to production environment with ongoing operational telemetry. |
+| **Exception** | `escalated` | Escalated | Exception | Tickets requiring human operator intervention due to gate failures or errors. |
+
+### 7.2 Macro Phase 1: Inception & Scoping (`--macro-inception`)
+- **Visual Grouping:** Spans the first 3 columns (`backlog`, `refining`, `feasible`) under a blue header bar (`#8ab4ff` light, `#6fa8ff` dark).
+- **Stage Details:**
+  1. `backlog`: Intake repository for unrefined issues, bugs, and feature requests. Holds pending items awaiting ingestion.
+  2. `refining`: Flow stage where ticket requirements, scope boundaries, acceptance criteria, and file contracts are clarified.
+  3. `feasible`: Gate threshold ensuring the work is technically viable, within project boundaries, and under cost estimation limits before engineering begins.
+
+### 7.3 Macro Phase 2: Construction & Verification (`--macro-construction`)
+- **Visual Grouping:** Spans the next 3 columns (`tests`, `building`, `review`) under a sage green header bar (`#7fd1a6`).
+- **Stage Details:**
+  4. `tests`: Flow stage enforcing test-driven development. Automated unit, integration, and contract test suites are generated before production code.
+  5. `building`: Flow stage where automated code generation implements solutions that satisfy the authored test contracts.
+  6. `review`: Gate threshold running automated linters, static analysis, test suites, branch protection checks, and code review verdicts. Failed checks cycle tickets back for rework.
+
+### 7.4 Macro Phase 3: Release & Production (`--macro-release`)
+- **Visual Grouping:** Spans the next 2 columns (`staging`, `prod`) under a teal header bar (`#2dd4a7`), tagged in the UI as Release & Operations.
+- **Stage Details:**
+  7. `staging`: Gate threshold where release artifacts are deployed to staging environments, verified with automated smoke tests and soak tests, and checked for regressions.
+  8. `prod`: Terminal operational stage. Artifacts are deployed to production and monitored with live telemetry.
+
+### 7.5 Exception Lane (`--macro-exception`)
+- **Visual Grouping:** Spans the final column (`escalated`) under a coral red header bar (`#f0644b`).
+- **Stage Details:**
+  9. `escalated`: Holds tickets that encountered unresolvable merge conflicts, repeated gate verification failures, budget limit halts, or unexpected runtime exceptions. Escalated tickets pause execution until human operators review and resolve the issue.
+
+### 7.6 Visual Presentation on the Board
+- **Macro Phase Band (`.macro-band`):** Positioned immediately above column headers. Features distinct accent border, phase title, stage count, and total ticket counter for that phase.
+- **Column Headers:** Monospace stage title, category chip (`Intake`, `Flow`, `Gate`, `Terminal`, `Exception`), and count badge.
+- **Ticket Cards (`.card`):** Displays issue number, title clamped to 2 lines, type badge (`Feature`, `Bug`, `Task`), per-ticket spend progress bar against the 3.00 USD ticket cap, time-in-stage duration, and status indicators.
+
+---
+
+## 8. Ticket Detail Inspector (`#/ticket/:issue`)
+
+The ticket detail view provides comprehensive diagnostic tracing for a single issue:
+1. **Summary Header:** Issue key, full title, type badge, environment badge, GitHub link, and total compute expense.
+2. **Stage Progression Stepper:** Horizontal visual stepper displaying every visit across all 9 stages, recording dwell time, entry timestamps, and rework cycle loops.
+3. **Policy Gate Verification Grid:** Dedicated matrix evaluating all quality gates: Tests, Coverage, End-to-End, Secret Scan, Tests-First order, Scope check, Review, Smoke test, and Soak test. Displays pass/fail status, attempt counts, and first-attempt pass indicators.
+4. **Environment Deployment Trail:** Visualizes progression through deployment hops (Staging -> Smoke -> Soak -> Production), linking commit SHAs and workflow run URLs.
+5. **Conversational Trail:** Accordion cards documenting recorded questions to the product owner, automated responses, code review verdicts, and triage diagnosis traces.
+
+---
+
+## 9. Security, CSP, and Implementation Guarantees
+
+All interface code strictly adheres to these security rules:
 1. **Text-Only DOM Construction:**
-   - All dynamic strings (issue titles, review remarks, error traces, commit messages) must be inserted strictly as text nodes via `document.createTextNode` or `element.textContent`.
-   - Never use `innerHTML`, `outerHTML`, `insertAdjacentHTML`, `document.write`, or `eval`.
-2. **Strict Content Security Policy Conformance:**
-   - No inline styles (`style="..."` attributes are prohibited and blocked by tests).
-   - Dynamic sizes, percentages, and progress bars must be set via CSS custom properties on element styles using the CSSOM API (`el.style.setProperty('--bar-width', pct)`).
-3. **Strict URL Sanitation:**
-   - External links must only link to repository resources matching known URL patterns.
-   - All links must use `target="_blank"` and `rel="noopener noreferrer"`.
-4. **Style and Typography Guidelines:**
-   - Do NOT use em-dashes anywhere in source text, documentation, or code comments. Use regular hyphens, colons, or parentheses instead.
-   - Maintain full test suite coverage (`npm test`) across static checks, unit tests, and Playwright browser accessibility assertions.
+   Dynamic text is strictly inserted via `document.createTextNode` or `element.textContent`. The codebase contains zero instances of `innerHTML`, `outerHTML`, `insertAdjacentHTML`, or `eval`.
+2. **Strict Content Security Policy:**
+   Inline script tags and inline `style="..."` attributes are prohibited and blocked by automated tests. Dynamic styling (such as progress bar percentages or chart dimensions) is applied exclusively via CSS custom property assignment (`el.style.setProperty('--bar-width', pct)`).
+3. **Safe URL Handling:**
+   All outbound links are sanitized through `safeGithubUrl` and `isSafeHref`. Links are restricted to verified repository paths and fragments, with `rel="noopener noreferrer"` applied to all external targets.
+4. **Zero Em-Dash Rule:**
+   In accordance with project typography standards, em-dashes are never used in documentation or interface text. Hyphens, colons, or parentheses are used instead.
