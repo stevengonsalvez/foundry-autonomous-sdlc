@@ -41,6 +41,30 @@ CI is plain tests and gates. It never drives an agent.
 - Traces of every scenario, from issue to release: [`docs/evidence.md`](docs/evidence.md)
 - Final report with the success criteria and their evidence: [`docs/final-report.md`](docs/final-report.md)
 
+## Documentation
+
+| Doc | What |
+|-----|------|
+| [`docs/architecture.md`](docs/architecture.md) | Contracts: agents, state machine, labels, ledger events and state |
+| [`docs/decisions.md`](docs/decisions.md) | Design decisions and the alternatives rejected |
+| [`docs/findings.md`](docs/findings.md) | Measured facts and problems found while running it |
+| [`docs/evidence.md`](docs/evidence.md) | Issue to release traces for every scenario |
+| [`docs/final-report.md`](docs/final-report.md) | Success criteria and their evidence |
+| [`docs/control-center-report.md`](docs/control-center-report.md) | Control center, continuous deployment and ledger build report |
+| [`docs/cd.md`](docs/cd.md) | Staging, smoke, soak, promote and rollback |
+| [`docs/runbook.md`](docs/runbook.md) | Bootstrap, deploy, operate, tear down |
+| [`docs/app-spec.md`](docs/app-spec.md) | Spec of the parcel tracker demo app |
+| [`docs/poc-spec.md`](docs/poc-spec.md), [`docs/poc-findings.md`](docs/poc-findings.md) | The earlier Actions-driven proof of concept: spec and findings |
+| [`docs/explainer/`](docs/explainer/README.md) | Visual explainer of the whole system |
+| [`docs/proof/`](docs/proof/) | Screenshots of the app, dashboard and control center, including the live runs |
+| [`apps/control-center/README.md`](apps/control-center/README.md), [`PRODUCT.md`](apps/control-center/PRODUCT.md), [`DESIGN.md`](apps/control-center/DESIGN.md), [`RESEARCH-flowtron.md`](apps/control-center/RESEARCH-flowtron.md) | Control center usage, product brief, design system, UI research |
+| [`dashboard/README.md`](dashboard/README.md) | Metrics dashboard |
+| [`agents/README.md`](agents/README.md), [`app/README.md`](app/README.md) | Agents package and demo app |
+| [`infra/terraform/README.md`](infra/terraform/README.md), [`bootstrap`](infra/terraform/bootstrap/README.md) | Terraform stack and remote-state bootstrap |
+| [`reference/actions-sandbox/README.md`](reference/actions-sandbox/README.md) | The earlier Actions sandbox, kept for comparison |
+
+Live repository views: [issues](https://github.com/stevengonsalvez/foundry-autonomous-sdlc/issues), [pull requests](https://github.com/stevengonsalvez/foundry-autonomous-sdlc/pulls), [releases](https://github.com/stevengonsalvez/foundry-autonomous-sdlc/releases), [Actions runs](https://github.com/stevengonsalvez/foundry-autonomous-sdlc/actions), [the `state` branch](https://github.com/stevengonsalvez/foundry-autonomous-sdlc/tree/state) (`state.json` and `events.jsonl` written by the ledger).
+
 ## The gates
 
 Every agent PR must pass six required checks on the exact head commit before the orchestrator may merge it, and GitHub enforces the same six server side (branch ruleset `main-gates`, no bypass actors):
@@ -65,7 +89,7 @@ On top of that the orchestrator requires a review marker from the independent re
 | The coding CLI is tricked into stealing secrets | It runs as an unprivileged user with an environment built from nothing; the GitHub token exists only in short-lived git subprocesses owned by the coder process; checkouts are scanned for links, nested repos and out-of-scope paths before every push |
 | Runaway spend | 3 USD per issue, 22 USD halt and 25 USD total (fail closed), 2 hour coder deadline, minimum idle timeouts. The ledger's estimate undercounts hosted compute, so the control center shows Azure's billed figure beside it (see the cost view and `docs/runbook.md`, "Spend finding") |
 | A bad release reaches users | Staging first, Playwright smoke on the live staging URL, a 10 minute soak, then the same artifact is promoted; any failure restores the artifact prod already serves and flags the ticket |
-| Secrets in the repo | None. Credentials live in Key Vault; gitleaks runs in CI and over full history before every push |
+| Secrets in the repo | None. Credentials live in Key Vault; gitleaks runs in CI and over full history before every push, and GitGuardian ([`gitguardian.yml`](.github/workflows/gitguardian.yml)) scans the full history on every push to `main` and weekly. Its key is only readable by workflows that run from `main`, never by a pull request |
 
 Design decisions are in [`docs/decisions.md`](docs/decisions.md), measured facts and the problems found while running it are in [`docs/findings.md`](docs/findings.md), the contracts are in [`docs/architecture.md`](docs/architecture.md).
 
@@ -73,16 +97,16 @@ Design decisions are in [`docs/decisions.md`](docs/decisions.md), measured facts
 
 | Path | What |
 |------|------|
-| `app/` | The parcel tracker: `core`, `carrier-mock` (OpenAPI), `api`, `web` (React, Vite), `e2e` (Playwright) |
-| `agents/` | Orchestrator logic, prompt agent definitions, the coder runtime and the hosted agent entry points |
-| `infra/terraform/` | Foundry, Key Vault, observability and budget modules, plus a remote-state bootstrap |
-| `scripts/` | Deploy script, repo setup, merge gate scripts, scenario runner, evidence collector, Pages assembly |
-| `dashboard/` | The static metrics dashboard |
-| `apps/control-center/` | The read-only control center (8 views, no build, no token) |
-| `agents/sdlc_agents/ledger/` | The state-keeper: events, ticket model, fold, reconcile, branch writer; hosted as `sdlc-ledger` or run inline |
-| `scripts/cd/`, `.github/workflows/cd.yml` | Continuous deployment: staging, smoke, soak, promote or rollback (see [`docs/cd.md`](docs/cd.md)) |
-| `scenarios/` | The four scripted scenarios |
-| `reference/` | The earlier Actions-driven version, kept for comparison |
+| [`app/`](app/) | The parcel tracker: `core`, `carrier-mock` (OpenAPI), `api`, `web` (React, Vite), `e2e` (Playwright) |
+| [`agents/`](agents/) | Orchestrator logic, prompt agent definitions, the coder runtime and the hosted agent entry points |
+| [`infra/terraform/`](infra/terraform/) | Foundry, Key Vault, observability and budget modules, plus a remote-state bootstrap |
+| [`scripts/`](scripts/) | Deploy script, repo setup, merge gate scripts, scenario runner, evidence collector, Pages assembly |
+| [`dashboard/`](dashboard/) | The static metrics dashboard |
+| [`apps/control-center/`](apps/control-center/) | The read-only control center (8 views, no build, no token) |
+| [`agents/sdlc_agents/ledger/`](agents/sdlc_agents/ledger/) | The state-keeper: events, ticket model, fold, reconcile, branch writer; hosted as `sdlc-ledger` or run inline |
+| [`scripts/cd/`](scripts/cd/), [`.github/workflows/cd.yml`](.github/workflows/cd.yml) | Continuous deployment: staging, smoke, soak, promote or rollback (see [`docs/cd.md`](docs/cd.md)) |
+| [`scenarios/`](scenarios/) | The four scripted scenarios |
+| [`reference/`](reference/) | The earlier Actions-driven version, kept for comparison |
 
 ## Run it yourself
 
