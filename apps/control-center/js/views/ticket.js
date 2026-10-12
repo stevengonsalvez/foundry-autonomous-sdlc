@@ -37,6 +37,8 @@ export const GATE_LABELS = Object.freeze({
   soak: 'Soak',
 });
 
+export const GATE_STATUSES = Object.freeze(['pass', 'fail', 'running', 'skipped', 'none']);
+export const CHAIN_STATUSES = Object.freeze(['pass', 'fail', 'running', 'skipped', 'none']);
 const GATE_TEXT = { pass: 'Passed', fail: 'Failed', running: 'In progress', skipped: 'Skipped', none: 'Not run' };
 const GATE_ICON = { pass: 'check', fail: 'cross', running: 'clock', skipped: 'dash', none: 'dash' };
 
@@ -154,12 +156,12 @@ function gatesPanel(ticket) {
   );
 }
 
-const SPLIT = [
+export const SPLIT = Object.freeze([
   ['model_usd', 'Model calls', 'split-model'],
   ['coder_usd', 'Coder runtime', 'split-coder'],
   ['coder_model_usd', 'Coder model', 'split-coder-model'],
   ['ledger_usd', 'Ledger compute', 'split-ledger'],
-];
+]);
 
 function costPanel(ticket) {
   const c = ticket.cost;
@@ -201,7 +203,7 @@ function costPanel(ticket) {
   );
 }
 
-const HOP_STATUS = { success: ['Succeeded', 'good'], skipped: ['Skipped', 'neutral'], rolled_back: ['Rolled back', 'bad'], failed: ['Failed', 'bad'], in_progress: ['In progress', 'warn'] };
+export const HOP_STATUS = Object.freeze({ success: ['Succeeded', 'good'], skipped: ['Skipped', 'neutral'], rolled_back: ['Rolled back', 'bad'], failed: ['Failed', 'bad'], in_progress: ['In progress', 'warn'] });
 function hopsPanel(ticket, now) {
   const chain = pipelineChain(ticket);
   const legacy = ticket.hops.some((x) => x.action === 'legacy-publish');

@@ -20,7 +20,7 @@ import {
 } from './common.js';
 
 // Macrobands grouping stages into lifecycle domains
-const MACROBANDS = Object.freeze([
+export const MACROBANDS = Object.freeze([
   { id: 'shape', label: 'ALIGN . PRODUCT', span: 3, tone: 'wait' },
   { id: 'build', label: 'IMPLEMENT . CODE', span: 3, tone: 'run' },
   { id: 'release', label: 'DELIVER . OPERATIONS', span: 2, tone: 'done' },
@@ -33,7 +33,7 @@ const MACROBANDS = Object.freeze([
  * - SIM: Simulated human interaction gate (requirements refinement with simulated user/PO).
  * - GATE: Quality and safety verification barrier (test designer gate, code review gate, smoke/staging gate, escalation gate).
  */
-const STAGE_MODES = Object.freeze({
+export const STAGE_MODES = Object.freeze({
   backlog: 'AUTO',
   refining: 'SIM',
   feasible: 'AUTO',
@@ -44,6 +44,9 @@ const STAGE_MODES = Object.freeze({
   prod: 'AUTO',
   escalated: 'GATE',
 });
+
+export const CHIP_STATES = Object.freeze(['active', 'pending', 'wait', 'blocked', 'done']);
+export const LANE_TONES = Object.freeze(['info', 'block', 'wait', 'agent', 'run', 'done']);
 
 function getTicketAgent(ticket) {
   if (ticket.coder?.job_id) return 'sdlc-coder';
@@ -107,10 +110,18 @@ function ticketChip(ticket, nowMs, lens) {
   const envB = envBadgeFor(ticket);
   const extraBadges = envB ? [envB, ...flags] : flags;
 
+  const stateSrText = {
+    active: 'in progress',
+    pending: 'pending',
+    wait: 'waiting',
+    blocked: 'blocked',
+    done: 'done',
+  }[stateTone] ?? stateTone;
+
   const pill = h(
     'div',
     { class: `chip-pill card-${stateTone}${ticket.pending ? ' card-pending' : ''}` },
-    h('div', { class: 'chip-head' }, chipNum, chipDot, h('span', { class: 'sr-only' }, stateTone), chipAgent, lensContent),
+    h('div', { class: 'chip-head' }, chipNum, chipDot, h('span', { class: 'sr-only' }, stateSrText), chipAgent, lensContent),
     h('div', { class: 'chip-body' }, link),
   );
 
@@ -294,7 +305,7 @@ function laneSpine(lanes) {
   return h(
     'div',
     { class: 'matrix-spine', role: 'row' },
-    h('div', { class: 'spine-head', role: 'columnheader' }, h('span', { class: 'spine-label' }, 'SWIMLANE')),
+    h('div', { class: 'spine-head', role: 'columnheader' }, h('span', { class: 'spine-label' }, 'Stage')),
     ...lanes.map((l) =>
       h(
         'div',

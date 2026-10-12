@@ -198,6 +198,7 @@ export function sinceEl(iso, nowMs) {
 // ------------------------------------------------------------------ deploy events
 
 const ENV_LABEL = { staging: 'staging', prod: 'production' };
+export const HOP_ACTIONS = Object.freeze(['stage', 'promote', 'rollback', 'skip', 'fail', 'legacy-publish']);
 
 export function hopTitle(hop) {
   const where = ENV_LABEL[hop.env] ?? hop.env;

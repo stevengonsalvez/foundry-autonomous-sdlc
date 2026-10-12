@@ -81,6 +81,8 @@ export function chartHost(draw, className = '') {
 
 // ----------------------------------------------------------------- small components
 
+export const BADGE_TONES = Object.freeze(['good', 'bad', 'warn', 'info', 'neutral']);
+
 export function badge(text, tone = 'neutral', className = '') {
   // Badges hold short labels; the text can come from the data, so it is capped.
   return h('span', { class: `badge tone-${tone} ${className}`.trim() }, limitText(text, 48));
