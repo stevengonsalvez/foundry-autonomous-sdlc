@@ -23,38 +23,103 @@ function stat(label, value, sub) {
   return h('div', { class: 'stat' }, h('dt', null, label), h('dd', null, value, sub ? h('span', { class: 'muted stat-sub' }, ` ${sub}`) : null));
 }
 
-function agentCard(agent, now, tickets) {
+function agentRow(agent, now, tickets) {
   const known = (n) => n !== null && tickets.has(n);
-  return h(
-    'article',
-    { class: `agent agent-${agent.state}`, 'aria-label': agent.name },
-    h('header', { class: 'agent-head' }, h('h3', { class: 'agent-name' }, h('code', null, agent.name)), stateChip(agent.state)),
-    h('p', { class: 'agent-role clamp-2' }, agent.role || 'No description.'),
-    h(
-      'dl',
-      { class: 'stats stats-agent' },
-      stat('Last active', agent.last_active_at ? timeEl(agent.last_active_at, now) : 'never'),
-      stat('Calls', formatInteger(agent.calls_total), agent.calls_last_tick > 0 ? `${agent.calls_last_tick} last tick` : ''),
-      stat('Tokens in', formatInteger(agent.tokens_in)),
-      stat('Tokens out', formatInteger(agent.tokens_out)),
-      stat('Spend', formatUsd(agent.usd)),
-      stat('Errors', formatInteger(agent.errors), `${formatInteger(agent.retries)} ${agent.retries === 1 ? 'retry' : 'retries'}`),
-    ),
-    h(
-      'p',
-      { class: 'agent-line' },
-      h('span', { class: 'label' }, 'Working on'),
-      agent.current_object !== null ? (known(agent.current_object) ? issueNumberLink(agent.current_object) : h('span', null, `#${agent.current_object}`)) : h('span', { class: 'muted' }, 'nothing'),
-    ),
-    agent.lock_holder ? h('p', { class: 'agent-line' }, h('span', { class: 'label' }, 'Lock'), h('span', { class: 'clamp-1 wrap' }, agent.lock_holder)) : null,
+  const isError = agent.state === 'error' || Boolean(agent.last_error);
+
+  const stateCell = h('td', null, stateChip(agent.state));
+
+  const nameCell = h(
+    'td',
+    null,
+    h('span', { class: 'agent-name font-mono strong' }, agent.name),
+    agent.role ? h('div', { class: 'agent-role muted text-xs clamp-1' }, agent.role) : null,
+  );
+
+  const activeCell = h('td', { class: 'num' }, agent.last_active_at ? timeEl(agent.last_active_at, now) : 'never');
+
+  const callsCell = h(
+    'td',
+    { class: 'num' },
+    formatInteger(agent.calls_total),
+    agent.calls_last_tick > 0 ? h('span', { class: 'muted text-xs' }, ` (+${agent.calls_last_tick})`) : null,
+  );
+
+  const tokensInCell = h('td', { class: 'num' }, formatInteger(agent.tokens_in));
+  const tokensOutCell = h('td', { class: 'num' }, formatInteger(agent.tokens_out));
+  const spendCell = h('td', { class: 'num' }, formatUsd(agent.usd));
+
+  const errorsCell = h(
+    'td',
+    null,
+    h('span', { class: agent.errors > 0 ? 'tone-bad strong num' : 'num' }, formatInteger(agent.errors)),
     agent.last_error
       ? h(
           'div',
           { class: 'agent-error', role: 'group', 'aria-label': 'Last error' },
-          h('p', { class: 'label' }, 'Last error', agent.last_error.at ? [' ', timeEl(agent.last_error.at, now)] : null, agent.last_error.result ? [' ', badge(agent.last_error.result, 'warn')] : null, agent.last_error.object !== null ? [' on ', issueNumberLink(agent.last_error.object)] : null),
-          h('p', { class: 'clamp-3 wrap' }, agent.last_error.detail || 'No detail recorded.'),
+          h('span', { class: 'error-detail' }, agent.last_error.detail || 'Error'),
         )
       : null,
+  );
+
+  const workingCell = h(
+    'td',
+    null,
+    agent.current_object !== null
+      ? known(agent.current_object)
+        ? issueNumberLink(agent.current_object)
+        : h('span', null, `#${agent.current_object}`)
+      : h('span', { class: 'muted' }, '-'),
+  );
+
+  return h(
+    'tr',
+    {
+      class: `agent agent-${agent.state}${isError ? ' is-error' : ''}`,
+      'aria-label': agent.name,
+    },
+    stateCell,
+    nameCell,
+    activeCell,
+    callsCell,
+    tokensInCell,
+    tokensOutCell,
+    spendCell,
+    errorsCell,
+    workingCell,
+  );
+}
+
+function agentsTable(agents, now, tickets) {
+  return h(
+    'section',
+    { class: 'panel', 'aria-label': 'Fleet agents table' },
+    h(
+      'div',
+      { class: 'table-wrap' },
+      h(
+        'table',
+        { class: 'data' },
+        h(
+          'thead',
+          null,
+          h(
+            'tr',
+            null,
+            h('th', null, 'State'),
+            h('th', null, 'Agent'),
+            h('th', null, 'Last active'),
+            h('th', { class: 'num' }, 'Calls'),
+            h('th', { class: 'num' }, 'Tokens in'),
+            h('th', { class: 'num' }, 'Tokens out'),
+            h('th', { class: 'num' }, 'Spend'),
+            h('th', null, 'Errors'),
+            h('th', null, 'Working on'),
+          ),
+        ),
+        h('tbody', null, ...agents.map((a) => agentRow(a, now, tickets))),
+      ),
+    ),
   );
 }
 
@@ -122,7 +187,7 @@ export function renderAgents(ctx) {
     { class: 'view' },
     pageHead({ title: 'Agents', lede: `${agents.length} ${plural(agents.length, 'agent')}: ${summary}. State is always written out, never colour alone.` }),
     tickStrip(state, now),
-    h('div', { class: 'agent-grid' }, ...agents.map((a) => agentCard(a, now, tickets))),
+    agentsTable(agents, now, tickets),
     tickObjects(state),
     notices(state, now),
   );

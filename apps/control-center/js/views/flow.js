@@ -52,7 +52,7 @@ function cyclePanel(state, now) {
               { label: 'Time per stage for each ticket', maxTotal, stageClass: stageFill },
             ),
           ),
-          h('ul', { class: 'legend' }, ...present.map((s) => h('li', null, h('span', { class: `swatch ${stageFill(s).replace('st-fill-', 'st-bg-')}`, 'aria-hidden': 'true' }), stageLabel(s)))),
+          h('ul', { class: 'legend legend-text' }, ...present.map((s) => h('li', null, stageLabel(s)))),
           dataTable(
             'Show cycle time as a table',
             table({

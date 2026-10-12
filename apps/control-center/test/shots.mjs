@@ -25,6 +25,7 @@ const VIEWS_TO_SHOOT = [
 
 const SIZES = {
   desktop: [1440, 900],
+  '1280': [1280, 800],
   mobile: [390, 844],
   '360': [360, 640],
 };
@@ -47,8 +48,8 @@ async function snap(page, file, width) {
 }
 
 try {
-  // 1. Board across lenses: Delivery, Cost, Gates at desktop, mobile, and 360
-  for (const size of ['desktop', 'mobile', '360']) {
+  // 1. Board across lenses: Delivery, Cost, Gates at desktop, 1280, mobile, and 360
+  for (const size of ['desktop', '1280', 'mobile', '360']) {
     const [width, height] = SIZES[size];
     const { context, page } = await openFixed(browser, server.url, { hash: '#/', width, height });
 

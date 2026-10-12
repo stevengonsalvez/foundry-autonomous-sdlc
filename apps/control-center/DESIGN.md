@@ -74,24 +74,33 @@ The vertical axis organizes work items into swimlanes:
   - `Agent`: Assigned fleet agent or unassigned (triage tickets retained)
   - `Outcome`: In-flight, Shipped, Escalated
 - Lane Spine (Sticky Left Column):
-  - Colored indicator dot (6px)
-  - Identifier / name in bold monospace
-  - Subtitle role/description
+  - Fixed 134px width aligned with macroband spacer.
+  - Colored indicator dot (6px).
+  - Identifier / name in bold monospace.
+  - Subtitle role/description.
 
 ### Ticket Pill Chips
-Work items appear as compact single-line interactive pill tokens:
-- Height: 24px to 28px.
-- Radius: Full pill (9999px).
+Work items appear as dense two-line pill tokens in the matrix grid:
 - Internal Composition:
-  1. Ticket ID: `#24` in monospace bold
-  2. State dot: 5px to 6px circular indicator (run, wait, block, info, or dashed pending)
-  3. Agent micro-tag: 2-letter uppercase tag (e.g. `CO`, `TD`, `RV`)
-  4. Lens metric:
-     - Delivery lens: stage duration (e.g. `14s`, `2m`)
-     - Cost lens: USD amount (e.g. `$0.04`)
-     - Gates lens: gates ratio (e.g. `4/4`)
-  5. Title: truncated title with text-overflow ellipsis
-- Flags: Secondary tags (such as `Waiting for ledger` or `Rolled back`) render as quiet inline metadata.
+  - Line 1 (Header row): Ticket ID (`#24`), state indicator dot (5px), 2-letter agent tag (`CO`), and lens metric (`1d 2h`, `$0.07`, or `6/6`).
+  - Line 2 (Body row): Ticket title with text-overflow ellipsis using the full cell width for high legibility.
+- Wide Cell Adaptivity: Container query (`@container (min-width: 260px)`) smoothly shifts chip to single-line layout when cell width permits (e.g. mobile stacked stage list).
+- Flags: Secondary tags (such as `Waiting for ledger` or `Rolled back`) render below the chip as quiet dashed badges, never rotated.
+
+### Spend Banner
+- Height: 28px slim one-line status strip.
+- Geometry: 6px coral dot, monospace text, subtle coral tinted background, hairline border.
+- Behavior: Visible across pages when spend exceeds halt line or cap, linking directly to Cost view.
+
+### Fleet Agents
+- Presentation: Dense 9-column data table replacing generic cards.
+- Columns: State (dot and text), Agent name, Last active, Calls, Tokens in, Tokens out, Spend, Errors, Working on.
+- Error Telemetry: Error rows highlighted with coral text and dot, avoiding large red card boxes.
+
+### Flow Metrics
+- Palette: Unified muted tone (`oklch(0.50 0.04 240)`) for standard stage bars and per-ticket stacked segments.
+- Semantic Accents: Golden amber strictly for waiting/backlog, coral strictly for failed or escalated.
+- Legend: Pure text labels without colored swatches.
 
 ### Non-Applicable and Empty Cells
 - Empty Cells: 1px hairline dark panel with clear coordinates.
@@ -109,13 +118,14 @@ All 8 application views share the same mission-control visual language:
 - Ticket Detail: Compact stage progression strip, 2-column tabular cost breakdown, aligned gate verification results, and chronological timeline.
 - Environments: Compact matrix comparison table for Staging and Production (version, commit, deploy timestamp, gates cleared pills, run link, included changes).
 - Cost: Dense hairline tables comparing ledger estimates against Azure billed costs, with over-cap indicators.
-- Fleet Agents: Dense status table of all agents with 2-letter badges, lifecycle state written out, and error telemetry.
+- Fleet Agents: Dense status table of all 11 agents with 2-letter badges, lifecycle state written out, and error telemetry.
 - Escalations: Incident desk with crimson hairlines, terminal reasons, and direct evidence links.
 - Flow Metrics: Inline SVG charts with hairline axes backed by accessible data tables.
 - Audit Trail: Dense chronological ledger stream filterable by event kind and ticket number.
 
 ## 4. Responsive Model
 
-- 1440px Desktop: Full two-dimensional matrix display with sticky swimlane spine.
-- 600px to 1024px: Horizontal scrolling matrix with sticky frozen swimlane headers on the left.
-- 360px Mobile: Stacked view where the board renders as a vertical list of stages, ensuring zero sideways page overflow.
+- 1440px Desktop: Full two-dimensional matrix display fitting all 9 stage columns and the Escalated stage without horizontal scroll.
+- 1280px Desktop: Fits all 9 stage columns and lane column with zero horizontal scroll.
+- Below 1100px: Horizontal scrolling matrix with sticky frozen swimlane headers on the left.
+- Below 640px Mobile: Stacked view where the board renders as a vertical list of stages, ensuring zero sideways page overflow.

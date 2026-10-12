@@ -99,8 +99,8 @@ export function mountShell({ onRefresh }) {
             h(
               'a',
               { class: 'spend-banner', href: '#/cost' },
-              icon('alert', { size: 16 }),
-              h('span', null, totals.over_cap ? 'Spend is over the cap' : 'Spend is over the halt line', billed !== null ? `: Azure billed ${formatUsdWords(billed)}.` : '.', totals.halted ? ' The loop is halted.' : '', ' See the cost view.'),
+              h('span', { class: 'spend-dot', 'aria-hidden': 'true' }),
+              h('span', { class: 'spend-text' }, totals.over_cap ? 'Spend is over the cap' : 'Spend is over the halt line', billed !== null ? `: Azure billed ${formatUsdWords(billed)}.` : '.', totals.halted ? ' The loop is halted.' : '', ' See the cost view.'),
             ),
           ),
         );

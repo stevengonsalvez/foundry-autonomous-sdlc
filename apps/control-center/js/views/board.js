@@ -103,11 +103,8 @@ function ticketChip(ticket, nowMs, lens) {
   const pill = h(
     'div',
     { class: `chip-pill card-${stateTone}${ticket.pending ? ' card-pending' : ''}` },
-    chipNum,
-    chipDot,
-    chipAgent,
-    link,
-    lensContent,
+    h('div', { class: 'chip-head' }, chipNum, chipDot, chipAgent, lensContent),
+    h('div', { class: 'chip-body' }, link),
   );
 
   return h(
