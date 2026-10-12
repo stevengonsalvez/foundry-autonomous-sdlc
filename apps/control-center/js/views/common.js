@@ -27,6 +27,62 @@ export function releaseLink(release) {
 
 export const runLink = (url) => dataLink(url);
 
+// ------------------------------------------------------------------ mission-control helpers
+
+export function modeBadge(mode) {
+  const m = String(mode).toUpperCase();
+  const tone = m === 'AUTO' ? 'auto' : m === 'GATE' ? 'gate' : m === 'SIM' ? 'sim' : 'manual';
+  return h('span', { class: `mode-badge mode-${tone}` }, m);
+}
+
+const AGENT_CODES = {
+  'sdlc-orchestrator': 'OR',
+  'sdlc-coder': 'CO',
+  'sdlc-req-gate': 'RG',
+  'sdlc-product-owner': 'PO',
+  'sdlc-feasibility': 'FE',
+  'sdlc-test-designer': 'TD',
+  'sdlc-reviewer': 'RV',
+  'sdlc-triage': 'TR',
+  'sdlc-ci-triage': 'CT',
+  'sdlc-release-notes': 'RN',
+  'sdlc-ledger': 'LD',
+};
+
+export function agentTag(agentName) {
+  if (!agentName) return '--';
+  return AGENT_CODES[agentName] ?? agentName.slice(0, 2).toUpperCase();
+}
+
+export function agentPill(agentName) {
+  const tag = agentTag(agentName);
+  return h('span', { class: 'agent-tag', title: agentName || 'unassigned' }, tag);
+}
+
+export function segmentedControl(items, current, onChange) {
+  const group = h('div', { class: 'segmented-control', role: 'group' });
+  for (const item of items) {
+    const val = typeof item === 'string' ? item : item.value;
+    const label = typeof item === 'string' ? item : item.label;
+    const active = val === current;
+    const btn = h(
+      'button',
+      {
+        type: 'button',
+        class: `segmented-btn${active ? ' is-active' : ''}`,
+        'aria-pressed': String(active),
+        'data-value': val,
+      },
+      label,
+    );
+    btn.addEventListener('click', () => {
+      if (val !== current) onChange(val);
+    });
+    group.append(btn);
+  }
+  return group;
+}
+
 // ------------------------------------------------------------------ badges
 
 const TYPE_TONE = { feature: 'info', bug: 'bad', maintenance: 'neutral', unclassified: 'neutral' };

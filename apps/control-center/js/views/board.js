@@ -1,84 +1,304 @@
-// #/  Ticket board: every ticket in its column, with filters. The columns are rebuilt in place when
-// a filter changes, so typing in the search box never loses focus.
+// #/  Delivery flow board: lane by stage matrix, macrobands, mode badges, pill chips, lens and group toggles.
 
 import { badge, emptyState, ghLink, h } from '../dom.js';
 import { formatInteger, formatUsd, plural } from '../format.js';
 import { icon } from '../icons.js';
-import { boardColumns, boardSummary, emptyFilters, typesPresent, timeInStage } from '../model.js';
+import { boardColumns, boardSummary, emptyFilters, typesPresent, timeInStage, stageLabel } from '../model.js';
 import { NEW_BUG_URL, NEW_TICKET_URL, limitText } from '../safe.js';
 import { ui } from '../ui.js';
 import {
+  agentPill,
+  agentTag,
   costBar,
   envBadgeFor,
   escalationBadge,
   externalLabel,
   flagBadges,
+  modeBadge,
   pageHead,
+  segmentedControl,
   sinceEl,
   ticketGithubUrl,
   ticketHref,
   typeBadge,
 } from './common.js';
 
-function card(ticket, nowMs) {
+// Macrobands grouping stages into lifecycle domains
+const MACROBANDS = Object.freeze([
+  { id: 'shape', label: 'SHAPE . BUSINESS', stages: ['backlog', 'refining', 'feasible'], tone: 'cyan' },
+  { id: 'build', label: 'BUILD . ENGINEERING', stages: ['tests', 'building', 'review'], tone: 'auto' },
+  { id: 'release', label: 'RELEASE . OPS', stages: ['staging', 'prod'], tone: 'agent' },
+  { id: 'escalated', label: 'ESCALATED', stages: ['escalated'], tone: 'gate' },
+]);
+
+// Execution mode per board stage derived from architecture definitions
+const STAGE_MODES = Object.freeze({
+  backlog: 'AUTO',
+  refining: 'SIM',
+  feasible: 'AUTO',
+  tests: 'GATE',
+  building: 'AUTO',
+  review: 'GATE',
+  staging: 'GATE',
+  prod: 'AUTO',
+  escalated: 'GATE',
+});
+
+function getTicketAgent(ticket) {
+  if (ticket.coder?.job_id) return 'sdlc-coder';
+  if (ticket.agent_runs && ticket.agent_runs.length > 0) {
+    return ticket.agent_runs.at(-1).agent;
+  }
+  switch (ticket.stage) {
+    case 'backlog': return 'sdlc-orchestrator';
+    case 'refining': return 'sdlc-req-gate';
+    case 'feasible': return 'sdlc-feasibility';
+    case 'tests': return 'sdlc-test-designer';
+    case 'building': return 'sdlc-coder';
+    case 'review': return 'sdlc-reviewer';
+    case 'staging': return 'sdlc-orchestrator';
+    case 'prod': return 'sdlc-ledger';
+    default: return 'sdlc-orchestrator';
+  }
+}
+
+function ticketChip(ticket, nowMs, lens) {
   const inStage = timeInStage(ticket, nowMs);
+  const agentName = getTicketAgent(ticket);
+  const tag = agentTag(agentName);
+
+  let stateTone = 'active';
+  if (ticket.pending) stateTone = 'pending';
+  else if (ticket.stage === 'escalated' || ticket.flags.includes('deploy-failed') || ticket.flags.includes('rolled-back')) stateTone = 'blocked';
+  else if (ticket.stage === 'backlog' || ticket.flags.includes('waiting-for-ledger')) stateTone = 'wait';
+  else if (ticket.stage === 'prod') stateTone = 'done';
+
   const link = ticket.pending
-    ? ghLink(ticketGithubUrl(ticket), [ticket.title || 'Untitled', icon('external', { size: 12, className: 'icon-ext' })], { class: 'card-link clamp-3' })
-    : h('a', { class: 'card-link clamp-3', href: ticketHref(ticket.issue), 'data-fkey': `t${ticket.issue}` }, ticket.title || 'Untitled');
+    ? ghLink(ticketGithubUrl(ticket), [ticket.title || 'Untitled', icon('external', { size: 12, className: 'icon-ext' })], { class: 'card-link clamp-1' })
+    : h('a', { class: 'card-link clamp-1', href: ticketHref(ticket.issue), 'data-fkey': `t${ticket.issue}` }, ticket.title || 'Untitled');
+
+  const chipNum = h('span', { class: 'chip-num' }, ticket.kind === 'pr' ? `PR #${ticket.issue}` : `#${ticket.issue}`);
+  const chipDot = h('span', { class: `chip-dot dot-${stateTone}`, 'aria-hidden': 'true' });
+  const chipAgent = h('span', { class: 'chip-agent', title: agentName }, tag);
+
+  let lensContent = null;
+  if (lens === 'cost') {
+    const usdText = formatUsd(ticket.cost?.usd ?? 0);
+    const pct = Math.min(100, Math.round(ticket.cost?.cap_used_pct ?? 0));
+    lensContent = h(
+      'span',
+      { class: 'chip-lens chip-cost', title: `${usdText} (${pct}% of cap)` },
+      h('span', { class: 'chip-cost-val' }, usdText),
+      h('span', { class: 'chip-cost-track', 'aria-hidden': 'true' }, h('span', { class: 'chip-cost-bar', vars: { pct: `${pct}%` } })),
+    );
+  } else if (lens === 'gates') {
+    const gates = ticket.gates || {};
+    const passCount = Object.values(gates).filter((v) => v === 'success').length;
+    const totalGates = Object.keys(gates).length;
+    lensContent = h(
+      'span',
+      { class: 'chip-lens chip-gates', title: `${passCount}/${totalGates} gates passed` },
+      h('span', { class: 'chip-gate-verdict' }, totalGates > 0 ? `${passCount}/${totalGates}` : 'none'),
+    );
+  } else {
+    // Delivery lens: time in stage
+    lensContent = h('span', { class: 'chip-lens chip-time' }, sinceEl(inStage.since, nowMs));
+  }
+
+  const flags = flagBadges(ticket.flags);
+  const envB = envBadgeFor(ticket);
+  const extraBadges = envB ? [envB, ...flags] : flags;
+
   return h(
     'article',
-    { class: `card${ticket.pending ? ' card-pending' : ''}`, 'data-stage': ticket.stage },
-    h('div', { class: 'card-top' }, h('span', { class: 'card-num' }, ticket.kind === 'pr' ? `PR #${ticket.issue}` : `#${ticket.issue}`), typeBadge(ticket.type), envBadgeFor(ticket)),
-    h('h3', { class: 'card-title' }, link),
-    ticket.pending
-      ? h('p', { class: 'card-note' }, 'Not in the ledger yet. It appears here with its stage once the next tick picks it up.')
-      : h('div', { class: 'card-cost' }, costBar(ticket.cost.usd, ticket.cost.cap_used_pct)),
-    h(
-      'div',
-      { class: 'card-foot' },
-      h('span', { class: 'in-stage' }, sinceEl(inStage.since, nowMs), ' in ', ticket.stage === 'prod' ? 'production' : ticket.stage),
-      escalationBadge(ticket),
-      ...flagBadges(ticket.flags),
-    ),
+    {
+      class: `card chip-pill card-${stateTone}${ticket.pending ? ' card-pending' : ''}`,
+      'data-stage': ticket.stage,
+      title: `#${ticket.issue}: ${ticket.title || 'Untitled'} (${ticket.stage})`,
+    },
+    chipDot,
+    chipNum,
+    chipAgent,
+    link,
+    lensContent,
+    extraBadges.length > 0 ? h('span', { class: 'chip-badges' }, ...extraBadges) : null,
   );
 }
 
-function column(col, nowMs, filtered) {
+function computeStageCounts(tickets) {
+  let inCount = 0;
+  let waitCount = 0;
+  let blockedCount = 0;
+  for (const t of tickets) {
+    if (t.stage === 'escalated' || t.flags.includes('deploy-failed')) blockedCount++;
+    else if (t.stage === 'backlog' || t.pending || t.flags.includes('waiting-for-ledger')) waitCount++;
+    else inCount++;
+  }
+  return { inCount, waitCount, blockedCount };
+}
+
+function getLaneKeys(group, tickets) {
+  if (group === 'agent') {
+    const set = new Set();
+    for (const t of tickets) set.add(getTicketAgent(t));
+    if (set.size === 0) set.add('sdlc-orchestrator');
+    return [...set].sort().map((agent) => ({
+      key: agent,
+      label: agent.replace(/^sdlc-/, '').toUpperCase(),
+      sub: agentTag(agent),
+      tone: 'agent',
+    }));
+  }
+  if (group === 'outcome') {
+    return [
+      { key: 'in-flight', label: 'IN FLIGHT', sub: 'active', tone: 'auto' },
+      { key: 'shipped', label: 'SHIPPED', sub: 'production', tone: 'done' },
+      { key: 'escalated', label: 'ESCALATED', sub: 'blocked', tone: 'gate' },
+    ];
+  }
+  // Default: Type
+  return [
+    { key: 'feature', label: 'FEATURE', sub: 'user value', tone: 'cyan' },
+    { key: 'bug', label: 'BUG', sub: 'defect repair', tone: 'gate' },
+    { key: 'maintenance', label: 'MAINTENANCE', sub: 'platform', tone: 'assist' },
+  ];
+}
+
+function ticketMatchesLane(ticket, laneKey, group) {
+  if (group === 'agent') return getTicketAgent(ticket) === laneKey;
+  if (group === 'outcome') {
+    if (laneKey === 'shipped') return ticket.stage === 'prod';
+    if (laneKey === 'escalated') return ticket.stage === 'escalated';
+    return ticket.stage !== 'prod' && ticket.stage !== 'escalated';
+  }
+  // Group: Type
+  return ticket.type === laneKey;
+}
+
+function isStageApplicable(stage, laneKey, group) {
+  if (group === 'outcome') {
+    if (laneKey === 'shipped') return stage === 'prod';
+    if (laneKey === 'escalated') return stage === 'escalated';
+    return stage !== 'prod' && stage !== 'escalated';
+  }
+  if (group === 'type') {
+    // Maintenance skips requirements refinement and feasibility
+    if (laneKey === 'maintenance' && (stage === 'refining' || stage === 'feasible')) return false;
+  }
+  return true;
+}
+
+function matrixCell(stage, laneKey, tickets, nowMs, lens, group) {
+  const applicable = isStageApplicable(stage, laneKey, group);
+  if (!applicable) {
+    return h(
+      'div',
+      { class: 'matrix-cell cell-hatched', 'data-lane': laneKey },
+      h('span', { class: 'cell-hatched-label' }, 'not in pipeline'),
+    );
+  }
+
+  const laneTickets = tickets.filter((t) => ticketMatchesLane(t, laneKey, group));
+
+  const cell = h(
+    'div',
+    { class: `matrix-cell${laneTickets.length === 0 ? ' cell-empty' : ''}`, 'data-lane': laneKey },
+    ...laneTickets.map((t) => ticketChip(t, nowMs, lens)),
+  );
+  return cell;
+}
+
+function stageColumn(col, nowMs, filtered, lens, group, lanes) {
   const quiet = col.tickets.length === 0;
-  const list = h('ul', { class: 'col-list' });
-  for (const t of col.tickets) list.append(h('li', null, card(t, nowMs)));
   const countText = filtered && col.total !== col.tickets.length ? `${col.tickets.length} of ${col.total}` : String(col.tickets.length);
+  const mode = STAGE_MODES[col.stage] ?? 'AUTO';
+  const { inCount, waitCount, blockedCount } = computeStageCounts(col.tickets);
+
+  let telemetryText = `${inCount} in . ${waitCount} wait . ${blockedCount} blocked`;
+  if (lens === 'cost') {
+    const stageUsd = col.tickets.reduce((sum, t) => sum + (t.cost?.usd ?? 0), 0);
+    telemetryText = formatUsd(stageUsd);
+  } else if (lens === 'gates') {
+    const totalG = col.tickets.reduce((sum, t) => sum + Object.keys(t.gates || {}).length, 0);
+    const passG = col.tickets.reduce((sum, t) => sum + Object.values(t.gates || {}).filter((v) => v === 'success').length, 0);
+    const rate = totalG > 0 ? Math.round((passG / totalG) * 100) : 100;
+    telemetryText = `${rate}% pass`;
+  }
+
+  const cells = lanes.map((lane) => matrixCell(col.stage, lane.key, col.tickets, nowMs, lens, group));
+
   return h(
     'section',
-    { class: `col col-${col.stage}${quiet ? ' col-quiet' : ''}`, 'aria-labelledby': `col-${col.stage}` },
+    { class: `col col-${col.stage}${quiet ? ' col-quiet' : ''}`, 'aria-labelledby': `col-${col.stage}`, 'data-stage': col.stage },
     h(
       'header',
       { class: 'col-head' },
-      h('h2', { id: `col-${col.stage}` }, col.label),
-      h('span', { class: 'col-count', title: `${col.tickets.length} shown, ${col.total} in this stage` }, countText),
+      h(
+        'div',
+        { class: 'col-head-top' },
+        h('h2', { id: `col-${col.stage}`, class: 'col-title' }, col.label),
+        modeBadge(mode),
+        h('span', { class: 'col-count', title: `${col.tickets.length} shown, ${col.total} in this stage` }, countText),
+      ),
+      h('div', { class: 'stage-telemetry', title: telemetryText }, telemetryText),
     ),
-    quiet ? h('p', { class: 'sr-only' }, filtered && col.total > 0 ? 'No matches' : 'No tickets') : list,
+    h('div', { class: 'col-cells' }, ...cells),
   );
 }
 
-function kpi(label, value, tone = '') {
-  return h('div', { class: `kpi ${tone}`.trim() }, h('dt', null, label), h('dd', null, value));
+function macrobandStrip() {
+  return h(
+    'div',
+    { class: 'macroband', 'aria-hidden': 'true' },
+    h('div', { class: 'mb-spacer' }),
+    ...MACROBANDS.map((mb) =>
+      h(
+        'div',
+        { class: `mb-cell mb-${mb.tone}`, 'data-band': mb.id },
+        h('span', { class: 'mb-line', 'aria-hidden': 'true' }),
+        h('span', { class: 'mb-name' }, mb.label),
+      ),
+    ),
+  );
 }
 
-function summaryStrip(ctx) {
+function laneSpine(lanes) {
+  return h(
+    'div',
+    { class: 'matrix-spine', 'aria-hidden': 'true' },
+    h('div', { class: 'spine-head' }, h('span', { class: 'spine-label' }, 'LANE / FLOW')),
+    ...lanes.map((l) =>
+      h(
+        'div',
+        { class: 'lane-head', 'data-lane': l.key },
+        h('span', { class: `lane-dot dot-${l.tone}` }),
+        h('span', { class: 'lane-name' }, l.label),
+        h('span', { class: 'lane-sub' }, l.sub),
+      ),
+    ),
+  );
+}
+
+function summaryLine(ctx) {
   const { state, pending } = ctx;
   const sum = boardSummary(state, pending);
   const totals = state.cost.totals;
   const billed = state.cost.billing?.billed_usd ?? null;
+
   return h(
-    'dl',
-    { class: 'kpis' },
-    kpi('Tickets', formatInteger(sum.total)),
-    kpi('In flight', formatInteger(sum.inFlight)),
-    kpi('In production', formatInteger(sum.prod), 'kpi-good'),
-    kpi('Escalated', formatInteger(sum.escalated), sum.escalated > 0 ? 'kpi-bad' : ''),
-    kpi('Ledger estimate', formatUsd(totals.usd)),
-    kpi('Azure billed', billed === null ? 'not read yet' : formatUsd(billed), billed !== null && totals.halted ? 'kpi-bad' : ''),
+    'div',
+    { class: 'delivery-stat-line' },
+    h('span', { class: 'stat-item' }, h('strong', null, formatInteger(sum.total)), ' tickets'),
+    h('span', { class: 'stat-sep' }, '.'),
+    h('span', { class: 'stat-item' }, h('strong', null, formatInteger(sum.inFlight)), ' in flight'),
+    h('span', { class: 'stat-sep' }, '.'),
+    h('span', { class: 'stat-item tone-good' }, h('strong', null, formatInteger(sum.prod)), ' in production'),
+    h('span', { class: 'stat-sep' }, '.'),
+    h('span', { class: `stat-item${sum.escalated > 0 ? ' tone-bad' : ''}` }, h('strong', null, formatInteger(sum.escalated)), ' escalated'),
+    h('span', { class: 'stat-sep' }, '.'),
+    h('span', { class: 'stat-item' }, formatUsd(totals.usd), ' ledger'),
+    h('span', { class: 'stat-sep' }, '.'),
+    h('span', { class: `stat-item${billed !== null && totals.halted ? ' tone-bad' : ''}` }, billed === null ? 'bill pending' : `${formatUsd(billed)} azure`),
   );
 }
 
@@ -99,7 +319,16 @@ function toolbar(ctx, update) {
     return chip;
   });
 
-  const search = h('input', { id: 'board-search', class: 'input', type: 'search', placeholder: 'Number or title', value: filters.query, autocomplete: 'off', spellcheck: 'false', 'data-fkey': 'search' });
+  const search = h('input', {
+    id: 'board-search',
+    class: 'input',
+    type: 'search',
+    placeholder: 'Number or title',
+    value: filters.query,
+    autocomplete: 'off',
+    spellcheck: 'false',
+    'data-fkey': 'search',
+  });
   search.addEventListener('input', () => {
     filters.query = search.value;
     update();
@@ -130,20 +359,65 @@ function toolbar(ctx, update) {
 export function renderBoard(ctx) {
   const { state, pending, now } = ctx;
   const filters = ui.board;
-  const board = h('div', { class: 'board', role: 'region', 'aria-label': 'Ticket board, scrolls sideways', tabindex: '0' });
+  const lens = filters.lens || 'delivery';
+  const group = filters.group || 'type';
+
+  const boardShell = h('div', { class: 'board-shell' });
+  const boardMatrix = h('div', { class: 'board matrix-grid', role: 'region', 'aria-label': 'Delivery flow matrix board, scrolls sideways', tabindex: '0' });
   const result = h('p', { class: 'sr-only', 'aria-live': 'polite', role: 'status' });
 
   const isFiltered = () => filters.types.size > 0 || filters.query.trim() !== '' || filters.hideOld;
+
   const update = () => {
     const columns = boardColumns(state, pending, filters, now);
-    board.replaceChildren(...columns.map((c) => column(c, now, isFiltered())));
+    const lanes = getLaneKeys(ui.board.group || 'type', state.tickets);
+
+    const stageCols = columns.map((c) => stageColumn(c, now, isFiltered(), ui.board.lens || 'delivery', ui.board.group || 'type', lanes));
+
+    boardMatrix.replaceChildren(laneSpine(lanes), ...stageCols);
+
     const shown = columns.reduce((n, c) => n + c.tickets.length, 0);
     result.textContent = `${shown} ${plural(shown, 'ticket')} shown`;
   };
+
+  const lensControl = segmentedControl(
+    [
+      { value: 'delivery', label: 'Delivery' },
+      { value: 'cost', label: 'Cost' },
+      { value: 'gates', label: 'Gates' },
+    ],
+    lens,
+    (nextLens) => {
+      filters.lens = nextLens;
+      ctx.rerender();
+    },
+  );
+
+  const groupControl = segmentedControl(
+    [
+      { value: 'type', label: 'Type' },
+      { value: 'agent', label: 'Agent' },
+      { value: 'outcome', label: 'Outcome' },
+    ],
+    group,
+    (nextGroup) => {
+      filters.group = nextGroup;
+      ctx.rerender();
+    },
+  );
+
+  const viewControls = h(
+    'div',
+    { class: 'matrix-controls' },
+    h('div', { class: 'ctrl-group' }, h('span', { class: 'ctrl-label' }, 'lens:'), lensControl),
+    h('div', { class: 'ctrl-group' }, h('span', { class: 'ctrl-label' }, 'group:'), groupControl),
+  );
+
   const bar = toolbar(ctx, update);
   update();
 
   const actions = [
+    viewControls,
     ghLink(NEW_TICKET_URL, [icon('plus', { size: 16 }), 'New ticket'], { class: 'btn btn-primary' }),
     ghLink(NEW_BUG_URL, [icon('bug', { size: 16 }), 'Report a bug'], { class: 'btn btn-secondary' }),
   ];
@@ -152,7 +426,7 @@ export function renderBoard(ctx) {
     return h(
       'div',
       { class: 'view' },
-      pageHead({ title: 'Tickets', lede: 'Every ticket from backlog to production.', actions }),
+      pageHead({ title: 'Delivery flow', lede: 'Every ticket from backlog to production.', actions }),
       emptyState(
         'No tickets yet',
         'The board fills as soon as the first issue is opened. Creating a ticket on GitHub is the only way to start one.',
@@ -161,16 +435,21 @@ export function renderBoard(ctx) {
     );
   }
 
+  const ticketCount = state.tickets.length + pending.length;
+  const agentCount = state.agents?.length || 11;
+  const subLine = `${ticketCount} tickets, ${agentCount} agents`;
+
+  boardShell.replaceChildren(macrobandStrip(), boardMatrix);
+
   return h(
     'div',
     { class: 'view view-board' },
-    pageHead({ title: 'Tickets', lede: 'Every ticket from backlog to production. Read only: tickets are created on GitHub, the agents do the rest.', actions }),
-    summaryStrip(ctx),
+    pageHead({ title: 'Delivery flow', lede: subLine, actions }),
+    summaryLine(ctx),
     bar,
     result,
-    board,
+    boardShell,
     state.dropped > 0 ? h('p', { class: 'footnote' }, badge(`${state.dropped} unreadable`, 'warn'), ' ', `${state.dropped} ${plural(state.dropped, 'entry', 'entries')} in state.json could not be read and were skipped.`) : null,
     state.archived > 0 ? h('p', { class: 'footnote' }, `${state.archived} older ${plural(state.archived, 'ticket')} archived by the ledger are not shown.`) : null,
   );
 }
-
