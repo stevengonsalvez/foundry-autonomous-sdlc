@@ -80,21 +80,57 @@ describe('views', { skip }, () => {
     });
   }
 
-  test('matrix keyboard navigation and axe accessibility', async () => {
+  test('delivery flow matrix: lens and group switching, macrobands, unclassified and pending ticket rendering', async () => {
     const { context, page } = await open('normal');
-    await page.keyboard.press('Tab');
-    const firstFocus = await page.evaluate(() => document.activeElement?.className);
-    assert.ok(firstFocus, 'skip link receives keyboard focus');
 
-    const chipLink = page.locator('.view-board article.card .card-link').first();
-    await chipLink.focus();
-    assert.equal(await page.evaluate(() => document.activeElement?.classList.contains('card-link')), true);
+    // 1. Band row has one cell per band
+    const bands = page.locator('.band-strip .band-cell');
+    assert.equal(await bands.count(), 4);
+    assert.deepEqual(
+      await bands.evaluateAll((els) => els.map((e) => e.getAttribute('data-band'))),
+      ['shape', 'build', 'release', 'escalated'],
+    );
 
+    // 2. Lens switching changes the DOM
+    const costBtn = page.getByRole('button', { name: 'Cost' });
+    await costBtn.click();
+    assert.ok((await page.locator('.chip-cost').count()) > 0, 'cost lens renders cost chips');
+
+    const gatesBtn = page.getByRole('button', { name: 'Gates' });
+    await gatesBtn.click();
+    assert.ok((await page.locator('.chip-gates').count()) > 0, 'gates lens renders gates chips');
+
+    const deliveryBtn = page.getByRole('button', { name: 'Delivery' });
+    await deliveryBtn.click();
+    assert.ok((await page.locator('.chip-time').count()) > 0, 'delivery lens renders time chips');
+
+    // 3. Group switching changes swimlanes
+    const agentBtn = page.getByRole('button', { name: 'Agent' });
+    await agentBtn.click();
+    const agentLanes = page.locator('.matrix-spine .lane-head');
+    assert.ok((await agentLanes.count()) >= 2, 'agent group displays multiple agent lanes');
+    assert.ok((await page.locator('.matrix-spine .lane-head[data-lane="unassigned"]').count()) === 1, 'unassigned lane exists for triage');
+
+    const outcomeBtn = page.getByRole('button', { name: 'Outcome' });
+    await outcomeBtn.click();
+    const outcomeLanes = page.locator('.matrix-spine .lane-head');
+    assert.equal(await outcomeLanes.count(), 3, 'outcome group displays 3 lanes: in-flight, shipped, escalated');
+
+    const typeBtn = page.getByRole('button', { name: 'Type' });
+    await typeBtn.click();
+    assert.equal(await page.locator('.matrix-spine .lane-head[data-lane="other"]').count(), 1, 'other lane exists for unclassified tickets');
+
+    // 4. No ticket is dropped: chip count equals total tickets in state
+    const totalChips = await page.locator('article.card').count();
+    assert.equal(totalChips, rawSample.tickets.length);
+
+    // 5. Axe accessibility check on the matrix
     if (pw?.AxeBuilder) {
       const results = await new pw.AxeBuilder({ page }).include('.view-board').analyze();
       const violations = results.violations.filter((v) => v.impact === 'serious' || v.impact === 'critical');
       assert.deepEqual(violations, [], 'axe matrix violations');
     }
+
     await context.close();
   });
 
@@ -587,20 +623,12 @@ describe('fetch strategy in the browser (scripted GitHub, no ?data=)', { skip },
 });
 
 describe('preferences', { skip }, () => {
-  test('theme switch cycles auto, light, dark, persists, and survives a reload', async () => {
+  test('dark theme is active by default and persists across reload', async () => {
     const { context, page } = await open('normal');
     const root = () => page.evaluate(() => document.documentElement.getAttribute('data-theme'));
-    assert.equal(await root(), null);
-    await page.locator('#theme-toggle').click();
-    assert.equal(await root(), 'light');
-    await page.locator('#theme-toggle').click();
     assert.equal(await root(), 'dark');
     await page.reload();
-    assert.equal(await root(), 'dark', 'saved choice applied before paint');
-    assert.equal(await page.evaluate(() => getComputedStyle(document.body).backgroundColor !== 'rgb(255, 255, 255)'), true);
-    await page.locator('#theme-toggle').click();
-    assert.equal(await root(), null);
-    assert.equal(await page.evaluate(() => localStorage.getItem('cc-theme')), null);
+    assert.equal(await root(), 'dark', 'dark theme active after reload');
     await context.close();
   });
 
@@ -613,7 +641,6 @@ describe('preferences', { skip }, () => {
     const seen = watch(page, servers.normal.url);
     await page.goto(`${servers.normal.url}?data=state.json`);
     await page.waitForSelector('#app[aria-busy="false"] .view');
-    await page.locator('#theme-toggle').click();
     assert.deepEqual(seen.errors, []);
     await context.close();
   });

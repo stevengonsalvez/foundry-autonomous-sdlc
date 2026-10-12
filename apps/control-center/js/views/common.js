@@ -59,8 +59,10 @@ export function agentPill(agentName) {
   return h('span', { class: 'agent-tag', title: agentName || 'unassigned' }, tag);
 }
 
-export function segmentedControl(items, current, onChange) {
-  const group = h('div', { class: 'segmented-control', role: 'group' });
+export function segmentedControl(items, current, onChange, ariaLabel = '') {
+  const attrs = { class: 'segmented-control', role: 'group' };
+  if (ariaLabel) attrs['aria-label'] = ariaLabel;
+  const group = h('div', attrs);
   for (const item of items) {
     const val = typeof item === 'string' ? item : item.value;
     const label = typeof item === 'string' ? item : item.label;

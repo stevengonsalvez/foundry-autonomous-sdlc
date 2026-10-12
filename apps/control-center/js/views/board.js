@@ -3,15 +3,12 @@
 import { badge, emptyState, ghLink, h } from '../dom.js';
 import { formatInteger, formatUsd, plural } from '../format.js';
 import { icon } from '../icons.js';
-import { boardColumns, boardSummary, emptyFilters, typesPresent, timeInStage, stageLabel } from '../model.js';
+import { boardColumns, boardSummary, emptyFilters, typesPresent, timeInStage } from '../model.js';
 import { NEW_BUG_URL, NEW_TICKET_URL, limitText } from '../safe.js';
 import { ui } from '../ui.js';
 import {
-  agentPill,
   agentTag,
-  costBar,
   envBadgeFor,
-  escalationBadge,
   externalLabel,
   flagBadges,
   modeBadge,
@@ -20,18 +17,22 @@ import {
   sinceEl,
   ticketGithubUrl,
   ticketHref,
-  typeBadge,
 } from './common.js';
 
 // Macrobands grouping stages into lifecycle domains
 const MACROBANDS = Object.freeze([
-  { id: 'shape', label: 'SHAPE . BUSINESS', stages: ['backlog', 'refining', 'feasible'], tone: 'cyan' },
-  { id: 'build', label: 'BUILD . ENGINEERING', stages: ['tests', 'building', 'review'], tone: 'auto' },
-  { id: 'release', label: 'RELEASE . OPS', stages: ['staging', 'prod'], tone: 'agent' },
-  { id: 'escalated', label: 'ESCALATED', stages: ['escalated'], tone: 'gate' },
+  { id: 'shape', label: 'SHAPE . BUSINESS', span: 3, tone: 'cyan' },
+  { id: 'build', label: 'BUILD . ENGINEERING', span: 3, tone: 'auto' },
+  { id: 'release', label: 'RELEASE . OPS', span: 2, tone: 'info' },
+  { id: 'escalated', label: 'ESCALATED', span: 1, tone: 'gate' },
 ]);
 
-// Execution mode per board stage derived from architecture definitions
+/**
+ * Pipeline stage execution modes (design-time architecture specification):
+ * - AUTO: Autonomous engine loop execution (backlog intake, feasible evaluation, code build, prod publish).
+ * - SIM: Simulated human interaction gate (requirements refinement with simulated user/PO).
+ * - GATE: Quality and safety verification barrier (test designer gate, code review gate, smoke/staging gate, escalation gate).
+ */
 const STAGE_MODES = Object.freeze({
   backlog: 'AUTO',
   refining: 'SIM',
@@ -49,17 +50,7 @@ function getTicketAgent(ticket) {
   if (ticket.agent_runs && ticket.agent_runs.length > 0) {
     return ticket.agent_runs.at(-1).agent;
   }
-  switch (ticket.stage) {
-    case 'backlog': return 'sdlc-orchestrator';
-    case 'refining': return 'sdlc-req-gate';
-    case 'feasible': return 'sdlc-feasibility';
-    case 'tests': return 'sdlc-test-designer';
-    case 'building': return 'sdlc-coder';
-    case 'review': return 'sdlc-reviewer';
-    case 'staging': return 'sdlc-orchestrator';
-    case 'prod': return 'sdlc-ledger';
-    default: return 'sdlc-orchestrator';
-  }
+  return null;
 }
 
 function ticketChip(ticket, nowMs, lens) {
@@ -79,7 +70,7 @@ function ticketChip(ticket, nowMs, lens) {
 
   const chipNum = h('span', { class: 'chip-num' }, ticket.kind === 'pr' ? `PR #${ticket.issue}` : `#${ticket.issue}`);
   const chipDot = h('span', { class: `chip-dot dot-${stateTone}`, 'aria-hidden': 'true' });
-  const chipAgent = h('span', { class: 'chip-agent', title: agentName }, tag);
+  const chipAgent = h('span', { class: 'chip-agent', title: agentName || 'unassigned' }, tag);
 
   let lensContent = null;
   if (lens === 'cost') {
@@ -109,19 +100,25 @@ function ticketChip(ticket, nowMs, lens) {
   const envB = envBadgeFor(ticket);
   const extraBadges = envB ? [envB, ...flags] : flags;
 
-  return h(
-    'article',
-    {
-      class: `card chip-pill card-${stateTone}${ticket.pending ? ' card-pending' : ''}`,
-      'data-stage': ticket.stage,
-      title: `#${ticket.issue}: ${ticket.title || 'Untitled'} (${ticket.stage})`,
-    },
-    chipDot,
+  const pill = h(
+    'div',
+    { class: `chip-pill card-${stateTone}${ticket.pending ? ' card-pending' : ''}` },
     chipNum,
+    chipDot,
     chipAgent,
     link,
     lensContent,
-    extraBadges.length > 0 ? h('span', { class: 'chip-badges' }, ...extraBadges) : null,
+  );
+
+  return h(
+    'article',
+    {
+      class: 'card',
+      'data-stage': ticket.stage,
+      title: `#${ticket.issue}: ${ticket.title || 'Untitled'} (${ticket.stage})`,
+    },
+    pill,
+    extraBadges.length > 0 ? h('div', { class: 'chip-tags' }, ...extraBadges) : null,
   );
 }
 
@@ -140,38 +137,54 @@ function computeStageCounts(tickets) {
 function getLaneKeys(group, tickets) {
   if (group === 'agent') {
     const set = new Set();
-    for (const t of tickets) set.add(getTicketAgent(t));
-    if (set.size === 0) set.add('sdlc-orchestrator');
-    return [...set].sort().map((agent) => ({
+    for (const t of tickets) {
+      const a = getTicketAgent(t);
+      if (a) set.add(a);
+    }
+    const lanes = [...set].sort().map((agent) => ({
       key: agent,
       label: agent.replace(/^sdlc-/, '').toUpperCase(),
       sub: agentTag(agent),
       tone: 'agent',
     }));
+    // Always include an unassigned lane so unassigned and pending tickets are never dropped
+    lanes.push({
+      key: 'unassigned',
+      label: 'UNASSIGNED',
+      sub: 'triage/wait',
+      tone: 'wait',
+    });
+    return lanes;
   }
   if (group === 'outcome') {
     return [
-      { key: 'in-flight', label: 'IN FLIGHT', sub: 'active', tone: 'auto' },
+      { key: 'in-flight', label: 'IN FLIGHT', sub: 'active', tone: 'run' },
       { key: 'shipped', label: 'SHIPPED', sub: 'production', tone: 'done' },
-      { key: 'escalated', label: 'ESCALATED', sub: 'blocked', tone: 'gate' },
+      { key: 'escalated', label: 'ESCALATED', sub: 'blocked', tone: 'block' },
     ];
   }
-  // Default: Type
+  // Default: Type - includes Other so unclassified tickets are never omitted
   return [
-    { key: 'feature', label: 'FEATURE', sub: 'user value', tone: 'cyan' },
-    { key: 'bug', label: 'BUG', sub: 'defect repair', tone: 'gate' },
-    { key: 'maintenance', label: 'MAINTENANCE', sub: 'platform', tone: 'assist' },
+    { key: 'feature', label: 'FEATURE', sub: 'user value', tone: 'info' },
+    { key: 'bug', label: 'BUG', sub: 'defect repair', tone: 'block' },
+    { key: 'maintenance', label: 'MAINTENANCE', sub: 'platform', tone: 'wait' },
+    { key: 'other', label: 'OTHER', sub: 'unclassified', tone: 'agent' },
   ];
 }
 
 function ticketMatchesLane(ticket, laneKey, group) {
-  if (group === 'agent') return getTicketAgent(ticket) === laneKey;
+  if (group === 'agent') {
+    const a = getTicketAgent(ticket);
+    if (laneKey === 'unassigned') return !a;
+    return a === laneKey;
+  }
   if (group === 'outcome') {
     if (laneKey === 'shipped') return ticket.stage === 'prod';
     if (laneKey === 'escalated') return ticket.stage === 'escalated';
     return ticket.stage !== 'prod' && ticket.stage !== 'escalated';
   }
   // Group: Type
+  if (laneKey === 'other') return ticket.type !== 'feature' && ticket.type !== 'bug' && ticket.type !== 'maintenance';
   return ticket.type === laneKey;
 }
 
@@ -189,20 +202,24 @@ function isStageApplicable(stage, laneKey, group) {
 }
 
 function matrixCell(stage, laneKey, tickets, nowMs, lens, group) {
+  const laneTickets = tickets.filter((t) => ticketMatchesLane(t, laneKey, group));
   const applicable = isStageApplicable(stage, laneKey, group);
-  if (!applicable) {
+  // Never swallow real tickets that exist in an out-of-pipeline stage
+  if (!applicable && laneTickets.length === 0) {
     return h(
       'div',
-      { class: 'matrix-cell cell-hatched', 'data-lane': laneKey },
-      h('span', { class: 'cell-hatched-label' }, 'not in pipeline'),
+      { class: 'matrix-cell cell-hatched', 'data-lane': laneKey, 'aria-labelledby': `lane-${laneKey} col-${stage}` },
+      h('span', { class: 'cell-hatched-label' }, 'bypasses stage'),
     );
   }
 
-  const laneTickets = tickets.filter((t) => ticketMatchesLane(t, laneKey, group));
-
   const cell = h(
     'div',
-    { class: `matrix-cell${laneTickets.length === 0 ? ' cell-empty' : ''}`, 'data-lane': laneKey },
+    {
+      class: `matrix-cell${laneTickets.length === 0 ? ' cell-empty' : ''}${!applicable ? ' cell-bypass' : ''}`,
+      'data-lane': laneKey,
+      'aria-labelledby': `lane-${laneKey} col-${stage}`,
+    },
     ...laneTickets.map((t) => ticketChip(t, nowMs, lens)),
   );
   return cell;
@@ -214,7 +231,7 @@ function stageColumn(col, nowMs, filtered, lens, group, lanes) {
   const mode = STAGE_MODES[col.stage] ?? 'AUTO';
   const { inCount, waitCount, blockedCount } = computeStageCounts(col.tickets);
 
-  let telemetryText = `${inCount} in . ${waitCount} wait . ${blockedCount} blocked`;
+  let telemetryText = `${inCount} in . ${waitCount} wait . ${blockedCount} blk`;
   if (lens === 'cost') {
     const stageUsd = col.tickets.reduce((sum, t) => sum + (t.cost?.usd ?? 0), 0);
     telemetryText = formatUsd(stageUsd);
@@ -236,8 +253,12 @@ function stageColumn(col, nowMs, filtered, lens, group, lanes) {
       h(
         'div',
         { class: 'col-head-top' },
-        h('h2', { id: `col-${col.stage}`, class: 'col-title' }, col.label),
-        modeBadge(mode),
+        h(
+          'div',
+          { class: 'col-title-group' },
+          h('h2', { id: `col-${col.stage}`, class: 'col-title' }, col.label),
+          modeBadge(mode),
+        ),
         h('span', { class: 'col-count', title: `${col.tickets.length} shown, ${col.total} in this stage` }, countText),
       ),
       h('div', { class: 'stage-telemetry', title: telemetryText }, telemetryText),
@@ -249,14 +270,13 @@ function stageColumn(col, nowMs, filtered, lens, group, lanes) {
 function macrobandStrip() {
   return h(
     'div',
-    { class: 'macroband', 'aria-hidden': 'true' },
-    h('div', { class: 'mb-spacer' }),
+    { class: 'band-strip', 'aria-hidden': 'true' },
+    h('div', { class: 'band-spacer' }),
     ...MACROBANDS.map((mb) =>
       h(
         'div',
-        { class: `mb-cell mb-${mb.tone}`, 'data-band': mb.id },
-        h('span', { class: 'mb-line', 'aria-hidden': 'true' }),
-        h('span', { class: 'mb-name' }, mb.label),
+        { class: `band-cell band-${mb.id}`, 'data-band': mb.id },
+        h('span', { class: 'band-label' }, mb.label),
       ),
     ),
   );
@@ -265,13 +285,13 @@ function macrobandStrip() {
 function laneSpine(lanes) {
   return h(
     'div',
-    { class: 'matrix-spine', 'aria-hidden': 'true' },
-    h('div', { class: 'spine-head' }, h('span', { class: 'spine-label' }, 'LANE / FLOW')),
+    { class: 'matrix-spine', role: 'presentation' },
+    h('div', { class: 'spine-head' }, h('span', { class: 'spine-label' }, 'SWIMLANE')),
     ...lanes.map((l) =>
       h(
         'div',
-        { class: 'lane-head', 'data-lane': l.key },
-        h('span', { class: `lane-dot dot-${l.tone}` }),
+        { class: 'lane-head', id: `lane-${l.key}`, 'data-lane': l.key },
+        h('span', { class: `lane-dot dot-${l.tone}`, 'aria-hidden': 'true' }),
         h('span', { class: 'lane-name' }, l.label),
         h('span', { class: 'lane-sub' }, l.sub),
       ),
@@ -391,6 +411,7 @@ export function renderBoard(ctx) {
       filters.lens = nextLens;
       ctx.rerender();
     },
+    'Lens',
   );
 
   const groupControl = segmentedControl(
@@ -404,6 +425,7 @@ export function renderBoard(ctx) {
       filters.group = nextGroup;
       ctx.rerender();
     },
+    'Swimlane group',
   );
 
   const viewControls = h(
@@ -436,8 +458,8 @@ export function renderBoard(ctx) {
   }
 
   const ticketCount = state.tickets.length + pending.length;
-  const agentCount = state.agents?.length || 11;
-  const subLine = `${ticketCount} tickets, ${agentCount} agents`;
+  const agentCount = state.agents?.length ?? 0;
+  const subLine = agentCount > 0 ? `${ticketCount} tickets, ${agentCount} agents` : `${ticketCount} tickets`;
 
   boardShell.replaceChildren(macrobandStrip(), boardMatrix);
 

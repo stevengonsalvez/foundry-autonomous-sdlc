@@ -1,6 +1,17 @@
 # Flowtron UI Research and Measurement Analysis
 
-An empirical study of the reference UI layout model, visual density, component anatomy, and measured metrics. Design principles and spatial measurements only. No proprietary code, CSS text, brand assets, or third-party copy are reproduced.
+An empirical study of the reference UI layout model, visual density, component anatomy, and measured metrics.
+
+## Provenance, Licensing, and Implementation Independence
+
+Flowtron has no open-source license. Consequently, strict separation was maintained:
+- **What was studied and adopted**: Structural design principles, spatial discipline, and measured dimensional ratios (lane-by-stage matrix representation, macroband grouping strip, pill chips, dual segmented toggles, tracked uppercase monospace typography, and 1px hairlines).
+- **What was changed and independently redesigned**:
+  - **Tokens**: Zero flowtron token names are used. Our system uses an independent scheme (`--canvas`, `--surface-0..3`, `--edge`, `--edge-subtle`, `--edge-focus`, `--fg`, `--fg-dim`, `--fg-muted`, `--tone-run`, `--tone-wait`, `--tone-block`, `--tone-info`, `--tone-agent`, `--tone-done`).
+  - **Color Palette**: Flowtron's palette (navy hue 255 with teal 165, amber 80, coral 30) was discarded. We built an independent graphite-blue base (hue 240) with custom semantic accents (emerald mint 150, golden amber 65, crimson 25, sky azure 220, electric violet 295, teal 175).
+  - **Class Names**: All component classes use our own names (`.band-strip`, `.band-cell`, `.matrix-grid`, `.matrix-spine`, `.lane-head`, `.matrix-cell`, `.chip-*`, etc.). Zero flowtron classes are used.
+  - **Copy and Visual Assets**: Hatched cell copy is "bypasses stage". Favicon is a custom geometric pulse mark in graphite-blue and sky azure.
+  - **Implementation**: Written from scratch in vanilla ES modules and standard CSS with pure dark theme, zero remote requests, and complete data fidelity.
 
 ## 1. Measured Values and Dimensional Ratios
 

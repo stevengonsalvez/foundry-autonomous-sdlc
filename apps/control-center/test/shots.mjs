@@ -10,7 +10,7 @@ import { startServer } from './dev-server.mjs';
 
 const outDir = process.env.SHOTS_OUT_DIR
   ? resolve(process.env.SHOTS_OUT_DIR).replace(/\/?$/, '/')
-  : fileURLToPath(new URL('../../../docs/proof/', import.meta.url));
+  : fileURLToPath(new URL('../docs/proof/', import.meta.url));
 const MAX_HEIGHT = 3000;
 
 const VIEWS_TO_SHOOT = [
@@ -70,6 +70,22 @@ try {
       await gatesBtn.first().click();
       await page.waitForTimeout(150);
       await snap(page, `${outDir}control-center-board-gates-${size}.png`, width);
+    }
+
+    // Agent group
+    const agentBtn = page.getByRole('button', { name: 'Agent' });
+    if (await agentBtn.count()) {
+      await agentBtn.first().click();
+      await page.waitForTimeout(150);
+      await snap(page, `${outDir}control-center-board-group-agent-${size}.png`, width);
+    }
+
+    // Outcome group
+    const outcomeBtn = page.getByRole('button', { name: 'Outcome' });
+    if (await outcomeBtn.count()) {
+      await outcomeBtn.first().click();
+      await page.waitForTimeout(150);
+      await snap(page, `${outDir}control-center-board-group-outcome-${size}.png`, width);
     }
 
     await context.close();

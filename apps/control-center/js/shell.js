@@ -7,31 +7,6 @@ import { icon } from './icons.js';
 import { freshness, STALE_AFTER_S } from './model.js';
 import { NAV } from './router.js';
 
-const THEME_KEY = 'cc-theme';
-const THEMES = ['auto', 'light', 'dark'];
-const THEME_ICON = { auto: 'auto', light: 'sun', dark: 'moon' };
-
-function readTheme() {
-  try {
-    const saved = localStorage.getItem(THEME_KEY);
-    return saved === 'light' || saved === 'dark' ? saved : 'auto';
-  } catch {
-    return 'auto';
-  }
-}
-
-function writeTheme(theme) {
-  const root = document.documentElement;
-  if (theme === 'auto') root.removeAttribute('data-theme');
-  else root.setAttribute('data-theme', theme);
-  try {
-    if (theme === 'auto') localStorage.removeItem(THEME_KEY);
-    else localStorage.setItem(THEME_KEY, theme);
-  } catch {
-    /* private mode or blocked storage: the choice just lasts for this visit */
-  }
-}
-
 const staleMinutes = STALE_AFTER_S / 60;
 
 export function mountShell({ onRefresh }) {
@@ -40,28 +15,12 @@ export function mountShell({ onRefresh }) {
   const bannerEl = document.getElementById('banner');
   const repoEl = document.getElementById('repo-name');
 
-  // ---- theme
-  let theme = readTheme();
-  const themeButton = h('button', { type: 'button', class: 'icon-btn', id: 'theme-toggle' });
-  const paintTheme = () => {
-    const next = THEMES[(THEMES.indexOf(theme) + 1) % THEMES.length];
-    themeButton.replaceChildren(icon(THEME_ICON[theme], { size: 16 }), h('span', { class: 'icon-btn-text' }, theme === 'auto' ? 'Auto' : theme === 'light' ? 'Light' : 'Dark'));
-    themeButton.setAttribute('aria-label', `Theme: ${theme}. Switch to ${next}.`);
-    themeButton.setAttribute('title', `Theme: ${theme}. Click for ${next}.`);
-  };
-  themeButton.addEventListener('click', () => {
-    theme = THEMES[(THEMES.indexOf(theme) + 1) % THEMES.length];
-    writeTheme(theme);
-    paintTheme();
-  });
-  paintTheme();
-
   // ---- refresh
   const refreshButton = h('button', { type: 'button', class: 'icon-btn', id: 'refresh', 'aria-label': 'Refresh now', title: 'Refresh now' }, icon('refresh', { size: 16 }), h('span', { class: 'icon-btn-text' }, 'Refresh'));
   refreshButton.addEventListener('click', onRefresh);
 
   const fresh = h('div', { class: 'fresh', id: 'freshness' });
-  toolsEl.replaceChildren(fresh, refreshButton, themeButton);
+  toolsEl.replaceChildren(fresh, refreshButton);
 
   // ---- navigation
   const links = new Map();

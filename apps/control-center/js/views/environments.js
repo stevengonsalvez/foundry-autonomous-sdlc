@@ -161,6 +161,51 @@ function historyPanel(state, now) {
   );
 }
 
+function environmentsMatrix(env, now) {
+  const rows = [
+    { target: 'staging', name: 'Staging', row: env.staging, path: '/staging/', siteHref: '../staging/' },
+    { target: 'prod', name: 'Production', row: env.prod, path: '/', siteHref: '../' },
+  ];
+
+  return panel(
+    { id: 'environments-matrix', title: 'Target environments', lede: 'Target environments and current live deployments.', className: 'panel-wide' },
+    table({
+      caption: 'Target environments deployment status matrix',
+      head: ['Environment', 'Version', 'Commit', 'Deployed', 'Gates cleared', 'Run', 'Included changes'],
+      rows: rows.map(({ name, row, path, siteHref }) => {
+        if (!row) {
+          return [
+            h('div', { class: 'env-target-head' }, h('strong', null, name), h('span', { class: 'muted' }, path)),
+            h('span', { class: 'muted' }, '-'),
+            h('span', { class: 'muted' }, '-'),
+            h('span', { class: 'muted' }, '-'),
+            h('span', { class: 'muted' }, 'none'),
+            h('span', { class: 'muted' }, 'none'),
+            h('span', { class: 'muted' }, 'No changes recorded'),
+          ];
+        }
+        const [statusLabel, statusTone] = (row && ROW_STATUS[row.status]) || [row?.status ?? '', 'neutral'];
+        return [
+          h(
+            'div',
+            { class: 'env-target-head' },
+            h('strong', null, name),
+            ' ',
+            statusLabel ? badge(statusLabel, statusTone) : null,
+            h('a', { class: 'env-path-link', href: siteHref }, h('code', null, path)),
+          ),
+          h('span', { class: 'env-version mono' }, row.version ?? 'unversioned'),
+          row.sha ? shaLink(row.sha) : h('span', { class: 'muted' }, '-'),
+          row.at ? timeEl(row.at, now) : h('span', { class: 'muted' }, '-'),
+          gateChips(row.gates_cleared || []),
+          runAnchor(row.run_url, 'Run') ?? h('span', { class: 'muted' }, 'none'),
+          includesList(row.includes || []),
+        ];
+      }),
+    }),
+  );
+}
+
 export function renderEnvironments(ctx) {
   const { state, now } = ctx;
   const env = state.environments;
@@ -174,9 +219,9 @@ export function renderEnvironments(ctx) {
   }
   return h(
     'div',
-    { class: 'view' },
+    { class: 'view view-environments' },
     pageHead({ title: 'Environments', lede: `Staging first, production after smoke and soak. Source: ${env.source}.` }),
-    h('div', { class: 'grid-2' }, envCard({ row: env.staging, previous: null, title: 'Staging', path: '/staging/', siteHref: '../staging/', now }), envCard({ row: env.prod, previous: env.previous_prod, title: 'Production', path: '/', siteHref: '../', now })),
+    environmentsMatrix(env, now),
     rollbackPanel(state, now),
     releasesPanel(state, now),
     historyPanel(state, now),

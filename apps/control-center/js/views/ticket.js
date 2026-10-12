@@ -144,8 +144,9 @@ function gatesPanel(ticket) {
             'span',
             { class: 'gate-text' },
             h('span', { class: 'gate-name' }, GATE_LABELS[g.gate] ?? titleCase(g.gate)),
+            ' ',
             h('span', { class: 'gate-state' }, GATE_TEXT[g.status], g.status === 'pass' && g.firstPass ? ' first try' : ''),
-            g.attempts > 1 ? h('span', { class: 'gate-note' }, `${g.attempts} attempts`) : g.derived ? h('span', { class: 'gate-note' }, 'from verdict') : null,
+            g.attempts > 1 ? [' ', h('span', { class: 'gate-note' }, `${g.attempts} attempts`)] : g.derived ? [' ', h('span', { class: 'gate-note' }, 'from verdict')] : null,
           ),
         ),
       ),
@@ -168,7 +169,12 @@ function costPanel(ticket) {
   const total = Math.max(c.usd, attributed, Number.MIN_VALUE);
   return panel(
     { id: 'cost', title: 'Cost', lede: `Against the ${formatUsd(c.cap_usd)} cap for one issue.` },
-    h('div', { class: 'cost-total' }, h('strong', null, formatUsd(c.usd)), h('span', { class: 'muted' }, `${Math.round(c.cap_used_pct)}% of the cap`)),
+    h(
+      'div',
+      { class: 'cost-total' },
+      h('strong', { class: 'cost-amount' }, formatUsd(c.usd)),
+      h('span', { class: 'cost-pct muted' }, `${Math.round(c.cap_used_pct)}% of the cap`),
+    ),
     costBar(c.usd, c.cap_used_pct, { label: false }),
     h(
       'div',
@@ -178,7 +184,7 @@ function costPanel(ticket) {
     h('ul', { class: 'legend' }, ...parts.map((p) => h('li', null, h('span', { class: `swatch ${p.cls}`, 'aria-hidden': 'true' }), `${p.label} `, h('span', { class: 'num' }, formatUsd(p.usd))))),
     h(
       'dl',
-      { class: 'stats' },
+      { class: 'stats stats-mono cost-table' },
       h('div', { class: 'stat' }, h('dt', null, 'Calls'), h('dd', null, formatInteger(c.calls))),
       h('div', { class: 'stat' }, h('dt', null, 'Tokens in'), h('dd', null, formatInteger(c.tokens_in))),
       h('div', { class: 'stat' }, h('dt', null, 'Tokens out'), h('dd', null, formatInteger(c.tokens_out))),
