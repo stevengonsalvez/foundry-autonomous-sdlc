@@ -2,12 +2,15 @@
 // reproducible:  npm run shots
 
 import { mkdir } from 'node:fs/promises';
+import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { launch, loadPlaywright, openFixed } from './browser.mjs';
 import { startServer } from './dev-server.mjs';
 
-const outDir = fileURLToPath(new URL('../../../docs/proof/', import.meta.url));
+const outDir = process.env.SHOTS_OUT_DIR
+  ? resolve(process.env.SHOTS_OUT_DIR).replace(/\/?$/, '/')
+  : fileURLToPath(new URL('../../../docs/proof/', import.meta.url));
 const MAX_HEIGHT = 3000;
 
 const VIEWS_TO_SHOOT = [
