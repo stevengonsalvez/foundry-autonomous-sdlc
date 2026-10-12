@@ -11,7 +11,7 @@ variable "name" {
 
 variable "mode" {
   type        = string
-  description = "Audit blocks nothing and its decisions are not yet observable; Enforced refuses unlisted hosts (a proxy 403 on HTTPS requests, other clients may see a TLS error)."
+  description = "Audit blocks nothing and its decisions are not yet observable; Enforced refuses unlisted hosts with a proxy 403 and denies all plain HTTP, even to listed hosts."
 
   validation {
     condition     = contains(["Audit", "Enforced"], var.mode)

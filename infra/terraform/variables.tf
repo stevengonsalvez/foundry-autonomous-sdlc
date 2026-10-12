@@ -132,11 +132,11 @@ variable "coder_egress_mode" {
     preview proxy, so Audit and Enforced are an explicit opt-in. "Audit" blocks
     nothing and its decisions are not yet observable (none reached Application
     Insights in the 2026-10-12 runs): it only shows that the policy attaches.
-    "Enforced" refuses every host outside the allow-list (measured: a proxy 403
-    on an HTTPS request; other clients may see a TLS certificate error), so run
-    a coder job on a test issue in Enforced before relying on it
-    (docs/runbook.md, section 9). A change applies to coder versions deployed
-    after it.
+    "Enforced" refuses every host outside the allow-list with a proxy 403 and
+    denies all plain HTTP, even to listed hosts (measured; the coder's apt
+    sources are HTTP, see the gate), so run a coder job on a test issue in
+    Enforced before relying on it (docs/runbook.md, section 9). A change
+    applies to coder versions deployed after it.
   EOT
 
   validation {
