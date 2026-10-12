@@ -58,6 +58,11 @@ export function ParcelPage({ trackingNumber }: { trackingNumber: string }) {
       ? getNewestEvent(state.data.events)
       : undefined;
 
+  const eventsCount =
+    state.status === "success" && Array.isArray(state.data.events)
+      ? state.data.events.length
+      : 0;
+
   return (
     <>
       <a className="back-link" href={HOME_HREF}>
@@ -78,6 +83,11 @@ export function ParcelPage({ trackingNumber }: { trackingNumber: string }) {
             {`Last updated: ${formatDateTime(newestEvent.timestamp)}`}
           </p>
         )}
+        {eventsCount > 0 ? (
+          <p className="parcel-header__events">
+            {`Tracking events: ${eventsCount}`}
+          </p>
+        ) : null}
         {state.status === "success" &&
           (state.data.status === "label_created" ||
             state.data.status === "in_transit" ||
