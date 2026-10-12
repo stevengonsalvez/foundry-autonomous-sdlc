@@ -2,8 +2,9 @@
 Prove the hosted-agent egress guardrail with a throwaway probe agent.
 
 Deploys `egress-probe` (agents/hosted/egress_probe: 0.25 vCPU, 0.5 GiB, 2 minute idle, no role, reads
-nothing secret) with the policy attached, asks it to GET an allowed and a blocked URL, checks the
-outcome against the policy's mode, then force-deletes the probe. A few cents of hosted compute.
+nothing secret) with the policy attached, asks it to GET its two fixed URLs (allowed: registry.npmjs.org,
+blocked: example.com; fixed in the probe so it cannot be aimed elsewhere), checks the outcome against the
+policy's mode, then force-deletes the probe. A few cents of hosted compute.
 
   Enforced: the allowed URL answers (any status but a proxy 403), the blocked URL gets 403.
   Audit:    both answer; the would-be denial is a "Network egress decision" trace in App Insights.
@@ -12,8 +13,7 @@ The policy is read from ARM, so the expectation follows whatever mode is deploye
 observed behaviour matches the mode, 1 when it does not (the report says which URL broke the rule).
 
 Usage:
-  uv run --project agents python scripts/verify_egress.py [--policy-id ID] \\
-      [--allowed https://registry.npmjs.org/] [--blocked https://example.com/] [--keep]
+  uv run --project agents python scripts/verify_egress.py [--policy-id ID] [--keep]
 """
 
 from __future__ import annotations
@@ -63,8 +63,6 @@ def judge(mode: str, allowed: dict[str, Any], blocked: dict[str, Any]) -> list[s
 def main(argv: list[str]) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[1])
     parser.add_argument("--policy-id", default=os.environ.get("EGRESS_POLICY_ID", ""))
-    parser.add_argument("--allowed", default="https://registry.npmjs.org/")
-    parser.add_argument("--blocked", default="https://example.com/")
     parser.add_argument("--keep", action="store_true", help="leave the probe agent deployed")
     args = parser.parse_args(argv)
 
@@ -114,23 +112,27 @@ def main(argv: list[str]) -> int:
         invoke = f"{config.project_endpoint}/agents/{PROBE}/endpoint/protocols/invocations?api-version=v1"
         caps = call("POST", invoke, da.AI_SCOPE, {"op": "caps"})
         print(f"caps {caps.status}: {caps.text()[:1500]}")
-        reply = call("POST", invoke, da.AI_SCOPE, {"op": "probe", "urls": [args.allowed, args.blocked]})
+        reply = call("POST", invoke, da.AI_SCOPE, {"op": "probe"})
         if reply.status != 200:
             print(f"error: probe call {reply.status}: {reply.text()[:500]}", file=sys.stderr)
             return 1
-        allowed, blocked = json.loads(reply.body)["results"]
+        result = json.loads(reply.body)
+        allowed, blocked = result["allowed"], result["blocked"]
         print(json.dumps({"allowed": allowed, "blocked": blocked}, indent=2))
         problems = judge(mode, allowed, blocked)
         for problem in problems:
             print(f"FAIL {problem}")
         if not problems:
-            print(f"PASS {mode}: {args.allowed} allowed, {args.blocked} "
+            print(f"PASS {mode}: {allowed['url']} allowed, {blocked['url']} "
                   f"{'refused with 403' if mode == 'Enforced' else 'let through (audit only)'}")
         return 1 if problems else 0
     finally:
         if not args.keep:
-            foundry._client.agents.delete(PROBE, force=True)
-            print(f"{PROBE} deleted")
+            try:
+                foundry._client.agents.delete(PROBE, force=True)
+                print(f"{PROBE} deleted")
+            except Exception as exc:  # never mask the verdict; the operator deletes by hand
+                print(f"warning: {PROBE} not deleted ({type(exc).__name__}), delete it by hand", file=sys.stderr)
 
 
 if __name__ == "__main__":
