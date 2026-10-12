@@ -13,7 +13,7 @@ import { readFile } from 'node:fs/promises';
 import { extname, join, normalize, resolve, sep } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
-import { makeHostile } from './hostile.mjs';
+import { makeHostile } from '../test/hostile.mjs';
 
 const root = resolve(fileURLToPath(new URL('..', import.meta.url)));
 const fixtures = join(root, 'test', 'fixtures');

@@ -6,7 +6,7 @@
   "type": "module",
   "engines": { "node": ">=22" },
   "scripts": {
-    "dev": "node test/dev-server.mjs",
+    "dev": "node scripts/dev-server.mjs",
     "test": "node --test \"test/**/*.test.mjs\"",
     "shots": "node test/shots.mjs"
   }

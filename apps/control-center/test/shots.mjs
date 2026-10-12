@@ -6,7 +6,7 @@ import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { launch, loadPlaywright, openFixed } from './browser.mjs';
-import { startServer } from './dev-server.mjs';
+import { startServer } from '../scripts/dev-server.mjs';
 
 const outDir = process.env.SHOTS_OUT_DIR
   ? resolve(process.env.SHOTS_OUT_DIR).replace(/\/?$/, '/')

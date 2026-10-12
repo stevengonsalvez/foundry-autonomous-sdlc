@@ -8,7 +8,7 @@ import { after, before, describe, test } from 'node:test';
 import assert from 'node:assert/strict';
 
 import { FIXED_NOW, VIEWS, launch, loadPlaywright, openFixed } from './browser.mjs';
-import { startServer } from './dev-server.mjs';
+import { startServer } from '../scripts/dev-server.mjs';
 import { PAYLOADS, makeHostile } from './hostile.mjs';
 import { rawIssues, rawSample } from './helpers.mjs';
 
