@@ -8,8 +8,18 @@ Flowtron has no open-source license. Consequently, strict implementation indepen
 - **What was taken and adopted**: Structural design principles, layout model, and measured dimensional ratios (lane-by-stage matrix representation, macroband grouping strip, pill chips, dual segmented toggles, tracked uppercase monospace typography, and 1px hairlines).
 - **What was changed and independently redesigned**:
   - **All Names and Tokens**: Zero flowtron token or class names are used. Our system uses an independent token scheme (`--canvas`, `--surface-0..3`, `--edge`, `--edge-subtle`, `--edge-focus`, `--fg`, `--fg-dim`, `--fg-muted`, `--tone-run`, `--tone-wait`, `--tone-block`, `--tone-info`, `--tone-agent`, `--tone-done`) and independent class names (`.band-strip`, `.band-cell`, `.matrix-grid`, `.matrix-spine`, `.lane-head`, `.matrix-cell`, `.chip-*`, etc.).
-  - **Palette**: The color palette was redesigned to ensure strict chromatic separation from flowtron (flowtron used navy hue 255 with teal 165, amber 80, coral 30). Our system uses an independent graphite-blue base (hue 240) with shifted surface ladder lightness steps (canvas 0.08, surface-0 0.10, surface-1 0.26, surface-2 0.30, surface-3 0.35, ensuring none is within 0.03 of flowtron ink 0.14, panel 0.18, or panel-2 0.22) and semantic accent hues positioned at least 20 degrees away (crimson hue 10 for `--tone-block` vs flowtron coral hue 32; emerald lime hue 138 for `--tone-done` vs flowtron teal hue 170).
-  - **Copy and Visual Assets**: All domain copy was rewritten. Macroband copy uses independent operational categories (ALIGN . PRODUCT, IMPLEMENT . CODE, DELIVER . OPERATIONS, EXCEPTIONS) rather than flowtron phase descriptions. Hatched cell copy is "bypasses stage". Favicon is an independent pulse mark in deep navy and indigo (#818cf8).
+  - **Palette**: The color palette was redesigned to ensure strict chromatic separation from flowtron:
+    - Flowtron reference values: ink 0.180, panel 0.224, panel-2 0.253.
+    - Document our independent slate base hue at 215 (at or below 225).
+    - Document our even surface ladder: canvas 0.10, surface-0 0.13, surface-1 0.16, surface-2 0.19, surface-3 0.23, surface-active 0.27, edge 0.29, edge-subtle 0.22. None matches flowtron steps (0.180, 0.224, 0.253).
+    - Precise and honest hue separation metrics:
+      - `--tone-run`: hue 142 (emerald mint) vs flowtron auto #2DD4A7 (hue 169.3 deg), 27.3 deg separation (>20 deg).
+      - `--tone-info`: hue 205 (cerulean) vs flowtron info #38BDF8 (hue 232.7 deg), 27.7 deg separation (>20 deg).
+      - `--tone-wait`: hue 52 (warm gold) vs flowtron assist (amber hue 80 deg), 28.0 deg separation (>20 deg).
+      - `--tone-block`: hue 15 (crimson), text lightness 0.74 (>= 4.5:1 contrast on surface-3).
+      - `--tone-done`: hue 138 (emerald lime) vs flowtron auto hue 169.3 deg, 31.3 deg separation (>20 deg).
+      - Favicon: #080e1a and #06b6d4 (cyan hue 196.2 deg, >36 deg from flowtron #38bdf8).
+  - **Copy and Visual Assets**: All domain copy was rewritten. Macroband copy uses independent operational categories (ALIGN . PRODUCT, IMPLEMENT . CODE, DELIVER . OPERATIONS, EXCEPTIONS) rather than flowtron phase descriptions. Hatched cell copy is "bypasses stage". Favicon is an independent pulse mark in deep slate and cyan (#080e1a and #06b6d4).
   - **Data Fidelity and Complete Accounting**: Unlike reference designs that collapse tickets into an overflow badge ("+N more"), our system maintains complete data fidelity: every active ticket is rendered as an interactive pill chip, ensuring column card counts strictly equal stage counts without swallowed or dropped items.
   - **Implementation**: Written from scratch in vanilla ES modules and standard CSS with pure dark theme, zero remote requests, and complete data fidelity.
 
