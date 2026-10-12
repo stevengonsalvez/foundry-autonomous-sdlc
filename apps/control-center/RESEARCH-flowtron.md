@@ -10,16 +10,17 @@ Flowtron has no open-source license. Consequently, strict implementation indepen
   - **All Names and Tokens**: Zero flowtron token or class names are used. Our system uses an independent token scheme (`--canvas`, `--surface-0..3`, `--edge`, `--edge-subtle`, `--edge-focus`, `--fg`, `--fg-dim`, `--fg-muted`, `--tone-run`, `--tone-wait`, `--tone-block`, `--tone-info`, `--tone-agent`, `--tone-done`) and independent class names (`.band-strip`, `.band-cell`, `.matrix-grid`, `.matrix-spine`, `.lane-head`, `.matrix-cell`, `.chip-*`, etc.).
   - **Palette**: The color palette was redesigned to ensure strict chromatic separation from flowtron:
     - Flowtron reference values: ink 0.180, panel 0.224, panel-2 0.253.
-    - Document our independent slate base hue at 215 (at or below 225).
-    - Document our even surface ladder: canvas 0.10, surface-0 0.13, surface-1 0.16, surface-2 0.19, surface-3 0.23, surface-active 0.27, edge 0.29, edge-subtle 0.22. None matches flowtron steps (0.180, 0.224, 0.253).
-    - Precise and honest hue separation metrics:
-      - `--tone-run`: hue 142 (emerald mint) vs flowtron auto #2DD4A7 (hue 169.3 deg), 27.3 deg separation (>20 deg).
-      - `--tone-info`: hue 205 (cerulean) vs flowtron info #38BDF8 (hue 232.7 deg), 27.7 deg separation (>20 deg).
-      - `--tone-wait`: hue 52 (warm gold) vs flowtron assist (amber hue 80 deg), 28.0 deg separation (>20 deg).
-      - `--tone-block`: hue 15 (crimson), text lightness 0.74 (>= 4.5:1 contrast on surface-3).
-      - `--tone-done`: hue 138 (emerald lime) vs flowtron auto hue 169.3 deg, 31.3 deg separation (>20 deg).
-      - Favicon: #080e1a and #06b6d4 (cyan hue 196.2 deg, >36 deg from flowtron #38bdf8).
-  - **Copy and Visual Assets**: All domain copy was rewritten. Macroband copy uses independent operational categories (ALIGN . PRODUCT, IMPLEMENT . CODE, DELIVER . OPERATIONS, EXCEPTIONS) rather than flowtron phase descriptions. Hatched cell copy is "bypasses stage". Favicon is an independent pulse mark in deep slate and cyan (#080e1a and #06b6d4).
+    - Our system uses an independent slate base hue at 215 (at or below 225).
+    - The surface ladder follows an even progression (canvas 0.10, surface-0 0.13, surface-1 0.16, surface-2 0.19, surface-3 0.23, surface-active 0.27, edge 0.29, edge-subtle 0.22) with measured delta differences against flowtron reference steps (flowtron ink 0.180 vs surface-2 0.190, panel 0.224 vs surface-3 0.230, panel-2 0.253 vs surface-active 0.270 with ΔL of 0.006 to 0.017).
+    - Measured hue separation against all reference accents (minimum 20 degrees OKLCH hue):
+      - `--tone-run`: hue 142 (emerald mint) vs auto #2DD4A7 (hue 169.3 deg): 27.3 deg separation (>20 deg).
+      - `--tone-info`: hue 260 (indigo blue) vs info #38BDF8 (hue 232.7 deg): 27.3 deg separation (>20 deg), vs contract #22D3EE (hue 211.5 deg): 48.5 deg separation (>20 deg).
+      - `--tone-wait`: hue 52 (warm gold) vs assist (amber hue 78.4 deg): 26.4 deg separation (>20 deg).
+      - `--tone-block`: hue 345 (crimson ruby) vs app-4 #FB7185 (hue 13.4 deg): 28.4 deg separation (>20 deg), text lightness 0.74 (>= 4.5:1 contrast on surface-3).
+      - `--tone-agent`: hue 325 (magenta violet) vs app-1 #A78BFA (hue 293.5 deg): 31.5 deg separation (>20 deg).
+      - `--tone-done`: hue 120 (lime green) vs auto #2DD4A7 (hue 169.3 deg): 49.3 deg separation (>20 deg), distinct by 22 deg from `--tone-run` (hue 142).
+      - Favicon: #080e1a and #3b82f6 (blue hue 259.8 deg): 27.1 deg separation from info #38BDF8 (hue 232.7 deg), 48.3 deg from contract #22D3EE (hue 211.5 deg), and 33.7 deg from app-1 #A78BFA (hue 293.5 deg) (>20 deg).
+  - **Copy and Visual Assets**: All domain copy was rewritten. Macroband copy uses independent operational categories (ALIGN . PRODUCT, IMPLEMENT . CODE, DELIVER . OPERATIONS, EXCEPTIONS) rather than flowtron phase descriptions. Hatched cell copy is "bypasses stage". Favicon is an independent pulse mark in deep slate and blue (#080e1a and #3b82f6).
   - **Data Fidelity and Complete Accounting**: Unlike reference designs that collapse tickets into an overflow badge ("+N more"), our system maintains complete data fidelity: every active ticket is rendered as an interactive pill chip, ensuring column card counts strictly equal stage counts without swallowed or dropped items.
   - **Implementation**: Written from scratch in vanilla ES modules and standard CSS with pure dark theme, zero remote requests, and complete data fidelity.
 
