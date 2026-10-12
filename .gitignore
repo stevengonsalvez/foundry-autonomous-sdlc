@@ -30,3 +30,6 @@ backend.tf
 
 # hook/agent session logs
 logs/
+
+# Added by ggshield
+.cache_ggshield
