@@ -124,13 +124,19 @@ variable "assign_deployer_roles" {
 
 variable "coder_egress_mode" {
   type        = string
-  default     = "Audit"
+  default     = "Off"
   description = <<-EOT
-    Egress guardrail for the sdlc-coder hosted agent (preview). "Audit" records
-    would-be denials and blocks nothing, "Enforced" refuses every host outside
-    the allow-list with a proxy 403, "Off" creates no policy (the deploy script
-    then warns that the coder's outbound traffic is unrestricted). A change
-    applies to coder versions deployed after it.
+    Egress guardrail for the sdlc-coder hosted agent (preview, no SLA). "Off"
+    (default) creates no policy: the coder's outbound traffic is unrestricted,
+    and the deploy script says so. No real coder job has yet run behind the
+    preview proxy, so Audit and Enforced are an explicit opt-in. "Audit" blocks
+    nothing and its decisions are not yet observable (none reached Application
+    Insights in the 2026-10-12 runs): it only shows that the policy attaches.
+    "Enforced" refuses every host outside the allow-list (measured: a proxy 403
+    on an HTTPS request; other clients may see a TLS certificate error), so run
+    a coder job on a test issue in Enforced before relying on it
+    (docs/runbook.md, section 9). A change applies to coder versions deployed
+    after it.
   EOT
 
   validation {
@@ -142,5 +148,5 @@ variable "coder_egress_mode" {
 variable "coder_egress_extra_hosts" {
   type        = list(string)
   default     = []
-  description = "Exact host names added to the coder's egress allow-list, for example agy API hosts found in Audit."
+  description = "Exact host names added to the coder's egress allow-list, for example hosts a coder job on a test issue needed in Enforced."
 }

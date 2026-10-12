@@ -91,8 +91,9 @@ module "budget" {
 # Egress allow-list for sdlc-coder (scripts/deploy_agents.py attaches it). Hosts
 # come from the coder's code: git and the GitHub API, npm, the Node and agy
 # downloads, apt, and this stack's Foundry and Key Vault endpoints. agy's own
-# API hosts are not known up front, hence Audit by default: read the would-deny
-# decisions of a real job before switching to Enforced (docs/runbook.md).
+# API hosts are not known up front and no real coder job has run behind the
+# preview proxy, hence Off by default: enable Audit or Enforced explicitly, and
+# run a job on a test issue in Enforced first (docs/runbook.md, section 9).
 module "egress_policy" {
   source = "./modules/egress_policy"
   count  = var.coder_egress_mode == "Off" ? 0 : 1
