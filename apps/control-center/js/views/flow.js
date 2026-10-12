@@ -1,7 +1,7 @@
 // #/flow  How work moves: time in stage, lead time, change failure, work in progress, gates, defects
 // and cost against the cap. Every chart has a table behind it.
 
-import { barChart, dotStrip, rateChart, releaseStrip, stackedStageChart } from '../charts.js';
+import { barChart, defectsChart, dotStrip, rateChart, releaseStrip, stackedStageChart } from '../charts.js';
 import { badge, chartHost, dataTable, emptyState, h, panel, table } from '../dom.js';
 import { formatDuration, formatInteger, formatPercent, formatUsd, parseTime, plural } from '../format.js';
 import { costBand, costRows, SCENARIO_NOTES, scenarioRows, stageDurations, stageLabel } from '../model.js';
@@ -42,7 +42,7 @@ function cyclePanel(state, now) {
     { id: 'cycle', title: 'Cycle time per stage', lede: 'Median time a ticket spends in each stage, then one bar per ticket. Stages still running are drawn faded and left out of the medians.', className: 'panel-wide' },
     stages.length === 0 ? h('p', { class: 'muted' }, 'No finished stages yet.') : chartHost((width) => barChart(width, medianRows, { label: `Median time per stage: ${medianRows.map((r) => `${r.label} ${r.text}`).join(', ')}`, labelChars: 14 })),
     shown.length === 0
-      ? null
+      ? (stages.length > 0 ? dataTable('Show stage medians as a table', table({ caption: 'Median time per stage', head: ['Stage', 'Median time', 'Sample size'], rows: medianRows.map((r) => [r.label, r.text, r.sub]) })) : null)
       : [
           h('h3', null, `Per ticket${perTicket.length > shown.length ? ` (the ${shown.length} most recently updated of ${perTicket.length})` : ''}`),
           chartHost((width) =>
@@ -76,14 +76,15 @@ function cyclePanel(state, now) {
 function leadPanel(state) {
   const lead = state.flow.lead_time;
   const points = lead.by_ticket.map((p) => ({ label: `#${p.issue}`, value: p.seconds }));
+  const dataTab = dataTable('Show lead times as a table', table({ caption: 'Lead time per ticket', head: ['Ticket', 'Lead time'], numeric: [1], rows: lead.by_ticket.map((p) => [issueNumberLink(p.issue), formatDuration(p.seconds)]) }));
   return panel(
     { id: 'lead', title: 'Lead time, issue to production', lede: 'From opening the issue to its first successful production deploy.' },
     h('dl', { class: 'kpis kpis-small' }, kpi('Median', lead.median_s === null ? '-' : formatDuration(lead.median_s)), kpi('Tickets in production', formatInteger(points.length))),
     points.length === 0
-      ? h('p', { class: 'muted' }, 'Nothing has reached production yet.')
+      ? [h('p', { class: 'muted' }, 'Nothing has reached production yet.'), dataTab]
       : [
           chartHost((width) => dotStrip(width, points, { median: lead.median_s, label: `Lead time per ticket, median ${lead.median_s === null ? 'unknown' : formatDuration(lead.median_s)}` })),
-          dataTable('Show lead times as a table', table({ caption: 'Lead time per ticket', head: ['Ticket', 'Lead time'], numeric: [1], rows: lead.by_ticket.map((p) => [issueNumberLink(p.issue), formatDuration(p.seconds)]) })),
+          dataTab,
         ],
   );
 }
@@ -91,15 +92,16 @@ function leadPanel(state) {
 function changeFailurePanel(state) {
   const cf = state.flow.change_failure;
   const releases = [...cf.per_release].sort((a, b) => (parseTime(a.at ?? '') ?? 0) - (parseTime(b.at ?? '') ?? 0));
+  const dataTab = dataTable('Show releases as a table', table({ caption: 'Releases and outcome', head: ['Version', 'Outcome'], rows: releases.map((r) => [r.version ?? 'unversioned', outcomeBadge(r.outcome)]) }));
   return panel(
     { id: 'change-failure', title: 'Change failure rate', lede: 'Share of finished releases that were rolled back. Skipped and pending builds are not counted.' },
     h('dl', { class: 'kpis kpis-small' }, kpi('Failure rate', cf.rate === null ? 'n/a' : formatPercent(cf.rate), cf.rate > 0 ? 'kpi-bad' : ''), kpi('Failed', `${formatInteger(cf.failed)} of ${formatInteger(cf.releases)}`)),
     releases.length === 0
-      ? h('p', { class: 'muted' }, 'No releases yet.')
+      ? [h('p', { class: 'muted' }, 'No releases yet.'), dataTab]
       : [
           chartHost((width) => releaseStrip(width, releases, { label: `Releases oldest to newest: ${releases.map((r) => `${r.version ?? 'unversioned'} ${r.outcome}`).join(', ')}` })),
           h('ul', { class: 'legend' }, ...['ok', 'failed', 'skipped', 'pending'].map((o) => h('li', null, outcomeBadge(o)))),
-          dataTable('Show releases as a table', table({ caption: 'Releases and outcome', head: ['Version', 'Outcome'], rows: releases.map((r) => [r.version ?? 'unversioned', outcomeBadge(r.outcome)]) })),
+          dataTab,
         ],
   );
 }
@@ -117,13 +119,14 @@ function wipPanel(state) {
 
 function gatesPanel(state) {
   const gates = Object.entries(state.flow.gate_first_pass).map(([gate, g]) => ({ gate, pass: g.pass, total: g.total }));
+  const dataTab = dataTable('Show pass rates as a table', table({ caption: 'First attempt pass rate per gate', head: ['Gate', 'Passed', 'Runs', 'Rate'], numeric: [1, 2, 3], rows: gates.map((g) => [h('code', null, g.gate), formatInteger(g.pass), formatInteger(g.total), g.total ? formatPercent(g.pass / g.total) : 'n/a']) }));
   return panel(
     { id: 'gates', title: 'Gate pass rate, first attempt', lede: 'How often a change cleared each check the first time it ran.' },
     gates.length === 0
-      ? h('p', { class: 'muted' }, 'No gate results yet.')
+      ? [h('p', { class: 'muted' }, 'No gate results yet.'), dataTab]
       : [
           chartHost((width) => rateChart(width, gates, { label: `First attempt pass rate: ${gates.map((g) => `${g.gate} ${g.total ? formatPercent(g.pass / g.total) : 'n/a'}`).join(', ')}` })),
-          dataTable('Show pass rates as a table', table({ caption: 'First attempt pass rate per gate', head: ['Gate', 'Passed', 'Runs', 'Rate'], numeric: [1, 2, 3], rows: gates.map((g) => [h('code', null, g.gate), formatInteger(g.pass), formatInteger(g.total), g.total ? formatPercent(g.pass / g.total) : 'n/a']) })),
+          dataTab,
         ],
   );
 }
@@ -133,9 +136,14 @@ function defectsPanel(state) {
   const owners = new Map();
   for (const d of defects) {
     const key = d.owner ?? 'unassigned';
-    const row = owners.get(key) ?? { owner: key, n: 0, times: [] };
-    row.n += 1;
-    if (d.seconds !== null) row.times.push(d.seconds);
+    const row = owners.get(key) ?? { owner: key, count: 0, open: 0, resolved: 0, times: [] };
+    row.count += 1;
+    if (d.seconds !== null) {
+      row.resolved += 1;
+      row.times.push(d.seconds);
+    } else {
+      row.open += 1;
+    }
     owners.set(key, row);
   }
   const median = (xs) => {
@@ -144,17 +152,49 @@ function defectsPanel(state) {
     const mid = Math.floor(s.length / 2);
     return s.length % 2 ? s[mid] : (s[mid - 1] + s[mid]) / 2;
   };
+  const ownerRows = [...owners.values()].map((o) => ({
+    ...o,
+    median: median(o.times),
+  })).sort((a, b) => b.count - a.count);
+
+  const dataTab = dataTable(
+    'Show defects as a table',
+    table({
+      caption: 'Bugs with owner, severity and resolution time',
+      head: ['Ticket', 'Owner', 'Severity', 'Resolution'],
+      rows: defects.map((d) => [
+        issueNumberLink(d.issue),
+        d.owner ?? '-',
+        d.severity ? badge(d.severity, 'warn') : '-',
+        d.seconds === null ? h('span', { class: 'muted' }, 'open') : formatDuration(d.seconds),
+      ]),
+    }),
+  );
+
   return panel(
     { id: 'defects', title: 'Defects: owner and resolution time', lede: 'Bugs only. Resolution time runs from opening the issue to its production deploy; open bugs have none.' },
     defects.length === 0
-      ? h('p', { class: 'muted' }, 'No bugs triaged yet.')
+      ? [h('p', { class: 'muted' }, 'No bugs triaged yet.'), dataTab]
       : [
-          h('div', { class: 'owner-tiles' }, ...[...owners.values()].map((o) => h('div', { class: 'owner-tile' }, h('span', { class: 'owner-name' }, o.owner), h('span', { class: 'owner-count' }, `${o.n} ${plural(o.n, 'bug')}`), h('span', { class: 'owner-median' }, o.times.length ? `median ${formatDuration(median(o.times))}` : 'none resolved')))),
-          table({
-            caption: 'Bugs with owner, severity and resolution time',
-            head: ['Ticket', 'Owner', 'Severity', 'Resolution'],
-            rows: defects.map((d) => [issueNumberLink(d.issue), d.owner ?? '-', d.severity ? badge(d.severity, 'warn') : '-', d.seconds === null ? h('span', { class: 'muted' }, 'open') : formatDuration(d.seconds)]),
-          }),
+          h(
+            'div',
+            { class: 'owner-tiles' },
+            ...ownerRows.map((o) =>
+              h(
+                'div',
+                { class: 'owner-tile' },
+                h('span', { class: 'owner-name' }, o.owner),
+                h('span', { class: 'owner-count' }, `${o.count} ${plural(o.count, 'bug')}`),
+                h('span', { class: 'owner-median' }, o.times.length ? `median ${formatDuration(o.median)}` : 'none resolved'),
+              ),
+            ),
+          ),
+          chartHost((width) =>
+            defectsChart(width, ownerRows, {
+              label: `Defects by owner: ${ownerRows.map((o) => `${o.owner} ${o.count} ${plural(o.count, 'bug')}`).join(', ')}`,
+            }),
+          ),
+          dataTab,
         ],
   );
 }
@@ -164,20 +204,40 @@ function costPanel(state) {
   const rows = costRows(state)
     .sort((a, b) => b.usd - a.usd)
     .slice(0, TOP);
+  const chart = chartHost((width) =>
+    barChart(
+      width,
+      rows.map((r) => ({
+        label: `#${r.issue} ${r.title}`,
+        value: r.usd,
+        text: formatUsd(r.usd),
+        sub: `${Math.round(r.pct)}%`,
+        cls: `fill-${costBand(r.pct)}`,
+      })),
+      { label: 'Cost per ticket against the per-issue cap', marker: { value: cap, label: `cap ${formatUsd(cap)}` }, labelChars: 26 },
+    ),
+  );
+  const dataTab = dataTable(
+    'Show costs as a table',
+    table({
+      caption: 'Cost per ticket',
+      head: ['Ticket', 'Cost', 'Of cap'],
+      numeric: [1, 2],
+      rows: rows.map((r) => [issueNumberLink(r.issue), formatUsd(r.usd), `${Math.round(r.pct)}%`]),
+    }),
+  );
+
   return panel(
-    { id: 'cost-cap', title: 'Cost per issue against the cap', lede: `The line marks the ${formatUsd(cap)} cap for one issue. The ${rows.length} costliest tickets${state.tickets.length > rows.length ? ` of ${state.tickets.length}` : ''}.` },
-    rows.length === 0
-      ? h('p', { class: 'muted' }, 'No spend yet.')
-      : [
-          chartHost((width) =>
-            barChart(
-              width,
-              rows.map((r) => ({ label: `#${r.issue} ${r.title}`, value: r.usd, text: formatUsd(r.usd), sub: `${Math.round(r.pct)}%`, cls: `fill-${costBand(r.pct)}` })),
-              { label: 'Cost per ticket against the per-issue cap', marker: { value: cap, label: `cap ${formatUsd(cap)}` }, labelChars: 26 },
-            ),
-          ),
-          dataTable('Show costs as a table', table({ caption: 'Cost per ticket', head: ['Ticket', 'Cost', 'Of cap'], numeric: [1, 2], rows: rows.map((r) => [issueNumberLink(r.issue), formatUsd(r.usd), `${Math.round(r.pct)}%`]) })),
-        ],
+    {
+      id: 'cost-per-ticket',
+      title: 'Cost per issue against the cap',
+      lede: `The line marks the ${formatUsd(cap)} cap for one issue. The ${rows.length} costliest tickets${state.tickets.length > rows.length ? ` of ${state.tickets.length}` : ''}.`,
+    },
+    h(
+      'div',
+      { id: 'cost-cap', class: 'cost-cap-inner' },
+      rows.length === 0 ? [h('p', { class: 'muted' }, 'No spend yet.'), dataTab] : [chart, dataTab],
+    ),
   );
 }
 
