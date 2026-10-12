@@ -51,18 +51,28 @@ The PAT belongs to the repo owner `stevengonsalvez`. It is used only against `st
 
 ## Egress
 
-`sdlc-coder` runs untrusted code (agy, `npm ci`, the tests it writes), so its hosted agent version carries an egress policy: the account RAI policy `sdlc-coder-egress` (`Microsoft.CognitiveServices/accounts/raiPolicies@2026-05-15-preview`, module `infra/terraform/modules/egress_policy`), attached as `rai_config` by `scripts/deploy_agents.py`. Default action Deny, one exact-host `Fqdn` Allow rule per host the coder's code calls:
+`sdlc-coder` runs untrusted code (agy, `npm ci`, the tests it writes). An egress policy on its hosted agent version can limit where that code connects. It is optional, preview (no SLA) and **off by default** (`coder_egress_mode = "Off"`): no real coder job has run behind the platform proxy, so enabling it is an explicit decision taken after the gate in `docs/runbook.md`, section 9.
+
+When on, it is the account RAI policy `sdlc-coder-egress` (`Microsoft.CognitiveServices/accounts/raiPolicies@2026-05-15-preview`, module `infra/terraform/modules/egress_policy`), attached as `rai_config` by `scripts/deploy_agents.py`: default action Deny, one exact-host `Fqdn` Allow rule per host the coder's code calls.
 
 | Host | Why |
 |------|-----|
 | `github.com`, `api.github.com` | clone, fetch, push; issues, PRs, owner lookup |
-| `registry.npmjs.org` | `npm ci` |
+| `registry.npmjs.org` | `npm ci` (every resolved URL in `app/package-lock.json` is on it) |
 | `nodejs.org` | node 22 download and `SHASUMS256.txt` |
-| `deb.debian.org` | `apt-get install git ca-certificates` |
-| `antigravity.google`, `antigravity-cli-auto-updater-974169037036.us-central1.run.app` | agy installer and the binary it downloads |
+| `deb.debian.org` | `apt-get install git ca-certificates`, over HTTPS only (see below) |
+| `antigravity.google`, `antigravity-cli-auto-updater-974169037036.us-central1.run.app` | agy installer and its release manifest |
+| `storage.googleapis.com` | the agy binary the manifest points to; one host for every bucket |
 | `<account>.services.ai.azure.com`, `<vault>.vault.azure.net` | the fallback model loop; secrets |
 
-Platform connectivity (managed identity, telemetry) is allowed by the service without rules. agy's own API hosts are not known from the code, so the policy starts in `Audit` (nothing blocked, would-be denials logged) and moves to `Enforced` (unlisted hosts get a proxy 403, measured 2026-10-12) only after a real job shows no needed host is missing (runbook section 9); hosts found that way go in `coder_egress_extra_hosts`. The orchestrator and ledger run only this repository's code and have no policy. A policy binds to an agent version: a change reaches the coder only through a new version and new sessions.
+What the platform does, measured on 2026-10-12 (details and not-measured items in the runbook):
+
+- With a policy attached, a proxy terminates TLS for every HTTPS host (its CA is in the sandbox trust store). With no policy attached it is not in the path at all.
+- **Audit blocks nothing**, and its would-be denials are not yet observable: none reached Application Insights. It still puts the traffic behind the proxy.
+- **Enforced** answers an unlisted HTTPS host with a proxy 403 carrying an `x-deny-reason` header, and denies all plain HTTP on port 80, including to listed hosts. The coder's `apt-get update` uses HTTP sources, so it fails (exit 100) until the sources are rewritten to HTTPS, which was measured to work. Only TCP 80 and 443 leave the sandbox; the rules do not live in the container's network namespace (flushing them as root changed nothing).
+- The allow-list limits destinations, not misuse of allowed hosts: a `git push` with the PAT, an `npm publish` with planted credentials, or an upload to any bucket on `storage.googleapis.com` still works. The proxy reads the traffic it terminates (inference: not measured what it logs), and DNS is answered for any public name (a tunnelling channel is an inference, not measured).
+
+Platform connectivity (managed identity token, Key Vault, model calls) was measured to keep working under Enforced with the two Azure hosts above. A policy binds to an agent version, and the deploy script puts the policy's mode and a hash of its rules in the coder's `EGRESS_FINGERPRINT`, so any change reaches the coder only through a new version and new sessions. The orchestrator and ledger run only this repository's code and have no policy.
 
 ## State machine
 
