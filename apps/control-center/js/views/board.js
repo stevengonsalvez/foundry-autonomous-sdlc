@@ -110,7 +110,7 @@ function ticketChip(ticket, nowMs, lens) {
   const pill = h(
     'div',
     { class: `chip-pill card-${stateTone}${ticket.pending ? ' card-pending' : ''}` },
-    h('div', { class: 'chip-head' }, chipNum, chipDot, chipAgent, lensContent),
+    h('div', { class: 'chip-head' }, chipNum, chipDot, h('span', { class: 'sr-only' }, stateTone), chipAgent, lensContent),
     h('div', { class: 'chip-body' }, link),
   );
 
@@ -257,7 +257,7 @@ function stageColumn(col, nowMs, filtered, lens, group, lanes) {
     { class: `col col-${col.stage}${quiet ? ' col-quiet' : ''}`, role: 'row', 'data-stage': col.stage },
     h(
       'header',
-      { class: 'col-head', role: 'columnheader' },
+      { class: 'col-head', role: 'rowheader' },
       h(
         'div',
         { class: 'col-head-top' },
@@ -298,7 +298,7 @@ function laneSpine(lanes) {
     ...lanes.map((l) =>
       h(
         'div',
-        { class: 'lane-head', id: `lane-${l.key}`, 'data-lane': l.key, role: 'rowheader' },
+        { class: 'lane-head', id: `lane-${l.key}`, 'data-lane': l.key, role: 'columnheader' },
         h('span', { class: `lane-dot dot-${l.tone}`, 'aria-hidden': 'true' }),
         h('span', { class: 'lane-name' }, l.label),
         h('span', { class: 'lane-sub' }, l.sub),
@@ -391,7 +391,7 @@ export function renderBoard(ctx) {
   const group = filters.group || 'type';
 
   const boardShell = h('div', { class: 'board-shell' });
-  const boardMatrix = h('div', { class: 'board matrix-grid', role: 'grid', 'aria-label': 'Delivery flow matrix board, scrolls sideways', tabindex: '0' });
+  const boardMatrix = h('div', { class: 'board matrix-grid', role: 'table', 'aria-label': 'Delivery flow matrix board, scrolls sideways', tabindex: '0' });
   const result = h('p', { class: 'sr-only', 'aria-live': 'polite', role: 'status' });
 
   const isFiltered = () => filters.types.size > 0 || filters.query.trim() !== '' || filters.hideOld;
