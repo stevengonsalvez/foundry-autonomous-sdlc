@@ -24,7 +24,7 @@ variable "allowed_hosts" {
   description = "Exact host names the agent may reach (one Fqdn Allow rule each); everything else is denied."
 
   validation {
-    condition     = length(var.allowed_hosts) > 0 && alltrue([for h in var.allowed_hosts : can(regex("^[a-z0-9]([a-z0-9.-]*[a-z0-9])?$", h))])
+    condition     = length(var.allowed_hosts) > 0 && length(var.allowed_hosts) <= 100 && alltrue([for h in var.allowed_hosts : can(regex("^[a-z0-9]([a-z0-9.-]*[a-z0-9])?$", h))])
     error_message = "allowed_hosts must be non-empty lowercase host names (no scheme, port, path or wildcard)."
   }
 }

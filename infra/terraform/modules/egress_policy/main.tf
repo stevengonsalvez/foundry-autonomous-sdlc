@@ -35,9 +35,10 @@ resource "azapi_resource" "this" {
         description   = "sdlc-coder allow-list (docs/architecture.md, Egress)"
         mode          = var.mode
         defaultAction = "Deny"
+        # Index prefix: truncated or dash-mapped host names cannot collide.
         rules = [
-          for host in var.allowed_hosts : {
-            name     = substr(replace(host, ".", "-"), 0, 64)
+          for i, host in var.allowed_hosts : {
+            name     = format("allow-%02d-%s", i, substr(replace(host, ".", "-"), 0, 55))
             ruleType = "Fqdn"
             match    = { host = host }
             action   = { actionType = "Allow" }
@@ -46,6 +47,4 @@ resource "azapi_resource" "this" {
       }
     }
   }
-
-  response_export_values = ["properties.egressPolicy.mode"]
 }
