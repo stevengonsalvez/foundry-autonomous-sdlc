@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import dataclasses
 import datetime
 import io
 import json
@@ -27,6 +28,8 @@ ROLE_GUIDS = {"Key Vault Secrets User": "00000000-0000-4000-8000-00000000a001",
               "Azure AI User": "00000000-0000-4000-8000-00000000a002",
               "Cost Management Reader": "00000000-0000-4000-8000-00000000a003"}
 
+POLICY = (f"/subscriptions/{SUB}/resourceGroups/rg-fsdlcd-demo/providers/Microsoft.CognitiveServices/"
+          "accounts/aif-fsdlcd/raiPolicies/sdlc-coder-egress")
 CONFIG = da.Config(project_endpoint=ENDPOINT, key_vault_uri=KV, subscription_id=SUB,
                    resource_group="rg-fsdlcd-demo", github_owner="stevengonsalvez")
 
@@ -90,15 +93,15 @@ class FakeFoundry:
         return [a for a in (self.get_agent(n) for n in sorted(self.agents)) if a]
 
     def create_hosted_version(self, name: str, *, cpu: str, memory: str, idle_minutes: int, env: dict[str, str],
-                              code: bytes, sha256: str, description: str) -> str:
+                              code: bytes, sha256: str, description: str, rai_policy: str = "") -> str:
         agent = self.agents.setdefault(name, {"versions": [], "principal_id": f"pid-{name}"})
-        key = (cpu, memory, idle_minutes, tuple(sorted(env.items())), sha256)
+        key = (cpu, memory, idle_minutes, tuple(sorted(env.items())), sha256, rai_policy)
         if agent["versions"] and agent["versions"][-1]["key"] == key:
             return agent["versions"][-1]["version"]
         version = str(len(agent["versions"]) + 1)
         agent["versions"].append({"version": version, "key": key, "status": "creating", "polls": 0})
         self.created.append({"name": name, "cpu": cpu, "memory": memory, "idle": idle_minutes, "env": env,
-                             "sha256": sha256,
+                             "sha256": sha256, "rai_policy": rai_policy,
                              "size": len(code)})
         return version
 
@@ -127,7 +130,7 @@ class FakeFoundry:
 
 
 def make(dry_run: bool = False, foundry: FakeFoundry | None = None, az: FakeAz | None = None,
-         http: FakeHttp | None = None) -> tuple[da.Deployer, io.StringIO, SimpleNamespace]:
+         http: FakeHttp | None = None, config: da.Config = CONFIG) -> tuple[da.Deployer, io.StringIO, SimpleNamespace]:
     out = io.StringIO()
     record = SimpleNamespace(foundry=foundry or FakeFoundry(), az=az or FakeAz(), http=http or FakeHttp(),
                              commands=[], tokens=[], sleeps=[])
@@ -141,7 +144,7 @@ def make(dry_run: bool = False, foundry: FakeFoundry | None = None, az: FakeAz |
         return f"token-{scope}"
 
     deployer = da.Deployer(
-        config=CONFIG, foundry=record.foundry, az=record.az, http=record.http, token=token, run=run,
+        config=config, foundry=record.foundry, az=record.az, http=record.http, token=token, run=run,
         console=da.Console(out), dry_run=dry_run, sleep=record.sleeps.append,
         zip_builders={da.ORCHESTRATOR: lambda: b"orchestrator-zip", da.CODER: lambda: b"coder-zip",
                       da.LEDGER: lambda: b"ledger-zip"},
@@ -169,6 +172,16 @@ def test_config_falls_back_to_terraform_outputs() -> None:
         da.Config.resolve({}, terraform_outputs=lambda: {k: v for k, v in outputs.items() if k != "key_vault_uri"})
     with pytest.raises(da.DeployError, match="project endpoint"):
         da.Config.resolve({"FOUNDRY_PROJECT_ENDPOINT": "https://x.example.com/nope"}, terraform_outputs=lambda: outputs)
+
+
+def test_config_reads_the_egress_policy_from_env_or_terraform() -> None:
+    env = {"FOUNDRY_PROJECT_ENDPOINT": ENDPOINT, "KEY_VAULT_URI": KV, "AZURE_SUBSCRIPTION_ID": SUB,
+           "AZURE_RESOURCE_GROUP": "rg-fsdlcd-demo", "EGRESS_POLICY_ID": POLICY}
+    assert da.Config.resolve(env, terraform_outputs=lambda: pytest.fail("not needed")).egress_policy_id == POLICY
+    outputs = {"foundry_project_endpoint": {"value": ENDPOINT}, "key_vault_uri": {"value": KV},
+               "azure_subscription_id": {"value": SUB}, "resource_group_name": {"value": "rg-fsdlcd-demo"},
+               "egress_policy_id": {"value": POLICY}}
+    assert da.Config.resolve({}, terraform_outputs=lambda: outputs).egress_policy_id == POLICY
 
 
 # -- connection --------------------------------------------------------------------------------
@@ -317,6 +330,21 @@ def test_hosted_dry_run_builds_zips_but_creates_nothing() -> None:
     assert rec.foundry.created == []
     assert "would create sdlc-coder" in out.getvalue()
     assert "cpu=2 memory=4Gi idle_timeout=30m" in out.getvalue()
+
+
+def test_hosted_attaches_the_egress_policy_to_the_coder_only() -> None:
+    deployer, out, rec = make(config=dataclasses.replace(CONFIG, egress_policy_id=POLICY))
+    deployer.hosted(da.DEFAULT_SIZES, timeout_s=600)
+    attached = {c["name"]: c["rai_policy"] for c in rec.foundry.created}
+    assert attached == {da.CODER: POLICY, da.ORCHESTRATOR: "", da.LEDGER: ""}
+    assert "warning" not in out.getvalue()
+
+
+def test_hosted_warns_when_the_coder_has_no_egress_policy() -> None:
+    deployer, out, rec = make()
+    deployer.hosted({da.CODER: da.DEFAULT_SIZES[da.CODER]}, timeout_s=600)
+    assert rec.foundry.created[0]["rai_policy"] == ""
+    assert "warning: sdlc-coder has no egress policy" in out.getvalue()
 
 
 def test_real_zip_builders_load_from_the_repo() -> None:
@@ -593,6 +621,10 @@ def test_sdk_facade_maps_agents_versions_and_routines() -> None:
     assert definition.session_configuration.idle_timeout_seconds == datetime.timedelta(minutes=30)
     assert definition.code_configuration.dependency_resolution == "remote_build"
     assert definition.protocol_versions[0].protocol == "invocations"
+    assert definition.rai_config is None
+    sdk.create_hosted_version("sdlc-coder", cpu="2", memory="4Gi", idle_minutes=30, env={}, code=b"zip",
+                              sha256="abc", description="d", rai_policy=POLICY)
+    assert agents.created[1]["definition"].rai_config.rai_policy_name == POLICY
     assert sdk.get_version("sdlc-coder", "4")["error"]["message"] == "bad"
 
     assert sdk.get_routine("missing") is None
