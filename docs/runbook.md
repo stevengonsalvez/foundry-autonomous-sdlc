@@ -304,15 +304,63 @@ The allow-list, rewritten by root before every agy call (its sha256 is logged): 
 
 **Commits.** Unsigned by design: there is no signing key in the sandbox, and the branch ruleset deliberately has no signed-commit rule (adding one would block every agent push). The author is `foundry-autonomous-sdlc` with the owner's GitHub noreply address (looked up at run time) or `noreply@users.noreply.github.com`. Messages are conventional commits: `test: add failing tests for #N` first, then `feat:` or `fix:`; maintenance commits are `test: repair stale tests for #N`. The PAT reaches git only for clone, fetch and push, through `GIT_ASKPASS` (a token-free script in a fresh root-only directory, deleted after each call); it never reaches `.git/config`, the remote URL or a log.
 
-**Egress allow-list (preview).** The coder's hosted agent version carries the policy `sdlc-coder-egress` (hosts and reasons in `docs/architecture.md`, Egress). Terraform variable `coder_egress_mode`: `Audit` (default) logs would-be denials and blocks nothing, `Enforced` refuses every unlisted host with a proxy 403, `Off` creates no policy, and the deploy script then warns that the coder's outbound traffic is unrestricted. After changing it, apply terraform and redeploy the coder (`deploy_agents.py hosted --only sdlc-coder`); running sessions keep the old version. The deploy script reads the policy and writes its mode and a hash of its rules into the coder's version description, so a mode or host change always creates a new version; a policy id that does not resolve fails the deploy. For `Off` the order is reversed: redeploy the coder with `EGRESS_POLICY_ID` unset first, then apply, so no live version references a deleted policy. Prove the policy behaves as its mode says with a throwaway probe agent (0.25 vCPU, about a cent; deleted afterwards, `--keep` leaves it):
+### Egress allow-list (preview, off by default)
 
-```bash
-uv run --project agents python scripts/verify_egress.py
-```
+The coder's hosted agent version can carry the egress policy `sdlc-coder-egress` (hosts and reasons in `docs/architecture.md`, Egress). Terraform variable `coder_egress_mode`:
 
-It deploys `egress-probe` with the policy attached, GETs `https://registry.npmjs.org/` (allowed) and `https://example.com/` (unlisted), and exits 0 when Enforced refuses the second with 403 or Audit lets both through. The probe's URLs are fixed in its code and it returns status codes and exception class names only. Measured on 2026-10-12: Audit, both URLs answered 200; Enforced, npm 200 and example.com 403 (the same URL answered 200 under Audit two minutes earlier, so the 403 is the platform proxy). The probe ran as root with `CAP_NET_ADMIN` and no proxy variables: the proxy is transparent to the agent.
+| Value | Effect |
+|-------|--------|
+| `Off` (default) | No policy. The coder's outbound traffic is unrestricted, as before, and the deploy script says so. Measured: with no policy attached the platform proxy is not in the path. |
+| `Audit` | Blocks nothing. Decisions are **not yet observable** (none reached Application Insights in five minutes). It puts the coder's HTTPS traffic behind the proxy, so it only shows that the policy attaches. |
+| `Enforced` | Refuses every host outside the list. Measured results below. Not enabled anywhere: see the gate. |
 
-To move to Enforced: run one real coder job in Audit and collect the hosts it contacted that are not on the list, add the needed ones to `coder_egress_extra_hosts`, then set `coder_egress_mode = "Enforced"`, apply, redeploy the coder and run `verify_egress.py`. Caveat: in the 2026-10-12 runs no egress decision (audit or deny) reached the project's Application Insights within five minutes; the request telemetry carries no egress fields. Until the platform exposes them, the would-deny list has to come from a job run in Enforced on a test issue: a missing host shows up as a job failing at install, clone or agy setup with an HTTP 403 in its log.
+**Enabling Enforced: run a coder job on a test issue in Enforced first.** Audit cannot tell you what is missing, so a missing host shows up only as a failing job.
+
+1. In a stack where a failed coder is harmless (routine disabled, or a non-production stack), set `coder_egress_mode = "Enforced"` and apply terraform.
+2. Redeploy the coder: `uv run --project agents python scripts/deploy_agents.py hosted --only sdlc-coder`. It reads the policy before anything is deployed, refuses a policy from another account, and writes the mode and a rule hash into the version's `EGRESS_FINGERPRINT`.
+3. Run `uv run --project agents python scripts/verify_egress.py`. It must print `PASS Enforced` (it also fails unless the live coder carries the policy and fingerprint).
+4. Start a job on a test issue and read the job log. A missing host is an HTTP 403 (`git`: `The requested URL returned error: 403`, Node: a 403 response, npm: `E403`) at install, clone or agy setup. Add each needed host to `coder_egress_extra_hosts`, apply, redeploy, repeat until a job reaches a pull request.
+5. Only then leave it on in production.
+
+**Gate before Enforced is enabled (open):**
+
+| # | Gate | Status |
+|---|------|--------|
+| 1 | `Toolchain.ensure_git` runs `apt-get update` against `http://deb.debian.org`; plain HTTP is denied for every host, so it exits 100 and the job fails at setup. Rewriting the URI to `https://deb.debian.org` in `/etc/apt/sources.list.d/debian.sources` was measured to work. | Not changed in the coder: open |
+| 2 | A full coder job on a test issue passes in Enforced (needs spend and a token). | Not run: open |
+| 3 | agy's runtime API hosts and whether agy trusts the proxy CA. The coder's scrubbed environment passes `SSL_CERT_FILE`, `SSL_CERT_DIR` and `NODE_EXTRA_CA_CERTS` but not `REQUESTS_CA_BUNDLE` or `GRPC_DEFAULT_SSL_ROOTS_FILE_PATH`, which the platform also sets. | Not measured: open |
+| 4 | Accept that `storage.googleapis.com` is allowed for every bucket. | Decision: open |
+
+**Operating it.** Apply terraform, then redeploy the coder (running sessions keep their old version). `deploy_agents.py hosted` fails when the coder has no resolved policy: set `EGRESS_POLICY_ID` to a policy id or to `off` (what terraform outputs for `Off`), or pass `--no-egress-policy` to deploy it open on purpose. For `Off` the order is reversed: redeploy the coder with `--no-egress-policy` first, then apply, so no live version references a deleted policy.
+
+**Verifying it.** `scripts/verify_egress.py` deploys a throwaway `egress-probe` (0.25 vCPU, no role, nothing secret; deleted afterwards, a stale one first) with the policy attached, checks that version reports the policy, and has it GET two fixed URLs without following redirects: `https://registry.npmjs.org/` (allowed) and `https://example.com/` (unlisted). Enforced passes when the second gets a 403 carrying the proxy's `x-deny-reason` header (an origin's own 403 does not count); Audit passes when both answer 200 to 399. `--no-coder-check` verifies the policy alone, for a stack where the coder is not deployed. A first call right after activation sometimes answers `409 agent_version_failed`; the script retries it.
+
+#### Measured on 2026-10-12
+
+One-off agents on the demo stack (`egress-probe`, and a throwaway `egress-measure` with fixed stages that returned only status codes, classifications, counts and header or variable names, never tokens, bodies or secrets; the latter is not kept in the repository). All deleted afterwards (404). The allow-list was the module's hosts, plus `storage.googleapis.com` where stated.
+
+| Check | Result |
+|-------|--------|
+| No policy attached: TLS issuer of npm and example.com | Real CAs (Google Trust Services, Cloudflare). The proxy is not in the path. |
+| Audit or Enforced: TLS issuer of every HTTPS host | `ADC Egress Proxy Intermediate CA v1.20` (npm, example.com, GitHub, Key Vault, Foundry). The proxy terminates TLS; its CA is installed in the trust store and the platform sets `SSL_CERT_FILE`, `REQUESTS_CA_BUNDLE`, `NODE_EXTRA_CA_CERTS`, `GRPC_DEFAULT_SSL_ROOTS_FILE_PATH`, `PATH_CA_CERTIFICATE`. |
+| Audit: everything | Unlisted HTTPS 200, plain HTTP 200, node fetch, npm, git, apt and the agy install all worked. |
+| Enforced, unlisted HTTPS host (as root and as `agyuser` with the coder's scrubbed environment) | 403 from the proxy, headers `Connection, Content-Length, Date, Server, x-deny-reason`, value `example.com:GET`. Node fetch 403, `npm view` against another registry `E403`, `git ls-remote` rc 128 (403). Clients that trust the proxy CA see a 403, not a certificate error. |
+| Enforced, listed HTTPS host | npm registry 200; Node fetch, `npm view`, `npm pack` of a tarball, `git ls-remote https://github.com/...` (rc 0, sha returned) and a 31 MB node download from nodejs.org (3 s) all worked. |
+| Enforced, plain HTTP port 80 | 403 for every host, listed (`registry.npmjs.org`, `github.com`, `deb.debian.org`) or not, reason `<host>:GET`. `apt-get update` exits 100 with the stock `http://` sources. |
+| Enforced, apt with `deb.debian.org` rewritten to https | `apt-get update` rc 0, `apt-get install git ca-certificates curl nftables iptables` rc 0. `packages.microsoft.com` and `snapshot.debian.org` (in the image's sources) did not fail the update. |
+| Enforced, agy installer | Without `storage.googleapis.com`: rc 1, 403, no binary. With it: rc 0, binary present. The vendor manifest names `storage.googleapis.com` for the binary. |
+| Enforced, hosts not on the list | `login.microsoftonline.com`, `codeload.github.com`, `objects.githubusercontent.com`, `raw.githubusercontent.com`, `security.debian.org`, `pypi.org`, `files.pythonhosted.org`, `api.githubcopilot.com`, `cloudcode-pa.googleapis.com`, `oauth2.googleapis.com`: 403. A GitHub release asset answers 302 from `github.com`, towards `objects.githubusercontent.com`. |
+| Dropped from the design list, needed? | `login.microsoftonline.com`: no, the managed identity token (vault and `ai.azure.com`) was obtained under Enforced. `codeload.github.com`, `objects.githubusercontent.com`: not needed by `npm ci` (all 424 resolved URLs in `app/package-lock.json` are `registry.npmjs.org`) or by git over HTTPS (measured); no coder code path downloads release assets (search of `agents/sdlc_agents/coder`). |
+| Managed identity, Key Vault, model, under Enforced | Token for `vault.azure.net` and `ai.azure.com`: obtained. Key Vault `GET` of a secret that does not exist: 403 from Key Vault itself (response carried `x-ms-keyvault-service-version`), so it is reachable; the probe's identity holds no vault role, so a granted secret read is not measured. Model call through the Responses API (16 output tokens): 200. |
+| Root bypass (Enforced, `nft` and `iptables` installed, `CAP_NET_ADMIN` present) | `nft list ruleset`, `iptables-save`, `ip6tables-save` list 0 lines. Flushing them as root (rc 0) changed nothing: unlisted host still 403, listed host still 200. The enforcement is not in the container's network namespace. |
+| Other protocols (Enforced, root and `agyuser` alike) | TCP to ports 22, 8080 and 587 fails (network error or refused); UDP DNS to 1.1.1.1 and 8.8.8.8 times out; TCP 80 and 443 connect and are then judged by the proxy. |
+| TLS to an unlisted host's address | No SNI: 403 (200 in Audit). SNI of a listed host with the unlisted host in the `Host` header: 421, not a fetch (421 in Audit too). |
+| DNS | The sandbox resolver answered a public unlisted name (`example.com`) under Enforced: DNS is not filtered. |
+| Audit decisions in Application Insights | None found within five minutes; request telemetry carries no egress fields. |
+
+**Not measured:** a full coder job; agy's runtime hosts, its TLS trust of the proxy CA and its auth flow; a granted Key Vault secret read; large or long-lived transfers (a big `git push`, agy streaming) and proxy latency or size limits; what the proxy logs or keeps; a client that does not trust the proxy CA (expected to fail certificate checks for every host, listed or not: inference); DNS tunnelling (inference only); cost (about 20 minutes of 0.25 to 0.5 vCPU hosted compute and a handful of model tokens; the billed figure lags and was not read).
+
+**What it does not protect against.** The allow-list limits destinations, not what is done at an allowed host: a `git push` with the token reaches `github.com`, an `npm publish` with planted credentials reaches `registry.npmjs.org`, and `storage.googleapis.com` is one host for every bucket. The proxy terminates TLS, so it can read the traffic to allowed hosts, including the GitHub token in git requests (measured that it terminates; what it logs is not measured). Treat the policy as one layer next to the engine user, the scrubbed environment and the pre-push scans, not a replacement.
 
 ## 10. Teardown
 
