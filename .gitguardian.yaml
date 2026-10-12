@@ -1,0 +1,13 @@
+# GitGuardian (ggshield) config. Every entry below was reviewed and is not a secret.
+version: 2
+
+secret:
+  # Test fixtures: planted fake values used to prove the log and env scrubbers redact them
+  # (JWT payloads are {"sub":"x"} and {"sub":"planted"} with dummy signatures).
+  # keyvault/main.tf: public Azure built-in role definition GUIDs, flagged as high entropy.
+  ignored_paths:
+    - agents/tests/coder/test_engines.py
+    - agents/tests/coder/test_job.py
+    - agents/tests/coder/test_runner.py
+    - agents/tests/test_coder_log.py
+    - infra/terraform/modules/keyvault/main.tf

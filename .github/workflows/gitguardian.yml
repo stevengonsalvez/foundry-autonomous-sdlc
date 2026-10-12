@@ -1,0 +1,42 @@
+name: GitGuardian
+
+# Second secret scanner next to gitleaks. Kept out of ci.yml on purpose: ci.yml holds no
+# secrets so a pull request, including an agent PR, can never read one. This workflow runs
+# only from main (push, schedule, manual), so the key is never exposed to PR-edited code.
+# It is not a required check. The full history is scanned each time; the repo is small.
+
+on:
+  push:
+    branches: [main]
+  schedule:
+    - cron: "17 5 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: gitguardian-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  ggshield:
+    name: ggshield
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      GITGUARDIAN_API_KEY: ${{ secrets.GITGUARDIAN_API_KEY }}
+      GGSHIELD_VERSION: "1.52.2"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Install ggshield
+        run: python3 -m pip install --user "ggshield==${GGSHIELD_VERSION}"
+
+      - name: Scan full history
+        run: |
+          export PATH="$HOME/.local/bin:$PATH"
+          ggshield secret scan repo .
