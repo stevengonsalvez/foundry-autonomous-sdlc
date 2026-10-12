@@ -61,7 +61,7 @@ const text = (page, selector) => page.locator(selector).first().innerText();
 const open = (state, opts) => openFixed(browser, servers[state].url, opts);
 
 describe('views', { skip }, () => {
-  for (const [width, height, label] of [[1440, 900, 'desktop'], [390, 800, 'phone']]) {
+  for (const [width, height, label] of [[1440, 900, 'desktop'], [360, 800, 'phone']]) {
     test(`all 8 views load at ${label} width with no errors, no failed or external requests, no sideways page scroll`, async () => {
       for (const [name, hash] of VIEWS) {
         const { context, page } = await open('normal', { hash, width, height });
@@ -69,8 +69,10 @@ describe('views', { skip }, () => {
         await page.reload();
         await page.waitForSelector('#app[aria-busy="false"] .view');
         assert.equal(await page.locator('h1').count() >= 1, true, `${name} has a heading`);
+        const scrollWidth = await page.evaluate(() => document.documentElement.scrollWidth);
         const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
         assert.ok(overflow <= 0, `${name} at ${label} scrolls sideways by ${overflow}px`);
+        if (width <= 360) assert.ok(scrollWidth <= 360, `${name} at ${label} scrollWidth exceeds 360px: ${scrollWidth}`);
         assert.deepEqual(seen.errors, [], `${name} console errors`);
         assert.deepEqual(seen.failed, [], `${name} failed requests`);
         assert.deepEqual(seen.external, [], `${name} requested something outside the dev server`);
@@ -130,9 +132,10 @@ describe('views', { skip }, () => {
     assert.equal(await page.locator('#gates .gate-pass').count(), 9, 'all nine gates read as passed');
     assert.ok(await page.locator('#timeline svg.chart').count());
     assert.match(await text(page, '#cost'), /\$0\.08/);
-    await page.setViewportSize({ width: 390, height: 800 });
+    await page.setViewportSize({ width: 360, height: 800 });
     await page.waitForTimeout(100);
     assert.ok(await page.locator('#timeline svg.chart').count(), 'stepper redraws vertically on a phone');
+    assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= 360), 'ticket 24 at 360px has no horizontal page scroll');
     await context.close();
   });
 
@@ -363,7 +366,7 @@ describe('security', { skip }, () => {
 
   const hostileRoutes = ['#/', '#/ticket/24', '#/ticket/25', '#/ticket/5', '#/ticket/27', '#/cost', '#/environments', '#/agents', '#/escalations', '#/flow', '#/trail'];
 
-  for (const [width, label] of [[1280, 'desktop'], [390, 'phone']]) {
+  for (const [width, label] of [[1280, 'desktop'], [360, 'phone']]) {
     test(`hostile strings render as text only at ${label} width: nothing injected, no handler runs, no unsafe link`, async () => {
       for (const hash of hostileRoutes) {
         const { context, page } = await open('hostile', { hash, width, height: 900 });
@@ -389,6 +392,7 @@ describe('security', { skip }, () => {
           if (a.target === '_blank') assert.match(a.rel, /noreferrer/);
         }
         assert.ok(p.overflow <= 0, `${where}: scrolls sideways by ${p.overflow}px; wide: ${JSON.stringify(p.wide)}`);
+        if (width <= 360) assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= 360), `${where}: scrollWidth exceeds 360px`);
         assert.deepEqual(seen.errors, [], `${where}: console errors`);
         await context.close();
       }
@@ -630,14 +634,23 @@ describe('preferences', { skip }, () => {
 });
 
 describe('accessibility (axe)', { skip: skip || (pw?.AxeBuilder ? false : '@axe-core/playwright is not resolvable from app/node_modules') }, () => {
-  for (const scheme of ['light', 'dark']) {
-    test(`no serious or critical violations in any view (${scheme})`, async () => {
+  for (const mode of ['light', 'dark', 'toggle-dark']) {
+    test(`no serious or critical violations in any view (${mode})`, async () => {
       const problems = [];
+      const scheme = mode === 'dark' ? 'dark' : 'light';
       for (const [name, hash] of [...VIEWS, ['ticket-25', '#/ticket/25'], ['ticket-5', '#/ticket/5']]) {
         const { context, page } = await open('normal', { hash, scheme, reducedMotion: 'reduce' });
+        if (mode === 'toggle-dark') {
+          await page.locator('#theme-toggle').click();
+          await page.locator('#theme-toggle').click();
+          if (await page.evaluate(() => document.documentElement.dataset.theme !== 'dark')) {
+            await page.evaluate(() => { document.documentElement.dataset.theme = 'dark'; });
+          }
+          assert.equal(await page.evaluate(() => document.documentElement.dataset.theme), 'dark');
+        }
         const results = await new pw.AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa']).analyze();
         for (const v of results.violations.filter((x) => ['serious', 'critical'].includes(x.impact))) {
-          problems.push(`${scheme} ${name}: ${v.id} (${v.impact}) ${v.nodes.slice(0, 3).map((n) => n.target.join(' ')).join(' | ')}`);
+          problems.push(`${mode} ${name}: ${v.id} (${v.impact}) ${v.nodes.slice(0, 3).map((n) => n.target.join(' ')).join(' | ')}`);
         }
         await context.close();
       }
