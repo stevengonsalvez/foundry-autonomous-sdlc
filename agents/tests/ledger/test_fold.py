@@ -92,9 +92,11 @@ def test_a_merge_after_cd_started_waits_in_staging_then_reaches_prod(real) -> No
     doc = fold.fold([ticket_event(item), env_event(deploy_doc([first, t_stage]), "2026-10-10T15:20:00Z")], NOW)
     t = doc["tickets"][0]
     assert t["env"] == "staging" and t["stage"] == "staging" and [h["status"] for h in t["hops"]] == ["success"]
+    assert "waiting for staging" in t["summary"]
     promote = hop("promote", sha, "2026-10-10T15:35:00Z", env="prod", pr=13, issue=12)
     doc = fold.fold([env_event(deploy_doc([first, t_stage, promote]), "2026-10-10T15:35:00Z")], NOW, base=doc)
     t = doc["tickets"][0]
+    assert "running in production" in t["summary"]  # the plain line follows the overlay
     assert (
         t["env"] == "prod"
         and t["stage"] == "prod"

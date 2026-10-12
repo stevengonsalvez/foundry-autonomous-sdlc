@@ -627,6 +627,11 @@ def finalise(doc: dict[str, Any], now: str) -> dict[str, Any]:
         saved = doc.get("summaries", {}).get(str(t["issue"]))
         if saved and saved.get("digest") == t.get("digest"):
             t["summary"] = saved["text"]
+        else:
+            # the plain line was written before the deploy overlay moved the ticket, so say where it is now
+            t["summary"] = model.summary_text(
+                t["title"], t["type"], t["stage"], t.get("escalation"), t.get("release"), t["cost"]["usd"]
+            )
         share = round(float(led_by_issue.get(str(t["issue"]), 0.0)), 6)
         t["cost"]["ledger_usd"] = share
         t["cost"]["total_usd"] = round(t["cost"]["usd"] + share, 6)
