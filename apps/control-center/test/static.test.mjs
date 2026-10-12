@@ -102,53 +102,36 @@ test('every class name in JS has a corresponding rule in CSS stylesheets', async
     cssClasses.add(match[1]);
   }
 
-  // Documented explicit allowlist of dynamic prefix namespaces:
-  // - st-text-, st-bg-, st-fill-: dynamic pipeline stage styling
-  // - dot-, card-: dynamic lifecycle status chip indicators
-  // - band-: dynamic macrobands and cost caps
-  // - env-: dynamic environment card variants
-  // - callout-: tone variants (danger, info)
-  // - state-, agent-: agent state and agent identity classes
-  // - release-: release outcome indicators
-  // - col-: dynamic stage column identifiers
-  // - mode-: stage execution mode markers
-  // - tone-: semantic tone utility classes
-  // - badge-: status badge color variants
-  // - split-: billing cost split categories
-  // - kpi-: kpi tone variants
-  // - gate-, chain-, hop-: delivery pipeline and gate indicators
+  // Documented explicit allowlist of dynamic prefix namespaces
   const DYNAMIC_PREFIXES = [
     'st-text-',
     'st-bg-',
     'st-fill-',
     'dot-',
-    'card-',
     'band-',
-    'env-',
-    'callout-',
     'state-',
     'agent-',
-    'release-',
     'col-',
     'mode-',
     'tone-',
-    'badge-',
     'split-',
-    'kpi-',
-    'gate-',
-    'chain-',
-    'hop-',
   ];
 
   function extractClassesFromCode(code) {
     const classes = new Set();
-    const stringPropRe = /\bclass(?:Name)?\s*:\s*(['"])(.*?)\1/gs;
+    const addToken = (token) => {
+      if (/^[a-zA-Z][a-zA-Z0-9_-]*[a-zA-Z0-9]$|^[a-zA-Z]$/.test(token)) {
+        classes.add(token);
+      }
+    };
+
+    const stringPropRe = /\b(?:class(?:Name)?|cls)\s*:\s*(['"])(.*?)\1/gs;
     for (const m of code.matchAll(stringPropRe)) {
       for (const token of m[2].split(/\s+/)) {
-        if (/^[a-zA-Z][a-zA-Z0-9_-]*$/.test(token)) classes.add(token);
+        addToken(token);
       }
     }
-    const tplPropRe = /\bclass(?:Name)?\s*:\s*`([^`]*)`/gs;
+    const tplPropRe = /\b(?:class(?:Name)?\s*:|(?:const|let|var)\s+cls\s*=|cls\s*:)\s*`([^`]*)`/gs;
     for (const m of code.matchAll(tplPropRe)) {
       const raw = m[1];
       let depth = 0;
@@ -170,7 +153,7 @@ test('every class name in JS has a corresponding rule in CSS stylesheets', async
               inExpr = false;
               for (const sm of expr.matchAll(/['"]([^'"]+)['"]/g)) {
                 for (const token of sm[1].split(/\s+/)) {
-                  if (/^[a-zA-Z][a-zA-Z0-9_-]*$/.test(token)) classes.add(token);
+                  addToken(token);
                 }
               }
               expr = '';
@@ -183,17 +166,47 @@ test('every class name in JS has a corresponding rule in CSS stylesheets', async
         }
       }
       for (const token of currentStatic.split(/\s+/)) {
-        if (/^[a-zA-Z][a-zA-Z0-9_-]*$/.test(token)) classes.add(token);
+        addToken(token);
       }
     }
     const classListRe = /\bclassList\.(?:add|remove|toggle)\s*\(\s*(['"`])(.*?)\1\s*\)/g;
     for (const m of code.matchAll(classListRe)) {
       for (const token of m[2].split(/\s+/)) {
-        if (/^[a-zA-Z][a-zA-Z0-9_-]*$/.test(token)) classes.add(token);
+        addToken(token);
       }
     }
     return classes;
   }
+
+  const STAGES = ['backlog', 'refining', 'feasible', 'tests', 'building', 'review', 'staging', 'prod', 'escalated'];
+  const OUTCOME_GLYPHS = ['ok', 'failed', 'skipped', 'pending'];
+  const HOP_STATUSES = ['success', 'skipped', 'rolled_back', 'failed', 'in_progress'];
+  const HOP_ACTIONS = ['stage', 'promote', 'rollback', 'skip', 'fail', 'legacy-publish'];
+  const AGENT_STATES = ['running', 'idle', 'error', 'stale', 'unknown'];
+  const NODE_STATES = ['todo', 'done', 'current', 'bad'];
+  const CHIP_STATES = ['active', 'pending', 'wait', 'blocked', 'done'];
+  const GATE_STATUSES = ['pass', 'fail', 'running', 'none'];
+  const CHAIN_STATUSES = ['pass', 'fail', 'running', 'none', 'skipped'];
+  const BADGE_TONES = ['good', 'bad', 'warn', 'info', 'neutral'];
+  const CALLOUT_VARIANTS = ['danger', 'info'];
+  const KPI_VARIANTS = ['good', 'bad'];
+
+  const expandedEnumClasses = [
+    ...STAGES.flatMap((s) => [`col-${s}`, `st-${s}`, `st-fill-${s}`]),
+    'badge-stage',
+    ...OUTCOME_GLYPHS.map((outcome) => `release-${outcome}`),
+    ...HOP_STATUSES.map((status) => `hop-${status}`),
+    ...HOP_ACTIONS.map((action) => `hop-${action}`),
+    ...AGENT_STATES.map((s) => `state-${s}`),
+    ...NODE_STATES.map((s) => `node-${s}`),
+    ...CHIP_STATES.flatMap((s) => [`card-${s}`, `dot-${s}`]),
+    ...GATE_STATUSES.map((s) => `gate-${s}`),
+    ...CHAIN_STATUSES.map((s) => `chain-${s}`),
+    ...BADGE_TONES.map((tone) => `badge-${tone}`),
+    ...CALLOUT_VARIANTS.map((variant) => `callout-${variant}`),
+    ...KPI_VARIANTS.map((variant) => `kpi-${variant}`),
+    'env-card',
+  ];
 
   const missing = [];
   for (const [file, code] of sources) {
@@ -203,6 +216,12 @@ test('every class name in JS has a corresponding rule in CSS stylesheets', async
       if (!cssClasses.has(cls)) {
         missing.push(`${file} uses class "${cls}" which has no rule in css/*.css`);
       }
+    }
+  }
+
+  for (const cls of expandedEnumClasses) {
+    if (!cssClasses.has(cls)) {
+      missing.push(`expanded enum class "${cls}" has no rule in css/*.css`);
     }
   }
 
