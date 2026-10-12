@@ -11,9 +11,9 @@
 ## Design Philosophy
 
 The Delivery Flow board organizes complex lifecycle operations through a two-dimensional matrix:
-1. Stage Axis (Horizontal): Grouped into macrobands (SHAPE, BUILD, RELEASE, ESCALATED) with tracked uppercase headers, operational mode badges (AUTO, GATE, SIM, MANUAL), and telemetry count lines.
+1. Stage Axis (Horizontal): Grouped into macrobands (ALIGN, IMPLEMENT, DELIVER, EXCEPTIONS) with tracked uppercase headers, operational mode badges (AUTO, GATE, SIM, MANUAL), and telemetry count lines.
 2. Swimlane Axis (Vertical): Grouped dynamically by work item type, active agent owner, or lifecycle outcome.
-3. Coordinate Cells: Dense panels divided by hairlines showing work items as compact pill tokens, with diagonal hatched treatments for non-applicable stages and collapsed indicators for overflows.
+3. Coordinate Cells: Dense panels divided by hairlines showing work items as compact pill tokens, with diagonal hatched treatments for non-applicable stages and full accounting of all items without dropped chips.
 4. Lenses: Instant perspective switching between Delivery duration, Cost expenditure against budget caps, and Gate verification rates.
 
 ## Accessibility Standards

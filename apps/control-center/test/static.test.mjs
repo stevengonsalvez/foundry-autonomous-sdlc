@@ -91,3 +91,120 @@ test('no stylesheet or script URL is external', async () => {
     assert.ok(url.startsWith('./') || url.startsWith('data:'), `${url} must be local relative path`);
   }
 });
+
+test('every class name in JS has a corresponding rule in CSS stylesheets', async () => {
+  const cssList = await files('css', '.css');
+  const cssContent = (await Promise.all(cssList.map((f) => readFile(join(root, f), 'utf8')))).join('\n');
+  const cssClasses = new Set();
+  const classSelectorRegex = /\.([a-zA-Z0-9_-]+)/g;
+  let match;
+  while ((match = classSelectorRegex.exec(cssContent)) !== null) {
+    cssClasses.add(match[1]);
+  }
+
+  // Documented explicit allowlist of dynamic prefix namespaces:
+  // - st-text-, st-bg-, st-fill-: dynamic pipeline stage styling
+  // - dot-, card-: dynamic lifecycle status chip indicators
+  // - band-: dynamic macrobands and cost caps
+  // - env-: dynamic environment card variants
+  // - callout-: tone variants (danger, info)
+  // - state-, agent-: agent state and agent identity classes
+  // - release-: release outcome indicators
+  // - col-: dynamic stage column identifiers
+  // - mode-: stage execution mode markers
+  // - tone-: semantic tone utility classes
+  // - badge-: status badge color variants
+  // - split-: billing cost split categories
+  // - kpi-: kpi tone variants
+  // - gate-, chain-, hop-: delivery pipeline and gate indicators
+  const DYNAMIC_PREFIXES = [
+    'st-text-',
+    'st-bg-',
+    'st-fill-',
+    'dot-',
+    'card-',
+    'band-',
+    'env-',
+    'callout-',
+    'state-',
+    'agent-',
+    'release-',
+    'col-',
+    'mode-',
+    'tone-',
+    'badge-',
+    'split-',
+    'kpi-',
+    'gate-',
+    'chain-',
+    'hop-',
+  ];
+
+  function extractClassesFromCode(code) {
+    const classes = new Set();
+    const stringPropRe = /\bclass(?:Name)?\s*:\s*(['"])(.*?)\1/gs;
+    for (const m of code.matchAll(stringPropRe)) {
+      for (const token of m[2].split(/\s+/)) {
+        if (/^[a-zA-Z][a-zA-Z0-9_-]*$/.test(token)) classes.add(token);
+      }
+    }
+    const tplPropRe = /\bclass(?:Name)?\s*:\s*`([^`]*)`/gs;
+    for (const m of code.matchAll(tplPropRe)) {
+      const raw = m[1];
+      let depth = 0;
+      let currentStatic = '';
+      let inExpr = false;
+      let expr = '';
+      for (let i = 0; i < raw.length; i++) {
+        if (!inExpr && raw[i] === '$' && raw[i + 1] === '{') {
+          inExpr = true;
+          depth = 1;
+          i++;
+          continue;
+        }
+        if (inExpr) {
+          if (raw[i] === '{') depth++;
+          else if (raw[i] === '}') {
+            depth--;
+            if (depth === 0) {
+              inExpr = false;
+              for (const sm of expr.matchAll(/['"]([^'"]+)['"]/g)) {
+                for (const token of sm[1].split(/\s+/)) {
+                  if (/^[a-zA-Z][a-zA-Z0-9_-]*$/.test(token)) classes.add(token);
+                }
+              }
+              expr = '';
+              continue;
+            }
+          }
+          expr += raw[i];
+        } else {
+          currentStatic += raw[i];
+        }
+      }
+      for (const token of currentStatic.split(/\s+/)) {
+        if (/^[a-zA-Z][a-zA-Z0-9_-]*$/.test(token)) classes.add(token);
+      }
+    }
+    const classListRe = /\bclassList\.(?:add|remove|toggle)\s*\(\s*(['"`])(.*?)\1\s*\)/g;
+    for (const m of code.matchAll(classListRe)) {
+      for (const token of m[2].split(/\s+/)) {
+        if (/^[a-zA-Z][a-zA-Z0-9_-]*$/.test(token)) classes.add(token);
+      }
+    }
+    return classes;
+  }
+
+  const missing = [];
+  for (const [file, code] of sources) {
+    const classes = extractClassesFromCode(code);
+    for (const cls of classes) {
+      if (DYNAMIC_PREFIXES.some((p) => cls.startsWith(p))) continue;
+      if (!cssClasses.has(cls)) {
+        missing.push(`${file} uses class "${cls}" which has no rule in css/*.css`);
+      }
+    }
+  }
+
+  assert.deepEqual(missing, []);
+});

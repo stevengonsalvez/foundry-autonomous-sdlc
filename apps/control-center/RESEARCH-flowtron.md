@@ -4,13 +4,13 @@ An empirical study of the reference UI layout model, visual density, component a
 
 ## Provenance, Licensing, and Implementation Independence
 
-Flowtron has no open-source license. Consequently, strict separation was maintained:
-- **What was studied and adopted**: Structural design principles, spatial discipline, and measured dimensional ratios (lane-by-stage matrix representation, macroband grouping strip, pill chips, dual segmented toggles, tracked uppercase monospace typography, and 1px hairlines).
+Flowtron has no open-source license. Consequently, strict implementation independence was maintained:
+- **What was taken and adopted**: Structural design principles, layout model, and measured dimensional ratios (lane-by-stage matrix representation, macroband grouping strip, pill chips, dual segmented toggles, tracked uppercase monospace typography, and 1px hairlines).
 - **What was changed and independently redesigned**:
-  - **Tokens**: Zero flowtron token names are used. Our system uses an independent scheme (`--canvas`, `--surface-0..3`, `--edge`, `--edge-subtle`, `--edge-focus`, `--fg`, `--fg-dim`, `--fg-muted`, `--tone-run`, `--tone-wait`, `--tone-block`, `--tone-info`, `--tone-agent`, `--tone-done`).
-  - **Color Palette**: Flowtron's palette (navy hue 255 with teal 165, amber 80, coral 30) was discarded. We built an independent graphite-blue base (hue 240) with custom semantic accents (emerald mint 150, golden amber 65, crimson 25, sky azure 220, electric violet 295, teal 175).
-  - **Class Names**: All component classes use our own names (`.band-strip`, `.band-cell`, `.matrix-grid`, `.matrix-spine`, `.lane-head`, `.matrix-cell`, `.chip-*`, etc.). Zero flowtron classes are used.
-  - **Copy and Visual Assets**: Hatched cell copy is "bypasses stage". Favicon is a custom geometric pulse mark in graphite-blue and sky azure.
+  - **All Names and Tokens**: Zero flowtron token or class names are used. Our system uses an independent token scheme (`--canvas`, `--surface-0..3`, `--edge`, `--edge-subtle`, `--edge-focus`, `--fg`, `--fg-dim`, `--fg-muted`, `--tone-run`, `--tone-wait`, `--tone-block`, `--tone-info`, `--tone-agent`, `--tone-done`) and independent class names (`.band-strip`, `.band-cell`, `.matrix-grid`, `.matrix-spine`, `.lane-head`, `.matrix-cell`, `.chip-*`, etc.).
+  - **Palette**: The color palette was redesigned to ensure strict chromatic separation from flowtron (flowtron used navy hue 255 with teal 165, amber 80, coral 30). Our system uses an independent graphite-blue base (hue 240) with shifted surface ladder lightness steps (canvas 0.08, surface-0 0.10, surface-1 0.26, surface-2 0.30, surface-3 0.35, ensuring none is within 0.03 of flowtron ink 0.14, panel 0.18, or panel-2 0.22) and semantic accent hues positioned at least 20 degrees away (crimson hue 10 for `--tone-block` vs flowtron coral hue 32; emerald lime hue 138 for `--tone-done` vs flowtron teal hue 170).
+  - **Copy and Visual Assets**: All domain copy was rewritten. Macroband copy uses independent operational categories (ALIGN . PRODUCT, IMPLEMENT . CODE, DELIVER . OPERATIONS, EXCEPTIONS) rather than flowtron phase descriptions. Hatched cell copy is "bypasses stage". Favicon is an independent pulse mark in deep navy and indigo (#818cf8).
+  - **Data Fidelity and Complete Accounting**: Unlike reference designs that collapse tickets into an overflow badge ("+N more"), our system maintains complete data fidelity: every active ticket is rendered as an interactive pill chip, ensuring column card counts strictly equal stage counts without swallowed or dropped items.
   - **Implementation**: Written from scratch in vanilla ES modules and standard CSS with pure dark theme, zero remote requests, and complete data fidelity.
 
 ## 1. Measured Values and Dimensional Ratios
@@ -113,7 +113,7 @@ The reference UI organizes complex lifecycle operations through a two-dimensiona
 ## 4. What to Amplify in the Redesign
 
 1. Strict 1px Hairlines: Replace card containers across all 8 views with crisp 1px borders in OKLCH palette tokens.
-2. Macroband and Stage Matrix: Implement the full macroband header (SHAPE . BUSINESS, BUILD . ENGINEERING, RELEASE . OPS) and lane matrix with mode badges.
+2. Macroband and Stage Matrix: Implement the full macroband header (ALIGN . PRODUCT, IMPLEMENT . CODE, DELIVER . OPERATIONS, EXCEPTIONS) and lane matrix with mode badges.
 3. Interactive Lens and Group Controls: Provide instant view toggles that change ticket chip details (Delivery age, Cost cap bars, Gate verdicts) and swimlane grouping (Type, Agent, Outcome).
 4. Responsive Fallback: Maintain the sticky lane header and horizontal scrolling down to 640px, transitioning to an ultra-dense stacked list at 360px without page overflow.
 5. Zero External Dependencies: Native CSS tokens, ES modules, safe DOM construction, and full keyboard navigation.

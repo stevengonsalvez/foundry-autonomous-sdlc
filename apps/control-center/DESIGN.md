@@ -118,7 +118,7 @@ All 8 application views share the same mission-control visual language:
 - Ticket Detail: Compact stage progression strip, 2-column tabular cost breakdown, aligned gate verification results, and chronological timeline.
 - Environments: Compact matrix comparison table for Staging and Production (version, commit, deploy timestamp, gates cleared pills, run link, included changes).
 - Cost: Dense hairline tables comparing ledger estimates against Azure billed costs, with over-cap indicators.
-- Fleet Agents: Dense status table of all 11 agents with 2-letter badges, lifecycle state written out, and error telemetry.
+- Fleet Agents: Dense status table of all active and registered fleet agents with 2-letter badges, lifecycle state written out, and error telemetry.
 - Escalations: Incident desk with crimson hairlines, terminal reasons, and direct evidence links.
 - Flow Metrics: Inline SVG charts with hairline axes backed by accessible data tables.
 - Audit Trail: Dense chronological ledger stream filterable by event kind and ticket number.

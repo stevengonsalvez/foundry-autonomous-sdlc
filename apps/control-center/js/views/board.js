@@ -21,10 +21,10 @@ import {
 
 // Macrobands grouping stages into lifecycle domains
 const MACROBANDS = Object.freeze([
-  { id: 'shape', label: 'SHAPE . BUSINESS', span: 3, tone: 'cyan' },
-  { id: 'build', label: 'BUILD . ENGINEERING', span: 3, tone: 'auto' },
-  { id: 'release', label: 'RELEASE . OPS', span: 2, tone: 'info' },
-  { id: 'escalated', label: 'ESCALATED', span: 1, tone: 'gate' },
+  { id: 'shape', label: 'ALIGN . PRODUCT', span: 3, tone: 'wait' },
+  { id: 'build', label: 'IMPLEMENT . CODE', span: 3, tone: 'run' },
+  { id: 'release', label: 'DELIVER . OPERATIONS', span: 2, tone: 'done' },
+  { id: 'escalated', label: 'EXCEPTIONS', span: 1, tone: 'block' },
 ]);
 
 /**
@@ -68,8 +68,15 @@ function ticketChip(ticket, nowMs, lens) {
     ? ghLink(ticketGithubUrl(ticket), [ticket.title || 'Untitled', icon('external', { size: 12, className: 'icon-ext' })], { class: 'card-link clamp-1' })
     : h('a', { class: 'card-link clamp-1', href: ticketHref(ticket.issue), 'data-fkey': `t${ticket.issue}` }, ticket.title || 'Untitled');
 
+  const stateGlyphs = {
+    active: '',
+    pending: '◌',
+    wait: '·',
+    blocked: '!',
+    done: '✓',
+  };
   const chipNum = h('span', { class: 'chip-num' }, ticket.kind === 'pr' ? `PR #${ticket.issue}` : `#${ticket.issue}`);
-  const chipDot = h('span', { class: `chip-dot dot-${stateTone}`, 'aria-hidden': 'true' });
+  const chipDot = h('span', { class: `chip-dot dot-${stateTone}`, 'aria-hidden': 'true', title: stateTone }, stateGlyphs[stateTone]);
   const chipAgent = h('span', { class: 'chip-agent', title: agentName || 'unassigned' }, tag);
 
   let lensContent = null;
@@ -198,25 +205,29 @@ function isStageApplicable(stage, laneKey, group) {
   return true;
 }
 
-function matrixCell(stage, laneKey, tickets, nowMs, lens, group) {
+function matrixCell(stage, lane, tickets, nowMs, lens, group) {
+  const laneKey = lane.key;
   const laneTickets = tickets.filter((t) => ticketMatchesLane(t, laneKey, group));
   const applicable = isStageApplicable(stage, laneKey, group);
   // Never swallow real tickets that exist in an out-of-pipeline stage
   if (!applicable && laneTickets.length === 0) {
     return h(
       'div',
-      { class: 'matrix-cell cell-hatched', 'data-lane': laneKey, 'aria-labelledby': `lane-${laneKey} col-${stage}` },
+      { class: 'matrix-cell cell-hatched', 'data-lane': laneKey, role: 'cell' },
       h('span', { class: 'cell-hatched-label' }, 'bypasses stage'),
     );
   }
+
+  const mobileLaneTag = h('div', { class: 'cell-lane-label', 'aria-hidden': 'true' }, h('span', { class: `lane-dot dot-${lane.tone}` }), lane.label);
 
   const cell = h(
     'div',
     {
       class: `matrix-cell${laneTickets.length === 0 ? ' cell-empty' : ''}${!applicable ? ' cell-bypass' : ''}`,
       'data-lane': laneKey,
-      'aria-labelledby': `lane-${laneKey} col-${stage}`,
+      role: 'cell',
     },
+    mobileLaneTag,
     ...laneTickets.map((t) => ticketChip(t, nowMs, lens)),
   );
   return cell;
@@ -239,14 +250,14 @@ function stageColumn(col, nowMs, filtered, lens, group, lanes) {
     telemetryText = `${rate}% pass`;
   }
 
-  const cells = lanes.map((lane) => matrixCell(col.stage, lane.key, col.tickets, nowMs, lens, group));
+  const cells = lanes.map((lane) => matrixCell(col.stage, lane, col.tickets, nowMs, lens, group));
 
   return h(
     'section',
-    { class: `col col-${col.stage}${quiet ? ' col-quiet' : ''}`, 'aria-labelledby': `col-${col.stage}`, 'data-stage': col.stage },
+    { class: `col col-${col.stage}${quiet ? ' col-quiet' : ''}`, role: 'row', 'data-stage': col.stage },
     h(
       'header',
-      { class: 'col-head' },
+      { class: 'col-head', role: 'columnheader' },
       h(
         'div',
         { class: 'col-head-top' },
@@ -260,7 +271,7 @@ function stageColumn(col, nowMs, filtered, lens, group, lanes) {
       ),
       h('div', { class: 'stage-telemetry', title: telemetryText }, telemetryText),
     ),
-    h('div', { class: 'col-cells' }, ...cells),
+    h('div', { class: 'col-cells', role: 'presentation' }, ...cells),
   );
 }
 
@@ -282,12 +293,12 @@ function macrobandStrip() {
 function laneSpine(lanes) {
   return h(
     'div',
-    { class: 'matrix-spine', role: 'presentation' },
-    h('div', { class: 'spine-head' }, h('span', { class: 'spine-label' }, 'SWIMLANE')),
+    { class: 'matrix-spine', role: 'row' },
+    h('div', { class: 'spine-head', role: 'columnheader' }, h('span', { class: 'spine-label' }, 'SWIMLANE')),
     ...lanes.map((l) =>
       h(
         'div',
-        { class: 'lane-head', id: `lane-${l.key}`, 'data-lane': l.key },
+        { class: 'lane-head', id: `lane-${l.key}`, 'data-lane': l.key, role: 'rowheader' },
         h('span', { class: `lane-dot dot-${l.tone}`, 'aria-hidden': 'true' }),
         h('span', { class: 'lane-name' }, l.label),
         h('span', { class: 'lane-sub' }, l.sub),
@@ -380,7 +391,7 @@ export function renderBoard(ctx) {
   const group = filters.group || 'type';
 
   const boardShell = h('div', { class: 'board-shell' });
-  const boardMatrix = h('div', { class: 'board matrix-grid', role: 'region', 'aria-label': 'Delivery flow matrix board, scrolls sideways', tabindex: '0' });
+  const boardMatrix = h('div', { class: 'board matrix-grid', role: 'grid', 'aria-label': 'Delivery flow matrix board, scrolls sideways', tabindex: '0' });
   const result = h('p', { class: 'sr-only', 'aria-live': 'polite', role: 'status' });
 
   const isFiltered = () => filters.types.size > 0 || filters.query.trim() !== '' || filters.hideOld;

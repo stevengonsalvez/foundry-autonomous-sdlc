@@ -1,4 +1,4 @@
-// The page frame: navigation, the freshness readout, the theme switch and the spend banner.
+// The page frame: navigation, the freshness readout, the controls and the spend banner.
 // The markup skeleton is in index.html; this fills in what changes.
 
 import { h, timeEl } from './dom.js';

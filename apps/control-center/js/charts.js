@@ -141,7 +141,7 @@ export function stackedStageChart(width, rows, { label, maxTotal, stageClass }) 
     for (const seg of row.segments) {
       const w = Math.max(1.5, seg.seconds * scale);
       svg.append(
-        s('rect', { x, y: barY, width: w, height: barH, class: `${stageClass(seg.stage)} seg${seg.open ? ' seg-open' : ''}` }, s('title', {}, `${row.label} ${seg.stage}: ${formatDuration(seg.seconds)}${seg.open ? ' so far' : ''}`)),
+        s('rect', { x, y: barY, width: w, height: barH, class: `${stageClass(seg.stage)} seg${seg.open ? ' seg-open' : ''}` }, s('title', {}, `${row.label} ${seg.label ?? seg.stage}: ${formatDuration(seg.seconds)}${seg.open ? ' so far' : ''}`)),
       );
       x += w;
     }

@@ -120,9 +120,20 @@ describe('views', { skip }, () => {
     await typeBtn.click();
     assert.equal(await page.locator('.matrix-spine .lane-head[data-lane="other"]').count(), 1, 'other lane exists for unclassified tickets');
 
-    // 4. No ticket is dropped: chip count equals total tickets in state
-    const totalChips = await page.locator('article.card').count();
-    assert.equal(totalChips, rawSample.tickets.length);
+    // 4. No ticket is dropped: verify across all groupings and lenses (chips equal column count per column)
+    for (const groupName of ['Type', 'Agent', 'Outcome']) {
+      await page.getByRole('button', { name: groupName }).click();
+      for (const lensName of ['Delivery', 'Cost', 'Gates']) {
+        await page.getByRole('button', { name: lensName }).click();
+        const chips = await page.locator('article.card').count();
+        assert.equal(chips, rawSample.tickets.length, `group=${groupName} lens=${lensName} total chips`);
+        for (const stage of rawSample.board_stages) {
+          const colCount = Number(await page.locator(`.col-${stage} .col-count`).innerText());
+          const stageCards = await page.locator(`.col-${stage} article.card`).count();
+          assert.equal(stageCards, colCount, `group=${groupName} lens=${lensName} stage=${stage} chips equal column count`);
+        }
+      }
+    }
 
     // 5. Axe accessibility check on the matrix
     if (pw?.AxeBuilder) {
