@@ -49,6 +49,21 @@ This is the contract every component is built against. If code and this file dis
 
 The PAT belongs to the repo owner `stevengonsalvez`. It is used only against `stevengonsalvez/foundry-autonomous-sdlc`; every client in this repo hard-codes that repo and refuses any other.
 
+## Egress
+
+`sdlc-coder` runs untrusted code (agy, `npm ci`, the tests it writes), so its hosted agent version carries an egress policy: the account RAI policy `sdlc-coder-egress` (`Microsoft.CognitiveServices/accounts/raiPolicies@2026-05-15-preview`, module `infra/terraform/modules/egress_policy`), attached as `rai_config` by `scripts/deploy_agents.py`. Default action Deny, one exact-host `Fqdn` Allow rule per host the coder's code calls:
+
+| Host | Why |
+|------|-----|
+| `github.com`, `api.github.com` | clone, fetch, push; issues, PRs, owner lookup |
+| `registry.npmjs.org` | `npm ci` |
+| `nodejs.org` | node 22 download and `SHASUMS256.txt` |
+| `deb.debian.org` | `apt-get install git ca-certificates` |
+| `antigravity.google`, `antigravity-cli-auto-updater-974169037036.us-central1.run.app` | agy installer and the binary it downloads |
+| `<account>.services.ai.azure.com`, `<vault>.vault.azure.net` | the fallback model loop; secrets |
+
+Platform connectivity (managed identity, telemetry) is allowed by the service without rules. agy's own API hosts are not known from the code, so the policy starts in `Audit` (nothing blocked, would-be denials logged) and moves to `Enforced` (unlisted hosts get a proxy 403) only after a real job's decisions are read; hosts found that way go in `coder_egress_extra_hosts`. The orchestrator and ledger run only this repository's code and have no policy. A policy binds to an agent version: a change reaches the coder only through a new version and new sessions.
+
 ## State machine
 
 One object, one `stage:*` label at a time. Transitions are performed only by the orchestrator, are idempotent (label swap plus state comment), and each is recorded with a timestamp in the state comment.
