@@ -6,10 +6,11 @@ import { fileURLToPath } from 'node:url';
 
 import { BOARD_STAGES, AGENT_STATES } from '../js/schema.js';
 import { OUTCOME_GLYPH, NODE_STATES } from '../js/charts.js';
-import { MACROBANDS, CHIP_STATES, LANE_TONES, STAGE_MODES } from '../js/views/board.js';
+import { MACROBANDS, CHIP_STATES, LANE_TONES } from '../js/views/board.js';
 import { GATE_STATUSES, CHAIN_STATUSES, SPLIT, HOP_STATUS } from '../js/views/ticket.js';
-import { HOP_ACTIONS } from '../js/views/common.js';
+import { HOP_ACTIONS, MODE_TONES } from '../js/views/common.js';
 import { BADGE_TONES } from '../js/dom.js';
+import { COST_BANDS } from '../js/model.js';
 
 const root = fileURLToPath(new URL('..', import.meta.url));
 
@@ -100,12 +101,25 @@ test('no stylesheet or script URL is external', async () => {
 
 test('every class name in JS has a corresponding rule in CSS stylesheets', async () => {
   const cssList = await files('css', '.css');
-  const cssContent = (await Promise.all(cssList.map((f) => readFile(join(root, f), 'utf8')))).join('\n');
+  const rawCss = (await Promise.all(cssList.map((f) => readFile(join(root, f), 'utf8')))).join('\n');
+  const cleanCss = rawCss.replace(/\/\*[\s\S]*?\*\//g, '');
   const cssClasses = new Set();
-  const classSelectorRegex = /\.([a-zA-Z0-9_-]+)/g;
-  let match;
-  while ((match = classSelectorRegex.exec(cssContent)) !== null) {
-    cssClasses.add(match[1]);
+  let prelude = '';
+  for (let i = 0; i < cleanCss.length; i++) {
+    const ch = cleanCss[i];
+    if (ch === '{') {
+      const text = prelude.trim();
+      if (!text.startsWith('@keyframes')) {
+        for (const m of text.matchAll(/\.([a-zA-Z0-9_-]+)/g)) {
+          cssClasses.add(m[1]);
+        }
+      }
+      prelude = '';
+    } else if (ch === '}' || ch === ';') {
+      prelude = '';
+    } else {
+      prelude += ch;
+    }
   }
 
   const ENUM_PREFIX_MAP = {
@@ -120,8 +134,8 @@ test('every class name in JS has a corresponding rule in CSS stylesheets', async
     'agent-': AGENT_STATES,
     'dot-': [...new Set([...CHIP_STATES, ...LANE_TONES])],
     'card-': CHIP_STATES,
-    'band-': [...MACROBANDS.map((m) => m.id), 'ok', 'high', 'over'],
-    'mode-': ['auto', 'gate', 'sim', 'manual'],
+    'band-': [...MACROBANDS.map((m) => m.id), ...COST_BANDS],
+    'mode-': MODE_TONES,
     'callout-': ['danger', 'info'],
     'env-': ['staging', 'production'],
     'hop-': [...new Set([...Object.keys(HOP_STATUS), ...HOP_ACTIONS])],
@@ -233,12 +247,8 @@ test('every class name in JS has a corresponding rule in CSS stylesheets', async
         }
       }
 
-      // 5. badge(..., ..., className)
-      for (const bm of l.matchAll(/\bbadge\s*\(\s*([^(),]+)\s*,\s*([^(),]+)\s*,\s*(['"])(.*?)\3\s*\)/g)) {
-        for (const t of bm[4].trim().split(/\s+/)) {
-          if (/^[a-zA-Z][a-zA-Z0-9_-]*$/.test(t)) requiredClasses.add(t);
-        }
-      }
+      // 5. badge(..., ..., className) parsed per call with depth awareness
+      // (handled per-file below outside line loop)
 
       // 6. text(x, y, cls, ...) in charts.js
       if (file.endsWith('charts.js')) {
@@ -254,6 +264,59 @@ test('every class name in JS has a corresponding rule in CSS stylesheets', async
         }
       }
     });
+
+    // Extract stateTone assignments and lane tones from board.js
+    if (file.endsWith('board.js')) {
+      for (const m of code.matchAll(/\bstateTone\s*=\s*['"]([^'"]+)['"]/g)) {
+        requiredClasses.add(`card-${m[1]}`);
+        requiredClasses.add(`dot-${m[1]}`);
+      }
+      for (const m of code.matchAll(/\btone\s*:\s*['"]([^'"]+)['"]/g)) {
+        requiredClasses.add(`dot-${m[1]}`);
+      }
+    }
+
+    // 5. badge(..., ..., className) parsed with depth awareness (handles conditionals & multiple arguments)
+    const badgeRegex = /\bbadge\s*\(/g;
+    let bMatch;
+    while ((bMatch = badgeRegex.exec(code)) !== null) {
+      const start = bMatch.index + bMatch[0].length;
+      let depth = 1;
+      let currentArg = '';
+      const args = [];
+      for (let i = start; i < code.length; i++) {
+        const ch = code[i];
+        if (ch === '(' || ch === '[' || ch === '{') depth++;
+        else if (ch === ')' || ch === ']' || ch === '}') {
+          depth--;
+          if (depth === 0) {
+            args.push(currentArg.trim());
+            break;
+          }
+        } else if (ch === ',' && depth === 1) {
+          args.push(currentArg.trim());
+          currentArg = '';
+          continue;
+        }
+        currentArg += ch;
+      }
+      if (args.length >= 3) {
+        const classArg = args[2];
+        for (const m of classArg.matchAll(/['"]([^'"]+)['"]/g)) {
+          for (const t of m[1].trim().split(/\s+/)) {
+            if (/^[a-zA-Z][a-zA-Z0-9_-]*$/.test(t)) requiredClasses.add(t);
+          }
+        }
+      }
+    }
+  }
+
+  // 7. Scan index.html for static classes
+  const html = await readFile(join(root, 'index.html'), 'utf8');
+  for (const m of html.matchAll(/\bclass=["']([^"']+)["']/g)) {
+    for (const t of m[1].trim().split(/\s+/)) {
+      if (/^[a-zA-Z][a-zA-Z0-9_-]*$/.test(t)) requiredClasses.add(t);
+    }
   }
 
   assert.deepEqual(unmappedTemplates, [], 'All template literal prefixes must be registered in ENUM_PREFIX_MAP');

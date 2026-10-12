@@ -220,6 +220,14 @@ main {
   min-inline-size: 0;
 }
 
+.footer {
+  margin-top: auto;
+  padding: 18px 0;
+  border-top: 1px solid var(--edge);
+  color: var(--fg-muted);
+  font-size: 11px;
+}
+
 /* Topbar */
 .topbar {
   background: var(--surface-0);

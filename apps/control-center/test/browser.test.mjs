@@ -80,6 +80,102 @@ describe('views', { skip }, () => {
     });
   }
 
+  test('DOM crawl: asserts every class on every rendered element across all views, lenses and groups has a CSS rule', async () => {
+    const targets = [
+      ...VIEWS.map(([, hash]) => hash),
+      '#/ticket/24',
+      '#/ticket/23',
+      '#/ticket/25',
+      '#/ticket/5',
+    ];
+
+    const missingAcrossViews = [];
+
+    // Crawl all standard views and ticket variations
+    for (const hash of targets) {
+      const { context, page } = await open('normal', { hash, width: 1440, height: 900 });
+      await page.waitForSelector('#app[aria-busy="false"] .view');
+
+      const missing = await page.evaluate(() => {
+        const sheetClasses = new Set();
+        for (const sheet of document.styleSheets) {
+          try {
+            for (const rule of sheet.cssRules) {
+              if (rule.selectorText) {
+                for (const m of rule.selectorText.matchAll(/\.([a-zA-Z0-9_-]+)/g)) {
+                  sheetClasses.add(m[1]);
+                }
+              }
+            }
+          } catch {
+            // Ignore cross-origin stylesheet errors
+          }
+        }
+        const domClasses = new Set();
+        for (const el of document.querySelectorAll('*')) {
+          for (const c of el.classList) {
+            domClasses.add(c);
+          }
+        }
+        const notFound = [];
+        for (const c of domClasses) {
+          if (!sheetClasses.has(c)) notFound.push(c);
+        }
+        return notFound;
+      });
+
+      if (missing.length > 0) {
+        missingAcrossViews.push({ target: hash, missing });
+      }
+      await context.close();
+    }
+
+    // Crawl all board lens and group combinations
+    const { context, page } = await open('normal', { hash: '#/', width: 1440, height: 900 });
+    await page.waitForSelector('#app[aria-busy="false"] .view');
+
+    for (const group of ['Type', 'Agent', 'Outcome']) {
+      await page.getByRole('button', { name: group }).click();
+      for (const lens of ['Delivery', 'Cost', 'Gates']) {
+        await page.getByRole('button', { name: lens }).click();
+        const missing = await page.evaluate(() => {
+          const sheetClasses = new Set();
+          for (const sheet of document.styleSheets) {
+            try {
+              for (const rule of sheet.cssRules) {
+                if (rule.selectorText) {
+                  for (const m of rule.selectorText.matchAll(/\.([a-zA-Z0-9_-]+)/g)) {
+                    sheetClasses.add(m[1]);
+                  }
+                }
+              }
+            } catch {
+              // Ignore cross-origin stylesheet errors
+            }
+          }
+          const domClasses = new Set();
+          for (const el of document.querySelectorAll('*')) {
+            for (const c of el.classList) {
+              domClasses.add(c);
+            }
+          }
+          const notFound = [];
+          for (const c of domClasses) {
+            if (!sheetClasses.has(c)) notFound.push(c);
+          }
+          return notFound;
+        });
+
+        if (missing.length > 0) {
+          missingAcrossViews.push({ target: `board group=${group} lens=${lens}`, missing });
+        }
+      }
+    }
+    await context.close();
+
+    assert.deepEqual(missingAcrossViews, [], 'Every element class rendered across all views, lenses and groups must have a rule in document.styleSheets');
+  });
+
   test('delivery flow matrix: lens and group switching, macrobands, unclassified and pending ticket rendering', async () => {
     const { context, page } = await open('normal');
 
