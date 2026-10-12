@@ -11,7 +11,7 @@ variable "name" {
 
 variable "mode" {
   type        = string
-  description = "Audit logs would-be denials and blocks nothing; Enforced refuses unlisted hosts with a proxy 403."
+  description = "Audit blocks nothing and its decisions are not yet observable; Enforced refuses unlisted hosts (a proxy 403 on HTTPS requests, other clients may see a TLS error)."
 
   validation {
     condition     = contains(["Audit", "Enforced"], var.mode)
@@ -24,7 +24,12 @@ variable "allowed_hosts" {
   description = "Exact host names the agent may reach (one Fqdn Allow rule each); everything else is denied."
 
   validation {
-    condition     = length(var.allowed_hosts) > 0 && length(var.allowed_hosts) <= 100 && alltrue([for h in var.allowed_hosts : can(regex("^[a-z0-9]([a-z0-9.-]*[a-z0-9])?$", h))])
-    error_message = "allowed_hosts must be non-empty lowercase host names (no scheme, port, path or wildcard)."
+    # Dotted labels of letters, digits and inner dashes; the last label starts with a letter, so IP literals
+    # (1.2.3.4) and "a..b" are rejected, as are schemes, ports, paths and wildcards.
+    condition = (
+      length(var.allowed_hosts) > 0 && length(var.allowed_hosts) <= 100 &&
+      alltrue([for h in var.allowed_hosts : length(h) <= 253 && can(regex("^([a-z0-9]([a-z0-9-]*[a-z0-9])?[.])+[a-z]([a-z0-9-]*[a-z0-9])?$", h))])
+    )
+    error_message = "allowed_hosts must be non-empty lowercase DNS names (no IP literal, empty label, scheme, port, path or wildcard)."
   }
 }

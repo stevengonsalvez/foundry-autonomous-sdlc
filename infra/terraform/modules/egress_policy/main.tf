@@ -38,7 +38,7 @@ resource "azapi_resource" "this" {
         # Index prefix: truncated or dash-mapped host names cannot collide.
         rules = [
           for i, host in var.allowed_hosts : {
-            name     = format("allow-%02d-%s", i, substr(replace(host, ".", "-"), 0, 55))
+            name     = format("allow-%02d-%s", i, trimsuffix(substr(replace(host, ".", "-"), 0, 55), "-"))
             ruleType = "Fqdn"
             match    = { host = host }
             action   = { actionType = "Allow" }
