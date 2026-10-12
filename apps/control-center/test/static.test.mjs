@@ -1,9 +1,15 @@
-// Grep-able promises: the app only reads, and never turns text into markup.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readdir, readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+
+import { BOARD_STAGES, AGENT_STATES } from '../js/schema.js';
+import { OUTCOME_GLYPH, NODE_STATES } from '../js/charts.js';
+import { MACROBANDS, CHIP_STATES, LANE_TONES, STAGE_MODES } from '../js/views/board.js';
+import { GATE_STATUSES, CHAIN_STATUSES, SPLIT, HOP_STATUS } from '../js/views/ticket.js';
+import { HOP_ACTIONS } from '../js/views/common.js';
+import { BADGE_TONES } from '../js/dom.js';
 
 const root = fileURLToPath(new URL('..', import.meta.url));
 
@@ -102,126 +108,160 @@ test('every class name in JS has a corresponding rule in CSS stylesheets', async
     cssClasses.add(match[1]);
   }
 
-  // Documented explicit allowlist of dynamic prefix namespaces
-  const DYNAMIC_PREFIXES = [
-    'st-text-',
-    'st-bg-',
-    'st-fill-',
-    'dot-',
-    'band-',
-    'state-',
-    'agent-',
-    'col-',
-    'mode-',
-    'tone-',
-    'split-',
-  ];
+  const ENUM_PREFIX_MAP = {
+    'col-': BOARD_STAGES,
+    'st-text-': BOARD_STAGES,
+    'st-bg-': BOARD_STAGES,
+    'st-fill-': BOARD_STAGES,
+    'release-': Object.keys(OUTCOME_GLYPH),
+    'node-': NODE_STATES,
+    'tone-': BADGE_TONES,
+    'state-': AGENT_STATES,
+    'agent-': AGENT_STATES,
+    'dot-': [...new Set([...CHIP_STATES, ...LANE_TONES])],
+    'card-': CHIP_STATES,
+    'band-': [...MACROBANDS.map((m) => m.id), 'ok', 'high', 'over'],
+    'mode-': ['auto', 'gate', 'sim', 'manual'],
+    'callout-': ['danger', 'info'],
+    'env-': ['staging', 'production'],
+    'hop-': [...new Set([...Object.keys(HOP_STATUS), ...HOP_ACTIONS])],
+    'gate-': GATE_STATUSES,
+    'chain-': CHAIN_STATUSES,
+    'fill-': ['ok', 'high', 'over', 'warn', 'info', 'accent', 'bad'],
+  };
 
-  function extractClassesFromCode(code) {
-    const classes = new Set();
-    const addToken = (token) => {
-      if (/^[a-zA-Z][a-zA-Z0-9_-]*[a-zA-Z0-9]$|^[a-zA-Z]$/.test(token)) {
-        classes.add(token);
+  const SPLIT_CLASSES = [...SPLIT.map((s) => s[2]), 'split-other'];
+
+  const requiredClasses = new Set();
+  for (const [prefix, variants] of Object.entries(ENUM_PREFIX_MAP)) {
+    for (const v of variants) requiredClasses.add(`${prefix}${v}`);
+  }
+  for (const c of SPLIT_CLASSES) requiredClasses.add(c);
+
+  const unmappedTemplates = [];
+
+  function parseClassTemplate(rawTpl) {
+    let i = 0;
+    let staticPart = '';
+    while (i < rawTpl.length) {
+      if (rawTpl[i] === '$' && rawTpl[i + 1] === '{') {
+        const tokens = staticPart.split(/\s+/);
+        const prefixCandidate = tokens[tokens.length - 1];
+        if (prefixCandidate && prefixCandidate.endsWith('-')) {
+          if (!ENUM_PREFIX_MAP[prefixCandidate]) {
+            unmappedTemplates.push(`Unknown template prefix: ${prefixCandidate}`);
+          }
+        }
+        for (const t of tokens) {
+          if (/^[a-zA-Z][a-zA-Z0-9_-]*$/.test(t) && !t.endsWith('-')) {
+            requiredClasses.add(t);
+          }
+        }
+        staticPart = '';
+        let depth = 1;
+        i += 2;
+        let expr = '';
+        while (i < rawTpl.length && depth > 0) {
+          if (rawTpl[i] === '{') depth++;
+          else if (rawTpl[i] === '}') {
+            depth--;
+            if (depth === 0) break;
+          } else {
+            expr += rawTpl[i];
+          }
+          i++;
+        }
+        let qTarget = expr;
+        const qIdx = expr.indexOf('?');
+        if (qIdx !== -1) qTarget = expr.slice(qIdx + 1);
+        for (const m of qTarget.matchAll(/['"]([^'"]+)['"]/g)) {
+          for (const t of m[1].trim().split(/\s+/)) {
+            if (/^[a-zA-Z][a-zA-Z0-9_-]*$/.test(t)) requiredClasses.add(t);
+          }
+        }
+      } else {
+        staticPart += rawTpl[i];
       }
-    };
-
-    const stringPropRe = /\b(?:class(?:Name)?|cls)\s*:\s*(['"])(.*?)\1/gs;
-    for (const m of code.matchAll(stringPropRe)) {
-      for (const token of m[2].split(/\s+/)) {
-        addToken(token);
+      i++;
+    }
+    for (const t of staticPart.split(/\s+/)) {
+      if (/^[a-zA-Z][a-zA-Z0-9_-]*$/.test(t) && !t.endsWith('-')) {
+        requiredClasses.add(t);
       }
     }
-    const tplPropRe = /\b(?:class(?:Name)?\s*:|(?:const|let|var)\s+cls\s*=|cls\s*:)\s*`([^`]*)`/gs;
-    for (const m of code.matchAll(tplPropRe)) {
-      const raw = m[1];
-      let depth = 0;
-      let currentStatic = '';
-      let inExpr = false;
-      let expr = '';
-      for (let i = 0; i < raw.length; i++) {
-        if (!inExpr && raw[i] === '$' && raw[i + 1] === '{') {
-          inExpr = true;
-          depth = 1;
-          i++;
-          continue;
+  }
+
+  for (const [file, code] of sources) {
+    const lines = code.split('\n');
+    lines.forEach((l) => {
+      // 1. Template literals assigned to class or cls
+      const tplMatches = l.matchAll(/\b(?:class(?:Name)?|cls)\s*:\s*`([^`]*)`|\b(?:const|let|var)\s+cls\s*=\s*`([^`]*)`|\bclass\s*=\s*`([^`]*)`/g);
+      for (const tm of tplMatches) {
+        parseClassTemplate(tm[1] ?? tm[2] ?? tm[3]);
+      }
+
+      // 2. Class property strings or conditional expressions
+      const propMatches = l.matchAll(/\b(?:class(?:Name)?|cls)\s*:\s*([^,`}\n]+)/g);
+      for (const pm of propMatches) {
+        let expr = pm[1];
+        const qIdx = expr.indexOf('?');
+        if (qIdx !== -1) expr = expr.slice(qIdx + 1);
+        for (const m of expr.matchAll(/['"]([^'"]+)['"]/g)) {
+          for (const t of m[1].trim().split(/\s+/)) {
+            if (/^[a-zA-Z][a-zA-Z0-9_-]*$/.test(t)) requiredClasses.add(t);
+          }
         }
-        if (inExpr) {
-          if (raw[i] === '{') depth++;
-          else if (raw[i] === '}') {
-            depth--;
-            if (depth === 0) {
-              inExpr = false;
-              for (const sm of expr.matchAll(/['"]([^'"]+)['"]/g)) {
-                for (const token of sm[1].split(/\s+/)) {
-                  addToken(token);
-                }
-              }
-              expr = '';
-              continue;
+      }
+
+      // 3. Variable assignments to cls
+      const varMatches = l.matchAll(/\b(?:const|let|var)\s+cls\s*=\s*([^;`\n]+)/g);
+      for (const vm of varMatches) {
+        let expr = vm[1];
+        const qIdx = expr.indexOf('?');
+        if (qIdx !== -1) expr = expr.slice(qIdx + 1);
+        for (const m of expr.matchAll(/['"]([^'"]+)['"]/g)) {
+          for (const t of m[1].trim().split(/\s+/)) {
+            if (/^[a-zA-Z][a-zA-Z0-9_-]*$/.test(t)) requiredClasses.add(t);
+          }
+        }
+      }
+
+      // 4. classList calls
+      for (const m of l.matchAll(/\bclassList\.(?:add|remove|toggle)\s*\(\s*(['"])(.*?)\1\s*\)/g)) {
+        for (const t of m[2].trim().split(/\s+/)) {
+          if (/^[a-zA-Z][a-zA-Z0-9_-]*$/.test(t)) requiredClasses.add(t);
+        }
+      }
+
+      // 5. badge(..., ..., className)
+      for (const bm of l.matchAll(/\bbadge\s*\(\s*([^(),]+)\s*,\s*([^(),]+)\s*,\s*(['"])(.*?)\3\s*\)/g)) {
+        for (const t of bm[4].trim().split(/\s+/)) {
+          if (/^[a-zA-Z][a-zA-Z0-9_-]*$/.test(t)) requiredClasses.add(t);
+        }
+      }
+
+      // 6. text(x, y, cls, ...) in charts.js
+      if (file.endsWith('charts.js')) {
+        for (const tm of l.matchAll(/\btext\s*\([^,]+,[^,]+,\s*([^,]+),/g)) {
+          let expr = tm[1];
+          const qIdx = expr.indexOf('?');
+          if (qIdx !== -1) expr = expr.slice(qIdx + 1);
+          for (const m of expr.matchAll(/['"]([^'"]+)['"]/g)) {
+            for (const t of m[1].trim().split(/\s+/)) {
+              if (/^[a-zA-Z][a-zA-Z0-9_-]*$/.test(t)) requiredClasses.add(t);
             }
           }
-          expr += raw[i];
-        } else {
-          currentStatic += raw[i];
         }
       }
-      for (const token of currentStatic.split(/\s+/)) {
-        addToken(token);
-      }
-    }
-    const classListRe = /\bclassList\.(?:add|remove|toggle)\s*\(\s*(['"`])(.*?)\1\s*\)/g;
-    for (const m of code.matchAll(classListRe)) {
-      for (const token of m[2].split(/\s+/)) {
-        addToken(token);
-      }
-    }
-    return classes;
+    });
   }
 
-  const STAGES = ['backlog', 'refining', 'feasible', 'tests', 'building', 'review', 'staging', 'prod', 'escalated'];
-  const OUTCOME_GLYPHS = ['ok', 'failed', 'skipped', 'pending'];
-  const HOP_STATUSES = ['success', 'skipped', 'rolled_back', 'failed', 'in_progress'];
-  const HOP_ACTIONS = ['stage', 'promote', 'rollback', 'skip', 'fail', 'legacy-publish'];
-  const AGENT_STATES = ['running', 'idle', 'error', 'stale', 'unknown'];
-  const NODE_STATES = ['todo', 'done', 'current', 'bad'];
-  const CHIP_STATES = ['active', 'pending', 'wait', 'blocked', 'done'];
-  const GATE_STATUSES = ['pass', 'fail', 'running', 'none'];
-  const CHAIN_STATUSES = ['pass', 'fail', 'running', 'none', 'skipped'];
-  const BADGE_TONES = ['good', 'bad', 'warn', 'info', 'neutral'];
-  const CALLOUT_VARIANTS = ['danger', 'info'];
-  const KPI_VARIANTS = ['good', 'bad'];
-
-  const expandedEnumClasses = [
-    ...STAGES.flatMap((s) => [`col-${s}`, `st-${s}`, `st-fill-${s}`]),
-    'badge-stage',
-    ...OUTCOME_GLYPHS.map((outcome) => `release-${outcome}`),
-    ...HOP_STATUSES.map((status) => `hop-${status}`),
-    ...HOP_ACTIONS.map((action) => `hop-${action}`),
-    ...AGENT_STATES.map((s) => `state-${s}`),
-    ...NODE_STATES.map((s) => `node-${s}`),
-    ...CHIP_STATES.flatMap((s) => [`card-${s}`, `dot-${s}`]),
-    ...GATE_STATUSES.map((s) => `gate-${s}`),
-    ...CHAIN_STATUSES.map((s) => `chain-${s}`),
-    ...BADGE_TONES.map((tone) => `badge-${tone}`),
-    ...CALLOUT_VARIANTS.map((variant) => `callout-${variant}`),
-    ...KPI_VARIANTS.map((variant) => `kpi-${variant}`),
-    'env-card',
-  ];
+  assert.deepEqual(unmappedTemplates, [], 'All template literal prefixes must be registered in ENUM_PREFIX_MAP');
 
   const missing = [];
-  for (const [file, code] of sources) {
-    const classes = extractClassesFromCode(code);
-    for (const cls of classes) {
-      if (DYNAMIC_PREFIXES.some((p) => cls.startsWith(p))) continue;
-      if (!cssClasses.has(cls)) {
-        missing.push(`${file} uses class "${cls}" which has no rule in css/*.css`);
-      }
-    }
-  }
-
-  for (const cls of expandedEnumClasses) {
+  for (const cls of requiredClasses) {
     if (!cssClasses.has(cls)) {
-      missing.push(`expanded enum class "${cls}" has no rule in css/*.css`);
+      missing.push(`class "${cls}" has no rule in css/*.css`);
     }
   }
 
