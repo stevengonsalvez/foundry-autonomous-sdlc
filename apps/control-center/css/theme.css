@@ -1,0 +1,282 @@
+/* Design Tokens for Control Center
+   Supports system light/dark theme and data-theme toggle.
+   Follows Flowtron operational design system specifications. */
+
+:root {
+  color-scheme: light dark;
+
+  /* Typography Stacks */
+  --font-sans: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+
+  /* Font Sizes */
+  --text-2xs: 9.5px;
+  --text-xs: 11px;
+  --text-sm: 12px;
+  --text-base: 13.5px;
+  --text-md: 15px;
+  --text-lg: 18px;
+  --text-xl: 22px;
+  --text-2xl: 26px;
+
+  /* Spacing Scale */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 28px;
+  --space-7: 40px;
+
+  /* Radii */
+  --radius-xs: 3px;
+  --radius-sm: 6px;
+  --radius-md: 9px;
+  --radius-lg: 12px;
+  --radius-pill: 9999px;
+
+  /* Transitions */
+  --trans-fast: 0.15s ease;
+  --trans-base: 0.22s ease;
+  --trans-smooth: 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+
+  /* Semantic Core Colors */
+  --color-auto: #10b981;
+  --color-assist: #f59e0b;
+  --color-gate: #ef4444;
+  --color-info: #3b82f6;
+  --color-cyan: #06b6d4;
+  --color-purple: #8b5cf6;
+  --color-slate: #64748b;
+
+  /* Theme Dependent Variables (Default: Light Mode) */
+  --bg-app: #f6f8fa;
+  --bg-panel: #ffffff;
+  --bg-panel-elevated: #ffffff;
+  --bg-surface: #f1f5f9;
+  --bg-surface-hover: #e2e8f0;
+  --bg-subtle: #f8fafc;
+
+  --line: #d0d7de;
+  --line-soft: #e2e8f0;
+  --line-strong: #94a3b8;
+
+  --text-primary: #0f172a;
+  --text-secondary: #334155;
+  --text-muted: #64748b;
+  --text-faint: #94a3b8;
+
+  /* Interactive */
+  --accent: #2563eb;
+  --accent-hover: #1d4ed8;
+  --accent-subtle: rgba(37, 99, 235, 0.08);
+  --focus-ring: #2563eb;
+
+  /* Status Tokens */
+  --auto: #059669;
+  --auto-bg: rgba(5, 150, 105, 0.1);
+  --auto-border: rgba(5, 150, 105, 0.3);
+
+  --assist: #d97706;
+  --assist-bg: rgba(217, 119, 6, 0.1);
+  --assist-border: rgba(217, 119, 6, 0.3);
+
+  --gate: #dc2626;
+  --gate-bg: rgba(220, 38, 38, 0.09);
+  --gate-border: rgba(220, 38, 38, 0.3);
+
+  --dit: #2563eb;
+  --dit-bg: rgba(37, 99, 235, 0.09);
+  --dit-border: rgba(37, 99, 235, 0.3);
+
+  --contract: #0891b2;
+  --contract-bg: rgba(8, 145, 178, 0.1);
+  --contract-border: rgba(8, 145, 178, 0.3);
+
+  --ephem: #7c3aed;
+  --ephem-bg: rgba(124, 58, 237, 0.1);
+  --ephem-border: rgba(124, 58, 237, 0.3);
+
+  --done: #475569;
+  --done-bg: rgba(71, 85, 105, 0.1);
+  --done-border: rgba(71, 85, 105, 0.3);
+
+  /* Shadows */
+  --shadow-sm: 0 1px 2px rgba(15, 23, 42, 0.05);
+  --shadow-md: 0 4px 6px -1px rgba(15, 23, 42, 0.07), 0 2px 4px -2px rgba(15, 23, 42, 0.05);
+  --shadow-lg: 0 10px 15px -3px rgba(15, 23, 42, 0.08), 0 4px 6px -4px rgba(15, 23, 42, 0.04);
+  --shadow-inset: inset 0 0 0 1px var(--line);
+}
+
+/* System Dark Preference */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg-app: #0e1217;
+    --bg-panel: #161c24;
+    --bg-panel-elevated: #1b232d;
+    --bg-surface: #1f2833;
+    --bg-surface-hover: #27313d;
+    --bg-subtle: #12171e;
+
+    --line: #27313d;
+    --line-soft: #1f2832;
+    --line-strong: #3e4c5e;
+
+    --text-primary: #f1f5f9;
+    --text-secondary: #cbd6e3;
+    --text-muted: #8b9bb0;
+    --text-faint: #5a697a;
+
+    --accent: #6fa8ff;
+    --accent-hover: #8bb8ff;
+    --accent-subtle: rgba(111, 168, 255, 0.12);
+    --focus-ring: #6fa8ff;
+
+    --auto: #2dd4a7;
+    --auto-bg: rgba(45, 212, 167, 0.12);
+    --auto-border: rgba(45, 212, 167, 0.35);
+
+    --assist: #f2b23d;
+    --assist-bg: rgba(242, 178, 61, 0.12);
+    --assist-border: rgba(242, 178, 61, 0.35);
+
+    --gate: #f0644b;
+    --gate-bg: rgba(240, 100, 75, 0.13);
+    --gate-border: rgba(240, 100, 75, 0.35);
+
+    --dit: #6fa8ff;
+    --dit-bg: rgba(111, 168, 255, 0.13);
+    --dit-border: rgba(111, 168, 255, 0.35);
+
+    --contract: #22d3ee;
+    --contract-bg: rgba(34, 211, 238, 0.12);
+    --contract-border: rgba(34, 211, 238, 0.35);
+
+    --ephem: #c084fc;
+    --ephem-bg: rgba(192, 132, 252, 0.12);
+    --ephem-border: rgba(192, 132, 252, 0.35);
+
+    --done: #94a3b8;
+    --done-bg: rgba(148, 163, 184, 0.12);
+    --done-border: rgba(148, 163, 184, 0.35);
+
+    --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
+    --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.4);
+    --shadow-lg: 0 12px 24px -4px rgba(0, 0, 0, 0.55);
+    --shadow-inset: inset 0 0 0 1px var(--line);
+  }
+}
+
+/* Explicit Dark Theme */
+[data-theme="dark"] {
+  --bg-app: #0e1217;
+  --bg-panel: #161c24;
+  --bg-panel-elevated: #1b232d;
+  --bg-surface: #1f2833;
+  --bg-surface-hover: #27313d;
+  --bg-subtle: #12171e;
+
+  --line: #27313d;
+  --line-soft: #1f2832;
+  --line-strong: #3e4c5e;
+
+  --text-primary: #f1f5f9;
+  --text-secondary: #cbd6e3;
+  --text-muted: #8b9bb0;
+  --text-faint: #5a697a;
+
+  --accent: #6fa8ff;
+  --accent-hover: #8bb8ff;
+  --accent-subtle: rgba(111, 168, 255, 0.12);
+  --focus-ring: #6fa8ff;
+
+  --auto: #2dd4a7;
+  --auto-bg: rgba(45, 212, 167, 0.12);
+  --auto-border: rgba(45, 212, 167, 0.35);
+
+  --assist: #f2b23d;
+  --assist-bg: rgba(242, 178, 61, 0.12);
+  --assist-border: rgba(242, 178, 61, 0.35);
+
+  --gate: #f0644b;
+  --gate-bg: rgba(240, 100, 75, 0.13);
+  --gate-border: rgba(240, 100, 75, 0.35);
+
+  --dit: #6fa8ff;
+  --dit-bg: rgba(111, 168, 255, 0.13);
+  --dit-border: rgba(111, 168, 255, 0.35);
+
+  --contract: #22d3ee;
+  --contract-bg: rgba(34, 211, 238, 0.12);
+  --contract-border: rgba(34, 211, 238, 0.35);
+
+  --ephem: #c084fc;
+  --ephem-bg: rgba(192, 132, 252, 0.12);
+  --ephem-border: rgba(192, 132, 252, 0.35);
+
+  --done: #94a3b8;
+  --done-bg: rgba(148, 163, 184, 0.12);
+  --done-border: rgba(148, 163, 184, 0.35);
+
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
+  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.4);
+  --shadow-lg: 0 12px 24px -4px rgba(0, 0, 0, 0.55);
+  --shadow-inset: inset 0 0 0 1px var(--line);
+}
+
+/* Explicit Light Theme */
+[data-theme="light"] {
+  --bg-app: #f6f8fa;
+  --bg-panel: #ffffff;
+  --bg-panel-elevated: #ffffff;
+  --bg-surface: #f1f5f9;
+  --bg-surface-hover: #e2e8f0;
+  --bg-subtle: #f8fafc;
+
+  --line: #d0d7de;
+  --line-soft: #e2e8f0;
+  --line-strong: #94a3b8;
+
+  --text-primary: #0f172a;
+  --text-secondary: #334155;
+  --text-muted: #64748b;
+  --text-faint: #94a3b8;
+
+  --accent: #2563eb;
+  --accent-hover: #1d4ed8;
+  --accent-subtle: rgba(37, 99, 235, 0.08);
+  --focus-ring: #2563eb;
+
+  --auto: #059669;
+  --auto-bg: rgba(5, 150, 105, 0.1);
+  --auto-border: rgba(5, 150, 105, 0.3);
+
+  --assist: #d97706;
+  --assist-bg: rgba(217, 119, 6, 0.1);
+  --assist-border: rgba(217, 119, 6, 0.3);
+
+  --gate: #dc2626;
+  --gate-bg: rgba(220, 38, 38, 0.09);
+  --gate-border: rgba(220, 38, 38, 0.3);
+
+  --dit: #2563eb;
+  --dit-bg: rgba(37, 99, 235, 0.09);
+  --dit-border: rgba(37, 99, 235, 0.3);
+
+  --contract: #0891b2;
+  --contract-bg: rgba(8, 145, 178, 0.1);
+  --contract-border: rgba(8, 145, 178, 0.3);
+
+  --ephem: #7c3aed;
+  --ephem-bg: rgba(124, 58, 237, 0.1);
+  --ephem-border: rgba(124, 58, 237, 0.3);
+
+  --done: #475569;
+  --done-bg: rgba(71, 85, 105, 0.1);
+  --done-border: rgba(71, 85, 105, 0.3);
+
+  --shadow-sm: 0 1px 2px rgba(15, 23, 42, 0.05);
+  --shadow-md: 0 4px 6px -1px rgba(15, 23, 42, 0.07), 0 2px 4px -2px rgba(15, 23, 42, 0.05);
+  --shadow-lg: 0 10px 15px -3px rgba(15, 23, 42, 0.08), 0 4px 6px -4px rgba(15, 23, 42, 0.04);
+  --shadow-inset: inset 0 0 0 1px var(--line);
+}
