@@ -1,24 +1,64 @@
+<p align="center">
+  <img src="docs/media/hero.svg" alt="Autonomous SDLC motion header: live topology network and 4 delivery flow lanes for feature, bug, escalation, and rollback" width="100%" />
+</p>
+
 # foundry-autonomous-sdlc
 
 An issue is filed. Agents on Azure AI Foundry score and refine the requirement, judge whether an agent can do the work, write failing tests first, build until the tests pass, review independently, merge and release. No human step. This repository is the demonstration, and every claim below links to a command you can run or a trace you can click.
 
-```
-┌──────────┐ every 5 min ┌──────────────────┐ Responses  ┌────────────────────────┐
-│ GitHub   │◀───────────▶│ sdlc-orchestrator│───────────▶│ prompt agents          │
-│ issues   │  labels,    │ hosted agent     │            │ req-gate, feasibility, │
-│ PRs      │  merges,    │ (Routine wakes   │            │ test-designer, PO,     │
-│ checks   │  releases   │  it)             │            │ reviewer, triage, notes│
-└────▲─────┘             └────────┬─────────┘            └────────────────────────┘
-     │ opens its own PR           │ Invocations
-     │                   ┌────────▼─────────┐
-     └───────────────────│ sdlc-coder       │  git, node, agy CLI, tests,
-                         │ hosted agent     │  typecheck and lint until green
-                         └──────────────────┘
-CI is plain tests and gates. It never drives an agent.
+## System topology
 
-  every tick ─events─▶ sdlc-ledger (hosted, scales to zero) ─one commit─▶ branch `state` ─▶ /control-center/
-  merge ─▶ CI ─▶ /staging/ ─▶ Playwright smoke ─▶ 10 min soak ─▶ prod (site root) | rollback + flag
-```
+<p align="center">
+  <img src="docs/media/topology.svg" alt="Animated system topology of the autonomous SDLC connecting GitHub, Routine timer, Orchestrator, Prompt agents, Coder, CI gates, Continuous Deployment, Ledger, and Control Center" width="100%" />
+</p>
+
+## Real execution scenarios
+
+The animations below are built from authentic recorded traces in branch `origin/state` (`events.jsonl` and `state.json`). Timings are compressed for demonstration (actual wall-clock runtimes: 2m to 18m). Pure vector animated SVGs with GIF fallbacks in `docs/media/`.
+
+<details open>
+<summary><b>Scenario 1: Feature happy path (Issue #24, PR #29, Release v0.3.0)</b></summary>
+
+Requirement scored, bounced below 80, refined by simulated product owner to 90, feasibility confirmed, TDD failing test committed first (`c0f5713`), implemented until green (`fcc6f1e`), approved by independent review, all 6 CI checks green, staged, smoke and 10-minute soak verified, released to prod. Total cost: $0.0816 USD.
+
+<p align="center">
+  <img src="docs/media/scenario-feature.svg" alt="Scenario 1 animation: feature happy path from intake through simulated refinement, TDD red commit, green build, review, and production soak to release" width="100%" />
+</p>
+
+</details>
+
+<details open>
+<summary><b>Scenario 2: Bug with failing regression test first (Issue #25, PR #26, Release v0.1.1)</b></summary>
+
+Bug triaged automatically (severity s3, owner api), requirement scored 83, failing regression test committed first (`6816a92`), fix committed (`a132025`), reviewed and verified across 6 gates, released. Total cost: $0.0368 USD.
+
+<p align="center">
+  <img src="docs/media/scenario-bug.svg" alt="Scenario 2 animation: bug with failing regression test committed first before the fix, clearing 6 CI gates to release" width="100%" />
+</p>
+
+</details>
+
+<details open>
+<summary><b>Scenario 3: Vague requirement and not-agent-suitable escalation (Issue #17)</b></summary>
+
+Initial requirement scored below 80 and bounced, simulated product owner clarifies scope, feasibility agent evaluates against repository contracts and judges not suitable (requires live production secrets, DNS/firewall changes, vendor agreement). Cleanly halted on the coral escalation path for human operator with zero rogue code edits. Total cost: $0.0153 USD.
+
+<p align="center">
+  <img src="docs/media/scenario-escalation.svg" alt="Scenario 3 animation: vague requirement bounced for refinement, evaluated by feasibility agent, and escalated in coral tone to human operator" width="100%" />
+</p>
+
+</details>
+
+<details open>
+<summary><b>Scenario 4: Continuous deployment smoke fail and rollback (PR #46 / Run 38180836579)</b></summary>
+
+Merged commit `8137c60` deployed to `/staging/`. Playwright smoke test fails on staging. Automated rollback immediately restores previous healthy production build (`641cb02`). Ticket flagged with label `escalated:deploy-failed`. Production root remains untouched with zero downtime.
+
+<p align="center">
+  <img src="docs/media/scenario-rollback.svg" alt="Scenario 4 animation: continuous deployment smoke test failure on staging triggering automated rollback and ticket escalation" width="100%" />
+</p>
+
+</details>
 
 ## What it shows
 
