@@ -33,7 +33,7 @@ export const runLink = (url) => dataLink(url);
 
 export function modeBadge(mode) {
   const m = String(mode).toUpperCase();
-  const tone = m === 'AUTO' ? 'auto' : m === 'GATE' ? 'gate' : m === 'SIM' ? 'sim' : 'manual';
+  const tone = m === 'AUTO' ? MODE_TONES[0] : m === 'GATE' ? MODE_TONES[1] : m === 'SIM' ? MODE_TONES[2] : MODE_TONES[3];
   return h('span', { class: `mode-badge mode-${tone}` }, m);
 }
 

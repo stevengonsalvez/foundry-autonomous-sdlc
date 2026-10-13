@@ -187,6 +187,17 @@ describe('views', { skip }, () => {
       ['shape', 'build', 'release', 'escalated'],
     );
 
+    // 1b. Matrix cells have aria-labelledby referencing valid lane and column headers
+    const cells = await page.locator('.matrix-cell').all();
+    assert.ok(cells.length > 0, 'matrix cells rendered');
+    for (const cell of cells) {
+      const labelledBy = await cell.getAttribute('aria-labelledby');
+      assert.ok(labelledBy, 'matrix-cell must have aria-labelledby');
+      const [laneId, colId] = labelledBy.split(' ');
+      assert.ok(laneId?.startsWith('lane-'), `lane ID "${laneId}" must start with lane-`);
+      assert.ok(colId?.startsWith('col-'), `col ID "${colId}" must start with col-`);
+    }
+
     // 2. Lens switching changes the DOM
     const costBtn = page.getByRole('button', { name: 'Cost' });
     await costBtn.click();

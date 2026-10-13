@@ -89,16 +89,18 @@ export function stageDurations(ticket, nowMs) {
 
 // ------------------------------------------------------------------ gates and environments
 
+export const GATE_STATUSES = Object.freeze(['pass', 'fail', 'running', 'skipped', 'none']);
+
 const GATE_PASS = ['success', 'passed', 'pass'];
 const GATE_FAIL = ['failure', 'failed', 'error', 'timed_out', 'cancelled', 'rolled_back'];
 const GATE_RUN = ['in_progress', 'pending', 'queued', 'running', 'waiting'];
 
 export function gateOutcome(raw) {
-  if (GATE_PASS.includes(raw)) return 'pass';
-  if (GATE_FAIL.includes(raw)) return 'fail';
-  if (GATE_RUN.includes(raw)) return 'running';
-  if (raw === 'skipped') return 'skipped';
-  return 'none';
+  if (GATE_PASS.includes(raw)) return GATE_STATUSES[0];
+  if (GATE_FAIL.includes(raw)) return GATE_STATUSES[1];
+  if (GATE_RUN.includes(raw)) return GATE_STATUSES[2];
+  if (raw === 'skipped') return GATE_STATUSES[3];
+  return GATE_STATUSES[4];
 }
 
 /**
@@ -205,9 +207,9 @@ export function boardSummary(state, pending) {
 export const COST_BANDS = Object.freeze(['ok', 'high', 'over']);
 
 export function costBand(pct) {
-  if (pct > 100) return 'over';
-  if (pct >= 75) return 'high';
-  return 'ok';
+  if (pct > 100) return COST_BANDS[2];
+  if (pct >= 75) return COST_BANDS[1];
+  return COST_BANDS[0];
 }
 
 export function costRows(state) {

@@ -223,7 +223,7 @@ function matrixCell(stage, lane, tickets, nowMs, lens, group) {
   if (!applicable && laneTickets.length === 0) {
     return h(
       'div',
-      { class: 'matrix-cell cell-hatched', 'data-lane': laneKey, role: 'cell' },
+      { class: 'matrix-cell cell-hatched', 'data-lane': laneKey, role: 'cell', 'aria-labelledby': `lane-${laneKey} col-${stage}` },
       h('span', { class: 'cell-hatched-label' }, 'bypasses stage'),
     );
   }
@@ -236,6 +236,7 @@ function matrixCell(stage, lane, tickets, nowMs, lens, group) {
       class: `matrix-cell${laneTickets.length === 0 ? ' cell-empty' : ''}${!applicable ? ' cell-bypass' : ''}`,
       'data-lane': laneKey,
       role: 'cell',
+      'aria-labelledby': `lane-${laneKey} col-${stage}`,
     },
     mobileLaneTag,
     ...laneTickets.map((t) => ticketChip(t, nowMs, lens)),
@@ -267,14 +268,14 @@ function stageColumn(col, nowMs, filtered, lens, group, lanes) {
     { class: `col col-${classToken(col.stage)}${quiet ? ' col-quiet' : ''}`, role: 'row', 'data-stage': col.stage },
     h(
       'header',
-      { class: 'col-head', role: 'rowheader' },
+      { class: 'col-head', role: 'rowheader', id: `col-${col.stage}` },
       h(
         'div',
         { class: 'col-head-top' },
         h(
           'div',
           { class: 'col-title-group' },
-          h('h2', { id: `col-${col.stage}`, class: 'col-title' }, col.label),
+          h('h2', { class: 'col-title' }, col.label),
           modeBadge(mode),
         ),
         h('span', { class: 'col-count', title: `${col.tickets.length} shown, ${col.total} in this stage` }, countText),
