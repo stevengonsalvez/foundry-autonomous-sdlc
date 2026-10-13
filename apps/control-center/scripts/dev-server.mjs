@@ -2,7 +2,7 @@
 // /state.json and /issues.json from the test fixtures, and serves the fixtures under /fixtures/.
 // Not part of the published site.
 //
-//   node test/dev-server.mjs [--port 8090] [--state normal|empty|missing|bad-version|invalid-json|http-500|hostile|stale] [--fixed]
+//   node scripts/dev-server.mjs [--port 8090] [--state normal|empty|missing|bad-version|invalid-json|http-500|hostile|stale] [--fixed]
 //
 // Open http://127.0.0.1:8090/?data=state.json (add &issues=issues.json for pending intake).
 // Unless --fixed, every timestamp in the fixture is shifted so the document looks two minutes old
