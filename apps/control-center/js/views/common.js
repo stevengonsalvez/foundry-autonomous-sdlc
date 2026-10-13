@@ -1,7 +1,7 @@
 // Pieces shared by several views. Untrusted text goes in as children (text nodes) only; links
 // come from the validators in safe.js or from the ticket number.
 
-import { badge, ghLink, h } from '../dom.js';
+import { badge, classToken, ghLink, h } from '../dom.js';
 import { icon } from '../icons.js';
 import { escalationLabel, formatDuration, formatTimestamp, formatUsd, parseTime, shortSha, titleCase } from '../format.js';
 import { commitUrl, dataLink, issueUrl, pullUrl, releaseUrl, safeGithubUrl } from '../safe.js';
@@ -12,7 +12,7 @@ export const ticketHref = (issue) => `#/ticket/${issue}`;
 export const MODE_TONES = Object.freeze(['auto', 'gate', 'sim', 'manual']);
 
 /** CSS class for a board stage: `st-fill-*` (SVG fill), `st-bg-*` (background), `st-text-*` (text). */
-export const stageFill = (stage) => `st-fill-${String(stage ?? '').toLowerCase().replace(/[^a-z0-9-]/g, '-')}`;
+export const stageFill = (stage) => `st-fill-${classToken(stage)}`;
 
 /** GitHub URL of a ticket: the one in the data when it points into this repo, else built from its number. */
 export function ticketGithubUrl(ticket) {
@@ -110,7 +110,8 @@ export function envBadgeFor(ticket) {
 }
 
 export function stageBadge(stage) {
-  return h('span', { class: `badge badge-stage st-text-${stage}` }, h('span', { class: `sdot st-bg-${stage}`, 'aria-hidden': 'true' }), stageLabel(stage));
+  const token = classToken(stage);
+  return h('span', { class: `badge badge-stage st-text-${token}` }, h('span', { class: `sdot st-bg-${token}`, 'aria-hidden': 'true' }), stageLabel(stage));
 }
 
 const FLAGS = {

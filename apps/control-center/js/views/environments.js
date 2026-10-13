@@ -1,6 +1,6 @@
 // #/environments  Staging and production, what each runs, how it got there, and every rollback.
 
-import { badge, emptyState, ghLink, h, panel, table, timeEl } from '../dom.js';
+import { badge, classToken, emptyState, ghLink, h, panel, table, timeEl } from '../dom.js';
 import { formatInteger, formatPercent, formatShortTime } from '../format.js';
 import { failedGate, flaggedIssue, newestFirst, releaseRows, rollbackRows } from '../model.js';
 import { pullUrl } from '../safe.js';
@@ -137,7 +137,7 @@ function historyPanel(state, now) {
           'ol',
           { class: 'hops' },
           ...rows.map((e) => {
-            const actionCls = String(e.action ?? '').toLowerCase().replace(/[^a-z0-9-]/g, '-');
+            const actionCls = classToken(e.action);
             return h(
               'li',
               { class: `hop hop-${actionCls}` },

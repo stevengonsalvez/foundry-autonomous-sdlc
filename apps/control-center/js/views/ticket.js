@@ -2,7 +2,7 @@
 // ran, what the agents asked and decided, and why it stopped if it did.
 
 import { stepper } from '../charts.js';
-import { badge, chartHost, dataTable, emptyState, ghLink, h, panel, table, timeEl } from '../dom.js';
+import { badge, chartHost, classToken, dataTable, emptyState, ghLink, h, panel, table, timeEl } from '../dom.js';
 import { formatDuration, formatInteger, formatShortTime, formatUsd, titleCase } from '../format.js';
 import { icon } from '../icons.js';
 import { GATES, gateStatus, pipelineChain, stageDurations, stageLabel, tddOrder } from '../model.js';
@@ -231,7 +231,7 @@ function hopsPanel(ticket, now) {
             const status = HOP_STATUS[hop.status] ?? [titleCase(hop.status || 'Unknown'), 'neutral'];
             return h(
               'li',
-              { class: `hop hop-${hop.status}` },
+              { class: `hop hop-${classToken(hop.status)}` },
               h('span', { class: 'hop-dot', 'aria-hidden': 'true' }),
               h(
                 'div',

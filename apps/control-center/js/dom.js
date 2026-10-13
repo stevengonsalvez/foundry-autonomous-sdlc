@@ -7,6 +7,15 @@ import { isSafeHref, limitText, safeGithubUrl } from './safe.js';
 const SVG_NS = 'http://www.w3.org/2000/svg';
 const CSS_LENGTH = /^-?\d+(\.\d+)?(%|px|rem|em|deg)?$/;
 
+/** Sanitize an arbitrary data string into a safe, bounded CSS class token. */
+export function classToken(val) {
+  return String(val ?? '')
+    .toLowerCase()
+    .replace(/[^a-z0-9-]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 32);
+}
+
 function setAttribute(el, key, value) {
   if (value === undefined || value === null || value === false) return;
   if (key === 'style' || key === 'srcdoc' || /^on/i.test(key)) {

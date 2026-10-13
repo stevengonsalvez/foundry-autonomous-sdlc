@@ -1,6 +1,6 @@
 // #/  Delivery flow board: lane by stage matrix, macrobands, mode badges, pill chips, lens and group toggles.
 
-import { badge, emptyState, ghLink, h } from '../dom.js';
+import { badge, classToken, emptyState, ghLink, h } from '../dom.js';
 import { formatInteger, formatUsd, plural } from '../format.js';
 import { icon } from '../icons.js';
 import { boardColumns, boardSummary, emptyFilters, typesPresent, timeInStage } from '../model.js';
@@ -264,7 +264,7 @@ function stageColumn(col, nowMs, filtered, lens, group, lanes) {
 
   return h(
     'section',
-    { class: `col col-${col.stage}${quiet ? ' col-quiet' : ''}`, role: 'row', 'data-stage': col.stage },
+    { class: `col col-${classToken(col.stage)}${quiet ? ' col-quiet' : ''}`, role: 'row', 'data-stage': col.stage },
     h(
       'header',
       { class: 'col-head', role: 'rowheader' },
