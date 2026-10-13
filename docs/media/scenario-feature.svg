@@ -1,0 +1,201 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 440" width="100%" height="100%">
+  
+    <style>
+      text {
+        font-family: ui-monospace, "SF Mono", Monaco, Menlo, Consolas, "Liberation Mono", monospace;
+        user-select: none;
+      }
+      .mono-xs { font-size: 8.5px; font-weight: 500; }
+      .mono-sm { font-size: 10px; font-weight: 500; }
+      .mono-md { font-size: 11.5px; font-weight: 600; }
+      .mono-lg { font-size: 13px; font-weight: 700; }
+      .mono-title { font-size: 13.5px; font-weight: 700; letter-spacing: 0.05em; }
+
+      @media (prefers-reduced-motion: reduce) {
+        * {
+          animation: none !important;
+        }
+        animate, animateMotion, animateTransform {
+          display: none !important;
+        }
+      }
+    </style>
+    
+  <defs>
+    <filter id="glow-feat" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="3" result="blur" />
+      <feComposite in="SourceGraphic" in2="blur" operator="over" />
+    </filter>
+  </defs>
+
+  <!-- Background -->
+  <rect width="960" height="440" fill="#02080f" />
+  <rect x="12" y="12" width="936" height="416" rx="6" fill="none" stroke="#202d37" stroke-width="1" />
+
+  <!-- Top Bar -->
+  <rect x="12" y="12" width="936" height="42" fill="#040f17" rx="6" />
+  <line x1="12" y1="54" x2="948" y2="54" stroke="#202d37" stroke-width="1" />
+  
+  <circle cx="32" cy="33" r="5" fill="#25df75" filter="url(#glow-feat)" />
+  <text x="46" y="37" fill="#dfe9f1" class="mono-title">SCENARIO 1 // FEATURE HAPPY PATH (ISSUE #24)</text>
+  
+  <!-- Top Badges -->
+  <rect x="530" y="24" width="76" height="18" rx="9" fill="#0f1f2a" stroke="#25df75" stroke-width="1" />
+  <text x="543" y="37" fill="#25df75" class="mono-xs">AUTO: RUN</text>
+
+  <rect x="614" y="24" width="104" height="18" rx="9" fill="#0f1f2a" stroke="#00c1eb" stroke-width="1" />
+  <text x="624" y="37" fill="#00c1eb" class="mono-xs">SPEND: $0.0816</text>
+
+  <rect x="726" y="24" width="210" height="18" rx="9" fill="#0f1f2a" stroke="#41d2b3" stroke-width="1" />
+  <text x="736" y="37" fill="#41d2b3" class="mono-xs">PROD: RELEASED v0.3.0</text>
+
+  <!-- Macrobands Strip -->
+  <rect x="36" y="66" width="300" height="22" fill="#07151f" />
+  <line x1="36" y1="66" x2="336" y2="66" stroke="#00c1eb" stroke-width="2" />
+  <text x="44" y="81" fill="#00c1eb" class="mono-xs" letter-spacing="0.08em">SHAPE . BUSINESS</text>
+
+  <rect x="344" y="66" width="310" height="22" fill="#07151f" />
+  <line x1="344" y1="66" x2="654" y2="66" stroke="#b99cff" stroke-width="2" />
+  <text x="352" y="81" fill="#b99cff" class="mono-xs" letter-spacing="0.08em">BUILD . ENGINEERING</text>
+
+  <rect x="662" y="66" width="262" height="22" fill="#07151f" />
+  <line x1="662" y1="66" x2="924" y2="66" stroke="#41d2b3" stroke-width="2" />
+  <text x="670" y="81" fill="#41d2b3" class="mono-xs" letter-spacing="0.08em">RELEASE . OPERATIONS</text>
+
+  <!-- Stage Headers Row -->
+  <!-- Col 1: Backlog -->
+  <rect x="36" y="94" width="94" height="34" fill="#040f17" stroke="#202d37" stroke-width="0.8" />
+  <text x="44" y="110" fill="#dfe9f1" class="mono-xs">BACKLOG</text>
+  <rect x="44" y="114" width="36" height="11" rx="2" fill="#0f1f2a" stroke="#25df75" stroke-width="0.6" />
+  <text x="48" y="123" fill="#25df75" style="font-size: 7.5px;">AUTO</text>
+
+  <!-- Col 2: Refining -->
+  <rect x="136" y="94" width="98" height="34" fill="#040f17" stroke="#202d37" stroke-width="0.8" />
+  <text x="144" y="110" fill="#dfe9f1" class="mono-xs">REFINING</text>
+  <rect x="144" y="114" width="30" height="11" rx="2" fill="#0f1f2a" stroke="#e8a838" stroke-width="0.6" />
+  <text x="148" y="123" fill="#e8a838" style="font-size: 7.5px;">SIM</text>
+
+  <!-- Col 3: Feasible -->
+  <rect x="240" y="94" width="96" height="34" fill="#040f17" stroke="#202d37" stroke-width="0.8" />
+  <text x="248" y="110" fill="#dfe9f1" class="mono-xs">FEASIBLE</text>
+  <rect x="248" y="114" width="36" height="11" rx="2" fill="#0f1f2a" stroke="#25df75" stroke-width="0.6" />
+  <text x="252" y="123" fill="#25df75" style="font-size: 7.5px;">AUTO</text>
+
+  <!-- Col 4: Tests -->
+  <rect x="344" y="94" width="98" height="34" fill="#040f17" stroke="#202d37" stroke-width="0.8" />
+  <text x="352" y="110" fill="#dfe9f1" class="mono-xs">TESTS (TDD)</text>
+  <rect x="352" y="114" width="36" height="11" rx="2" fill="#0f1f2a" stroke="#25df75" stroke-width="0.6" />
+  <text x="356" y="123" fill="#25df75" style="font-size: 7.5px;">AUTO</text>
+
+  <!-- Col 5: Building -->
+  <rect x="448" y="94" width="98" height="34" fill="#040f17" stroke="#202d37" stroke-width="0.8" />
+  <text x="456" y="110" fill="#dfe9f1" class="mono-xs">BUILDING</text>
+  <rect x="456" y="114" width="36" height="11" rx="2" fill="#0f1f2a" stroke="#25df75" stroke-width="0.6" />
+  <text x="460" y="123" fill="#25df75" style="font-size: 7.5px;">AUTO</text>
+
+  <!-- Col 6: Review -->
+  <rect x="552" y="94" width="102" height="34" fill="#040f17" stroke="#202d37" stroke-width="0.8" />
+  <text x="560" y="110" fill="#dfe9f1" class="mono-xs">REVIEW (CI)</text>
+  <rect x="560" y="114" width="36" height="11" rx="2" fill="#0f1f2a" stroke="#ff4979" stroke-width="0.6" />
+  <text x="564" y="123" fill="#ff4979" style="font-size: 7.5px;">GATE</text>
+
+  <!-- Col 7: Staging -->
+  <rect x="662" y="94" width="124" height="34" fill="#040f17" stroke="#202d37" stroke-width="0.8" />
+  <text x="670" y="110" fill="#dfe9f1" class="mono-xs">STAGING (SMOKE)</text>
+  <rect x="670" y="114" width="36" height="11" rx="2" fill="#0f1f2a" stroke="#ff4979" stroke-width="0.6" />
+  <text x="674" y="123" fill="#ff4979" style="font-size: 7.5px;">GATE</text>
+
+  <!-- Col 8: Prod -->
+  <rect x="794" y="94" width="130" height="34" fill="#040f17" stroke="#202d37" stroke-width="0.8" />
+  <text x="802" y="110" fill="#dfe9f1" class="mono-xs">PROD (RELEASE)</text>
+  <rect x="802" y="114" width="36" height="11" rx="2" fill="#0f1f2a" stroke="#25df75" stroke-width="0.6" />
+  <text x="806" y="123" fill="#25df75" style="font-size: 7.5px;">AUTO</text>
+
+  <!-- Matrix Grid Background / Lane -->
+  <rect x="36" y="136" width="888" height="140" fill="#07151f" stroke="#202d37" stroke-width="0.8" />
+
+  <!-- Column Dividers for Matrix Look -->
+  <line x1="133" y1="136" x2="133" y2="276" stroke="#101a21" stroke-dasharray="2,2" />
+  <line x1="237" y1="136" x2="237" y2="276" stroke="#101a21" stroke-dasharray="2,2" />
+  <line x1="341" y1="136" x2="341" y2="276" stroke="#101a21" stroke-dasharray="2,2" />
+  <line x1="445" y1="136" x2="445" y2="276" stroke="#101a21" stroke-dasharray="2,2" />
+  <line x1="549" y1="136" x2="549" y2="276" stroke="#101a21" stroke-dasharray="2,2" />
+  <line x1="659" y1="136" x2="659" y2="276" stroke="#101a21" stroke-dasharray="2,2" />
+  <line x1="791" y1="136" x2="791" y2="276" stroke="#101a21" stroke-dasharray="2,2" />
+
+  <!-- Flow Lane Guide Line -->
+  <path id="lane-feature" d="M 80 200 L 180 200 L 285 200 L 390 200 L 495 200 L 600 200 L 720 200 L 850 200" stroke="#202d37" stroke-width="2" stroke-dasharray="4,4" fill="none" />
+
+  <!-- Verification Gates Along Lane -->
+  <g id="gate-1">
+    <circle cx="180" cy="200" r="14" fill="#0f1f2a" stroke="#e8a838" stroke-width="1.5" />
+    <text x="174" y="204" fill="#e8a838" class="mono-xs">90%</text>
+    <text x="156" y="226" fill="#87949f" class="mono-xs">PO Answer</text>
+  </g>
+
+  <g id="gate-2">
+    <circle cx="285" cy="200" r="14" fill="#0f1f2a" stroke="#25df75" stroke-width="1.5" />
+    <text x="277" y="204" fill="#25df75" class="mono-xs">OK</text>
+    <text x="264" y="226" fill="#87949f" class="mono-xs">Feasible</text>
+  </g>
+
+  <g id="gate-3">
+    <circle cx="390" cy="200" r="14" fill="#0f1f2a" stroke="#25df75" stroke-width="1.5" />
+    <text x="380" y="204" fill="#25df75" class="mono-xs">TDD</text>
+    <text x="366" y="226" fill="#87949f" class="mono-xs">c0f5713 (red)</text>
+  </g>
+
+  <g id="gate-4">
+    <circle cx="495" cy="200" r="14" fill="#0f1f2a" stroke="#25df75" stroke-width="1.5" />
+    <text x="485" y="204" fill="#25df75" class="mono-xs">BLD</text>
+    <text x="472" y="226" fill="#87949f" class="mono-xs">fcc6f1e (grn)</text>
+  </g>
+
+  <g id="gate-5">
+    <circle cx="600" cy="200" r="14" fill="#0f1f2a" stroke="#25df75" stroke-width="1.5" />
+    <text x="592" y="204" fill="#25df75" class="mono-xs">6/6</text>
+    <text x="580" y="226" fill="#87949f" class="mono-xs">PR #29 Appr</text>
+  </g>
+
+  <g id="gate-6">
+    <circle cx="720" cy="200" r="14" fill="#0f1f2a" stroke="#25df75" stroke-width="1.5" />
+    <text x="710" y="204" fill="#25df75" class="mono-xs">10m</text>
+    <text x="696" y="226" fill="#87949f" class="mono-xs">Smoke + Soak</text>
+  </g>
+
+  <g id="gate-7">
+    <rect x="826" y="186" width="56" height="28" rx="14" fill="#0f1f2a" stroke="#41d2b3" stroke-width="1.5" />
+    <text x="834" y="204" fill="#41d2b3" class="mono-xs">v0.3.0</text>
+    <text x="838" y="226" fill="#87949f" class="mono-xs">Shipped</text>
+  </g>
+
+  <!-- MOVING TICKET PILL CHIP (#24) -->
+  <g id="active-pill" transform="translate(80, 200)">
+    <rect x="-44" y="-12" width="88" height="24" rx="12" fill="#162936" stroke="#25df75" stroke-width="1.5" filter="url(#glow-feat)" />
+    <circle cx="-32" cy="0" r="4" fill="#25df75" />
+    <text x="-24" y="4" fill="#dfe9f1" class="mono-sm">#24</text>
+    <rect x="0" y="-7" width="18" height="14" rx="2" fill="#07151f" />
+    <text x="3" y="4" fill="#b99cff" class="mono-xs">CO</text>
+    <text x="22" y="4" fill="#25df75" class="mono-xs">AUTO</text>
+
+    <!-- Path Animation across 14 seconds -->
+    <animateMotion dur="14s" repeatCount="indefinite" path="M 0 0 L 100 0 L 205 0 L 310 0 L 415 0 L 520 0 L 640 0 L 770 0" keyTimes="0;0.12;0.25;0.42;0.58;0.72;0.88;1" />
+  </g>
+
+  <!-- Live Telemetry Card at Bottom -->
+  <rect x="36" y="290" width="888" height="110" rx="4" fill="#040f17" stroke="#202d37" stroke-width="0.8" />
+  <rect x="36" y="290" width="4" height="110" fill="#00c1eb" />
+
+  <text x="50" y="310" fill="#dfe9f1" class="mono-md">CHRONOLOGICAL AUDIT TRAIL // ISSUE #24</text>
+  <text x="340" y="310" fill="#87949f" class="mono-xs">TITLE: "Make the parcel tracker better" (scenario b)</text>
+
+  <text x="50" y="332" fill="#b0bdc6" class="mono-xs">00:00  [req-gate] Bounced: score 72 &lt; 80 threshold. Asked 2 clarification questions.</text>
+  <text x="50" y="348" fill="#e8a838" class="mono-xs">00:03  [product-owner] Simulated PO replied with concrete criteria. Re-score: 90/100 (ready).</text>
+  <text x="50" y="364" fill="#b0bdc6" class="mono-xs">00:05  [feasibility] Suitable: True, risk low. Scoped to parcel tracker view.</text>
+  <text x="50" y="380" fill="#b99cff" class="mono-xs">00:07  [sdlc-coder] Commit c0f5713 (tests first, 1 failed, 0 loaded) -> Commit fcc6f1e (5 files fixed, green).</text>
+  <text x="50" y="394" fill="#41d2b3" class="mono-xs">00:11  [orchestrator] PR #29 merged; CD staged; Playwright smoke passed; 10m soak verified; v0.3.0 live.</text>
+
+  <!-- Footer -->
+  <rect x="12" y="408" width="936" height="20" fill="#040f17" rx="3" />
+  <text x="24" y="422" fill="#87949f" class="mono-xs">TIMINGS COMPRESSED (ACTUAL: 18m WALL CLOCK) . RECORDED IN STATE:EVENTS.JSONL . BILLED COST: $0.0816 USD</text>
+</svg>
