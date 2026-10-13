@@ -1684,13 +1684,13 @@ table.data {
 }
 
 .hop-success .hop-dot, .hop-promote .hop-dot, .hop-stage .hop-dot { background: var(--tone-run); border-radius: 50%; }
-.hop-failed .hop-dot, .hop-fail .hop-dot, .hop-rolled_back .hop-dot, .hop-rollback .hop-dot {
+.hop-failed .hop-dot, .hop-fail .hop-dot, .hop-rolled_back .hop-dot, .hop-rolled-back .hop-dot, .hop-rollback .hop-dot {
   background: oklch(0.46 0.20 345);
   border: 1px solid var(--tone-block);
   border-radius: 2px;
   transform: rotate(45deg);
 }
-.hop-failed, .hop-fail, .hop-rolled_back, .hop-rollback {
+.hop-failed, .hop-fail, .hop-rolled_back, .hop-rolled-back, .hop-rollback {
   border-inline-start: 2px solid var(--tone-block);
 }
 .hop-skipped .hop-dot, .hop-skip .hop-dot {
@@ -1698,7 +1698,7 @@ table.data {
   border: 1.5px dashed var(--tone-wait);
   border-radius: 50%;
 }
-.hop-in_progress .hop-dot {
+.hop-in_progress .hop-dot, .hop-in-progress .hop-dot {
   background: var(--tone-info);
   border-radius: 50%;
   box-shadow: 0 0 0 2px oklch(from var(--tone-info) l c h / 0.25);

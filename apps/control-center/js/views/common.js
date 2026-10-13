@@ -6,13 +6,14 @@ import { icon } from '../icons.js';
 import { escalationLabel, formatDuration, formatTimestamp, formatUsd, parseTime, shortSha, titleCase } from '../format.js';
 import { commitUrl, dataLink, issueUrl, pullUrl, releaseUrl, safeGithubUrl } from '../safe.js';
 import { costBand, stageLabel } from '../model.js';
+import { BOARD_STAGES } from '../schema.js';
 
 export const ticketHref = (issue) => `#/ticket/${issue}`;
 
 export const MODE_TONES = Object.freeze(['auto', 'gate', 'sim', 'manual']);
 
 /** CSS class for a board stage: `st-fill-*` (SVG fill), `st-bg-*` (background), `st-text-*` (text). */
-export const stageFill = (stage) => `st-fill-${classToken(stage)}`;
+export const stageFill = (stage) => `st-fill-${BOARD_STAGES.includes(stage) ? stage : 'backlog'}`;
 
 /** GitHub URL of a ticket: the one in the data when it points into this repo, else built from its number. */
 export function ticketGithubUrl(ticket) {
@@ -110,7 +111,7 @@ export function envBadgeFor(ticket) {
 }
 
 export function stageBadge(stage) {
-  const token = classToken(stage);
+  const token = BOARD_STAGES.includes(stage) ? stage : 'backlog';
   return h('span', { class: `badge badge-stage st-text-${token}` }, h('span', { class: `sdot st-bg-${token}`, 'aria-hidden': 'true' }), stageLabel(stage));
 }
 
