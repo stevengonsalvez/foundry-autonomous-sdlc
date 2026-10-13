@@ -21,10 +21,10 @@ import {
 
 // Macrobands grouping stages into lifecycle domains
 export const MACROBANDS = Object.freeze([
-  { id: 'shape', label: 'ALIGN . PRODUCT', span: 3, tone: 'wait' },
-  { id: 'build', label: 'IMPLEMENT . CODE', span: 3, tone: 'run' },
-  { id: 'release', label: 'DELIVER . OPERATIONS', span: 2, tone: 'done' },
-  { id: 'escalated', label: 'EXCEPTIONS', span: 1, tone: 'block' },
+  { id: 'shape', label: 'ALIGN . PRODUCT', span: 3 },
+  { id: 'build', label: 'IMPLEMENT . CODE', span: 3 },
+  { id: 'release', label: 'DELIVER . OPERATIONS', span: 2 },
+  { id: 'escalated', label: 'EXCEPTIONS', span: 1 },
 ]);
 
 /**

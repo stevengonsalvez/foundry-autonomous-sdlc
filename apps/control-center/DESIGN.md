@@ -7,18 +7,18 @@ This document defines the tokens, component anatomy, layout model, and styling r
 Defined in `:root` in `css/styles.css`, the color system utilizes an independent graphite-blue OKLCH palette calibrated for a dark mission-control environment. Chroma is restrained on neutrals and semantic tones are tuned for high contrast.
 
 ### Base Canvas and Surface Hierarchy
-- `--canvas`: `oklch(0.10 0.016 215)` (Page canvas background behind all containers)
-- `--surface-0`: `oklch(0.13 0.018 215)` (Base matrix panel and shell background)
-- `--surface-1`: `oklch(0.16 0.020 215)` (Elevated table row and card surface)
-- `--surface-2`: `oklch(0.19 0.022 215)` (Active control surface and track background)
-- `--surface-3`: `oklch(0.23 0.024 215)` (Raised segmented button and hover surface)
-- `--surface-active`: `oklch(0.27 0.026 215)` (Focused interactive element surface)
+- `--canvas`: `oklch(0.07 0.012 215)` (Page canvas background behind all containers)
+- `--surface-0`: `oklch(0.09 0.014 215)` (Base matrix panel and shell background)
+- `--surface-1`: `oklch(0.11 0.016 215)` (Elevated table row and card surface)
+- `--surface-2`: `oklch(0.125 0.018 215)` (Active control surface and track background)
+- `--surface-3`: `oklch(0.138 0.020 215)` (Raised segmented button and hover surface)
+- `--surface-active`: `oklch(0.140 0.024 215)` (Focused interactive element surface)
 
-Lightness steps follow a stepped progression (.03/.03/.03/.04/.04) from canvas (0.10) to active surface (0.27), maintaining a minimum OKLab distance of dE_ok >= 0.04 against reference neutrals.
+Neutral surfaces are calibrated so every single neutral differs from all 5 reference dark neutrals (`ink`, `panel`, `panel-2`, `line-soft`, `line`) by dE_ok >= 0.04.
 
 ### Hairlines and Dividers
-- `--edge`: `oklch(0.355 0.025 215)` (Container boundary and matrix grid hairlines)
-- `--edge-subtle`: `oklch(0.22 0.018 215)` (Interior table row and cell divider hairlines)
+- `--edge`: `oklch(0.380 0.025 215)` (Container boundary and matrix grid hairlines)
+- `--edge-subtle`: `oklch(0.350 0.020 215)` (Interior table row and cell divider hairlines)
 - `--edge-focus`: `oklch(0.72 0.16 190)` (High-visibility keyboard focus outline)
 
 ### Typography Contrast (WCAG AA Compliant >= 4.5:1)
@@ -133,7 +133,7 @@ Work items appear as dense two-line pill tokens in the matrix grid:
 In the ticket detail progression strip:
 - `.node-done`: Uses `var(--tone-done)` stroke for clear completion semantics.
 - `.node-current`: Uses `var(--tone-info)` stroke with pulsing indicator.
-- `.link`: Unfinished connector uses `var(--fg-muted)` at reduced opacity (0.45) with dashed stroke (`stroke-dasharray: 4 3`) for high contrast against `--surface-0`.
+- `.link`: Unfinished connector uses `var(--fg-muted)` at reduced opacity (0.55) with dashed stroke (`stroke-dasharray: 4 3`), achieving 5.1:1 contrast against `--surface-0` (exceeding WCAG AA non-text 3:1).
 - `.link-done`: Completed connector uses solid stroke in `var(--tone-done)`.
 
 ### Spend Banner

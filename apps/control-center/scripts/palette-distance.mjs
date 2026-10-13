@@ -132,12 +132,17 @@ export async function run() {
   const cssTokens = await parseCssTokens(cssPath);
   const flowtronAccents = JSON.parse(await readFile(accentsPath, 'utf8'));
 
-  // Extract favicon colors from index.html
+  // Extract favicon colors from index.html with URI decoding (throw if missing, no fallback)
   const html = await readFile(indexHtmlPath, 'utf8');
-  const favBgMatch = html.match(/rect[^>]*fill=['"](#[\da-fA-F]{6})['"]/);
-  const favDotMatch = html.match(/circle[^>]*fill=['"](#[\da-fA-F]{6})['"]/);
-  const favBgHex = favBgMatch ? favBgMatch[1] : '#04070d';
-  const favDotHex = favDotMatch ? favDotMatch[1] : '#06b6d4';
+  const favLinkMatch = html.match(/<link\s+rel=["']icon["']\s+href="([^"]+)"/i) || html.match(/<link\s+rel=["']icon["']\s+href='([^']+)'/i);
+  if (!favLinkMatch) throw new Error('favicon <link rel="icon"> not found in index.html');
+  const decodedHref = decodeURIComponent(favLinkMatch[1]);
+  const favBgMatch = decodedHref.match(/rect[^>]*fill=['"](#[\da-fA-F]{6})['"]/i);
+  const favDotMatch = decodedHref.match(/circle[^>]*fill=['"](#[\da-fA-F]{6})['"]/i);
+  if (!favBgMatch) throw new Error('Could not parse favicon background color from decoded SVG in index.html');
+  if (!favDotMatch) throw new Error('Could not parse favicon dot color from decoded SVG in index.html');
+  const favBgHex = favBgMatch[1];
+  const favDotHex = favDotMatch[1];
 
   const favDotLab = hexToOklab(favDotHex);
   const [dotL, dotC, dotH] = labToOklch(...favDotLab);
@@ -192,7 +197,7 @@ export async function run() {
 
   for (const tokenName of accentTokens) {
     const t = cssTokens[tokenName];
-    if (!t) continue;
+    if (!t) throw new Error(`Missing expected accent token: ${tokenName}`);
 
     let minDE = Infinity;
     let minAccent = '';
@@ -234,11 +239,36 @@ export async function run() {
     const roleStr = sameRole || 'neutral';
     const sameDEStr = sameRoleDE !== null ? sameRoleDE.toFixed(4) : '-';
     const sameDhStr = sameRoleDh !== null ? `${sameRoleDh.toFixed(1)}°` : '-';
-    const minStr = `${minAccent} (${minDE.toFixed(4)})`;
 
     console.log(
       `| \`${tokenName}\` | ${oklchStr} | ${roleStr} | ${sameRole || '-'} | ${sameDEStr} | ${sameDhStr} | ${minAccent} | ${minDE.toFixed(4)} | ${status} |`
     );
+  }
+
+  // Full All-Pairs Table
+  console.log('\n### Full All-Pairs Distance Matrix: Every Token vs Every Reference Accent\n');
+  const allPairsCols = ['Token', ...accentKeys, 'Min dE', 'Same-Role dE', 'Status'];
+  console.log(`| ${allPairsCols.join(' | ')} |`);
+  console.log(`| ${allPairsCols.map(() => '---').join(' | ')} |`);
+
+  for (const tokenName of accentTokens) {
+    const t = cssTokens[tokenName];
+    const sameRole = SAME_ROLES[tokenName];
+    let minDE = Infinity;
+    let sameRoleDE = null;
+    const rowVals = [`\`${tokenName}\``];
+
+    for (const accName of accentKeys) {
+      const dist = dE(t.lab, flowtron[accName].lab);
+      if (dist < minDE) minDE = dist;
+      if (accName === sameRole) sameRoleDE = dist;
+      rowVals.push(dist.toFixed(4));
+    }
+    rowVals.push(minDE.toFixed(4));
+    rowVals.push(sameRoleDE !== null ? sameRoleDE.toFixed(4) : '-');
+    const pass = sameRole === null || (sameRoleDE !== null && sameRoleDE >= 0.06 && (t.C < 0.03 || circularHueDiff(t.h, flowtron[sameRole].h) >= 12));
+    rowVals.push(pass ? 'PASS' : '**FAIL**');
+    console.log(`| ${rowVals.join(' | ')} |`);
   }
 
   console.log('\n### Cross-Role Accents Within 20° Hue (Permitted by Decision)\n');
@@ -252,23 +282,64 @@ export async function run() {
     }
   }
 
-  // Neutrals check
-  console.log('\n### Neutrals Distance vs Flowtron Neutrals (Target: dE_ok >= 0.04)\n');
-  const neutralCols = ['Token', 'Our OKLCH', 'Flowtron Token', 'Flowtron Hex', 'dE_ok', 'Status'];
-  console.log(`| ${neutralCols.join(' | ')} |`);
-  console.log(`| ${neutralCols.map(() => '---').join(' | ')} |`);
+  // Neutrals check across ALL 5 reference dark neutrals
+  console.log('\n### Neutrals Distance Matrix vs All 5 Reference Dark Neutrals (Target: dE_ok >= 0.04)\n');
+  const darkNeutrals = ['ink', 'panel', 'panel-2', 'line-soft', 'line'];
+  const darkNeutralLabs = Object.fromEntries(darkNeutrals.map((n) => [n, hexToOklab(FLOWTRON_NEUTRALS[n])]));
 
-  for (const [tokenName, flowtronName] of Object.entries(SAME_ROLE_NEUTRALS)) {
+  const ourDarkNeutrals = [
+    '--canvas',
+    '--surface-0',
+    '--surface-1',
+    '--surface-2',
+    '--surface-3',
+    '--surface-active',
+    '--edge-subtle',
+    '--edge',
+    'favicon-bg',
+  ];
+
+  const neutralMatrixCols = ['Token', 'Our OKLCH', 'vs ink', 'vs panel', 'vs panel-2', 'vs line-soft', 'vs line', 'Min dE', 'Status'];
+  console.log(`| ${neutralMatrixCols.join(' | ')} |`);
+  console.log(`| ${neutralMatrixCols.map(() => '---').join(' | ')} |`);
+
+  let neutralsPass = true;
+  for (const tokenName of ourDarkNeutrals) {
     const t = cssTokens[tokenName];
-    if (!t) continue;
+    if (!t) throw new Error(`Missing expected neutral token: ${tokenName}`);
+
+    const dists = darkNeutrals.map((n) => dE(t.lab, darkNeutralLabs[n]));
+    const minD = Math.min(...dists);
+    const pass = minD >= 0.04;
+    if (!pass) {
+      neutralsPass = false;
+      allPass = false;
+    }
+
+    const row = [
+      `\`${tokenName}\``,
+      `${t.L.toFixed(2)} ${t.C.toFixed(3)} ${Math.round(t.h)}°`,
+      ...dists.map((d) => d.toFixed(4)),
+      minD.toFixed(4),
+      pass ? 'PASS' : '**FAIL**',
+    ];
+    console.log(`| ${row.join(' | ')} |`);
+  }
+
+  // Typography Neutrals
+  console.log('\n### Typography Neutrals vs Flowtron Reference Values\n');
+  const typoCols = ['Token', 'Our OKLCH', 'Flowtron Token', 'Flowtron Hex', 'dE_ok', 'Status'];
+  console.log(`| ${typoCols.join(' | ')} |`);
+  console.log(`| ${typoCols.map(() => '---').join(' | ')} |`);
+
+  for (const [tokenName, flowtronName] of Object.entries({ '--fg': 'text', '--fg-dim': 'muted', '--fg-muted': 'muted-2' })) {
+    const t = cssTokens[tokenName];
+    if (!t) throw new Error(`Missing typography token: ${tokenName}`);
     const fHex = FLOWTRON_NEUTRALS[flowtronName];
-    const fLab = hexToOklab(fHex);
-    const dist = dE(t.lab, fLab);
-    const pass = dist >= 0.04;
+    const dist = dE(t.lab, hexToOklab(fHex));
+    const pass = dist >= 0.06;
     if (!pass) allPass = false;
-    console.log(
-      `| \`${tokenName}\` | ${t.L.toFixed(2)} ${t.C.toFixed(3)} ${Math.round(t.h)}° | \`${flowtronName}\` | \`${fHex}\` | ${dist.toFixed(4)} | ${pass ? 'PASS' : '**FAIL**'} |`
-    );
+    console.log(`| \`${tokenName}\` | ${t.L.toFixed(2)} ${t.C.toFixed(3)} ${Math.round(t.h)}° | \`${flowtronName}\` | \`${fHex}\` | ${dist.toFixed(4)} | ${pass ? 'PASS' : '**FAIL**'} |`);
   }
 
   // Stage Fills Inter-Distance Table
@@ -293,6 +364,8 @@ export async function run() {
     for (let j = i + 1; j < stageTokens.length; j++) {
       const a = cssTokens[stageTokens[i]];
       const b = cssTokens[stageTokens[j]];
+      if (!a) throw new Error(`Missing stage token: ${stageTokens[i]}`);
+      if (!b) throw new Error(`Missing stage token: ${stageTokens[j]}`);
       const dh = circularHueDiff(a.h, b.h);
       const dist = dE(a.lab, b.lab);
       const pass = dh >= 25 && dist >= 0.06;
@@ -304,13 +377,14 @@ export async function run() {
   }
 
   console.log(`\nOverall Accent Same-Role Distance: ${allPass ? 'PASS' : 'FAIL'}`);
+  console.log(`Overall Neutrals Distance Separation: ${neutralsPass ? 'PASS' : 'FAIL'}`);
   console.log(`Overall Stage Fills Separation: ${fillsPass ? 'PASS' : 'FAIL'}`);
-  return { allPass, fillsPass };
+  return { allPass, neutralsPass, fillsPass };
 }
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   const result = await run();
-  if (!result.allPass || !result.fillsPass) {
+  if (!result.allPass || !result.neutralsPass || !result.fillsPass) {
     process.exit(1);
   }
 }

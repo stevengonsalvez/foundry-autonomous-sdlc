@@ -7,16 +7,16 @@
   color-scheme: dark;
 
   /* Custom graphite-blue palette (hue 215, dark mission control) */
-  --canvas: oklch(0.10 0.016 215);        /* Page canvas background behind all containers */
-  --surface-0: oklch(0.13 0.018 215);     /* Base matrix panel and shell background */
-  --surface-1: oklch(0.16 0.020 215);     /* Elevated table row and card surface */
-  --surface-2: oklch(0.19 0.022 215);     /* Active control surface and track background */
-  --surface-3: oklch(0.23 0.024 215);     /* Raised segmented button and hover surface */
-  --surface-active: oklch(0.27 0.026 215);/* Focused interactive element surface */
+  --canvas: oklch(0.07 0.012 215);        /* Page canvas background behind all containers */
+  --surface-0: oklch(0.09 0.014 215);     /* Base matrix panel and shell background */
+  --surface-1: oklch(0.11 0.016 215);     /* Elevated table row and card surface */
+  --surface-2: oklch(0.125 0.018 215);    /* Active control surface and track background */
+  --surface-3: oklch(0.138 0.020 215);    /* Raised segmented button and hover surface */
+  --surface-active: oklch(0.140 0.024 215);/* Focused interactive element surface */
 
   /* Hairlines and borders (uniform 1px grid strokes) */
-  --edge: oklch(0.355 0.025 215);         /* Container boundary and matrix grid hairlines */
-  --edge-subtle: oklch(0.22 0.018 215);   /* Interior table row and cell divider hairlines */
+  --edge: oklch(0.380 0.025 215);         /* Container boundary and matrix grid hairlines */
+  --edge-subtle: oklch(0.350 0.020 215);   /* Interior table row and cell divider hairlines */
   --edge-focus: oklch(0.72 0.16 190);     /* High-visibility keyboard focus outline */
 
   /* High-contrast system typography (WCAG AA compliant >= 4.5:1) */
@@ -557,7 +557,7 @@ main {
 .tone-good, .badge.tone-good { background: oklch(0.20 0.06 142 / 0.5); border-color: oklch(0.40 0.10 142); color: var(--tone-run); }
 .tone-bad, .badge.tone-bad { background: oklch(0.20 0.08 345 / 0.5); border-color: oklch(0.40 0.12 345); color: var(--tone-block); }
 .tone-warn, .badge.tone-warn { background: oklch(0.20 0.06 52 / 0.5); border-color: oklch(0.40 0.10 52); color: var(--tone-wait); }
-.tone-info, .badge.tone-info { background: oklch(0.20 0.06 260 / 0.5); border-color: oklch(0.40 0.10 260); color: var(--tone-info); }
+.tone-info, .badge.tone-info { background: oklch(0.20 0.06 190 / 0.5); border-color: oklch(0.40 0.10 190); color: var(--tone-info); }
 .tone-neutral, .badge.tone-neutral { background: var(--surface-1); border-color: var(--edge); color: var(--fg-muted); }
 
 .mode-badge {
@@ -1634,7 +1634,7 @@ table.data {
 }
 .chain-running .chain-mark {
   color: var(--tone-info);
-  background: oklch(0.20 0.05 260);
+  background: oklch(0.20 0.05 190);
 }
 .chain-skipped {
   border-style: dashed;
@@ -2032,7 +2032,7 @@ tr.agent.is-error .agent-name {
 .node-bad { fill: var(--surface-1); stroke: var(--tone-block); stroke-width: 2; }
 .node-core { fill: var(--tone-info); }
 .node-glyph { fill: none; stroke: var(--fg); stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
-.link { stroke: var(--fg-muted); stroke-opacity: 0.45; stroke-dasharray: 4 3; stroke-width: 2; fill: none; }
+.link { stroke: var(--fg-muted); stroke-opacity: 0.55; stroke-dasharray: 4 3; stroke-width: 2; fill: none; }
 .link-done { stroke: var(--tone-done); stroke-opacity: 1; stroke-dasharray: none; }
 
 .node-pulse {

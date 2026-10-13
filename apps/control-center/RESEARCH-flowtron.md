@@ -7,10 +7,10 @@ An empirical study of the reference UI layout model, visual density, component a
 Flowtron has no open-source license. Consequently, strict implementation independence was maintained:
 - **What was taken and adopted**: Structural design principles, layout model, and measured dimensional ratios (lane-by-stage matrix representation, macroband grouping strip, pill chips, dual segmented toggles, tracked uppercase monospace typography, and 1px hairlines).
 - **What was changed and independently redesigned**:
-  - **All Names and Tokens**: Zero flowtron token or class names are used. Our system uses an independent token scheme (`--canvas`, `--surface-0..3`, `--edge`, `--edge-subtle`, `--edge-focus`, `--fg`, `--fg-dim`, `--fg-muted`, `--tone-run`, `--tone-wait`, `--tone-block`, `--tone-info`, `--tone-agent`, `--tone-done`) and independent class names (`.band-strip`, `.band-cell`, `.matrix-grid`, `.matrix-spine`, `.lane-head`, `.matrix-cell`, `.chip-*`, etc.).
+  - **Component Names and Tokens**: Common architectural and layout class names are retained (`.board-shell`, `.kpis`, `.seg`, `.table-wrap`, etc.), while flowtron token names and component identifiers are replaced with an independent scheme (`--canvas`, `--surface-0..3`, `--edge`, `--edge-subtle`, `--edge-focus`, `--fg`, `--fg-dim`, `--fg-muted`, `--tone-run`, `--tone-wait`, `--tone-block`, `--tone-info`, `--tone-agent`, `--tone-done`, `.band-strip`, `.band-cell`, `.matrix-grid`, `.matrix-spine`, `.lane-head`, `.matrix-cell`, `.chip-*`, etc.).
   - **Palette**: The color palette was redesigned to maintain strict chromatic separation from flowtron under the same-role distance standard:
     - **Governing Rule**: Each token must differ from its same-role flowtron accent (`auto`, `dit`, `gate`, `assist`, `done`, `app-1`, `contract`, etc.) by dE_ok >= 0.06 and at least 12 degrees circular hue when chroma >= 0.03. Proximity to another-role accent within 20 degrees is permitted but explicitly inventoried in the cross-role table.
-    - **Neutral Ladder**: Earlier surfaces were within dE 0.017 to 0.025 of flowtron ink/panel/panel-2/line. The neutrals were recalibrated so every neutral differs from its corresponding flowtron reference neutral by dE_ok >= 0.04. The surface ladder follows a stepped progression with lightness deltas of .03/.03/.03/.04/.04 (`--canvas` 0.10, `--surface-0` 0.13, `--surface-1` 0.16, `--surface-2` 0.19, `--surface-3` 0.23, `--surface-active` 0.27).
+    - **Neutral Ladder**: Early drafts placed surfaces within dE 0.013 to 0.024 of reference neutrals when compared across all rungs. The neutral ladder was recalibrated so that every single neutral sits dE_ok >= 0.04 from every reference dark neutral (`ink`, `panel`, `panel-2`, `line-soft`, `line`), using lower surface lightness (`--canvas` 0.07, `--surface-0` 0.09, `--surface-1` 0.11, `--surface-2` 0.125, `--surface-3` 0.138, `--surface-active` 0.140) and elevated hairline edges (`--edge-subtle` 0.35, `--edge` 0.38).
     - **Reference Values**: Flowtron reference tokens from `src/style.css` include neutrals (`ink` #0E1217, `panel` #161C24, `panel-2` #1B232D, `line` #27313D, `line-soft` #1F2832, `text` #CBD6E3, `muted` #697686, `muted-2` #4D596A) and accents (`auto` #2DD4A7, `assist` #F2B23D, `gate` #F0644B, `dit` #6FA8FF, `contract` #22D3EE, `ephem` #C084FC, `dark` #C9A227, `done` #3A4654, `app-1` #A78BFA, `--app-2` #38BDF8, `app-3` #A3E635, `app-4` #FB7185). Note: #38BDF8 is `--app-2` in flowtron (not named info).
     - **Generated Palette Distance Matrix** (via `scripts/palette-distance.mjs`):
 
@@ -55,17 +55,24 @@ Flowtron has no open-source license. Consequently, strict implementation indepen
 | `favicon-dot` | `contract` | contract | 3.7° | 0.0831 |
 | `favicon-dot` | `app-2` | app-2 | 17.4° | 0.0573 |
 
-#### Neutrals Distance vs Flowtron Neutrals (dE_ok >= 0.04)
+#### Neutrals Distance Matrix vs All 5 Reference Dark Neutrals (Target: dE_ok >= 0.04)
+
+| Token | Our OKLCH | vs ink | vs panel | vs panel-2 | vs line-soft | vs line | Min dE | Status |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `--canvas` | 0.07 0.012 215° | 0.1106 | 0.1546 | 0.1836 | 0.2033 | 0.2398 | 0.1106 | PASS |
+| `--surface-0` | 0.09 0.014 215° | 0.0907 | 0.1346 | 0.1636 | 0.1833 | 0.2198 | 0.0907 | PASS |
+| `--surface-1` | 0.11 0.016 215° | 0.0710 | 0.1148 | 0.1437 | 0.1633 | 0.1998 | 0.0710 | PASS |
+| `--surface-2` | 0.13 0.018 215° | 0.0565 | 0.0999 | 0.1288 | 0.1484 | 0.1848 | 0.0565 | PASS |
+| `--surface-3` | 0.14 0.020 215° | 0.0443 | 0.0872 | 0.1159 | 0.1354 | 0.1719 | 0.0443 | PASS |
+| `--surface-active` | 0.14 0.024 215° | 0.0435 | 0.0856 | 0.1141 | 0.1336 | 0.1699 | 0.0435 | PASS |
+| `--edge-subtle` | 0.35 0.020 215° | 0.1702 | 0.1266 | 0.0981 | 0.0784 | 0.0439 | 0.0439 | PASS |
+| `--edge` | 0.38 0.025 215° | 0.2005 | 0.1567 | 0.1280 | 0.1083 | 0.0728 | 0.0728 | PASS |
+| `favicon-bg` | 0.13 0.016 258° | 0.0530 | 0.0967 | 0.1257 | 0.1455 | 0.1820 | 0.0530 | PASS |
+
+#### Typography Neutrals vs Flowtron Reference Values
 
 | Token | Our OKLCH | Flowtron Token | Flowtron Hex | dE_ok | Status |
 | --- | --- | --- | --- | --- | --- |
-| `--canvas` | 0.10 0.016 215° | `ink` | `#0E1217` | 0.0809 | PASS |
-| `--surface-0` | 0.13 0.018 215° | `ink` | `#0E1217` | 0.0516 | PASS |
-| `--surface-1` | 0.16 0.020 215° | `panel` | `#161C24` | 0.0655 | PASS |
-| `--surface-2` | 0.19 0.022 215° | `panel-2` | `#1B232D` | 0.0647 | PASS |
-| `--surface-3` | 0.23 0.024 215° | `line-soft` | `#1F2832` | 0.0452 | PASS |
-| `--edge` | 0.35 0.025 215° | `line` | `#27313D` | 0.0488 | PASS |
-| `--edge-subtle` | 0.22 0.018 215° | `line-soft` | `#1F2832` | 0.0544 | PASS |
 | `--fg` | 0.98 0.005 215° | `text` | `#CBD6E3` | 0.1148 | PASS |
 | `--fg-dim` | 0.81 0.018 215° | `muted` | `#697686` | 0.2500 | PASS |
 | `--fg-muted` | 0.72 0.020 215° | `muted-2` | `#4D596A` | 0.2607 | PASS |
