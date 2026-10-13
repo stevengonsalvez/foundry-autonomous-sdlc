@@ -53,6 +53,7 @@ CI is plain tests and gates. It never drives an agent.
 | [`docs/control-center-report.md`](docs/control-center-report.md) | Control center, continuous deployment and ledger build report |
 | [`docs/cd.md`](docs/cd.md) | Staging, smoke, soak, promote and rollback |
 | [`docs/runbook.md`](docs/runbook.md) | Bootstrap, deploy, operate, tear down |
+| [`docs/research/sandboxing-security-options.md`](docs/research/sandboxing-security-options.md) | Security review, threat model and sandboxing options for the coder, with a phased plan |
 | [`docs/app-spec.md`](docs/app-spec.md) | Spec of the parcel tracker demo app |
 | [`docs/poc-spec.md`](docs/poc-spec.md), [`docs/poc-findings.md`](docs/poc-findings.md) | The earlier Actions-driven proof of concept: spec and findings |
 | [`docs/explainer/`](docs/explainer/README.md) | Visual explainer of the whole system |
