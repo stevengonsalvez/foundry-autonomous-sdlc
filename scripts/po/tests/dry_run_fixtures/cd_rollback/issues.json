@@ -1,0 +1,9 @@
+[
+  {
+    "number": 65,
+    "title": "feat: Display package transit badge",
+    "author": { "login": "stevengonsalvez" },
+    "body": "Smoke test failed heading check during CD promotion; staging rolled back.",
+    "labels": [{ "name": "type:feature" }, { "name": "escalated:deploy-failed" }]
+  }
+]

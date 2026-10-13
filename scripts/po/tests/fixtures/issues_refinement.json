@@ -1,0 +1,18 @@
+[
+  {
+    "number": 62,
+    "title": "feat: Filter parcel list by destination country",
+    "author": {
+      "login": "stevengonsalvez"
+    },
+    "labels": [
+      {
+        "name": "type:feature"
+      },
+      {
+        "name": "stage:needs-refinement"
+      }
+    ],
+    "createdAt": "2026-10-13T17:15:00Z"
+  }
+]

@@ -1,0 +1,9 @@
+[
+  {
+    "number": 62,
+    "title": "feat: Filter parcel list by destination country",
+    "author": { "login": "stevengonsalvez" },
+    "body": "Need to filter the list of parcels.",
+    "labels": [{ "name": "type:feature" }, { "name": "stage:needs-refinement" }]
+  }
+]

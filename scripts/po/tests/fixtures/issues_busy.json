@@ -1,0 +1,18 @@
+[
+  {
+    "number": 60,
+    "title": "feat: Display tracking history map",
+    "author": {
+      "login": "stevengonsalvez"
+    },
+    "labels": [
+      {
+        "name": "type:feature"
+      },
+      {
+        "name": "stage:building"
+      }
+    ],
+    "createdAt": "2026-10-13T17:00:00Z"
+  }
+]
