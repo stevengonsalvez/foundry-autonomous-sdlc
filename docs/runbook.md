@@ -319,7 +319,7 @@ The coder's hosted agent version can carry the egress policy `sdlc-coder-egress`
 1. In a stack where a failed coder is harmless (routine disabled, or a non-production stack), set `coder_egress_mode = "Enforced"` and apply terraform.
 2. Redeploy the coder: `uv run --project agents python scripts/deploy_agents.py hosted --only sdlc-coder`. It reads the policy before anything is deployed, refuses a policy from another account, and writes the mode and a rule hash into the version's `EGRESS_FINGERPRINT`.
 3. Run `uv run --project agents python scripts/verify_egress.py`. It must print `PASS Enforced` (it also fails unless the live coder carries the policy and fingerprint).
-4. Start a job on a test issue and read the job log. A missing host is an HTTP 403 (`git`: `The requested URL returned error: 403`, Node: a 403 response, npm: `E403`) at install, clone or agy setup. Add each needed host to `coder_egress_extra_hosts`, apply, redeploy, repeat until a job reaches a pull request.
+4. Start a job on a test issue and read the job log. A missing host is an HTTP 403 (`git`: `The requested URL returned error: 403`, Node: a 403 response, npm: `E403`) at install, clone or agy setup. A client that does not trust the proxy CA (agy with `REQUESTS_CA_BUNDLE` and `GRPC_DEFAULT_SSL_ROOTS_FILE_PATH` stripped by the scrubbed environment, see gate 3) shows a certificate error on every host, listed or not, not a 403: do not read that as a missing host, fix its trust first (inference from how the proxy terminates TLS; not measured). Add each needed host to `coder_egress_extra_hosts`, apply, redeploy, repeat until a job reaches a pull request.
 5. Only then leave it on in production.
 
 **Gate before Enforced is enabled (open):**
