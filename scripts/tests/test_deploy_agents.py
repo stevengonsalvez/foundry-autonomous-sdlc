@@ -107,7 +107,7 @@ class FakeFoundry:
             return agent["versions"][-1]["version"]
         version = str(len(agent["versions"]) + 1)
         agent["versions"].append({"version": version, "key": key, "status": "creating", "polls": 0,
-                                  "rai_policy": self.attach_as or rai_policy, "env": dict(env)})
+                                  "rai_policy": rai_policy if self.attach_as is None else self.attach_as, "env": dict(env)})
         self.created.append({"name": name, "cpu": cpu, "memory": memory, "idle": idle_minutes, "env": env,
                              "sha256": sha256, "rai_policy": rai_policy,
                              "size": len(code)})
@@ -444,11 +444,15 @@ def test_a_policy_from_another_account_is_refused() -> None:
     assert rec.foundry.created == []
 
 
-def test_an_active_coder_that_does_not_carry_the_policy_fails_the_deploy() -> None:
+@pytest.mark.parametrize(("attached", "message"), [
+    ("", r"sdlc-coder version \S+ is live without the policy; redeploy or disable the routine"),
+    ("something-else", "is live carrying egress policy something-else, not .*; redeploy or disable"),
+])
+def test_an_active_coder_that_does_not_carry_the_policy_fails_the_deploy(attached: str, message: str) -> None:
     foundry = FakeFoundry()
-    foundry.attach_as = "something-else"
+    foundry.attach_as = attached
     deployer, _, _ = make(foundry=foundry)
-    with pytest.raises(da.DeployError, match="active but carries egress policy something-else"):
+    with pytest.raises(da.DeployError, match=message):
         deployer.hosted({da.CODER: da.DEFAULT_SIZES[da.CODER]}, timeout_s=600)
 
 

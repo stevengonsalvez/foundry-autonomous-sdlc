@@ -517,8 +517,10 @@ class Deployer:
             self.say(f"{name} version {version} {'unchanged' if unchanged else 'created'}, waiting for active")
             found = self._wait_active(name, version, timeout_s)
             if name in EGRESS_AGENTS and found["rai_policy"].lower() != rai_policy.lower():
-                raise DeployError(f"{name} version {version} is active but carries egress policy "
-                                  f"{found['rai_policy'] or 'none'}, not {rai_policy or 'none'}")
+                live = found["rai_policy"]
+                state = ("is live without the policy" if not live
+                         else f"is live carrying egress policy {live}, not {rai_policy or 'none'}")
+                raise DeployError(f"{name} version {version} {state}; redeploy or disable the routine")
             self.say(f"{name} version {version} active")
 
     def _resolve_egress(self, sizes: dict[str, HostedSize]) -> EgressPolicy | None:
