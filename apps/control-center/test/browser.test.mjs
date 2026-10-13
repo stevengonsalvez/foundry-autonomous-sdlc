@@ -25,7 +25,7 @@ const REPO = 'https://github.com/stevengonsalvez/foundry-autonomous-sdlc';
 
 before(async () => {
   if (!browser) return;
-  for (const state of ['normal', 'empty', 'missing', 'bad-version', 'invalid-json', 'http-500', 'hostile']) servers[state] = await startServer({ state, fixed: true });
+  for (const state of ['normal', 'empty', 'missing', 'bad-version', 'invalid-json', 'http-500', 'hostile', 'edge']) servers[state] = await startServer({ state, fixed: true });
   servers.stale = await startServer({ state: 'stale' });
   servers.live = await startServer({ state: 'normal' });
 });
@@ -80,6 +80,37 @@ describe('views', { skip }, () => {
     });
   }
 
+  async function findMissingClasses(page, label) {
+    assert.equal(await page.locator('.error-panel').count(), 0, `no error panel rendered on ${label}`);
+    return page.evaluate(() => {
+      const sheetClasses = new Set();
+      for (const sheet of document.styleSheets) {
+        try {
+          for (const rule of sheet.cssRules) {
+            if (rule.selectorText) {
+              for (const m of rule.selectorText.matchAll(/\.([a-zA-Z0-9_-]+)/g)) {
+                sheetClasses.add(m[1]);
+              }
+            }
+          }
+        } catch {
+          // Ignore cross-origin stylesheet errors
+        }
+      }
+      const domClasses = new Set();
+      for (const el of document.querySelectorAll('*')) {
+        for (const c of el.classList) {
+          domClasses.add(c);
+        }
+      }
+      const notFound = [];
+      for (const c of domClasses) {
+        if (!sheetClasses.has(c)) notFound.push(c);
+      }
+      return notFound;
+    });
+  }
+
   test('DOM crawl: asserts every class on every rendered element across all views, lenses and groups has a CSS rule', async () => {
     const targets = [
       ...VIEWS.map(([, hash]) => hash),
@@ -91,87 +122,54 @@ describe('views', { skip }, () => {
 
     const missingAcrossViews = [];
 
-    // Crawl all standard views and ticket variations
-    for (const hash of targets) {
-      const { context, page } = await open('normal', { hash, width: 1440, height: 900 });
+    // Crawl all standard views and ticket variations across normal and edge fixtures
+    for (const state of ['normal', 'edge']) {
+      for (const hash of targets) {
+        const { context, page } = await open(state, { hash, width: 1440, height: 900 });
+        await page.waitForSelector('#app[aria-busy="false"] .view');
+        const missing = await findMissingClasses(page, `${state} ${hash}`);
+        if (missing.length > 0) {
+          missingAcrossViews.push({ target: `${state} ${hash}`, missing });
+        }
+        await context.close();
+      }
+    }
+
+    // Crawl hostile fixture across views and tickets
+    const hostileTargets = [
+      ...VIEWS.map(([, hash]) => hash),
+      '#/ticket/24',
+      '#/ticket/25',
+      '#/ticket/5',
+    ];
+    for (const hash of hostileTargets) {
+      const { context, page } = await open('hostile', { hash, width: 1440, height: 900 });
       await page.waitForSelector('#app[aria-busy="false"] .view');
-
-      const missing = await page.evaluate(() => {
-        const sheetClasses = new Set();
-        for (const sheet of document.styleSheets) {
-          try {
-            for (const rule of sheet.cssRules) {
-              if (rule.selectorText) {
-                for (const m of rule.selectorText.matchAll(/\.([a-zA-Z0-9_-]+)/g)) {
-                  sheetClasses.add(m[1]);
-                }
-              }
-            }
-          } catch {
-            // Ignore cross-origin stylesheet errors
-          }
-        }
-        const domClasses = new Set();
-        for (const el of document.querySelectorAll('*')) {
-          for (const c of el.classList) {
-            domClasses.add(c);
-          }
-        }
-        const notFound = [];
-        for (const c of domClasses) {
-          if (!sheetClasses.has(c)) notFound.push(c);
-        }
-        return notFound;
-      });
-
+      const missing = await findMissingClasses(page, `hostile ${hash}`);
       if (missing.length > 0) {
-        missingAcrossViews.push({ target: hash, missing });
+        missingAcrossViews.push({ target: `hostile ${hash}`, missing });
       }
       await context.close();
     }
 
-    // Crawl all board lens and group combinations
-    const { context, page } = await open('normal', { hash: '#/', width: 1440, height: 900 });
-    await page.waitForSelector('#app[aria-busy="false"] .view');
+    // Crawl all board lens and group combinations across normal and edge fixtures
+    for (const state of ['normal', 'edge']) {
+      const { context, page } = await open(state, { hash: '#/', width: 1440, height: 900 });
+      await page.waitForSelector('#app[aria-busy="false"] .view');
 
-    for (const group of ['Type', 'Agent', 'Outcome']) {
-      await page.getByRole('button', { name: group }).click();
-      for (const lens of ['Delivery', 'Cost', 'Gates']) {
-        await page.getByRole('button', { name: lens }).click();
-        const missing = await page.evaluate(() => {
-          const sheetClasses = new Set();
-          for (const sheet of document.styleSheets) {
-            try {
-              for (const rule of sheet.cssRules) {
-                if (rule.selectorText) {
-                  for (const m of rule.selectorText.matchAll(/\.([a-zA-Z0-9_-]+)/g)) {
-                    sheetClasses.add(m[1]);
-                  }
-                }
-              }
-            } catch {
-              // Ignore cross-origin stylesheet errors
-            }
+      for (const group of ['Type', 'Agent', 'Outcome']) {
+        await page.getByRole('button', { name: group }).click();
+        for (const lens of ['Delivery', 'Cost', 'Gates']) {
+          await page.getByRole('button', { name: lens }).click();
+          const target = `${state} board group=${group} lens=${lens}`;
+          const missing = await findMissingClasses(page, target);
+          if (missing.length > 0) {
+            missingAcrossViews.push({ target, missing });
           }
-          const domClasses = new Set();
-          for (const el of document.querySelectorAll('*')) {
-            for (const c of el.classList) {
-              domClasses.add(c);
-            }
-          }
-          const notFound = [];
-          for (const c of domClasses) {
-            if (!sheetClasses.has(c)) notFound.push(c);
-          }
-          return notFound;
-        });
-
-        if (missing.length > 0) {
-          missingAcrossViews.push({ target: `board group=${group} lens=${lens}`, missing });
         }
       }
+      await context.close();
     }
-    await context.close();
 
     assert.deepEqual(missingAcrossViews, [], 'Every element class rendered across all views, lenses and groups must have a rule in document.styleSheets');
   });

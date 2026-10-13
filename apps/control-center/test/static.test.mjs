@@ -300,6 +300,19 @@ test('every class name in JS has a corresponding rule in CSS stylesheets', async
         }
         currentArg += ch;
       }
+      if (args.length >= 2) {
+        const toneArg = args[1]
+          .replace(/[!=]==?\s*['"][^'"]+['"]/g, '')
+          .replace(/['"][^'"]+['"]\s*[!=]==?/g, '');
+        for (const m of toneArg.matchAll(/['"]([^'"]+)['"]/g)) {
+          const toneVal = m[1].trim();
+          assert.ok(
+            BADGE_TONES.includes(toneVal),
+            `badge tone "${toneVal}" in ${file} is not in BADGE_TONES: ${BADGE_TONES.join(', ')}`,
+          );
+          requiredClasses.add(`tone-${toneVal}`);
+        }
+      }
       if (args.length >= 3) {
         const classArg = args[2];
         for (const m of classArg.matchAll(/['"]([^'"]+)['"]/g)) {
