@@ -32,6 +32,7 @@ infra/terraform/
 │   ├── foundry/        account, project, model deployment (pinned or quota-aware),
 │   │                   App Insights tracing connection, project + deployer RBAC
 │   ├── observability/  Log Analytics + workspace-based App Insights
+│   ├── egress_policy/  sdlc-coder egress allow-list (account RAI policy, preview), off by default
 │   ├── github-oidc/    UAMI, federated credentials, CI role assignments
 │   └── budget/         RG budget + alerts
 └── bootstrap/          separate root, local state: remote state storage

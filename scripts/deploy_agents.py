@@ -4,7 +4,8 @@ Deploy the agent side of the demo onto the Foundry project. Idempotent; every st
   connection     project connection github-mcp (RemoteTool, CustomKeys, Authorization: Bearer <PAT>)
   prompt-agents  prompt agent versions (python -m sdlc_agents.create_agents)
   hosted         hosted agents sdlc-orchestrator, sdlc-coder and sdlc-ledger from zips, waits for status active
-                 (idle timeout: orchestrator 2 minutes so compute stops between ticks, coder 10 minutes,
+                 (idle timeout: orchestrator 2 minutes so compute stops between ticks, coder 10 minutes and the
+                 egress guardrail EGRESS_POLICY_ID (fails closed: no policy, no coder deploy),
                  ledger 2 minutes at 0.25 vCPU and 0.5 GiB: it wakes only when events arrive)
   roles          Key Vault Secrets User per secret, Foundry User on the project for the hosted agents,
                  Cost Management Reader on the resource group for the ledger
@@ -17,7 +18,10 @@ Credentials are the operator's `az login` (AzureCliCredential). The PAT is read 
 sent only in the connection PUT body, and redacted from everything this script prints.
 
 Configuration comes from the environment, falling back to `terraform output` in infra/terraform:
-FOUNDRY_PROJECT_ENDPOINT, KEY_VAULT_URI, AZURE_SUBSCRIPTION_ID, AZURE_RESOURCE_GROUP, GITHUB_OWNER.
+FOUNDRY_PROJECT_ENDPOINT, KEY_VAULT_URI, AZURE_SUBSCRIPTION_ID, AZURE_RESOURCE_GROUP, GITHUB_OWNER, and
+EGRESS_POLICY_ID (output egress_policy_id: the egress guardrail attached to sdlc-coder). The coder is not
+deployed without one: set it to a raiPolicies resource id, to `off` (what terraform emits for
+coder_egress_mode = "Off") or pass --no-egress-policy to leave the coder's outbound traffic unrestricted.
 
 Usage: uv run --project agents python scripts/deploy_agents.py [--dry-run] <command> [options]
 """
@@ -76,6 +80,17 @@ ARM = "https://management.azure.com"
 ARM_API_VERSION = "2025-04-01-preview"
 ARM_SCOPE = "https://management.azure.com/.default"
 AI_SCOPE = "https://ai.azure.com/.default"
+# Hosted agents that get the egress guardrail. The coder runs untrusted code (agy, npm ci, tests);
+# the orchestrator and ledger run only this repository's code and are left open (docs/architecture.md).
+EGRESS_AGENTS = (CODER,)
+EGRESS_API_VERSION = "2026-05-15-preview"
+EGRESS_MODES = ("Audit", "Enforced")
+# Explicit "no policy" marker (terraform output for coder_egress_mode = "Off", or EGRESS_POLICY_ID=off): an
+# empty value means "not resolved" and fails the coder deploy, so the guardrail is never lost by accident.
+EGRESS_OFF = "off"
+_POLICY_ID = re.compile(
+    r"/subscriptions/(?P<subscription>[^/]+)/resourceGroups/(?P<group>[^/]+)/providers/"
+    r"Microsoft\.CognitiveServices/accounts/(?P<account>[A-Za-z0-9_.-]+)/raiPolicies/(?P<name>[A-Za-z0-9_.-]+)")
 ROUTINE = "sdlc-tick"
 PROBE_ROUTINE = "probe-tick"
 ROUTINE_CRON = "*/5 * * * *"
@@ -98,6 +113,46 @@ class DeployError(RuntimeError):
 
 
 # ---------------------------------------------------------------------------------------------
+# Egress policy: one reader for the deploy step and for scripts/verify_egress.py
+# ---------------------------------------------------------------------------------------------
+
+@dataclass(frozen=True)
+class EgressPolicy:
+    id: str
+    name: str
+    mode: str
+    rules: int
+    fingerprint: str   # "<mode>-<sha256[:12] of the egress policy>": changes with the mode or any rule
+
+
+def policy_id_parts(policy_id: str) -> re.Match[str]:
+    match = _POLICY_ID.fullmatch(policy_id)
+    if match is None:
+        raise DeployError(f"not a raiPolicies resource id: {policy_id!r}")
+    return match
+
+
+def read_egress_policy(http: Transport, token: str, policy_id: str) -> EgressPolicy:
+    """GET the policy from ARM and fail on anything that is not a default-deny egress allow-list in a
+    known mode: a policy that does not resolve or has no egressPolicy is never treated as 'no policy'."""
+    name = policy_id_parts(policy_id).group("name")
+    resp = http(HttpRequest("GET", f"{ARM}{policy_id}?api-version={EGRESS_API_VERSION}",
+                            {"Authorization": f"Bearer {token}"}, None, 60.0))
+    if resp.status != 200:
+        raise DeployError(f"egress policy {name}: GET {resp.status}")
+    try:
+        egress = json.loads(resp.body)["properties"]["egressPolicy"]
+        mode, default, rules = egress["mode"], egress["defaultAction"], egress["rules"]
+    except (ValueError, KeyError, TypeError):
+        raise DeployError(f"egress policy {name}: no egressPolicy with mode, defaultAction and rules") from None
+    if mode not in EGRESS_MODES or default != "Deny" or not isinstance(rules, list):
+        raise DeployError(f"egress policy {name}: mode {mode!r} / defaultAction {default!r} is not "
+                          f"{'|'.join(EGRESS_MODES)} with default Deny")
+    digest = hashlib.sha256(json.dumps(egress, sort_keys=True).encode()).hexdigest()[:12]
+    return EgressPolicy(policy_id, name, mode, len(rules), f"{mode}-{digest}")
+
+
+# ---------------------------------------------------------------------------------------------
 # Configuration
 # ---------------------------------------------------------------------------------------------
 
@@ -108,21 +163,36 @@ class Config:
     subscription_id: str
     resource_group: str
     github_owner: str = OWNER
+    # Full ARM id of the egress guardrail (accounts/raiPolicies) attached to sdlc-coder, or EGRESS_OFF; empty
+    # means unresolved, which fails the coder deploy (other commands do not need it).
+    egress_policy_id: str = ""
 
     @classmethod
     def resolve(cls, env: Mapping[str, str], *, terraform_outputs: Callable[[], dict[str, Any]]) -> Config:
         wanted = {"FOUNDRY_PROJECT_ENDPOINT": "foundry_project_endpoint", "KEY_VAULT_URI": "key_vault_uri",
                   "AZURE_SUBSCRIPTION_ID": "azure_subscription_id", "AZURE_RESOURCE_GROUP": "resource_group_name"}
         values = {var: env.get(var, "") for var in wanted}
+        egress = env.get("EGRESS_POLICY_ID", "")
+        outputs: dict[str, Any] = {}
         if not all(values.values()):
             outputs = terraform_outputs()
             for var, output in wanted.items():
                 values[var] = values[var] or str((outputs.get(output) or {}).get("value", ""))
+        if not egress:
+            # Read even when the four variables above are set. No terraform at all (env-only setups) leaves
+            # it empty, and hosted() then refuses to deploy the coder.
+            try:
+                outputs = outputs or terraform_outputs()
+            except DeployError:
+                outputs = {}
+            egress = str((outputs.get("egress_policy_id") or {}).get("value") or "")
+        if egress and egress != EGRESS_OFF:
+            policy_id_parts(egress)
         missing = [var for var, value in values.items() if not value]
         if missing:
             raise DeployError(f"{', '.join(missing)} not set and not found in terraform outputs")
         config = cls(values["FOUNDRY_PROJECT_ENDPOINT"], values["KEY_VAULT_URI"], values["AZURE_SUBSCRIPTION_ID"],
-                     values["AZURE_RESOURCE_GROUP"], env.get("GITHUB_OWNER") or OWNER)
+                     values["AZURE_RESOURCE_GROUP"], env.get("GITHUB_OWNER") or OWNER, egress)
         if not _ENDPOINT.fullmatch(config.project_endpoint):
             raise DeployError(f"not a Foundry project endpoint: {config.project_endpoint}")
         return config
@@ -147,6 +217,15 @@ class Config:
     @property
     def group_scope(self) -> str:
         return f"/subscriptions/{self.subscription_id}/resourceGroups/{self.resource_group}"
+
+    def check_policy_scope(self, policy_id: str) -> None:
+        """A stale EGRESS_POLICY_ID from another stack must not attach to this one."""
+        parts = policy_id_parts(policy_id)
+        theirs = parts.group("subscription", "group", "account")
+        if [x.lower() for x in theirs] != [x.lower() for x in (self.subscription_id, self.resource_group, self.account)]:
+            raise DeployError(f"egress policy {parts.group('name')} belongs to account "
+                              f"{parts.group('account')} in {parts.group('group')}, not {self.account} in "
+                              f"{self.resource_group}")
 
     def secret_scope(self, secret: str) -> str:
         return (f"/subscriptions/{self.subscription_id}/resourceGroups/{self.resource_group}/providers/"
@@ -198,8 +277,9 @@ class FoundryOps(Protocol):
     def get_agent(self, name: str) -> dict[str, Any] | None: ...
     def list_agents(self) -> list[dict[str, Any]]: ...
     def create_hosted_version(self, name: str, *, cpu: str, memory: str, idle_minutes: int, env: dict[str, str],
-                              code: bytes, sha256: str, description: str) -> str: ...
+                              code: bytes, sha256: str, description: str, rai_policy: str = "") -> str: ...
     def get_version(self, name: str, version: str) -> dict[str, Any]: ...
+    def delete_agent(self, name: str) -> None: ...
     def get_routine(self, name: str) -> dict[str, Any] | None: ...
     def put_routine(self, name: str, **fields: Any) -> None: ...
     def set_routine_enabled(self, name: str, enabled: bool) -> None: ...
@@ -239,11 +319,12 @@ class SdkFoundry:
         return [self._agent_view(a) for a in self._client.agents.list()]
 
     def create_hosted_version(self, name: str, *, cpu: str, memory: str, idle_minutes: int, env: dict[str, str],
-                              code: bytes, sha256: str, description: str) -> str:
+                              code: bytes, sha256: str, description: str, rai_policy: str = "") -> str:
         from azure.ai.projects.models import (
             CodeConfiguration,
             HostedAgentDefinition,
             ProtocolVersionRecord,
+            RaiConfig,
             SessionConfiguration,
         )
 
@@ -253,6 +334,8 @@ class SdkFoundry:
             code_configuration=CodeConfiguration(runtime="python_3_13", entry_point=["python", "main.py"],
                                                  dependency_resolution="remote_build"),
             protocol_versions=[ProtocolVersionRecord(protocol="invocations", version="2.0.0")],
+            # The egress guardrail binds to the version: a policy change needs a new version and a new session.
+            rai_config=RaiConfig(rai_policy_name=rai_policy) if rai_policy else None,
         )
         created = self._client.agents.create_version_from_code(
             agent_name=name, definition=definition, code=(f"{name}.zip", code, "application/zip"),
@@ -262,7 +345,13 @@ class SdkFoundry:
 
     def get_version(self, name: str, version: str) -> dict[str, Any]:
         found = self._client.agents.get_version(agent_name=name, agent_version=version)
-        return {"status": _g(found, "status"), "error": _g(found, "error")}
+        definition = _g(found, "definition")
+        return {"status": _g(found, "status"), "error": _g(found, "error"),
+                "rai_policy": _g(_g(definition, "rai_config"), "rai_policy_name") or "",
+                "env": dict(_g(definition, "environment_variables") or {})}
+
+    def delete_agent(self, name: str) -> None:
+        self._client.agents.delete(name, force=True)
 
     def get_routine(self, name: str) -> dict[str, Any] | None:
         try:
@@ -348,6 +437,7 @@ class Deployer:
     dry_run: bool = False
     sleep: Callable[[float], None] = time.sleep
     zip_builders: dict[str, Callable[[], bytes]] | None = None
+    no_egress_policy: bool = False   # --no-egress-policy: the operator explicitly leaves the coder open
 
     def say(self, message: str) -> None:
         self.console.say(("[dry-run] " if self.dry_run else "") + message)
@@ -396,6 +486,9 @@ class Deployer:
         if ledger_mode not in LEDGER_MODES:
             raise DeployError(f"ledger mode must be one of {', '.join(LEDGER_MODES)}")
         builders = self.zip_builders or default_zip_builders()
+        # Resolved once, before anything is deployed: a missing or wrong policy must not leave the ledger and
+        # the orchestrator deployed with the coder not.
+        egress = self._resolve_egress(sizes)
         # The ledger first: the orchestrator is told to use it only once it is there.
         for name, size in sorted(sizes.items(), key=lambda item: item[0] != LEDGER):
             env = {**self.config.hosted_env(), "HOSTED_CPU": size.cpu, "HOSTED_MEMORY": size.memory}
@@ -404,28 +497,55 @@ class Deployer:
             if name == LEDGER:
                 env.update({"AZURE_SUBSCRIPTION_ID": self.config.subscription_id,
                             "AZURE_RESOURCE_GROUP": self.config.resource_group})
+            rai_policy = ""
+            if name in EGRESS_AGENTS:
+                # In the definition, so a mode or rule change (same policy id) is a new version, not a reuse.
+                env["EGRESS_FINGERPRINT"] = egress.fingerprint if egress else EGRESS_OFF
+                rai_policy = egress.id if egress else ""
             code = builders[name]()
             sha = hashlib.sha256(code).hexdigest()
             if self.dry_run:
                 self.say(f"would create {name} version: cpu={size.cpu} memory={size.memory} "
                          f"idle_timeout={size.idle_minutes}m python_3_13 remote_build invocations 2.0.0, "
-                         f"zip {len(code)} bytes sha256 {sha}, env {sorted(env)}")
+                         f"zip {len(code)} bytes sha256 {sha}, env {sorted(env)}, egress {rai_policy or 'none'}")
                 continue
             before = self.foundry.get_agent(name)
             version = self.foundry.create_hosted_version(
                 name, cpu=size.cpu, memory=size.memory, idle_minutes=size.idle_minutes, env=env, code=code,
-                sha256=sha, description=f"{name} zip sha256 {sha[:12]}")
+                sha256=sha, description=f"{name} zip sha256 {sha[:12]}", rai_policy=rai_policy)
             unchanged = before is not None and before["latest_version"] == version
             self.say(f"{name} version {version} {'unchanged' if unchanged else 'created'}, waiting for active")
-            self._wait_active(name, version, timeout_s)
+            found = self._wait_active(name, version, timeout_s)
+            if name in EGRESS_AGENTS and found["rai_policy"].lower() != rai_policy.lower():
+                raise DeployError(f"{name} version {version} is active but carries egress policy "
+                                  f"{found['rai_policy'] or 'none'}, not {rai_policy or 'none'}")
             self.say(f"{name} version {version} active")
 
-    def _wait_active(self, name: str, version: str, timeout_s: int) -> None:
+    def _resolve_egress(self, sizes: dict[str, HostedSize]) -> EgressPolicy | None:
+        """The coder's policy, or None only when the operator chose it explicitly (`off`, --no-egress-policy).
+        Anything unresolved or inconsistent raises."""
+        if not any(name in EGRESS_AGENTS for name in sizes):
+            return None
+        wanted = self.config.egress_policy_id
+        if self.no_egress_policy or wanted == EGRESS_OFF:
+            self.say("warning: egress policy off (explicit): sdlc-coder's outbound traffic is unrestricted")
+            return None
+        if not wanted:
+            raise DeployError(
+                "no egress policy for sdlc-coder: set EGRESS_POLICY_ID (a raiPolicies resource id, or `off`), "
+                "apply terraform so output egress_policy_id exists, or pass --no-egress-policy")
+        self.config.check_policy_scope(wanted)
+        policy = read_egress_policy(self.http, self.token(ARM_SCOPE), wanted)
+        self.say(f"egress policy {policy.name}: mode {policy.mode}, {policy.rules} rules, "
+                 f"fingerprint {policy.fingerprint}")
+        return policy
+
+    def _wait_active(self, name: str, version: str, timeout_s: int) -> dict[str, Any]:
         waited = 0
         while True:
             found = self.foundry.get_version(name, version)
             if found["status"] == "active":
-                return
+                return found
             if found["status"] == "failed":
                 error = found.get("error") or {}
                 raise DeployError(f"{name} version {version} failed: {_g(error, 'code')}: {_g(error, 'message')}")
@@ -591,6 +711,9 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
                              "the same run; required when the orchestrator is deployed alone, so a redeploy never "
                              "changes it silently); inline deploys no sdlc-ledger agent")
     hosted.add_argument("--timeout", type=int, default=900, help="seconds to wait for status active")
+    hosted.add_argument("--no-egress-policy", action="store_true",
+                        help="deploy sdlc-coder with no egress policy (its outbound traffic is unrestricted); "
+                             "without this or EGRESS_POLICY_ID=off, a missing policy fails the deploy")
     routine = argparse.ArgumentParser(add_help=False)
     toggle = routine.add_mutually_exclusive_group()
     toggle.add_argument("--enable", dest="enable", action="store_const", const=True, default=None)
@@ -672,6 +795,7 @@ def build_deployer(args: argparse.Namespace) -> Deployer:  # pragma: no cover - 
         config=config, foundry=SdkFoundry(AIProjectClient(endpoint=config.project_endpoint, credential=credential)),
         az=run_az, http=urllib_transport, token=lambda scope: credential.get_token(scope).token, run=run_command,
         console=Console(), dry_run=args.dry_run,
+        no_egress_policy=getattr(args, "no_egress_policy", False),
     )
 
 

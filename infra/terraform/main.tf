@@ -87,3 +87,36 @@ module "budget" {
   alert_thresholds  = var.budget_alert_thresholds
   contact_emails    = var.budget_contact_emails
 }
+
+# Egress allow-list for sdlc-coder (scripts/deploy_agents.py attaches it). Hosts
+# come from the coder's code and were checked against a live Enforced policy on
+# 2026-10-12 (docs/runbook.md, section 9): git and the GitHub API, npm, the
+# Node download, Debian apt (HTTPS only: plain HTTP is denied for every host),
+# the agy installer and its updater, the agy binary on storage.googleapis.com,
+# and this stack's Foundry and Key Vault endpoints.
+#
+# storage.googleapis.com is one host for every Google Cloud Storage bucket, so
+# allowing it for the agy download also allows any other bucket: the allow-list
+# limits destinations, not what is done at an allowed host. agy's own runtime
+# API hosts are not known, and no real coder job has run behind the preview
+# proxy, hence Off by default: enable Audit or Enforced explicitly, and run a
+# job on a test issue in Enforced first.
+module "egress_policy" {
+  source = "./modules/egress_policy"
+  count  = var.coder_egress_mode == "Off" ? 0 : 1
+
+  account_id = module.foundry.account_id
+  mode       = var.coder_egress_mode
+  allowed_hosts = distinct(concat([
+    "github.com",
+    "api.github.com",
+    "registry.npmjs.org",
+    "nodejs.org",
+    "deb.debian.org",
+    "antigravity.google",
+    "antigravity-cli-auto-updater-974169037036.us-central1.run.app",
+    "storage.googleapis.com",
+    trimprefix(module.foundry.account_endpoint, "https://"),
+    trimsuffix(trimprefix(module.keyvault.vault_uri, "https://"), "/"),
+  ], var.coder_egress_extra_hosts))
+}

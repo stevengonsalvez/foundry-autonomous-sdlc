@@ -121,3 +121,32 @@ variable "assign_deployer_roles" {
   default     = true
   description = "Grant the principal running Terraform the Foundry User role on the Foundry account so it can create agents from a laptop."
 }
+
+variable "coder_egress_mode" {
+  type        = string
+  default     = "Off"
+  description = <<-EOT
+    Egress guardrail for the sdlc-coder hosted agent (preview, no SLA). "Off"
+    (default) creates no policy: the coder's outbound traffic is unrestricted,
+    and the deploy script says so. No real coder job has yet run behind the
+    preview proxy, so Audit and Enforced are an explicit opt-in. "Audit" blocks
+    nothing and its decisions are not yet observable (none reached Application
+    Insights in the 2026-10-12 runs): it only shows that the policy attaches.
+    "Enforced" refuses every host outside the allow-list with a proxy 403 and
+    denies all plain HTTP, even to listed hosts (measured; the coder's apt
+    sources are HTTP, see the gate), so run a coder job on a test issue in
+    Enforced before relying on it (docs/runbook.md, section 9). A change
+    applies to coder versions deployed after it.
+  EOT
+
+  validation {
+    condition     = contains(["Off", "Audit", "Enforced"], var.coder_egress_mode)
+    error_message = "coder_egress_mode must be Off, Audit or Enforced."
+  }
+}
+
+variable "coder_egress_extra_hosts" {
+  type        = list(string)
+  default     = []
+  description = "Exact host names added to the coder's egress allow-list, for example hosts a coder job on a test issue needed in Enforced."
+}

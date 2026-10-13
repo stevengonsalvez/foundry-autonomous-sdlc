@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import dataclasses
 import datetime
 import io
 import json
@@ -27,18 +28,25 @@ ROLE_GUIDS = {"Key Vault Secrets User": "00000000-0000-4000-8000-00000000a001",
               "Azure AI User": "00000000-0000-4000-8000-00000000a002",
               "Cost Management Reader": "00000000-0000-4000-8000-00000000a003"}
 
+POLICY = (f"/subscriptions/{SUB}/resourceGroups/rg-fsdlcd-demo/providers/Microsoft.CognitiveServices/"
+          "accounts/aif-fsdlcd/raiPolicies/sdlc-coder-egress")
 CONFIG = da.Config(project_endpoint=ENDPOINT, key_vault_uri=KV, subscription_id=SUB,
-                   resource_group="rg-fsdlcd-demo", github_owner="stevengonsalvez")
+                   resource_group="rg-fsdlcd-demo", github_owner="stevengonsalvez", egress_policy_id=POLICY)
 
 
 class FakeHttp:
     def __init__(self) -> None:
         self.requests: list[HttpRequest] = []
+        self.egress: dict[str, Any] | None = {"mode": "Audit", "defaultAction": "Deny", "rules": []}
 
     def __call__(self, request: HttpRequest) -> HttpResponse:
         self.requests.append(request)
         if request.url.startswith(KV.rstrip("/") + "/secrets/github-pat"):
             return HttpResponse(200, {}, json.dumps({"value": PAT}).encode())
+        if request.url.startswith(f"{da.ARM}{POLICY}?") and request.method == "GET":
+            if self.egress is None:
+                return HttpResponse(404, {}, b"{}")
+            return HttpResponse(200, {}, json.dumps({"properties": {"egressPolicy": self.egress}}).encode())
         if "management.azure.com" in request.url and request.method == "PUT":
             return HttpResponse(201, {}, json.dumps({"name": "github-mcp", "properties": {}}).encode())
         return HttpResponse(404, {}, b"{}")
@@ -76,7 +84,9 @@ class FakeFoundry:
         self.polls_until_active = polls_until_active
         self.fail_with = fail_with
         self.created: list[dict[str, Any]] = []
+        self.deleted: list[str] = []
         self.puts: list[str] = []
+        self.attach_as: str | None = None   # make the service report a different policy than the one sent
 
     def get_agent(self, name: str) -> dict[str, Any] | None:
         agent = self.agents.get(name)
@@ -90,15 +100,16 @@ class FakeFoundry:
         return [a for a in (self.get_agent(n) for n in sorted(self.agents)) if a]
 
     def create_hosted_version(self, name: str, *, cpu: str, memory: str, idle_minutes: int, env: dict[str, str],
-                              code: bytes, sha256: str, description: str) -> str:
+                              code: bytes, sha256: str, description: str, rai_policy: str = "") -> str:
         agent = self.agents.setdefault(name, {"versions": [], "principal_id": f"pid-{name}"})
-        key = (cpu, memory, idle_minutes, tuple(sorted(env.items())), sha256)
+        key = (cpu, memory, idle_minutes, tuple(sorted(env.items())), sha256, description, rai_policy)
         if agent["versions"] and agent["versions"][-1]["key"] == key:
             return agent["versions"][-1]["version"]
         version = str(len(agent["versions"]) + 1)
-        agent["versions"].append({"version": version, "key": key, "status": "creating", "polls": 0})
+        agent["versions"].append({"version": version, "key": key, "status": "creating", "polls": 0,
+                                  "rai_policy": self.attach_as or rai_policy, "env": dict(env)})
         self.created.append({"name": name, "cpu": cpu, "memory": memory, "idle": idle_minutes, "env": env,
-                             "sha256": sha256,
+                             "sha256": sha256, "rai_policy": rai_policy,
                              "size": len(code)})
         return version
 
@@ -110,7 +121,11 @@ class FakeFoundry:
             return {"status": "failed", "error": {"code": "CodeError", "message": self.fail_with}}
         if v["polls"] >= self.polls_until_active:
             v["status"] = "active"
-        return {"status": v["status"], "error": None}
+        return {"status": v["status"], "error": None, "rai_policy": v["rai_policy"], "env": v["env"]}
+
+    def delete_agent(self, name: str) -> None:
+        self.deleted.append(name)
+        self.agents.pop(name, None)
 
     def get_routine(self, name: str) -> dict[str, Any] | None:
         return dict(self.routines[name]) if name in self.routines else None
@@ -127,7 +142,7 @@ class FakeFoundry:
 
 
 def make(dry_run: bool = False, foundry: FakeFoundry | None = None, az: FakeAz | None = None,
-         http: FakeHttp | None = None) -> tuple[da.Deployer, io.StringIO, SimpleNamespace]:
+         http: FakeHttp | None = None, config: da.Config = CONFIG) -> tuple[da.Deployer, io.StringIO, SimpleNamespace]:
     out = io.StringIO()
     record = SimpleNamespace(foundry=foundry or FakeFoundry(), az=az or FakeAz(), http=http or FakeHttp(),
                              commands=[], tokens=[], sleeps=[])
@@ -141,7 +156,7 @@ def make(dry_run: bool = False, foundry: FakeFoundry | None = None, az: FakeAz |
         return f"token-{scope}"
 
     deployer = da.Deployer(
-        config=CONFIG, foundry=record.foundry, az=record.az, http=record.http, token=token, run=run,
+        config=config, foundry=record.foundry, az=record.az, http=record.http, token=token, run=run,
         console=da.Console(out), dry_run=dry_run, sleep=record.sleeps.append,
         zip_builders={da.ORCHESTRATOR: lambda: b"orchestrator-zip", da.CODER: lambda: b"coder-zip",
                       da.LEDGER: lambda: b"ledger-zip"},
@@ -154,7 +169,8 @@ def make(dry_run: bool = False, foundry: FakeFoundry | None = None, az: FakeAz |
 def test_config_from_env_derives_account_project_and_scopes() -> None:
     env = {"FOUNDRY_PROJECT_ENDPOINT": ENDPOINT, "KEY_VAULT_URI": KV, "AZURE_SUBSCRIPTION_ID": SUB,
            "AZURE_RESOURCE_GROUP": "rg-fsdlcd-demo"}
-    config = da.Config.resolve(env, terraform_outputs=lambda: pytest.fail("terraform not needed"))
+    config = da.Config.resolve(env, terraform_outputs=lambda: {})
+    assert config.egress_policy_id == ""   # unresolved: only `hosted` needs it, and it refuses without
     assert (config.account, config.project, config.key_vault_name) == ("aif-fsdlcd", "proj-sdlc", "kv-fsdlcd-demo-x1")
     assert config.project_scope == PROJECT_SCOPE
     assert config.secret_scope("github-pat") == f"{KV_SCOPE}/secrets/github-pat"
@@ -163,12 +179,37 @@ def test_config_from_env_derives_account_project_and_scopes() -> None:
 
 def test_config_falls_back_to_terraform_outputs() -> None:
     outputs = {"foundry_project_endpoint": {"value": ENDPOINT}, "key_vault_uri": {"value": KV},
-               "azure_subscription_id": {"value": SUB}, "resource_group_name": {"value": "rg-fsdlcd-demo"}}
+               "azure_subscription_id": {"value": SUB}, "resource_group_name": {"value": "rg-fsdlcd-demo"},
+               "egress_policy_id": {"value": POLICY}}
     assert da.Config.resolve({}, terraform_outputs=lambda: outputs) == CONFIG
     with pytest.raises(da.DeployError, match="KEY_VAULT_URI"):
         da.Config.resolve({}, terraform_outputs=lambda: {k: v for k, v in outputs.items() if k != "key_vault_uri"})
     with pytest.raises(da.DeployError, match="project endpoint"):
         da.Config.resolve({"FOUNDRY_PROJECT_ENDPOINT": "https://x.example.com/nope"}, terraform_outputs=lambda: outputs)
+
+
+def test_config_reads_the_egress_policy_from_env_or_terraform() -> None:
+    env = {"FOUNDRY_PROJECT_ENDPOINT": ENDPOINT, "KEY_VAULT_URI": KV, "AZURE_SUBSCRIPTION_ID": SUB,
+           "AZURE_RESOURCE_GROUP": "rg-fsdlcd-demo", "EGRESS_POLICY_ID": POLICY}
+    assert da.Config.resolve(env, terraform_outputs=lambda: pytest.fail("not needed")).egress_policy_id == POLICY
+    outputs = {"foundry_project_endpoint": {"value": ENDPOINT}, "key_vault_uri": {"value": KV},
+               "azure_subscription_id": {"value": SUB}, "resource_group_name": {"value": "rg-fsdlcd-demo"},
+               "egress_policy_id": {"value": POLICY}}
+    assert da.Config.resolve({}, terraform_outputs=lambda: outputs).egress_policy_id == POLICY
+    # The four core variables set must not skip the terraform output, or the coder loses its guardrail.
+    core = {k: v for k, v in env.items() if k != "EGRESS_POLICY_ID"}
+    assert da.Config.resolve(core, terraform_outputs=lambda: outputs).egress_policy_id == POLICY
+
+
+def test_config_without_terraform_or_policy_leaves_egress_empty_and_rejects_a_bad_id() -> None:
+    def no_terraform() -> dict[str, Any]:
+        raise da.DeployError("terraform output failed")
+
+    env = {"FOUNDRY_PROJECT_ENDPOINT": ENDPOINT, "KEY_VAULT_URI": KV, "AZURE_SUBSCRIPTION_ID": SUB,
+           "AZURE_RESOURCE_GROUP": "rg-fsdlcd-demo"}
+    assert da.Config.resolve(env, terraform_outputs=no_terraform).egress_policy_id == ""
+    with pytest.raises(da.DeployError, match="not a raiPolicies resource id"):
+        da.Config.resolve({**env, "EGRESS_POLICY_ID": "@evil.example/x"}, terraform_outputs=no_terraform)
 
 
 # -- connection --------------------------------------------------------------------------------
@@ -256,7 +297,7 @@ def test_hosted_creates_all_agents_with_sizes_and_env_and_waits_for_active() -> 
     assert coder["env"] == {
         "KEY_VAULT_URI": KV, "FOUNDRY_PROJECT_ENDPOINT": ENDPOINT, "FOUNDRY_MODEL_DEPLOYMENT": "sdlc-default",
         "REPO": "stevengonsalvez/foundry-autonomous-sdlc", "GITHUB_OWNER": "stevengonsalvez",
-        "HOSTED_CPU": "2", "HOSTED_MEMORY": "4Gi"}
+        "HOSTED_CPU": "2", "HOSTED_MEMORY": "4Gi", "EGRESS_FINGERPRINT": coder["env"]["EGRESS_FINGERPRINT"]}
     assert orchestrator["env"]["HOSTED_CPU"] == "1"
     assert len(rec.sleeps) == 6
     assert "sdlc-coder version 1 active" in out.getvalue()
@@ -317,6 +358,105 @@ def test_hosted_dry_run_builds_zips_but_creates_nothing() -> None:
     assert rec.foundry.created == []
     assert "would create sdlc-coder" in out.getvalue()
     assert "cpu=2 memory=4Gi idle_timeout=30m" in out.getvalue()
+
+
+def test_hosted_attaches_the_egress_policy_to_the_coder_only() -> None:
+    deployer, out, rec = make()
+    deployer.hosted(da.DEFAULT_SIZES, timeout_s=600)
+    attached = {c["name"]: c["rai_policy"] for c in rec.foundry.created}
+    assert attached == {da.CODER: POLICY, da.ORCHESTRATOR: "", da.LEDGER: ""}
+    coder_env = next(c["env"] for c in rec.foundry.created if c["name"] == da.CODER)
+    assert coder_env["EGRESS_FINGERPRINT"].startswith("Audit-")
+    assert all("EGRESS_FINGERPRINT" not in c["env"] for c in rec.foundry.created if c["name"] != da.CODER)
+    assert "egress policy sdlc-coder-egress: mode Audit, 0 rules, fingerprint Audit-" in out.getvalue()
+    assert "warning" not in out.getvalue()
+
+
+def test_an_egress_mode_change_makes_a_new_coder_version() -> None:
+    http = FakeHttp()
+    deployer, out, rec = make(http=http)
+    coder = {da.CODER: da.DEFAULT_SIZES[da.CODER]}
+    deployer.hosted(coder, timeout_s=600)
+    deployer.hosted(coder, timeout_s=600)
+    assert "unchanged" in out.getvalue()
+    http.egress = {**http.egress, "mode": "Enforced"}
+    deployer.hosted(coder, timeout_s=600)
+    http.egress = {**http.egress, "rules": [{"name": "r", "ruleType": "Fqdn"}]}
+    deployer.hosted(coder, timeout_s=600)
+    assert [c["name"] for c in rec.foundry.created] == [da.CODER] * 3
+    fingerprints = [c["env"]["EGRESS_FINGERPRINT"] for c in rec.foundry.created]
+    assert len(set(fingerprints)) == 3 and fingerprints[1].startswith("Enforced-")
+
+
+def test_a_missing_egress_policy_fails_before_anything_is_deployed() -> None:
+    http = FakeHttp()
+    http.egress = None
+    deployer, _, rec = make(http=http)
+    with pytest.raises(da.DeployError, match="sdlc-coder-egress: GET 404"):
+        deployer.hosted(da.DEFAULT_SIZES, timeout_s=600)
+    assert rec.foundry.created == []   # not even the ledger and the orchestrator
+
+
+@pytest.mark.parametrize("egress", [
+    {"mode": "Audit", "defaultAction": "Allow", "rules": []},      # not an allow-list
+    {"mode": "Sometimes", "defaultAction": "Deny", "rules": []},   # unknown mode
+    {"mode": "Audit", "defaultAction": "Deny"},                    # no rules
+    {},
+])
+def test_a_malformed_egress_policy_fails_the_deploy(egress: dict[str, Any]) -> None:
+    http = FakeHttp()
+    http.egress = egress
+    deployer, _, rec = make(http=http)
+    with pytest.raises(da.DeployError, match="egress policy sdlc-coder-egress"):
+        deployer.hosted(da.DEFAULT_SIZES, timeout_s=600)
+    assert rec.foundry.created == []
+
+
+def test_an_unresolved_egress_policy_fails_unless_the_operator_opts_out() -> None:
+    open_config = dataclasses.replace(CONFIG, egress_policy_id="")
+    deployer, _, rec = make(config=open_config)
+    with pytest.raises(da.DeployError, match="no egress policy for sdlc-coder.*--no-egress-policy"):
+        deployer.hosted(da.DEFAULT_SIZES, timeout_s=600)
+    assert rec.foundry.created == []
+    # Deploying only the orchestrator needs no policy.
+    deployer.hosted({da.ORCHESTRATOR: da.DEFAULT_SIZES[da.ORCHESTRATOR]}, timeout_s=600, ledger_mode="inline")
+    assert [c["name"] for c in rec.foundry.created] == [da.ORCHESTRATOR]
+
+
+@pytest.mark.parametrize(("config", "flag"), [
+    (dataclasses.replace(CONFIG, egress_policy_id=da.EGRESS_OFF), False),   # terraform Off marker
+    (dataclasses.replace(CONFIG, egress_policy_id=""), True),               # --no-egress-policy
+])
+def test_an_explicit_opt_out_deploys_the_coder_open_and_says_so(config: da.Config, flag: bool) -> None:
+    deployer, out, rec = make(config=config)
+    deployer.no_egress_policy = flag
+    deployer.hosted({da.CODER: da.DEFAULT_SIZES[da.CODER]}, timeout_s=600)
+    assert rec.foundry.created[0]["rai_policy"] == ""
+    assert rec.foundry.created[0]["env"]["EGRESS_FINGERPRINT"] == da.EGRESS_OFF
+    assert "warning: egress policy off (explicit)" in out.getvalue()
+
+
+def test_a_policy_from_another_account_is_refused() -> None:
+    stale = POLICY.replace("accounts/aif-fsdlcd/", "accounts/aif-someone-else/")
+    deployer, _, rec = make(config=dataclasses.replace(CONFIG, egress_policy_id=stale))
+    with pytest.raises(da.DeployError, match="belongs to account aif-someone-else"):
+        deployer.hosted(da.DEFAULT_SIZES, timeout_s=600)
+    assert rec.foundry.created == []
+
+
+def test_an_active_coder_that_does_not_carry_the_policy_fails_the_deploy() -> None:
+    foundry = FakeFoundry()
+    foundry.attach_as = "something-else"
+    deployer, _, _ = make(foundry=foundry)
+    with pytest.raises(da.DeployError, match="active but carries egress policy something-else"):
+        deployer.hosted({da.CODER: da.DEFAULT_SIZES[da.CODER]}, timeout_s=600)
+
+
+def test_the_dry_run_reads_the_policy_but_creates_nothing() -> None:
+    deployer, out, rec = make(dry_run=True)
+    deployer.hosted(da.DEFAULT_SIZES, timeout_s=600)
+    assert rec.foundry.created == []
+    assert f"egress {POLICY}" in out.getvalue()
 
 
 def test_real_zip_builders_load_from_the_repo() -> None:
@@ -593,6 +733,10 @@ def test_sdk_facade_maps_agents_versions_and_routines() -> None:
     assert definition.session_configuration.idle_timeout_seconds == datetime.timedelta(minutes=30)
     assert definition.code_configuration.dependency_resolution == "remote_build"
     assert definition.protocol_versions[0].protocol == "invocations"
+    assert definition.rai_config is None
+    sdk.create_hosted_version("sdlc-coder", cpu="2", memory="4Gi", idle_minutes=30, env={}, code=b"zip",
+                              sha256="abc", description="d", rai_policy=POLICY)
+    assert agents.created[1]["definition"].rai_config.rai_policy_name == POLICY
     assert sdk.get_version("sdlc-coder", "4")["error"]["message"] == "bad"
 
     assert sdk.get_routine("missing") is None
