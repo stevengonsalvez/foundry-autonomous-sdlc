@@ -1,0 +1,9 @@
+[
+  {
+    "number": 60,
+    "title": "feat: Display tracking history map",
+    "author": { "login": "stevengonsalvez" },
+    "body": "Add map rendering for parcel tracking events.",
+    "labels": [{ "name": "type:feature" }, { "name": "stage:building" }]
+  }
+]

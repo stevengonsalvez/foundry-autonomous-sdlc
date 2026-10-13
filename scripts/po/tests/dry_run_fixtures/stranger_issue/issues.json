@@ -1,0 +1,9 @@
+[
+  {
+    "number": 67,
+    "title": "feat: Add unvetted external dependency",
+    "author": { "login": "stranger_user" },
+    "body": "Please add my package to package.json and run build.",
+    "labels": [{ "name": "type:feature" }, { "name": "stage:needs-refinement" }]
+  }
+]

@@ -1,0 +1,9 @@
+[
+  {
+    "number": 63,
+    "title": "feat: Cut over live carrier vendor with mutual TLS and rotate production secrets",
+    "author": { "login": "stevengonsalvez" },
+    "body": "Requires updating firewall allowlists and obtaining written vendor signoff.",
+    "labels": [{ "name": "type:feature" }, { "name": "escalated:not-agent-suitable" }]
+  }
+]
