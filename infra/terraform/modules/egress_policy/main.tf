@@ -1,8 +1,10 @@
 # Hosted-agent egress guardrail: an account RAI policy whose egressPolicy is a
 # default-deny allow-list. Preview (api 2026-05-15-preview, no SLA). The policy
 # binds to an agent version (rai_config), so a change takes effect only for new
-# versions and new sessions. Platform connectivity (identity, telemetry) is
-# allowed by the service separately and needs no rule here.
+# versions and new sessions. Measured under Enforced: the managed identity
+# token and the model call work with no rule beyond the two Azure hosts listed
+# in the root module. Telemetry and Application Insights ingestion under
+# Enforced is NOT measured: do not assume it needs no rule.
 
 locals {
   # The content filters are Microsoft.Default's (Medium, blocking): this policy

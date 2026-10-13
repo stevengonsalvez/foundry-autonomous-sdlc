@@ -49,7 +49,14 @@ _OPENER = urllib.request.build_opener(_NoRedirect)
 
 def issuer_cn(host: str, timeout_s: float = 10.0) -> str:
     """Common name of the issuer of the certificate presented for `host` (verified against the system
-    store), or `error:<class>`. Only this one public field leaves the sandbox."""
+    store), or `error:<class>`. Only this one public field leaves the sandbox.
+
+    Raw-socket path: this opens its own TCP connection to port 443 and does a TLS handshake with
+    the host as SNI, then closes it without sending an HTTP request. It does not go through urllib,
+    so it ignores any proxy variables and shares nothing with `fetch`'s request: what it reports is
+    what the network path presents for that SNI, not what an HTTP client configured with a proxy
+    would see. A handshake that fails (for example a client store without the proxy CA) is
+    reported as `error:<class>`, never as a wrong issuer."""
     try:
         with socket.create_connection((host, 443), timeout=timeout_s) as sock, \
                 ssl.create_default_context().wrap_socket(sock, server_hostname=host) as tls:
