@@ -457,3 +457,34 @@ jobs:
       - name: Dynamic test of app evolution showcase
         working-directory: app
         run: npm run test:history
+
+  # Not a required check: tests and lints for the simulated human product owner loop.
+  po-tests:
+    name: po-tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Lint persona and roadmap
+        run: |
+          scripts/po/lint_persona.sh
+          scripts/po/lint_roadmap.sh
+
+      - name: Run lint persona mutation tests
+        run: scripts/po/tests/test_lint_persona.sh
+
+      - name: Run lint roadmap mutation tests
+        run: scripts/po/tests/test_lint_roadmap.sh
+
+      - name: Run precheck test suite
+        run: scripts/po/tests/test_precheck.sh
+
+      - name: Run dry-run scenario test suite
+        run: scripts/po/tests/test_dry_run.sh

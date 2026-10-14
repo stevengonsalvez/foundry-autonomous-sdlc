@@ -5,31 +5,90 @@
 #
 # Usage:
 #   scripts/po/dry_run.sh <fixture_dir>
-#   scripts/po/dry_run.sh --state <state.json> --issues <issues.json>
+#   scripts/po/dry_run.sh --state <file> --issues <file> [--roadmap <file>] [--memory <file>] [--labels <file>]
 
 set -euo pipefail
 
 state_file=""
 issues_file=""
+roadmap_file=""
+memory_file=""
+labels_file=""
 
-if [ $# -eq 1 ] && [ -d "$1" ]; then
-  state_file="$1/state.json"
-  issues_file="$1/issues.json"
-elif [ $# -ge 2 ]; then
-  while [ $# -gt 0 ]; do
-    case "$1" in
-      --state) state_file="$2"; shift 2 ;;
-      --issues) issues_file="$2"; shift 2 ;;
-      *) echo "Unknown option: $1" >&2; exit 1 ;;
-    esac
-  done
-else
-  echo "Usage: scripts/po/dry_run.sh <fixture_dir> OR --state <file> --issues <file>" >&2
+# If first argument is an existing directory, load fixture files
+if [ $# -ge 1 ] && [ -d "$1" ]; then
+  fixture_dir="$1"
+  shift
+  state_file="$fixture_dir/state.json"
+  issues_file="$fixture_dir/issues.json"
+  if [ -f "$fixture_dir/roadmap.md" ]; then
+    roadmap_file="$fixture_dir/roadmap.md"
+  elif [ -f "$fixture_dir/ROADMAP.md" ]; then
+    roadmap_file="$fixture_dir/ROADMAP.md"
+  fi
+  if [ -f "$fixture_dir/memory.md" ]; then
+    memory_file="$fixture_dir/memory.md"
+  elif [ -f "$fixture_dir/MEMORY.md" ]; then
+    memory_file="$fixture_dir/MEMORY.md"
+  fi
+  if [ -f "$fixture_dir/labels.json" ]; then
+    labels_file="$fixture_dir/labels.json"
+  elif [ -f "$fixture_dir/LABELS.json" ]; then
+    labels_file="$fixture_dir/LABELS.json"
+  fi
+fi
+
+# Parse remaining or direct options
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --state) state_file="$2"; shift 2 ;;
+    --issues) issues_file="$2"; shift 2 ;;
+    --roadmap) roadmap_file="$2"; shift 2 ;;
+    --memory) memory_file="$2"; shift 2 ;;
+    --labels) labels_file="$2"; shift 2 ;;
+    *) echo "Unknown option or extra argument: $1" >&2; exit 1 ;;
+  esac
+done
+
+if [ -z "$state_file" ] || [ -z "$issues_file" ]; then
+  echo "Usage: scripts/po/dry_run.sh <fixture_dir> OR scripts/po/dry_run.sh --state <file> --issues <file> [--roadmap <file>] [--memory <file>] [--labels <file>]" >&2
   exit 1
 fi
 
 [ -f "$state_file" ] || { echo "Error: State file not found: $state_file" >&2; exit 1; }
 [ -f "$issues_file" ] || { echo "Error: Issues file not found: $issues_file" >&2; exit 1; }
+if [ -n "$roadmap_file" ] && [ ! -f "$roadmap_file" ]; then
+  echo "Error: Roadmap file not found: $roadmap_file" >&2; exit 1
+fi
+if [ -n "$memory_file" ] && [ ! -f "$memory_file" ]; then
+  echo "Error: Memory file not found: $memory_file" >&2; exit 1
+fi
+if [ -n "$labels_file" ] && [ ! -f "$labels_file" ]; then
+  echo "Error: Labels file not found: $labels_file" >&2; exit 1
+fi
+
+missing_simulated_human=0
+
+if [ -n "$labels_file" ] && [ -f "$labels_file" ]; then
+  labels_check="$(python3 - "$labels_file" << 'PYEOF'
+import sys, json
+path = sys.argv[1]
+try:
+    with open(path, "r", encoding="utf-8") as f:
+        data = json.load(f)
+    existing = set()
+    for entry in data:
+        if isinstance(entry, dict) and "name" in entry:
+            existing.add(entry["name"])
+        elif isinstance(entry, str):
+            existing.add(entry)
+    print(f"missing_simulated_human={1 if 'simulated-human' not in existing else 0}")
+except Exception:
+    print("missing_simulated_human=1")
+PYEOF
+  )"
+  eval "$labels_check"
+fi
 
 echo "[DRY RUN] Evaluating simulated human persona logic..."
 state_json="$(cat "$state_file")"
@@ -37,6 +96,7 @@ issues_json="$(cat "$issues_file")"
 
 billed_usd="$(jq -r '.cost.billing.billed_usd // .cost.totals.billed_usd // 0' <<< "$state_json")"
 echo "[DRY RUN] Current billed spend: ${billed_usd} USD (Cap: 18.00 USD)"
+echo "[DRY RUN] Note: dry-run evaluates persona logic; scripts/po/precheck.sh is the authoritative spend gate."
 
 # Track commands to output
 declare -a commands=()
@@ -58,6 +118,12 @@ for ((i=0; i<num_issues; i++)); do
   title="$(jq -r '.title' <<< "$issue")"
   author="$(jq -r '.author.login // empty' <<< "$issue")"
   body="$(jq -r '.body // ""' <<< "$issue")"
+  state="$(jq -r '.state // "OPEN"' <<< "$issue")"
+
+  # Skip hats unless issue state is OPEN (case-insensitive)
+  if [ "${state^^}" != "OPEN" ]; then
+    continue
+  fi
 
   # Guardrail (a): Untrusted data and author restriction
   if [ "$author" != "stevengonsalvez" ]; then
@@ -65,8 +131,14 @@ for ((i=0; i<num_issues; i++)); do
     continue
   fi
 
-  # Guardrail (a): Prompt injection defense
-  if grep -iP "(ignore all previous instructions|system override|approve pr|merge pr|raise.*spend cap)" <<< "$body" >/dev/null 2>&1; then
+  # Guardrail (a): Prompt injection defense (using Python, no grep -iP)
+  has_injection="$(python3 -c '
+import sys, re
+body = sys.stdin.read()
+pattern = re.compile(r"(ignore all previous instructions|system override|approve pr|merge pr|raise.*spend cap)", re.IGNORECASE)
+print("1" if pattern.search(body) else "0")
+' <<< "$body")"
+  if [ "$has_injection" = "1" ]; then
     echo "[SECURITY] Untrusted input detected in issue #$number body. Prompt injection payload neutralized."
   fi
 
@@ -77,11 +149,53 @@ for ((i=0; i<num_issues; i++)); do
     is_busy=1
   fi
 
+  # Check if issue was already answered by persona with <!-- po-answered:v1 --> (owner-only)
+  already_answered="$(python3 -c '
+import sys, json
+try:
+    issue_data = json.loads(sys.argv[1])
+    comments = issue_data.get("comments", [])
+    answered = any(
+        "<!-- po-answered:v1 -->" in (c.get("body") or "")
+        and (c.get("author") or {}).get("login") == "stevengonsalvez"
+        for c in comments
+    )
+    print("1" if answered else "0")
+except Exception:
+    print("0")
+' "$issue")"
+
+  # Handle build-failed and review-failed escalations (close even if already answered)
+  if grep -q "escalated:build-failed" <<< "$labels" || grep -q "escalated:review-failed" <<< "$labels"; then
+    hat_escalation=$((hat_escalation + 1))
+    if [ "$already_answered" = "1" ]; then
+      echo "[HAT] Escalation Owner: Issue #$number (build-failed/review-failed) was answered with po-answered marker but remains open. Closing issue."
+      commands+=("gh issue close $number")
+    else
+      echo "[HAT] Escalation Owner: Handling build-failed/review-failed escalation on issue #$number"
+      comment_body="### Simulated human (antigravity)
+<!-- po-answered:v1 -->
+
+Reviewing failed pipeline attempts from coder logs or PR review.
+Closing issue to unblock pipeline."
+      commands+=("gh issue comment $number --body \"$comment_body\"")
+      commands+=("gh issue edit $number --add-label \"simulated-human\"")
+      commands+=("gh issue close $number")
+    fi
+    continue
+  fi
+
+  if [ "$already_answered" = "1" ]; then
+    echo "[HAT] Skipping issue #$number: already answered with po-answered marker."
+    continue
+  fi
+
   # Hat 1: Requirements Answerer
   if grep -q "stage:needs-refinement" <<< "$labels"; then
     hat_refinement=$((hat_refinement + 1))
     echo "[HAT] Requirements Answerer: Processing clarification questions for issue #$number"
     comment_body="### Simulated human (antigravity)
+<!-- po-answered:v1 -->
 
 **Clarifications and Refinements:**
 1. Scope is strictly confined to app/web and client-side presentation.
@@ -96,10 +210,11 @@ for ((i=0; i<num_issues; i++)); do
   if grep -q "type:bug" <<< "$labels" && ! grep -q "bug:triaged" <<< "$labels"; then
     hat_triage=$((hat_triage + 1))
     echo "[HAT] Triage Lead: Triaging defect #$number ('$title')"
-    commands+=("gh issue edit $number --add-label \"bug:triaged,severity:s2,owner:web,simulated-human\"")
+    commands+=("gh issue edit $number --add-label \"bug:triaged,severity:s3,owner:web,simulated-human\"")
     comment_body="### Simulated human (antigravity)
+<!-- po-answered:v1 -->
 
-Triaged as severity s2 (workaround available) owned by web workspace."
+Triaged as severity s3 (workaround available) owned by web workspace."
     commands+=("gh issue comment $number --body \"$comment_body\"")
     continue
   fi
@@ -108,11 +223,26 @@ Triaged as severity s2 (workaround available) owned by web workspace."
   if grep -q "escalated:" <<< "$labels"; then
     hat_escalation=$((hat_escalation + 1))
 
-    # Guardrail (e): Cost-cap escalation
+    # Agent-error escalation (Issue 72 shaped)
+    if grep -q "escalated:agent-error" <<< "$labels"; then
+      echo "[HAT] Escalation Owner: Handling agent-error escalation on issue #$number"
+      comment_body="### Simulated human (antigravity)
+<!-- po-answered:v1 -->
+
+Agent encountered persistent failure streak or invalid test assertions after coder repair iterations.
+Closing ticket to unblock autonomous SDLC pipeline; work is dropped as out of roadmap scope."
+      commands+=("gh issue comment $number --body \"$comment_body\"")
+      commands+=("gh issue edit $number --add-label \"simulated-human\"")
+      commands+=("gh issue close $number")
+      continue
+    fi
+
+    # Cost-cap escalation
     if grep -q "escalated:cost-cap" <<< "$labels"; then
       echo "[HAT] Escalation Owner: Handling cost-cap escalation on issue #$number"
       echo "[GUARDRAIL] NEVER raise spend cap or continue past halt limit. Closing or parking issue."
       comment_body="### Simulated human (antigravity)
+<!-- po-answered:v1 -->
 
 Closing issue due to cost cap limit. Spend reached the allocated cap.
 Under strict spend guardrails, spend caps are never raised and execution does not continue past the 22 USD halt limit.
@@ -123,11 +253,12 @@ Follow-up work should be split into a scoped, smaller increment."
       continue
     fi
 
-    # Guardrail (f): CD rollback escalation
+    # CD rollback escalation
     if grep -q "escalated:deploy-failed" <<< "$labels"; then
       echo "[HAT] Escalation Owner: Handling CD rollback escalation on issue #$number"
       echo "[GUARDRAIL] NEVER instruct re-release of rolled-back build. Filing fix issue."
       comment_body="### Simulated human (antigravity)
+<!-- po-answered:v1 -->
 
 CD deployment failed smoke or soak verification and automatically rolled back to the previous stable release.
 Per deployment guardrails, the rolled-back build will not be re-released.
@@ -158,6 +289,7 @@ app/web or app/api depending on failure logs."
     if grep -q "escalated:not-agent-suitable" <<< "$labels"; then
       echo "[HAT] Escalation Owner: Handling not-agent-suitable escalation on issue #$number"
       comment_body="### Simulated human (antigravity)
+<!-- po-answered:v1 -->
 
 Issue requires external vendor contracts, live credentials, or manual authorization.
 Reframing: Autonomous SDLC work is restricted to mock environments and local contracts.
@@ -168,9 +300,10 @@ Closing external-scope request; please use carrier-mock integration tests for lo
       continue
     fi
 
-    # Other escalations (e.g. escalated:requirements, escalated:build-failed)
+    # Other escalations (e.g. escalated:requirements)
     echo "[HAT] Escalation Owner: Reviewing escalation on issue #$number"
     comment_body="### Simulated human (antigravity)
+<!-- po-answered:v1 -->
 
 Reviewing failed pipeline attempts. Storing findings in run log."
     commands+=("gh issue comment $number --body \"$comment_body\"")
@@ -179,36 +312,191 @@ Reviewing failed pipeline attempts. Storing findings in run log."
   fi
 done
 
-# Hat 4: Product Owner (Only when idle, no active escalations or questions being answered)
-if [ "$hat_refinement" -eq 0 ] && [ "$hat_escalation" -eq 0 ]; then
+# Hat 4: Product Owner (Only when idle, no active escalations, triage, or questions being answered)
+if [ "$hat_refinement" -eq 0 ] && [ "$hat_triage" -eq 0 ] && [ "$hat_escalation" -eq 0 ]; then
   if [ "$is_busy" -eq 1 ]; then
     echo "[PIPELINE] Pipeline is busy with active building or review. Product Owner hat skipped."
   else
     hat_po=1
-    echo "[HAT] Product Owner: Pipeline is idle. Preparing ONE improvement issue tied to a real gap."
 
-    new_issue_body="### Simulated human (antigravity)
+    if [ -n "$roadmap_file" ] && [ -f "$roadmap_file" ]; then
+      roadmap_eval="$(python3 - "$roadmap_file" "$issues_file" "$memory_file" << 'PYEOF'
+import sys, os, re, json
+
+roadmap_file = sys.argv[1] if len(sys.argv) > 1 else ""
+issues_file = sys.argv[2] if len(sys.argv) > 2 else ""
+memory_file = sys.argv[3] if len(sys.argv) > 3 else ""
+
+with open(roadmap_file, "r", encoding="utf-8") as f:
+    content = f.read()
+
+item_blocks = re.split(r"(?=^###\s+ITEM-\d+:)", content, flags=re.MULTILINE)
+items = []
+for block in item_blocks:
+    block = block.strip()
+    if not block.startswith("### ITEM-"):
+        continue
+    header = re.match(r"^###\s+(ITEM-\d+):\s+(.+)$", block.splitlines()[0])
+    if not header:
+        continue
+    item_id = header.group(1).strip()
+    title = header.group(2).strip()
+
+    status_m = re.search(r"-\s+\*\*Status\*\*:\s*(\w+)", block)
+    status = status_m.group(1).lower() if status_m else "todo"
+
+    dep_m = re.search(r"-\s+\*\*Dependencies\*\*:\s*\[(.*?)\]", block)
+    deps = [d.strip() for d in dep_m.group(1).split(",") if d.strip()] if dep_m else []
+
+    gap_m = re.search(r"-\s+\*\*Gap Anchor\*\*:\s*(.+)$", block, re.MULTILINE)
+    gap = gap_m.group(1).strip() if gap_m else ""
+
+    user_val_m = re.search(r"-\s+\*\*User Value\*\*:\s*(.+)$", block, re.MULTILINE)
+    user_val = user_val_m.group(1).strip() if user_val_m else ""
+
+    ac_m = re.search(r"-\s+\*\*Acceptance Criteria\*\*:\s*\n((?:\s+\d+\..*\n?)+)", block)
+    ac = ac_m.group(1).strip() if ac_m else ""
+
+    files_m = re.search(r"-\s+\*\*Files Touched\*\*:\s*\n((?:\s+-\s+`.*?`.*\n?)+)", block)
+    files = files_m.group(1).strip() if files_m else "app/web"
+
+    items.append({
+        "id": item_id,
+        "title": title,
+        "status": status,
+        "deps": deps,
+        "gap": gap,
+        "user_val": user_val,
+        "ac": ac,
+        "files": files
+    })
+
+items_by_id = {it["id"]: it for it in items}
+done_items = {it["id"] for it in items if it["status"] == "done"}
+filed_items = {it["id"] for it in items if it["status"] == "filed"}
+
+# Scan issues.json for filed/done items (authoritative source of truth, owner only)
+if issues_file and os.path.isfile(issues_file):
+    try:
+        with open(issues_file, "r", encoding="utf-8") as f:
+            issues_data = json.load(f)
+        for iss in issues_data:
+            author_login = ""
+            author_obj = iss.get("author")
+            if isinstance(author_obj, dict):
+                author_login = author_obj.get("login", "")
+            elif isinstance(author_obj, str):
+                author_login = str(author_obj)
+            if author_login != "stevengonsalvez":
+                continue
+
+            title = iss.get("title", "")
+            body = iss.get("body", "")
+            raw_labels = iss.get("labels", [])
+            labels = [l["name"] if isinstance(l, dict) else str(l) for l in raw_labels]
+
+            matched_id = None
+            m = re.search(r"Roadmap item:\s*(ITEM-\d+)", body, re.IGNORECASE)
+            if m:
+                matched_id = m.group(1).upper()
+            else:
+                m2 = re.search(r"Roadmap Reference\s*\n+\s*(ITEM-\d+)", body, re.IGNORECASE)
+                if m2:
+                    matched_id = m2.group(1).upper()
+                else:
+                    m3 = re.search(r"\b(ITEM-\d+)\b", title)
+                    if m3:
+                        matched_id = m3.group(1).upper()
+                    else:
+                        for it in items:
+                            if it["title"].strip() == title.strip():
+                                matched_id = it["id"]
+                                break
+
+            if matched_id and matched_id in items_by_id:
+                if "stage:released" in labels or "stage:merged" in labels:
+                    done_items.add(matched_id)
+                else:
+                    filed_items.add(matched_id)
+    except Exception:
+        pass
+
+# Determine remaining unfiled todo items
+todo_items = [it for it in items if it["status"] == "todo" and it["id"] not in done_items and it["id"] not in filed_items]
+todo_count = len(todo_items)
+
+# Find next unblocked ready item
+ready_item = None
+for it in todo_items:
+    if all(d in done_items for d in it["deps"]):
+        ready_item = it
+        break
+
+result = {
+    "total": len(items),
+    "todo_count": todo_count,
+    "ready_item": ready_item
+}
+print(json.dumps(result))
+PYEOF
+)"
+      todo_count="$(jq -r '.todo_count' <<< "$roadmap_eval")"
+
+      if [ "$todo_count" -lt 5 ]; then
+        echo "[LOG] Roadmap extension requested: fewer than 5 todo items remaining ($todo_count left in $roadmap_file). Maintainer extension needed."
+      fi
+
+      ready_item="$(jq -c '.ready_item' <<< "$roadmap_eval")"
+      if [ "$ready_item" != "null" ]; then
+        item_id="$(jq -r '.id' <<< "$ready_item")"
+        item_title="$(jq -r '.title' <<< "$ready_item")"
+        item_gap="$(jq -r '.gap' <<< "$ready_item")"
+        item_user_val="$(jq -r '.user_val' <<< "$ready_item")"
+        item_ac="$(jq -r '.ac' <<< "$ready_item")"
+        item_files="$(jq -r '.files' <<< "$ready_item")"
+
+        echo "[HAT] Product Owner: Pipeline is idle. Selecting next roadmap item by dependency order: $item_id ('$item_title')"
+
+        body_file="$(mktemp -t po-issue-XXXXXX.md)"
+        trap 'rm -f "$body_file"' EXIT
+        cat > "$body_file" << EOF
+### Simulated human (antigravity)
+
+Roadmap item: $item_id
 
 ## Context
-Carrier contract app/contracts/carrier.openapi.yaml includes event location metadata, but app/web parcel timeline currently displays only description and timestamp.
+$item_gap
 
 ## User story
-As a parcel recipient, I want to see the event location in the timeline so that I know where my parcel was scanned.
+$item_user_val
 
 ## Acceptance criteria
-1. When an event contains a non-empty location string, display it beneath the event description as 'Location: <location>'.
-2. The location text must be a visible text node accessible to screen readers.
-3. When location is null or omitted, no location line or empty node is rendered.
-4. Existing event ordering and styling are preserved.
+$item_ac
 
 ## Scope
-app/web only.
+$item_files
 
 ## Out of scope
-Geocoding or map views."
+Work outside app/ or unrelated refactoring.
+EOF
 
-    commands+=("gh issue create --title \"feat(web): display event location in parcel timeline\" --body \"$new_issue_body\" --label \"type:feature,simulated-human\"")
+        echo "[DRY RUN] Staged issue body at $body_file:"
+        cat "$body_file"
+
+        commands+=("gh issue create --title \"$item_title\" --body-file \"$body_file\" --label \"type:feature,simulated-human\"")
+      else
+        echo "[HAT] Product Owner: Pipeline is idle but all remaining roadmap items are blocked by unsatisfied dependencies."
+      fi
+    else
+      echo "[HAT] Product Owner: No roadmap file available. Intake paused until po/ROADMAP.md is provided."
+    fi
   fi
+fi
+
+# Guardrail: Check label availability
+if [ "$missing_simulated_human" -eq 1 ] && [ "${#commands[@]}" -gt 0 ]; then
+  echo "BLOCKED: label simulated-human missing, maintainer must create it"
+  commands=()
 fi
 
 echo "----------------------------------------"

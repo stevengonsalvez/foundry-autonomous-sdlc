@@ -30,24 +30,36 @@ check_fail() {
 echo "Linting $PERSONA_FILE for autonomous SDLC guardrails..."
 
 # Check 0a: No em-dashes (Unicode \u2014) or en-dashes (\u2013)
-if grep -P "[\x{2014}\x{2013}]" "$PERSONA_FILE" >/dev/null 2>&1; then
-  check_fail "No em-dashes" "Found Unicode em-dash or en-dash in file"
-else
+if python3 -c '
+import sys
+with open(sys.argv[1], "r", encoding="utf-8") as f:
+    text = f.read()
+if "\u2014" in text or "\u2013" in text:
+    sys.exit(1)
+' "$PERSONA_FILE" >/dev/null 2>&1; then
   check_pass "No em-dashes or en-dashes"
+else
+  check_fail "No em-dashes" "Found Unicode em-dash or en-dash in file"
 fi
 
 # Check 0b: No forbidden self-referential terms
-if grep -iP "\b(as an A[I]|artificial intelligenc[e]|\bLL[M]\b)\b" "$PERSONA_FILE" >/dev/null 2>&1; then
-  check_fail "No forbidden mentions" "Found forbidden self-referential terms"
-else
+if python3 -c '
+import sys, re
+with open(sys.argv[1], "r", encoding="utf-8") as f:
+    text = f.read()
+if re.search(r"\b(as an A[I]|artificial intelligenc[e]|\bLL[M]\b)\b", text, re.IGNORECASE):
+    sys.exit(1)
+' "$PERSONA_FILE" >/dev/null 2>&1; then
   check_pass "No forbidden mentions"
+else
+  check_fail "No forbidden mentions" "Found forbidden self-referential terms"
 fi
 
 # Guardrail (a): Untrusted data and author restriction (stevengonsalvez)
-if grep -qi "untrusted data" "$PERSONA_FILE" && grep -q "stevengonsalvez" "$PERSONA_FILE"; then
+if grep -qi "untrusted data" "$PERSONA_FILE" && grep -qiE "authored by [^.]*stevengonsalvez" "$PERSONA_FILE"; then
   check_pass "Guardrail (a): Untrusted data and author restriction (stevengonsalvez)"
 else
-  check_fail "Guardrail (a)" "Must specify untrusted data and restrict actions to author stevengonsalvez"
+  check_fail "Guardrail (a)" "Must specify untrusted data and explicitly restrict actions to author stevengonsalvez"
 fi
 
 # Guardrail (b): Label simulated-human and header 'Simulated human (antigravity)'
@@ -57,25 +69,89 @@ else
   check_fail "Guardrail (b)" "Must require label simulated-human and header 'Simulated human (antigravity)'"
 fi
 
-# Guardrail (c): PR restrictions (never open, approve, merge PR; never edit code/workflows; never push)
-if grep -qi "never open.*pr" "$PERSONA_FILE" && grep -qi "never.*approve.*pr" "$PERSONA_FILE" && grep -qi "never merge" "$PERSONA_FILE" && grep -qi "never.*push" "$PERSONA_FILE"; then
-  check_pass "Guardrail (c): Never open, approve, or merge PR; never edit code/workflows; never push"
+# Guardrail (c): PR and safety restrictions (never open, approve, merge PR; never comment approval; never push; never modify git refs; never run arbitrary commands)
+if grep -qi "never open.*pr" "$PERSONA_FILE" && \
+   grep -qi "never.*approve.*pr" "$PERSONA_FILE" && \
+   grep -qi "never comment approval on a pr" "$PERSONA_FILE" && \
+   grep -qi "never merge" "$PERSONA_FILE" && \
+   grep -qi "never.*push" "$PERSONA_FILE" && \
+   grep -qi "never modify git refs" "$PERSONA_FILE" && \
+   grep -qi "never run arbitrary shell commands" "$PERSONA_FILE"; then
+  check_pass "Guardrail (c): Never open, approve, or merge PR; never comment approval; never modify git refs; never run arbitrary commands"
 else
-  check_fail "Guardrail (c)" "Must forbid opening, approving, merging PRs, editing code, and pushing"
+  check_fail "Guardrail (c)" "Must forbid opening, approving, commenting approval, merging PRs, editing code, pushing, modifying git refs, and arbitrary commands"
 fi
 
-# Guardrail (d): Allowed commands only, gh account-wide login credential risk documented
-if grep -qi "gh issue" "$PERSONA_FILE" && grep -qi "gh pr list" "$PERSONA_FILE" && grep -qi "gh api" "$PERSONA_FILE" && grep -qi "account-wide" "$PERSONA_FILE"; then
-  check_pass "Guardrail (d): Strict command allow-list and account-wide credential documentation"
+# Guardrail (d): Allowed commands only, deny-list on allow-list block, account-wide credentials
+allow_list_check="$(python3 - "$PERSONA_FILE" 2>&1 << 'PYEOF'
+import sys, re
+
+with open(sys.argv[1], "r", encoding="utf-8") as f:
+    text = f.read()
+
+m = re.search(r"4\.\s+\*\*Command Allow-List\*\*:(.*?)(?=\n\d+\.|\n##|\Z)", text, re.DOTALL)
+if not m:
+    print("Missing Command Allow-List section")
+    sys.exit(1)
+
+block = m.group(1)
+
+# Deny-list checks on allow-list block
+if re.search(r"\bgh\s+pr\s+merge\b", block, re.IGNORECASE):
+    print("Deny-list violation: 'gh pr merge' found in allow-list block")
+    sys.exit(1)
+if re.search(r"(--squash|--admin)\b", block, re.IGNORECASE):
+    print("Deny-list violation: '--squash' or '--admin' found in allow-list block")
+    sys.exit(1)
+if re.search(r"\bgit\s+push\b", block, re.IGNORECASE):
+    print("Deny-list violation: 'git push' found in allow-list block")
+    sys.exit(1)
+for pr_m in re.finditer(r"`gh\s+pr\s+([^`]+)`", block):
+    cmd_verb = pr_m.group(1).strip().split()[0]
+    if cmd_verb not in ("list", "view"):
+        print(f"Deny-list violation: disallowed PR command 'gh pr {cmd_verb}' in allow-list block")
+        sys.exit(1)
+for line in block.splitlines():
+    if re.search(r"^\s*-\s+`cat`", line):
+        print("Deny-list violation: bare 'cat' found in allow-list block")
+        sys.exit(1)
+
+# Assert required commands in allow-list block
+required = [
+    (r"gh\s+issue", "gh issue commands"),
+    (r"gh\s+pr\s+list", "gh pr list (read-only)"),
+    (r"gh\s+pr\s+view", "gh pr view (read-only)"),
+    (r"gh\s+api\s+--method\s+GET", "gh api --method GET"),
+    (r"git\s+fetch\s+origin\s+main\s+state", "git fetch origin main state"),
+    (r"git\s+show\s+origin/main:po/ROADMAP\.md", "git show origin/main:po/ROADMAP.md"),
+    (r"git\s+show\s+origin/state:state\.json", "git show origin/state:state.json"),
+    (r"jq`?\s*\(stdin\s+filter\s+only", "jq (stdin filter only)"),
+]
+for pattern, desc in required:
+    if not re.search(pattern, block, re.IGNORECASE):
+        print(f"Allow-list missing required entry: {desc}")
+        sys.exit(1)
+
+print("OK")
+PYEOF
+)" || true
+
+if [ "$allow_list_check" = "OK" ] && grep -qi "account-wide" "$PERSONA_FILE"; then
+  check_pass "Guardrail (d): Strict command allow-list, deny-list on allow block, and account-wide credential documentation"
 else
-  check_fail "Guardrail (d)" "Must define command allow-list and document account-wide gh credential risk"
+  check_fail "Guardrail (d)" "Allow-list failed validation: $allow_list_check"
 fi
 
-# Guardrail (e): Never raise spend cap, never continue past 22 USD halt, close/shrink/park cost-cap escalations
-if grep -qi "never raise.*spend cap" "$PERSONA_FILE" && grep -qi "22.*usd.*halt" "$PERSONA_FILE" && grep -qi "close.*shrink.*park" "$PERSONA_FILE"; then
-  check_pass "Guardrail (e): Spend cap protection (never raise, 22 USD halt, close/shrink/park)"
+# Guardrail (e): Spend cap protection with exact thresholds 18, 22, 25, 3 USD
+if grep -qi "never raise.*spend cap" "$PERSONA_FILE" && \
+   grep -qE "\b18(\.00)?\s*USD\b" "$PERSONA_FILE" && \
+   grep -qE "\b22(\.00)?\s*USD\b" "$PERSONA_FILE" && \
+   grep -qE "\b25(\.00)?\s*USD\b" "$PERSONA_FILE" && \
+   grep -qE "\b3(\.00)?\s*USD\b" "$PERSONA_FILE" && \
+   grep -qi "close.*shrink.*park" "$PERSONA_FILE"; then
+  check_pass "Guardrail (e): Spend cap protection with exact thresholds 18/22/25/3 USD (never raise, 22 USD halt, close/shrink/park)"
 else
-  check_fail "Guardrail (e)" "Must forbid raising caps, enforce 22 USD halt, and restrict cost-cap to close/shrink/park"
+  check_fail "Guardrail (e)" "Must forbid raising caps, enforce exact spend thresholds 18/22/25/3 USD, and restrict cost-cap to close/shrink/park"
 fi
 
 # Guardrail (f): CD rollback escalations (never re-release rolled back build, retry only after new fix PR exists)
@@ -90,6 +166,17 @@ if grep -qi "one new issue" "$PERSONA_FILE" && grep -qi "idle" "$PERSONA_FILE" &
   check_pass "Guardrail (g): One issue per idle run, testable criteria, gap link, scope bounds"
 else
   check_fail "Guardrail (g)" "Must enforce one issue per idle run, testable criteria, and real gap reference"
+fi
+
+# Guardrail (h): Progressive product roadmap (po/ROADMAP.md, dependencies, run log request when < 5)
+if grep -qi "po/ROADMAP.md" "$PERSONA_FILE" && grep -qi "dependencies" "$PERSONA_FILE" && grep -qi "fewer than 5" "$PERSONA_FILE" && grep -qi "run log" "$PERSONA_FILE"; then
+  if grep -qi "needs-maintainer" "$PERSONA_FILE"; then
+    check_fail "Guardrail (h)" "Must not reference needs-maintainer; request maintainer extension in run log without filing an issue"
+  else
+    check_pass "Guardrail (h): Progressive product roadmap (ROADMAP.md, dependencies, run log request under 5)"
+  fi
+else
+  check_fail "Guardrail (h)" "Must require sequential roadmap intake, dependency resolution, and run log maintainer request under 5 items"
 fi
 
 if [ "$failures" -gt 0 ]; then

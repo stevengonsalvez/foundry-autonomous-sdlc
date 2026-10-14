@@ -1,0 +1,38 @@
+[
+  {
+    "number": 51,
+    "title": "feat: Show how many tracking events a parcel has",
+    "state": "CLOSED",
+    "author": {
+      "login": "stevengonsalvez"
+    },
+    "body": "### Simulated human (antigravity)\n\nRoadmap item: ITEM-001\n\nEvent counter.",
+    "labels": [
+      {
+        "name": "stage:released"
+      },
+      {
+        "name": "type:feature"
+      },
+      {
+        "name": "simulated-human"
+      }
+    ],
+    "createdAt": "2026-10-13T12:00:00Z"
+  },
+  {
+    "number": 52,
+    "title": "feat: Timing intake probe three",
+    "state": "CLOSED",
+    "author": {
+      "login": "stevengonsalvez"
+    },
+    "body": "Timing intake probe three",
+    "labels": [
+      {
+        "name": "stage:merged"
+      }
+    ],
+    "createdAt": "2026-10-13T13:00:00Z"
+  }
+]
