@@ -17,8 +17,11 @@
 # 13. real gh JSON with uppercase CLOSED state ignores closed issues
 # 14. roadmap item already filed skips to next unblocked ready item
 # 15. missing simulated-human label logs BLOCKED and plans no commands
-# 16. memory mentions under rejected are ignored; filed state comes from GitHub
+# 16. memory mentions under rejected or themes are ignored; filed state comes from GitHub
 # 17. explicit command line options execute hermetically
+# 18. answered build-failed issue plans close only without second comment
+# 19. stranger marker comment does not silence persona and plans answer and close
+# 20. stranger roadmap issue is ignored and does not skip roadmap item
 
 set -euo pipefail
 
@@ -200,6 +203,27 @@ run_dry_test "Explicit command line flags execute hermetically" \
   "Roadmap extension requested" \
   "roadmap: extend" \
   "gh issue create --title \"feat\(web\): base layout\""
+
+# 18. Answered build-failed issue plans close only without second comment
+run_dry_test "Answered build-failed issue plans close only without second comment" \
+  "\"$FIXTURES/build_failed_answered\"" \
+  "gh issue close 70" \
+  "gh issue comment" \
+  "was answered with po-answered marker but remains open"
+
+# 19. Stranger marker comment on issue 72 does not silence persona
+run_dry_test "Stranger marker comment does not silence persona and plans answer and close" \
+  "\"$FIXTURES/stranger_marker\"" \
+  "gh issue comment 72" \
+  "" \
+  "gh issue close 72"
+
+# 20. Stranger roadmap issue is ignored and does not skip item
+run_dry_test "Stranger roadmap issue is ignored and does not skip item" \
+  "\"$FIXTURES/stranger_roadmap_issue\"" \
+  "gh issue create --title \"feat\(web\): base layout\"" \
+  "gh issue create --title \"feat\(web\): clear search query button\"" \
+  "Roadmap item: ITEM-001"
 
 echo "----------------------------------------"
 if [ "$failures" -gt 0 ]; then

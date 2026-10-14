@@ -1,0 +1,36 @@
+[
+  {
+    "number": 70,
+    "title": "feat(web): render tracking status icon",
+    "state": "OPEN",
+    "author": {
+      "login": "stevengonsalvez"
+    },
+    "body": "### Simulated human (antigravity)\n\nRoadmap item: ITEM-001\n\nRender status icon.",
+    "labels": [
+      {
+        "name": "stage:building"
+      },
+      {
+        "name": "type:feature"
+      },
+      {
+        "name": "escalated:build-failed"
+      }
+    ],
+    "comments": [
+      {
+        "author": {
+          "login": "stevengonsalvez"
+        },
+        "body": "<!-- sdlc-coder-log:v1 j-70-3 -->\nCoder failed build with compilation error in Timeline.tsx."
+      },
+      {
+        "author": {
+          "login": "stevengonsalvez"
+        },
+        "body": "### Simulated human (antigravity)\n<!-- po-answered:v1 -->\n\nReviewing failed pipeline attempts from coder logs or PR review.\nClosing issue to unblock pipeline."
+      }
+    ]
+  }
+]

@@ -11,6 +11,12 @@ Notice: The persona command allow-list permits GitHub CLI operations (gh issue .
 
 ---
 
+## Themes and History
+
+- Previous theme addressed ITEM-001 foundation setup and ITEM-002 navigation helpers.
+
+---
+
 ## Product Roadmap Progression
 
 Intake derives filed state strictly from GitHub issues with marker Roadmap item: ITEM-0NN.
