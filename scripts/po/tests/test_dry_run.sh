@@ -118,6 +118,13 @@ run_dry_test "Stranger issue is ignored with zero commands" \
   "Ignoring issue #67.*only stevengonsalvez is trusted" \
   "gh issue comment 67|gh issue edit 67|gh issue close 67"
 
+# 9. Idle with roadmap: picks next item by dependency order
+run_dry_test "Idle with roadmap picks next item by dependency order" \
+  "$FIXTURES/idle_with_roadmap" \
+  "gh issue create --title \"feat\(web\): filter dropdown component\"" \
+  "gh issue create --title \"feat\(web\): advanced filter options\"" \
+  "ITEM-003"
+
 echo "----------------------------------------"
 if [ "$failures" -gt 0 ]; then
   echo "FAILED: $failures of $total tests failed."

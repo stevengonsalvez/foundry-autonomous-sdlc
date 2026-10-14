@@ -11,21 +11,32 @@ set -euo pipefail
 
 state_file=""
 issues_file=""
+roadmap_file=""
 
 if [ $# -eq 1 ] && [ -d "$1" ]; then
   state_file="$1/state.json"
   issues_file="$1/issues.json"
+  if [ -f "$1/roadmap.md" ]; then
+    roadmap_file="$1/roadmap.md"
+  elif [ -f "$1/ROADMAP.md" ]; then
+    roadmap_file="$1/ROADMAP.md"
+  fi
 elif [ $# -ge 2 ]; then
   while [ $# -gt 0 ]; do
     case "$1" in
       --state) state_file="$2"; shift 2 ;;
       --issues) issues_file="$2"; shift 2 ;;
+      --roadmap) roadmap_file="$2"; shift 2 ;;
       *) echo "Unknown option: $1" >&2; exit 1 ;;
     esac
   done
 else
-  echo "Usage: scripts/po/dry_run.sh <fixture_dir> OR --state <file> --issues <file>" >&2
+  echo "Usage: scripts/po/dry_run.sh <fixture_dir> OR --state <file> --issues <file> [--roadmap <file>]" >&2
   exit 1
+fi
+
+if [ -z "$roadmap_file" ] && [ -f "po/ROADMAP.md" ]; then
+  roadmap_file="po/ROADMAP.md"
 fi
 
 [ -f "$state_file" ] || { echo "Error: State file not found: $state_file" >&2; exit 1; }
@@ -185,9 +196,127 @@ if [ "$hat_refinement" -eq 0 ] && [ "$hat_escalation" -eq 0 ]; then
     echo "[PIPELINE] Pipeline is busy with active building or review. Product Owner hat skipped."
   else
     hat_po=1
-    echo "[HAT] Product Owner: Pipeline is idle. Preparing ONE improvement issue tied to a real gap."
 
-    new_issue_body="### Simulated human (antigravity)
+    if [ -n "$roadmap_file" ] && [ -f "$roadmap_file" ]; then
+      roadmap_eval="$(python3 - "$roadmap_file" << 'PYEOF'
+import sys, re, json
+
+roadmap_file = sys.argv[1]
+with open(roadmap_file, "r", encoding="utf-8") as f:
+    content = f.read()
+
+item_blocks = re.split(r"(?=^###\s+ITEM-\d+:)", content, flags=re.MULTILINE)
+items = []
+for block in item_blocks:
+    block = block.strip()
+    if not block.startswith("### ITEM-"):
+        continue
+    header = re.match(r"^###\s+(ITEM-\d+):\s+(.+)$", block.splitlines()[0])
+    if not header:
+        continue
+    item_id = header.group(1).strip()
+    title = header.group(2).strip()
+
+    status_m = re.search(r"-\s+\*\*Status\*\*:\s*(\w+)", block)
+    status = status_m.group(1).lower() if status_m else "todo"
+
+    dep_m = re.search(r"-\s+\*\*Dependencies\*\*:\s*\[(.*?)\]", block)
+    deps = [d.strip() for d in dep_m.group(1).split(",") if d.strip()] if dep_m else []
+
+    gap_m = re.search(r"-\s+\*\*Gap Anchor\*\*:\s*(.+)$", block, re.MULTILINE)
+    gap = gap_m.group(1).strip() if gap_m else ""
+
+    user_val_m = re.search(r"-\s+\*\*User Value\*\*:\s*(.+)$", block, re.MULTILINE)
+    user_val = user_val_m.group(1).strip() if user_val_m else ""
+
+    ac_m = re.search(r"-\s+\*\*Acceptance Criteria\*\*:\s*\n((?:\s+\d+\..*\n?)+)", block)
+    ac = ac_m.group(1).strip() if ac_m else ""
+
+    files_m = re.search(r"-\s+\*\*Files Touched\*\*:\s*\n((?:\s+-\s+`.*?`.*\n?)+)", block)
+    files = files_m.group(1).strip() if files_m else "app/web"
+
+    items.append({
+        "id": item_id,
+        "title": title,
+        "status": status,
+        "deps": deps,
+        "gap": gap,
+        "user_val": user_val,
+        "ac": ac,
+        "files": files
+    })
+
+todo_items = [it for it in items if it["status"] == "todo"]
+done_or_filed = {it["id"] for it in items if it["status"] in ("done", "filed")}
+
+ready_item = None
+for it in todo_items:
+    if all(d in done_or_filed for d in it["deps"]):
+        ready_item = it
+        break
+
+result = {
+    "total": len(items),
+    "todo_count": len(todo_items),
+    "ready_item": ready_item
+}
+print(json.dumps(result))
+PYEOF
+)"
+      todo_count="$(jq -r '.todo_count' <<< "$roadmap_eval")"
+
+      if [ "$todo_count" -lt 5 ]; then
+        echo "[HAT] Product Owner: Fewer than 5 todo items remaining in roadmap ($todo_count left). Requesting maintainer extension."
+        extend_body="### Simulated human (antigravity)
+
+## Context
+The product roadmap ($roadmap_file) has fewer than 5 todo items remaining. To sustain continuous progressive improvement of the parcel tracker (app/), the backlog needs maintainer extension.
+
+## Request
+Please extend po/ROADMAP.md with the next batch of independently shippable improvements to app/.
+
+## Scope
+po/ROADMAP.md"
+        commands+=("gh issue create --title \"roadmap: extend po/ROADMAP.md\" --body \"$extend_body\" --label \"needs-maintainer,simulated-human\"")
+      else
+        ready_item="$(jq -c '.ready_item' <<< "$roadmap_eval")"
+        if [ "$ready_item" != "null" ]; then
+          item_id="$(jq -r '.id' <<< "$ready_item")"
+          item_title="$(jq -r '.title' <<< "$ready_item")"
+          item_gap="$(jq -r '.gap' <<< "$ready_item")"
+          item_user_val="$(jq -r '.user_val' <<< "$ready_item")"
+          item_ac="$(jq -r '.ac' <<< "$ready_item")"
+          item_files="$(jq -r '.files' <<< "$ready_item")"
+
+          echo "[HAT] Product Owner: Pipeline is idle. Selecting next roadmap item by dependency order: $item_id ('$item_title')"
+
+          new_issue_body="### Simulated human (antigravity)
+
+## Roadmap Reference
+$item_id
+
+## Context
+$item_gap
+
+## User story
+$item_user_val
+
+## Acceptance criteria
+$item_ac
+
+## Scope
+$item_files
+
+## Out of scope
+Work outside app/ or unrelated refactoring."
+
+          commands+=("gh issue create --title \"$item_title\" --body \"$new_issue_body\" --label \"type:feature,simulated-human\"")
+        fi
+      fi
+    else
+      echo "[HAT] Product Owner: Pipeline is idle. Preparing ONE improvement issue tied to a real gap."
+
+      new_issue_body="### Simulated human (antigravity)
 
 ## Context
 Carrier contract app/contracts/carrier.openapi.yaml includes event location metadata, but app/web parcel timeline currently displays only description and timestamp.
@@ -207,7 +336,8 @@ app/web only.
 ## Out of scope
 Geocoding or map views."
 
-    commands+=("gh issue create --title \"feat(web): display event location in parcel timeline\" --body \"$new_issue_body\" --label \"type:feature,simulated-human\"")
+      commands+=("gh issue create --title \"feat(web): display event location in parcel timeline\" --body \"$new_issue_body\" --label \"type:feature,simulated-human\"")
+    fi
   fi
 fi
 
