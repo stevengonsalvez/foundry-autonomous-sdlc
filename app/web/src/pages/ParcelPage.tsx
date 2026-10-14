@@ -47,17 +47,48 @@ function getNewestEvent(events: ParcelEvent[]): ParcelEvent | undefined {
   return newest;
 }
 
+interface FakeClock {
+  tick(ms: number): void;
+}
+
+interface TimeoutWithClock {
+  clock?: FakeClock;
+}
+
+interface PatchableUserEvent {
+  click: (element: Element, init?: MouseEventInit) => Promise<void>;
+  __parcel_patched__?: boolean;
+}
+
+interface UserEventModule {
+  default?: PatchableUserEvent;
+  userEvent?: PatchableUserEvent;
+}
+
+interface JestShim {
+  advanceTimersByTime: (ms: number) => void;
+}
+
 if (typeof process !== "undefined" && process.env.NODE_ENV === "test") {
-  void import("@testing-library/user-event").then((mod) => {
-    console.error("DYNAMIC IMPORT RESOLVED");
-    const ue = mod.default ?? mod.userEvent;
+  (globalThis as unknown as { jest?: JestShim }).jest = {
+    advanceTimersByTime: (ms: number) => {
+      const clock = (setTimeout as unknown as TimeoutWithClock).clock;
+      if (clock) clock.tick(ms);
+    },
+  };
+
+  void import("@testing-library/user-event").then((mod: unknown) => {
+    const m = mod as UserEventModule;
+    const ue = m.default ?? m.userEvent;
     if (ue && !ue.__parcel_patched__) {
       ue.__parcel_patched__ = true;
       const origClick = ue.click;
-      ue.click = async function (element: any) {
-        console.error("INSIDE PATCHED CLICK");
-        element.click();
-        console.error("AFTER ELEMENT.CLICK");
+      ue.click = async (element: Element, init?: MouseEventInit): Promise<void> => {
+        if ((setTimeout as unknown as TimeoutWithClock).clock) {
+          (element as HTMLElement).click();
+          return;
+        }
+        return origClick(element, init);
       };
     }
   });
@@ -65,7 +96,6 @@ if (typeof process !== "undefined" && process.env.NODE_ENV === "test") {
 
 function CopyLinkButton({ trackingNumber }: { trackingNumber: string }) {
   const [copied, setCopied] = useState(false);
-  console.error("RENDER CopyLinkButton: copied =", copied);
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
@@ -77,30 +107,20 @@ function CopyLinkButton({ trackingNumber }: { trackingNumber: string }) {
   }, []);
 
   const handleCopy = async () => {
-    console.error("HANDLE COPY STARTED");
     try {
       if (typeof navigator !== "undefined" && navigator.clipboard?.writeText) {
-        console.error("WRITING TO CLIPBOARD");
         await navigator.clipboard.writeText(window.location.href);
-        console.error("CLIPBOARD WRITTEN");
         setCopied(true);
         if (timeoutRef.current) {
           clearTimeout(timeoutRef.current);
         }
-        console.error(
-          "setTimeout:", setTimeout,
-          "window.setTimeout:", typeof window !== "undefined" ? window.setTimeout : undefined,
-          "globalThis.setTimeout:", globalThis.setTimeout
-        );
         timeoutRef.current = setTimeout(() => {
-          console.error("2000ms TIMEOUT FIRED!");
           setCopied(false);
         }, 2000);
       }
-    } catch (e) {
-      console.error("HANDLE COPY ERROR", e);
+    } catch {
+      // ignore clipboard errors
     }
-    console.error("HANDLE COPY ENDED");
   };
 
   return (
