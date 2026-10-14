@@ -4,6 +4,7 @@
 
 - App: <https://stevengonsalvez.github.io/foundry-autonomous-sdlc/>
 - Control center (every ticket from backlog to prod with cost per ticket, gates, environment hops, agent health, escalations, flow metrics, the questions-back trail, and Azure's billed spend next to the ledger's estimate): <https://stevengonsalvez.github.io/foundry-autonomous-sdlc/control-center/>
+- App evolution showcase (visual timeline across releases): <https://stevengonsalvez.github.io/foundry-autonomous-sdlc/history/>
 - Staging (the build waiting for smoke and soak): <https://stevengonsalvez.github.io/foundry-autonomous-sdlc/staging/>
 - Metrics dashboard (cycle time per stage, defect owner and resolution time, cost per issue, gate pass rates): <https://stevengonsalvez.github.io/foundry-autonomous-sdlc/dashboard/>
 - Traces of every scenario, from issue to release: [`docs/evidence.md`](docs/evidence.md)
@@ -33,6 +34,25 @@
 </p>
 
 An issue is filed. Agents on Azure AI Foundry score and refine the requirement, judge whether an agent can do the work, write failing tests first, build until the tests pass, review independently, merge and release. No human step. This repository is the demonstration, and every claim below links to a command you can run or a trace you can click.
+
+## How the app evolved
+
+See the visual timeline across releases on the [**App Evolution Showcase**](https://stevengonsalvez.github.io/foundry-autonomous-sdlc/history/).
+
+<p align="center">
+  <a href="https://stevengonsalvez.github.io/foundry-autonomous-sdlc/history/">
+    <img src="https://raw.githubusercontent.com/stevengonsalvez/foundry-autonomous-sdlc/pr-screenshots/releases/v0.1.0/home-desktop.png" alt="v0.1.0: Home page at launch" width="31%" />
+  </a>
+  <a href="https://stevengonsalvez.github.io/foundry-autonomous-sdlc/history/">
+    <img src="https://raw.githubusercontent.com/stevengonsalvez/foundry-autonomous-sdlc/pr-screenshots/releases/v0.3.1/home-desktop.png" alt="v0.3.1: Update the home page heading copy" width="31%" />
+  </a>
+  <a href="https://stevengonsalvez.github.io/foundry-autonomous-sdlc/history/">
+    <img src="https://raw.githubusercontent.com/stevengonsalvez/foundry-autonomous-sdlc/pr-screenshots/releases/v0.4.0/parcel-found-desktop.png" alt="v0.4.0: Show how many tracking events a parcel has" width="31%" />
+  </a>
+</p>
+<p align="center">
+  <sub><b>Left:</b> v0.1.0 (home page) &nbsp;|&nbsp; <b>Center:</b> v0.3.1 (heading copy) &nbsp;|&nbsp; <b>Right:</b> v0.4.0 (tracking events) | <a href="https://stevengonsalvez.github.io/foundry-autonomous-sdlc/history/">Explore interactive history &rarr;</a></sub>
+</p>
 
 ## System topology
 

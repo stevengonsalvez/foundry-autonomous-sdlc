@@ -23,7 +23,8 @@
     "test:coverage": "vitest run --coverage",
     "build": "npm run build --workspaces --if-present",
     "build:pages": "npm run build:pages --workspace @parcel/web",
-    "e2e": "npm run e2e --workspace @parcel/e2e"
+    "e2e": "npm run e2e --workspace @parcel/e2e",
+    "test:history": "npm run test:history --workspace @parcel/e2e"
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",

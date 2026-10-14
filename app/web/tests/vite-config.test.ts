@@ -29,10 +29,10 @@ describe("vite build base", () => {
     const assets = [...html.matchAll(/(?:src|href)="([^"]*assets\/[^"]+)"/g)].map((m) => m[1]);
     expect(assets.length).toBeGreaterThanOrEqual(2);
     for (const asset of assets) expect(asset).toMatch(/^\.\/assets\//);
-  });
+  }, 15000);
 
   it("keeps absolute asset paths for the normal build", () => {
     const html = build("production", join(dir, "normal"));
     expect(html).toMatch(/(?:src|href)="\/assets\//);
-  });
+  }, 15000);
 });

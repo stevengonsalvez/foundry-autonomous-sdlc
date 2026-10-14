@@ -39,6 +39,13 @@ VIEWPORT_RE = re.compile(r"^(desktop|mobile)$")
 ALLOWED_CHUNK_TYPES: frozenset[bytes] = frozenset(
     {b"IHDR", b"IDAT", b"IEND", b"sRGB", b"gAMA", b"pHYs"}
 )
+EXACT_CHUNK_LENGTHS: dict[bytes, int] = {
+    b"IHDR": 13,
+    b"sRGB": 1,
+    b"gAMA": 4,
+    b"pHYs": 9,
+    b"IEND": 0,
+}
 
 ALLOWED_DIMENSIONS = {
     "desktop": (1280, 800),
@@ -81,6 +88,7 @@ def validate_png_bytes(
     # Walk chunks to ensure proper framing, allowed chunk types, CRC and IEND terminal chunk
     pos = 8
     found_iend = False
+    ihdr_count = 0
     while pos + 12 <= len(content):
         chunk_len, chunk_type = struct.unpack(">I4s", content[pos : pos + 8])
         chunk_data_end = pos + 8 + chunk_len
@@ -98,6 +106,21 @@ def validate_png_bytes(
                 f"{chunk_type.decode('latin1', errors='replace')}"
             )
             return errs
+
+        if chunk_type == b"IHDR":
+            ihdr_count += 1
+            if ihdr_count > 1:
+                errs.append(f"File {filename} has multiple IHDR chunks")
+                return errs
+
+        if chunk_type in EXACT_CHUNK_LENGTHS:
+            exp_len = EXACT_CHUNK_LENGTHS[chunk_type]
+            if chunk_len != exp_len:
+                errs.append(
+                    f"File {filename} chunk {chunk_type.decode('latin1', errors='replace')} "
+                    f"has invalid length {chunk_len} (expected {exp_len})"
+                )
+                return errs
 
         chunk_data = content[pos + 8 : chunk_data_end]
         (expected_crc,) = struct.unpack(">I", content[chunk_data_end:crc_end])
@@ -119,6 +142,8 @@ def validate_png_bytes(
 
     if not found_iend:
         errs.append(f"File {filename} missing PNG IEND chunk")
+    if ihdr_count != 1:
+        errs.append(f"File {filename} missing PNG IHDR chunk")
 
     return errs
 
