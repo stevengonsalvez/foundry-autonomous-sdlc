@@ -760,7 +760,7 @@ body {
 .badge-alert {
   display: inline-block;
   background: var(--tone-block);
-  color: #fff;
+  color: #000;
   font-size: 0.75rem;
   font-weight: 700;
   padding: 0.2rem 0.5rem;
@@ -937,6 +937,27 @@ FAVICON_URI = (
 )
 
 
+def _preview_html(entry: dict[str, Any] | None) -> str:
+    """Render preview card content for the Then vs Now comparison strip."""
+    if not entry:
+        return ""
+    tag_q = html.escape(entry["tag"], quote=True)
+    desktop_fn = entry.get("screenshots", {}).get("home", {}).get("desktop")
+    if entry.get("reproducible") and desktop_fn:
+        fn_desktop = html.escape(desktop_fn, quote=True)
+        return (
+            f'<img src="./screenshots/{tag_q}/{fn_desktop}" alt="{tag_q} home desktop" '
+            f'loading="lazy" width="600" height="375" />'
+        )
+    reason = html.escape(entry.get("not_reproducible_reason") or "not captured")
+    return (
+        f'<div class="not-reproducible-box">'
+        f'<span class="badge-alert">Not Reproducible</span>'
+        f'<p>Reason: {reason}</p>'
+        f'</div>'
+    )
+
+
 def render_html(
     entries: list[dict[str, Any]], repo_name: str = "stevengonsalvez/foundry-autonomous-sdlc"
 ) -> str:
@@ -946,29 +967,8 @@ def render_html(
     newest_entry = entries[0] if entries else None
 
     # Then vs Now images (home route)
-    then_img_html = ""
-    if oldest_entry:
-        tag_q = html.escape(oldest_entry["tag"], quote=True)
-        fn_desktop = html.escape(
-            oldest_entry["screenshots"].get("home", {}).get("desktop", "home-desktop.png"),
-            quote=True,
-        )
-        then_img_html = (
-            f'<img src="./screenshots/{tag_q}/{fn_desktop}" alt="{tag_q} home desktop" '
-            f'loading="lazy" width="600" height="375" />'
-        )
-
-    now_img_html = ""
-    if newest_entry:
-        tag_q = html.escape(newest_entry["tag"], quote=True)
-        fn_desktop = html.escape(
-            newest_entry["screenshots"].get("home", {}).get("desktop", "home-desktop.png"),
-            quote=True,
-        )
-        now_img_html = (
-            f'<img src="./screenshots/{tag_q}/{fn_desktop}" alt="{tag_q} home desktop" '
-            f'loading="lazy" width="600" height="375" />'
-        )
+    then_img_html = _preview_html(oldest_entry)
+    now_img_html = _preview_html(newest_entry)
 
     # Build timeline items HTML
     timeline_items_html: list[str] = []
@@ -1334,6 +1334,9 @@ def build_history_site(
             oldest = entries[-1]
             if oldest.get("reproducible"):
                 rendered_tags.add(oldest["tag"])
+            newest = entries[0]
+            if newest.get("reproducible"):
+                rendered_tags.add(newest["tag"])
 
         for tag_name in sorted(rendered_tags):
             src_tag_dir = screenshots_dir / tag_name
@@ -1381,12 +1384,18 @@ def main() -> None:
         type=Path,
         help="Path to state.json ledger",
     )
+    parser.add_argument(
+        "--tags",
+        nargs="*",
+        help="Explicit list of release tags to include (defaults to all git v* tags)",
+    )
     args = parser.parse_args()
 
     build_history_site(
         output_dir=args.output_dir,
         screenshots_dir=args.screenshots_dir,
         state_path=args.state,
+        tags=args.tags,
     )
 
 

@@ -35,7 +35,17 @@ test.beforeAll(async () => {
   const routes = ["home", "parcel-found", "not-found", "invalid-input"];
   const viewports = ["desktop", "mobile"];
 
-  for (const tag of ["v0.1.0", "v0.4.0"]) {
+  // Dynamically discover all release tags from git so future tags (e.g. v0.6.0) don't break the test.
+  // Deliberately keep v0.1.0 uncaptured so the .not-reproducible-box fallback and its axe
+  // color-contrast check always run end-to-end.
+  const allGitTags = execSync("git tag -l 'v*'", { cwd: REPO_ROOT, encoding: "utf-8" })
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean);
+  const uncapturedTag = "v0.1.0";
+  const capturedTags = allGitTags.filter((t) => t !== uncapturedTag);
+
+  for (const tag of (capturedTags.length > 0 ? capturedTags : allGitTags)) {
     const tagDir = path.join(tempScreenshotsDir, tag);
     fs.mkdirSync(tagDir, { recursive: true });
     const screenshots = [];
@@ -89,8 +99,12 @@ test.beforeAll(async () => {
       if (fs.existsSync(filePath) && fs.statSync(filePath).isFile()) {
         const ext = path.extname(filePath).toLowerCase();
         const contentType = MIME_TYPES[ext] ?? "application/octet-stream";
-        res.writeHead(200, { "Content-Type": contentType });
-        fs.createReadStream(filePath).pipe(res);
+        const content = fs.readFileSync(filePath);
+        res.writeHead(200, {
+          "Content-Type": contentType,
+          "Content-Length": content.length,
+        });
+        res.end(content);
       } else {
         res.writeHead(404);
         res.end("Not Found");
