@@ -53,7 +53,7 @@ HOP_STATUSES = ("in_progress", "success", "failed", "rolled_back", "skipped")
 DEPLOY_FAILED_LABEL = "escalated:deploy-failed"
 
 # Which gate names the cost-free CI checks and CD steps report.
-GATE_NAMES = ("test", "coverage", "e2e", "gitleaks", "tdd-order", "agent-scope", "review", "smoke", "soak")
+GATE_NAMES = ("test", "coverage", "e2e", "gitleaks", "tdd-order", "agent-scope", "evals", "review", "smoke", "soak")
 
 _CONTROL = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]")
 

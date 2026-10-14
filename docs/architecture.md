@@ -202,7 +202,7 @@ Coder steps, all in code (the CLI only edits files):
 
 ## Gates
 
-CI jobs, all run on every pull request with no path filters so the names always report. These six are required status checks in the branch ruleset on `main`.
+CI jobs, all run on every pull request with no path filters so the names always report. These seven are required status checks in the branch ruleset on `main`.
 
 | Check | Passes when |
 |-------|-------------|
@@ -212,6 +212,7 @@ CI jobs, all run on every pull request with no path filters so the names always 
 | `gitleaks` | zero findings in the PR range and in the working tree |
 | `tdd-order` | see below |
 | `agent-scope` | for branches `agent/*`, every changed file is under `app/` |
+| `evals` | offline replay of recorded gate outputs against golden expectations passes with trusted checks |
 
 `tdd-order` (script `scripts/gates/tdd_order.py`): for a branch named `agent/*`, list commits `base..head` oldest first and classify each as test-only (every changed file matches a test glob) or not. Pass when (a) the first commit is test-only, (b) no non-test commit precedes the last leading test-only commit, (c) the tip of the leading test-only commits fails `npm test` when run in a clean worktree, and that red is real: at least one assertion failure and no invalid failure (`ReferenceError`, `TypeError`, `SyntaxError`, `is not defined`, `is not a function`, `Cannot find module`, `Failed to resolve import`, a test file that fails to load) among the test files those commits added or changed, read from the vitest JSON report (result `tests-invalid-red` otherwise), and (d) later commits never modify or delete a test file that exists at that tip. A branch whose commits are all test-only (maintenance) passes with note `test-only`. Non-`agent/*` branches pass with note `not-agent-branch`.
 

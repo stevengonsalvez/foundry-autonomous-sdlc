@@ -4,7 +4,7 @@
 import { formatRatio, formatUsdWords, parseTime, titleCase } from './format.js';
 
 export const TYPES = Object.freeze(['feature', 'bug', 'maintenance']);
-export const GATES = Object.freeze(['test', 'coverage', 'e2e', 'gitleaks', 'tdd-order', 'agent-scope', 'review', 'smoke', 'soak']);
+export const GATES = Object.freeze(['test', 'coverage', 'e2e', 'gitleaks', 'tdd-order', 'agent-scope', 'evals', 'review', 'smoke', 'soak']);
 export const OLD_AFTER_DAYS = 7;
 export const STALE_AFTER_S = 600;
 
