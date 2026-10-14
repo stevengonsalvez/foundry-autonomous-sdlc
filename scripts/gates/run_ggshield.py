@@ -15,6 +15,11 @@ import sys
 from pathlib import Path
 
 QUOTA_ERROR_SUBSTRING = "no more API calls available"
+QUOTA_EXIT_CODE = 128
+QUOTA_STDERR_LINES = {
+    "Error: Could not perform the requested action: no more API calls available.",
+    "Error: Could not perform the requested action: no more API calls available",
+}
 
 
 def run_ggshield(args: list[str]) -> int:
@@ -29,7 +34,7 @@ def run_ggshield(args: list[str]) -> int:
     executable = shutil.which("ggshield")
     cmd = [executable, *args] if executable else [sys.executable, "-m", "ggshield", *args]
 
-    proc = subprocess.run(cmd, capture_output=True, text=True)
+    proc = subprocess.run(cmd, check=False, capture_output=True, text=True)
 
     if proc.stdout:
         sys.stdout.write(proc.stdout)
@@ -41,30 +46,34 @@ def run_ggshield(args: list[str]) -> int:
     if proc.returncode == 0:
         return 0
 
-    combined_output = f"{proc.stdout}\n{proc.stderr}"
-    if QUOTA_ERROR_SUBSTRING in combined_output:
-        warning_msg = (
-            "GitGuardian API quota exhausted (no more API calls available). "
-            "Scan skipped; required Gitleaks secret gate remains active."
-        )
-        print(f"::warning::{warning_msg}")
-
-        summary_file = os.environ.get("GITHUB_STEP_SUMMARY")
-        if summary_file:
-            summary_path = Path(summary_file)
-            summary_text = (
-                "### GitGuardian Secret Scan\n\n"
-                "> [!WARNING]\n"
-                "> **GitGuardian API quota exhausted**: no more API calls available.\n"
-                "> Scan was skipped. Required `gitleaks` gate remains active and enforcing.\n\n"
+    # Never swallow findings (exit code 1) or non-quota exit codes.
+    # ggshield exits 128 when the GitGuardian API quota is exhausted.
+    # The quota error line must appear anchored in stderr (not stdout).
+    if proc.returncode == QUOTA_EXIT_CODE:
+        stderr_lines = [line.strip() for line in (proc.stderr or "").splitlines()]
+        if any(line in QUOTA_STDERR_LINES for line in stderr_lines):
+            warning_msg = (
+                "GitGuardian API quota exhausted (no more API calls available). "
+                "Scan skipped; required Gitleaks secret gate remains active."
             )
-            try:
-                with summary_path.open("a", encoding="utf-8") as f:
-                    f.write(summary_text)
-            except OSError as err:
-                sys.stderr.write(f"Failed to write GITHUB_STEP_SUMMARY: {err}\n")
+            print(f"::warning::{warning_msg}")
 
-        return 0
+            summary_file = os.environ.get("GITHUB_STEP_SUMMARY")
+            if summary_file:
+                summary_path = Path(summary_file)
+                summary_text = (
+                    "### GitGuardian Secret Scan\n\n"
+                    "> [!WARNING]\n"
+                    "> **GitGuardian API quota exhausted**: no more API calls available.\n"
+                    "> Scan was skipped. Required `gitleaks` gate remains active and enforcing.\n\n"
+                )
+                try:
+                    with summary_path.open("a", encoding="utf-8") as f:
+                        f.write(summary_text)
+                except OSError as err:
+                    sys.stderr.write(f"Failed to write GITHUB_STEP_SUMMARY: {err}\n")
+
+            return 0
 
     return proc.returncode
 
