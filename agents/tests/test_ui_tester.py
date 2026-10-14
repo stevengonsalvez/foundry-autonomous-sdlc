@@ -143,11 +143,17 @@ def test_ui_tester_runs_for_new_head_sha(world: World, monkeypatch: pytest.Monke
     world.tick()
     assert len(world.foundry.agent_calls("sdlc-ui-tester")) == 1
 
-    # Push new commit to PR
+    # Push new commit to PR (checks not yet finished, proof not yet updated)
     branch = f"agent/issue-{n}"
     head_sha_2 = world.gh._commit("feat: update", ("app/web/src/Home.tsx",), head_sha_1)
     world.gh.branches[branch] = head_sha_2
     world.gh.pulls[pr_num]["head_sha"] = head_sha_2
+
+    # Tick before proof is updated: proof comment still references head_sha_1
+    world.tick()
+    # Proof not yet updated for new head, so no new call is made
+    assert len(world.foundry.agent_calls("sdlc-ui-tester")) == 1
+
     world.gh.check_runs[head_sha_2] = [
         CheckRun(check, "completed", "success", world.clock.now_iso(), (pr_num,))
         for check in gates.REQUIRED_CHECKS
@@ -164,9 +170,13 @@ def test_ui_tester_runs_for_new_head_sha(world: World, monkeypatch: pytest.Monke
         f"- Head commit: `{head_sha_2}`\n"
         f'| home | <img src="{base_url_2}/home-desktop.png" /> |\n'
     )
-    world.gh.comments[pr_num].append(
-        Comment(105, "github-actions[bot]", new_proof, world.clock.now_iso())
-    )
+    # Edit comment 101 in place (the real publisher edits one comment)
+    for idx, c in enumerate(world.gh.comments[pr_num]):
+        if c.id == 101:
+            world.gh.comments[pr_num][idx] = Comment(
+                101, "github-actions[bot]", new_proof, world.clock.now_iso()
+            )
+            break
 
     world.tick()
 
@@ -181,6 +191,24 @@ def test_ui_tester_runs_for_new_head_sha(world: World, monkeypatch: pytest.Monke
     assert len(ui_tester_comments) == 1
     assert head_sha_1 not in ui_tester_comments[0].body
     assert head_sha_2 in ui_tester_comments[0].body
+
+
+def test_ui_tester_skips_when_stage_not_in_review(
+    world: World, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv(UI_TESTER_FEATURE_FLAG, "1")
+    n, pr_num, _ = _setup_open_agent_pr(world, ui_proof=True)
+
+    # Change issue stage back to BUILDING
+    st = world.gh.state_of(n)
+    st_obj = state.State(st)
+    st_obj.enter(state.BUILDING, world.clock.now_iso())
+    world.gh.comments[n][0] = Comment(100, OWNER, state.render(st_obj), world.clock.now_iso())
+
+    world.tick()
+
+    assert not world.foundry.agent_calls("sdlc-ui-tester")
+    assert not any(UI_TESTER_MARKER_PREFIX in c.body for c in world.gh.comments[pr_num])
 
 
 def test_ui_tester_skips_when_no_ui_proof(world: World, monkeypatch: pytest.MonkeyPatch) -> None:
