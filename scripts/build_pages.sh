@@ -116,24 +116,20 @@ fi
 # 2c. App evolution history: build /history/ at Pages build time from origin/pr-screenshots:releases/*
 history_note="no app history source, /history/ is not published"
 pr_screenshots_dir="${PR_SCREENSHOTS_DIR:-}"
-history_src="${HISTORY_SRC:-$repo_root/history}"
+state_path="${STATE_PATH:-}"
 
 if [ -n "$pr_screenshots_dir" ] && [ -d "$pr_screenshots_dir/releases" ]; then
   mkdir -p "$out/history"
   echo "building /history/ from pr-screenshots releases..."
+  state_args=()
+  if [ -n "$state_path" ] && [ -f "$state_path" ]; then
+    state_args=(--state "$state_path")
+  fi
   python3 "$repo_root/scripts/ui/generate_history.py" \
     --output-dir "$out/history" \
-    --screenshots-dir "$pr_screenshots_dir/releases"
+    --screenshots-dir "$pr_screenshots_dir/releases" \
+    "${state_args[@]}"
   history_note="app history built at /history/ from pr-screenshots releases"
-elif [ -n "$history_src" ] && [ -f "$history_src/index.html" ]; then
-  mkdir -p "$out/history"
-  cp "$history_src/index.html" "$out/history/index.html"
-  for part in css js data.json; do
-    if [ -e "$history_src/$part" ]; then
-      cp -R "$history_src/$part" "$out/history/$part"
-    fi
-  done
-  history_note="app history published at /history/ from local source"
 fi
 
 # 3. Metrics, only when present and readable by this dashboard version
