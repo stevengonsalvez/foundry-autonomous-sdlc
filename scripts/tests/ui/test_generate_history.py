@@ -624,3 +624,62 @@ def test_csp_disallows_raw_githubusercontent() -> None:
 
     assert "https://raw.githubusercontent.com" not in CSP_CONTENT
     assert "img-src 'self' data:;" in CSP_CONTENT
+
+
+def test_uncaptured_release_does_not_produce_404_images() -> None:
+    """A release without captured screenshots (such as v0.5.0 before captures are synced)
+    must not render <img> tags referencing non-existent files on disk.
+    """
+    import re
+
+    with tempfile.TemporaryDirectory() as td:
+        screenshots_dir = Path(td) / "screenshots"
+        screenshots_dir.mkdir()
+        create_release_fixture(screenshots_dir, "v0.1.0")
+        create_release_fixture(screenshots_dir, "v0.4.0")
+        # v0.5.0 has NO screenshot directory (uncaptured / not reproducible)
+
+        state_data = {
+            "tickets": [
+                {
+                    "release": {"tag": "v0.5.0"},
+                    "title": "feat(web): display event location pin in parcel timeline",
+                    "issue": 83,
+                    "pr": {
+                        "number": 86,
+                        "url": "https://github.com/stevengonsalvez/foundry-autonomous-sdlc/pull/86",
+                    },
+                    "cost": {"total_usd": 0.220416},
+                },
+                {
+                    "release": {"tag": "v0.4.0"},
+                    "title": "feat(web): add tracking number copy button",
+                },
+                {
+                    "release": {"tag": "v0.1.0"},
+                    "title": "feat(web): initial release",
+                },
+            ]
+        }
+
+        out_dir = Path(td) / "out"
+        build_history_site(
+            output_dir=out_dir,
+            screenshots_dir=screenshots_dir,
+            state_data=state_data,
+            tags=["v0.1.0", "v0.4.0", "v0.5.0"],
+        )
+
+        html_content = (out_dir / "index.html").read_text(encoding="utf-8")
+
+        # Extract all <img src="..."> references
+        img_srcs = re.findall(r'<img[^>]+src=["\']([^"\']+)["\']', html_content)
+        assert len(img_srcs) > 0
+
+        # Every image tag in the generated HTML MUST exist on disk in out_dir (no 404s)
+        for src in img_srcs:
+            clean_src = src.removeprefix("./")
+            file_on_disk = out_dir / clean_src
+            msg = f"Image referenced in HTML does not exist (would 404): {src}"
+            assert file_on_disk.exists(), msg
+
