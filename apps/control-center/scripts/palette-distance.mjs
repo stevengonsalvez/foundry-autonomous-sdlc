@@ -134,7 +134,8 @@ export async function parseCssTokens(cssPath) {
   return tokens;
 }
 
-export async function run() {
+export async function run({ verbose = false } = {}) {
+  const print = verbose ? console.log : () => {};
   const root = new URL('../', import.meta.url);
   const cssPath = fileURLToPath(new URL('css/styles.css', root));
   const indexHtmlPath = fileURLToPath(new URL('index.html', root));
@@ -193,14 +194,14 @@ export async function run() {
 
   const accentKeys = Object.keys(flowtron);
 
-  console.log('# Palette Distance Matrix: Control Center Tokens vs Flowtron Reference Accents\n');
-  console.log('Measurement standard: OKLab Delta-E (dE_ok) and circular hue distance in degrees.');
-  console.log('Rule: Same-role distance dE_ok >= 0.06 and circular hue diff >= 12 deg. Where within 20 deg of another role, explicitly listed.\n');
+  print('# Palette Distance Matrix: Control Center Tokens vs Flowtron Reference Accents\n');
+  print('Measurement standard: OKLab Delta-E (dE_ok) and circular hue distance in degrees.');
+  print('Rule: Same-role distance dE_ok >= 0.06 and circular hue diff >= 12 deg. Where within 20 deg of another role, explicitly listed.\n');
 
   // Markdown table header
   const headerCols = ['Our Token', 'OKLCH', 'Role', 'Same-Role Accent', 'Same-Role dE', 'Same-Role dh', 'Min dE Accent', 'Min dE', 'Status'];
-  console.log(`| ${headerCols.join(' | ')} |`);
-  console.log(`| ${headerCols.map(() => '---').join(' | ')} |`);
+  print(`| ${headerCols.join(' | ')} |`);
+  print(`| ${headerCols.map(() => '---').join(' | ')} |`);
 
   let allPass = true;
   const crossRoleNear = [];
@@ -245,21 +246,21 @@ export async function run() {
       if (!pass) allPass = false;
     }
 
-    const oklchStr = `${t.L.toFixed(2)} ${t.C.toFixed(2)} ${Math.round(t.h)}°`;
+    const oklchStr = `${t.L.toFixed(3)} ${t.C.toFixed(3)} ${Math.round(t.h)}°`;
     const roleStr = sameRole || 'neutral';
     const sameDEStr = sameRoleDE !== null ? sameRoleDE.toFixed(4) : '-';
     const sameDhStr = sameRoleDh !== null ? `${sameRoleDh.toFixed(1)}°` : '-';
 
-    console.log(
+    print(
       `| \`${tokenName}\` | ${oklchStr} | ${roleStr} | ${sameRole || '-'} | ${sameDEStr} | ${sameDhStr} | ${minAccent} | ${minDE.toFixed(4)} | ${status} |`
     );
   }
 
   // Full All-Pairs Table
-  console.log('\n### Full All-Pairs Distance Matrix: Every Token vs Every Reference Accent\n');
+  print('\n### Full All-Pairs Distance Matrix: Every Token vs Every Reference Accent\n');
   const allPairsCols = ['Token', ...accentKeys, 'Min dE', 'Same-Role dE', 'Status'];
-  console.log(`| ${allPairsCols.join(' | ')} |`);
-  console.log(`| ${allPairsCols.map(() => '---').join(' | ')} |`);
+  print(`| ${allPairsCols.join(' | ')} |`);
+  print(`| ${allPairsCols.map(() => '---').join(' | ')} |`);
 
   for (const tokenName of accentTokens) {
     const t = cssTokens[tokenName];
@@ -278,22 +279,22 @@ export async function run() {
     rowVals.push(sameRoleDE !== null ? sameRoleDE.toFixed(4) : '-');
     const pass = sameRole === null || (sameRoleDE !== null && sameRoleDE >= 0.06 && (t.C < 0.03 || circularHueDiff(t.h, flowtron[sameRole].h) >= 12));
     rowVals.push(pass ? 'PASS' : '**FAIL**');
-    console.log(`| ${rowVals.join(' | ')} |`);
+    print(`| ${rowVals.join(' | ')} |`);
   }
 
-  console.log('\n### Cross-Role Accents Within 20° Hue (Permitted by Decision)\n');
+  print('\n### Cross-Role Accents Within 20° Hue (Permitted by Decision)\n');
   if (crossRoleNear.length === 0) {
-    console.log('None.');
+    print('None.');
   } else {
-    console.log('| Token | Flowtron Accent | Role of Accent | Hue Diff | dE_ok |');
-    console.log('| --- | --- | --- | --- | --- |');
+    print('| Token | Flowtron Accent | Role of Accent | Hue Diff | dE_ok |');
+    print('| --- | --- | --- | --- | --- |');
     for (const c of crossRoleNear) {
-      console.log(`| \`${c.token}\` | \`${c.accent}\` | ${c.accent} | ${c.dh.toFixed(1)}° | ${c.dist.toFixed(4)} |`);
+      print(`| \`${c.token}\` | \`${c.accent}\` | ${c.accent} | ${c.dh.toFixed(1)}° | ${c.dist.toFixed(4)} |`);
     }
   }
 
   // Neutrals check across ALL 8 reference neutrals
-  console.log('\n### Neutrals Distance Matrix vs All 8 Reference Neutrals (Target: dE_ok >= 0.04)\n');
+  print('\n### Neutrals Distance Matrix vs All 8 Reference Neutrals (Target: dE_ok >= 0.04)\n');
   const refNeutrals = ['ink', 'panel', 'panel-2', 'line-soft', 'line', 'muted-2', 'muted', 'text'];
   const refNeutralLabs = Object.fromEntries(refNeutrals.map((n) => [n, hexToOklab(FLOWTRON_NEUTRALS[n])]));
 
@@ -322,8 +323,8 @@ export async function run() {
     'Min dE',
     'Status',
   ];
-  console.log(`| ${neutralMatrixCols.join(' | ')} |`);
-  console.log(`| ${neutralMatrixCols.map(() => '---').join(' | ')} |`);
+  print(`| ${neutralMatrixCols.join(' | ')} |`);
+  print(`| ${neutralMatrixCols.map(() => '---').join(' | ')} |`);
 
   let neutralsPass = true;
   for (const tokenName of ourDarkNeutrals) {
@@ -340,24 +341,24 @@ export async function run() {
 
     const row = [
       `\`${tokenName}\``,
-      `${t.L.toFixed(2)} ${t.C.toFixed(3)} ${Math.round(t.h)}°`,
+      `${t.L.toFixed(3)} ${t.C.toFixed(3)} ${Math.round(t.h)}°`,
       ...dists.map((d) => d.toFixed(4)),
       minD.toFixed(4),
       pass ? 'PASS' : '**FAIL**',
     ];
-    console.log(`| ${row.join(' | ')} |`);
+    print(`| ${row.join(' | ')} |`);
   }
 
   // Adjacent Surface Rungs Contrast
-  console.log('\n### Adjacent Surface Rungs Contrast (Target: ratio >= 1.10:1)\n');
+  print('\n### Adjacent Surface Rungs Contrast (Target: ratio >= 1.10:1)\n');
   const rungPairs = [
     ['--surface-0', '--canvas'],
     ['--surface-1', '--surface-0'],
     ['--surface-2', '--surface-1'],
     ['--surface-3', '--surface-2'],
   ];
-  console.log('| Rung Pair | Upper Surface | Lower Surface | Contrast Ratio | Status |');
-  console.log('| --- | --- | --- | --- | --- |');
+  print('| Rung Pair | Upper Surface | Lower Surface | Contrast Ratio | Status |');
+  print('| --- | --- | --- | --- | --- |');
 
   let rungsPass = true;
   for (const [upper, lower] of rungPairs) {
@@ -371,14 +372,14 @@ export async function run() {
       rungsPass = false;
       allPass = false;
     }
-    console.log(`| \`${upper}\` vs \`${lower}\` | ${u.L.toFixed(3)} | ${l.L.toFixed(3)} | ${cr.toFixed(3)}:1 | ${pass ? 'PASS' : '**FAIL**'} |`);
+    print(`| \`${upper}\` vs \`${lower}\` | ${u.L.toFixed(3)} | ${l.L.toFixed(3)} | ${cr.toFixed(3)}:1 | ${pass ? 'PASS' : '**FAIL**'} |`);
   }
 
   // Typography Neutrals
-  console.log('\n### Typography Neutrals vs Flowtron Reference Values\n');
+  print('\n### Typography Neutrals vs Flowtron Reference Values\n');
   const typoCols = ['Token', 'Our OKLCH', 'Flowtron Token', 'Flowtron Hex', 'dE_ok', 'Status'];
-  console.log(`| ${typoCols.join(' | ')} |`);
-  console.log(`| ${typoCols.map(() => '---').join(' | ')} |`);
+  print(`| ${typoCols.join(' | ')} |`);
+  print(`| ${typoCols.map(() => '---').join(' | ')} |`);
 
   for (const [tokenName, flowtronName] of Object.entries({ '--fg': 'text', '--fg-dim': 'muted', '--fg-muted': 'muted-2' })) {
     const t = cssTokens[tokenName];
@@ -387,11 +388,11 @@ export async function run() {
     const dist = dE(t.lab, hexToOklab(fHex));
     const pass = dist >= 0.06;
     if (!pass) allPass = false;
-    console.log(`| \`${tokenName}\` | ${t.L.toFixed(2)} ${t.C.toFixed(3)} ${Math.round(t.h)}° | \`${flowtronName}\` | \`${fHex}\` | ${dist.toFixed(4)} | ${pass ? 'PASS' : '**FAIL**'} |`);
+    print(`| \`${tokenName}\` | ${t.L.toFixed(3)} ${t.C.toFixed(3)} ${Math.round(t.h)}° | \`${flowtronName}\` | \`${fHex}\` | ${dist.toFixed(4)} | ${pass ? 'PASS' : '**FAIL**'} |`);
   }
 
   // Stage Fills Inter-Distance Table
-  console.log('\n### Stage Fills Inter-Distance Matrix (Target: Circular dh >= 25° AND dE_ok >= 0.06)\n');
+  print('\n### Stage Fills Inter-Distance Matrix (Target: Circular dh >= 25° AND dE_ok >= 0.06)\n');
   const stageTokens = [
     '--st-fill-backlog',
     '--st-fill-refining',
@@ -404,8 +405,8 @@ export async function run() {
     '--st-fill-escalated',
   ];
 
-  console.log('| Stage A | Stage B | Hue A | Hue B | Circular dh | dE_ok | Status |');
-  console.log('| --- | --- | --- | --- | --- | --- | --- |');
+  print('| Stage A | Stage B | Hue A | Hue B | Circular dh | dE_ok | Status |');
+  print('| --- | --- | --- | --- | --- | --- | --- |');
 
   let fillsPass = true;
   for (let i = 0; i < stageTokens.length; i++) {
@@ -418,21 +419,21 @@ export async function run() {
       const dist = dE(a.lab, b.lab);
       const pass = dh >= 25 && dist >= 0.06;
       if (!pass) fillsPass = false;
-      console.log(
+      print(
         `| \`${stageTokens[i]}\` | \`${stageTokens[j]}\` | ${Math.round(a.h)}° | ${Math.round(b.h)}° | ${dh.toFixed(1)}° | ${dist.toFixed(4)} | ${pass ? 'PASS' : '**FAIL**'} |`
       );
     }
   }
 
-  console.log(`\nOverall Accent Same-Role Distance: ${allPass ? 'PASS' : 'FAIL'}`);
-  console.log(`Overall Neutrals Distance Separation: ${neutralsPass ? 'PASS' : 'FAIL'}`);
-  console.log(`Overall Adjacent Surface Rungs Contrast: ${rungsPass ? 'PASS' : 'FAIL'}`);
-  console.log(`Overall Stage Fills Separation: ${fillsPass ? 'PASS' : 'FAIL'}`);
+  print(`\nOverall Accent Same-Role Distance: ${allPass ? 'PASS' : 'FAIL'}`);
+  print(`Overall Neutrals Distance Separation: ${neutralsPass ? 'PASS' : 'FAIL'}`);
+  print(`Overall Adjacent Surface Rungs Contrast: ${rungsPass ? 'PASS' : 'FAIL'}`);
+  print(`Overall Stage Fills Separation: ${fillsPass ? 'PASS' : 'FAIL'}`);
   return { allPass, neutralsPass, fillsPass, rungsPass };
 }
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
-  const result = await run();
+  const result = await run({ verbose: true });
   if (!result.allPass || !result.neutralsPass || !result.fillsPass || !result.rungsPass) {
     process.exit(1);
   }
