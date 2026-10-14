@@ -36,12 +36,17 @@ VALID: dict[str, dict[str, Any]] = {
     "sdlc-reviewer": {"verdict": "approve", "head": "abcdef1", "findings": [], "summary": "s"},
     "sdlc-triage": {"severity": "s2", "owner": "web", "summary": "s", "suspected_area": "a", "rationale": "r"},
     "sdlc-ci-triage": {"cause": "stale-test", "explanation": "e", "test_files": ["app/web/src/Home.test.tsx"]},
+    "sdlc-ui-tester": {
+        "verdict": "pass",
+        "findings": [],
+        "summary": "No visual UI anomalies detected across viewports.",
+    },
 }
 
 
-def test_the_eight_agents_from_the_architecture_table_exist() -> None:
+def test_the_prompt_agents_from_the_architecture_table_exist() -> None:
     assert AGENT_NAMES == ["sdlc-req-gate", "sdlc-product-owner", "sdlc-feasibility", "sdlc-test-designer",
-                           "sdlc-reviewer", "sdlc-triage", "sdlc-ci-triage", "sdlc-release-notes"]
+                           "sdlc-reviewer", "sdlc-triage", "sdlc-ci-triage", "sdlc-release-notes", "sdlc-ui-tester"]
     assert {a.name for a in AGENTS if a.output_kind == "markdown"} == {"sdlc-release-notes"}
 
 
@@ -179,6 +184,40 @@ def test_ci_triage_needs_test_files_for_a_stale_test_and_only_test_paths() -> No
 def test_triage_enums_reject_off_list_values() -> None:
     with pytest.raises(ValueError, match="not in allowed set"):
         AGENT_BY_NAME["sdlc-triage"].validate_output({**VALID["sdlc-triage"], "owner": "security"})
+
+
+def test_ui_tester_overrides_pass_when_critical_or_high_findings() -> None:
+    tester = AGENT_BY_NAME["sdlc-ui-tester"]
+    data = {
+        "verdict": "pass",
+        "findings": [
+            {
+                "route": "home",
+                "viewport": "desktop",
+                "issue": "Primary button clipped",
+                "severity": "high",
+            }
+        ],
+        "summary": "Layout issue found.",
+    }
+    tester.validate_output(data)
+    assert data["verdict"] == "concerns"
+
+    # Low severity does not override pass
+    data_low = {
+        "verdict": "pass",
+        "findings": [
+            {
+                "route": "home",
+                "viewport": "desktop",
+                "issue": "Minor padding",
+                "severity": "low",
+            }
+        ],
+        "summary": "Minor spacing.",
+    }
+    tester.validate_output(data_low)
+    assert data_low["verdict"] == "pass"
 
 
 # ---------------------------------------------------------------------------

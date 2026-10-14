@@ -118,6 +118,17 @@ CI_TRIAGE_SCHEMA = _obj({
     "test_files": _arr(_str(paths.MAX_PATH_LENGTH, 1), 5),
 })
 
+UI_TESTER_SCHEMA = _obj({
+    "verdict": {"type": "string", "enum": ["pass", "concerns"]},
+    "findings": _arr(_obj({
+        "route": _str(100, 1),
+        "viewport": _str(100, 1),
+        "issue": _str(400, 1),
+        "severity": {"type": "string", "enum": ["critical", "high", "medium", "low", "info"]},
+    }), 10),
+    "summary": _str(400, 1),
+})
+
 
 # ---------------------------------------------------------------------------
 # Output checks the schema cannot express. They may normalise data in place.
@@ -168,6 +179,12 @@ def _check_ci_triage(data: dict[str, Any]) -> None:
     data["test_files"] = [paths.normalise_test_path(p) for p in data["test_files"]]
     if data["cause"] == "stale-test" and not data["test_files"]:
         raise ValueError("sdlc-ci-triage: stale-test needs at least one test file")
+
+
+def _check_ui_tester(data: dict[str, Any]) -> None:
+    # A critical or high severity finding forces the concerns verdict.
+    if any(f["severity"] in ("critical", "high") for f in data["findings"]):
+        data["verdict"] = "concerns"
 
 
 # ---------------------------------------------------------------------------
@@ -518,6 +535,33 @@ Rules: only facts from the input; no links, no images, no HTML, no @mentions; ne
 "fixes #N" or "closes #N".
 """
 
+_UI_TESTER = """\
+ROLE: visual UI testing and layout inspector for pull requests.
+
+EVALUATION TASK:
+Analyse rendered screenshots of the parcel tracker application taken at fixed routes and viewports.
+Inspect the images for layout regressions, text overlap, horizontal clipping, or styling defects.
+
+ROUTES:
+- "home": tracking search form and recent parcels table
+- "parcel-found": parcel details, status badge, delivery estimate, timeline
+- "not-found": parcel not found alert notice
+- "invalid-input": invalid tracking number alert notice
+
+VIEWPORTS:
+- "desktop": 1280px wide
+- "mobile": 390px wide (must not have horizontal clipping or overflow)
+
+SEVERITY:
+- "critical": unreadable page, crashing UI, or blocking overflow
+- "high": major layout overlap or clipping of primary actions or data
+- "medium": minor spacing anomaly, awkward text wrapping, or slight misalignment
+- "low": subtle visual inconsistency
+- "info": stylistic observation
+
+OUTPUT: one JSON object with keys verdict, findings, summary.
+"""
+
 
 AGENTS: list[AgentDef] = [
     AgentDef("sdlc-req-gate", _with_preamble(_REQ_GATE), "json", REQ_GATE_SCHEMA, _check_req_gate),
@@ -539,6 +583,10 @@ AGENTS: list[AgentDef] = [
     AgentDef("sdlc-triage", _with_preamble(_TRIAGE), "json", TRIAGE_SCHEMA),
     AgentDef("sdlc-ci-triage", _with_preamble(_CI_TRIAGE), "json", CI_TRIAGE_SCHEMA, _check_ci_triage),
     AgentDef("sdlc-release-notes", _with_preamble(_RELEASE_NOTES), "markdown", max_output_tokens=3_000),
+    AgentDef(
+        "sdlc-ui-tester", _with_preamble(_UI_TESTER), "json", UI_TESTER_SCHEMA, _check_ui_tester,
+        max_output_tokens=6_000,
+    ),
 ]
 
 AGENT_BY_NAME: dict[str, AgentDef] = {a.name: a for a in AGENTS}
