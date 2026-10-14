@@ -273,6 +273,7 @@ class TestProtect:
             "gitleaks",
             "tdd-order",
             "agent-scope",
+            "evals",
         ]
         assert {c["integration_id"] for c in checks["required_status_checks"]} == {15368}
 
@@ -304,7 +305,7 @@ class TestProtect:
                 rule["parameters"]["required_status_checks"].pop()
         run_phase(fake, "protect")
         rule = next(r for r in fake.rulesets[1]["rules"] if r["type"] == "required_status_checks")
-        assert len(rule["parameters"]["required_status_checks"]) == 6
+        assert len(rule["parameters"]["required_status_checks"]) == len(sr.REQUIRED_CHECKS)
 
     def test_extra_fields_from_github_do_not_cause_churn(self) -> None:
         fake = FakeGitHub()
@@ -328,6 +329,38 @@ class TestProtect:
         workflow = yaml.safe_load((ROOT / ".github/workflows/ci.yml").read_text())
         job_names = {job.get("name", job_id) for job_id, job in workflow["jobs"].items()}
         assert set(sr.REQUIRED_CHECKS) <= job_names
+
+    def test_required_checks_match_gates(self) -> None:
+        import re
+
+        agents_dir = str(ROOT / "agents")
+        if agents_dir not in sys.path:
+            sys.path.insert(0, agents_dir)
+        from sdlc_agents import gates
+        from sdlc_agents.ledger import model
+
+        import scripts.cd.plan as plan
+        import scripts.collect_evidence as ce
+
+        assert sr.REQUIRED_CHECKS == gates.REQUIRED_CHECKS
+        assert sr.REQUIRED_CHECKS == plan.REQUIRED_CHECKS
+        assert sr.REQUIRED_CHECKS == ce.GATES
+        assert "evals" in sr.REQUIRED_CHECKS
+
+        # Verify JS dashboard GATE_ORDER
+        agg_text = (ROOT / "dashboard" / "js" / "aggregate.js").read_text(encoding="utf-8")
+        m_agg = re.search(r"export const GATE_ORDER = \[(.*?)\];", agg_text)
+        assert m_agg
+        agg_gates = tuple(re.findall(r"['\"]([^'\"]+)['\"]", m_agg.group(1)))
+        assert agg_gates == sr.REQUIRED_CHECKS
+
+        # Verify control center GATES and ledger GATE_NAMES
+        cc_text = (ROOT / "apps" / "control-center" / "js" / "model.js").read_text(encoding="utf-8")
+        m_cc = re.search(r"export const GATES = Object\.freeze\(\[(.*?)\]\);", cc_text)
+        assert m_cc
+        cc_gates = tuple(re.findall(r"['\"]([^'\"]+)['\"]", m_cc.group(1)))
+        assert cc_gates == model.GATE_NAMES
+        assert cc_gates[:7] == sr.REQUIRED_CHECKS
 
 
 class TestAll:

@@ -191,7 +191,7 @@ test('gateRates: first attempt vs eventual from gate_attempts', () => {
 
 test('gateRates: gates come out in pipeline order', () => {
   const names = gateRates(issues).map((g) => g.gate);
-  assert.deepEqual(names, ['test', 'coverage', 'e2e', 'gitleaks', 'tdd-order', 'agent-scope']);
+  assert.deepEqual(names, ['test', 'coverage', 'e2e', 'gitleaks', 'tdd-order', 'agent-scope', 'evals']);
 });
 
 test('gateRates: without attempts the first-attempt rate is null, not invented', () => {

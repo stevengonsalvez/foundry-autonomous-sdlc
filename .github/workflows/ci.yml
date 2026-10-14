@@ -3,7 +3,7 @@ name: CI
 # Plain checks only. This workflow never drives agents: it holds no secrets and no
 # Azure credentials, and nothing here calls the orchestrator or the coder. The agents
 # read these results through the GitHub API; the branch ruleset enforces the same
-# six required checks server side (test, coverage, e2e, gitleaks, tdd-order, agent-scope).
+# seven required checks server side (test, coverage, e2e, gitleaks, tdd-order, agent-scope, evals).
 #
 # The gate scripts and .gitleaks.toml are always read from a checkout of main (`trusted/`),
 # so a pull request cannot change the rules it is judged by.
@@ -296,6 +296,39 @@ jobs:
           --head "$HEAD_SHA"
           --branch "$BRANCH"
 
+  evals:
+    name: evals
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # Gate code and config come from main, never from the PR under test: a PR that
+      # rewrites a gate must still be judged by the gate as it is on main.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: main
+          path: trusted
+          sparse-checkout: evals
+          persist-credentials: false
+
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+        with:
+          version: ${{ env.UV_VERSION }}
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Replay evaluation gate
+        run: |
+          if [ -d trusted/evals ]; then
+            export EVALS_TRUSTED_DIR="$GITHUB_WORKSPACE/trusted/evals"
+            uv run --project agents --locked --with "pytest==$PYTEST_VERSION" python -m pytest -q -c /dev/null --rootdir trusted/evals --confcutdir trusted/evals trusted/evals/
+          else
+            echo "::error::trusted/evals missing on main"
+            exit 1
+          fi
+
   # Not a required check: the control center's unit, browser and accessibility tests. The browser
   # tests use the Playwright install of the app workspace.
   control-center:
@@ -354,7 +387,7 @@ jobs:
           scripts/gates scripts/tests/gates scripts/cd scripts/tests/cd
           scripts/setup_repo.py scripts/tests/test_setup_repo.py
           scripts/verify_egress.py scripts/tests/test_verify_egress.py
-          scripts/ui scripts/tests/ui
+          scripts/ui scripts/tests/ui evals
 
   # Not a required check: the Python agents package.
   agents:

@@ -43,7 +43,7 @@ from sdlc_agents.state import (
 MAX_REVIEW_REJECTIONS = 2
 MAX_CODER_ATTEMPTS = 8            # first build, two rebuilds after test repairs, two CI revisions, a review one
 MAX_CI_REVISIONS = 2              # red required checks on an agent PR: coder revise rounds before build-failed
-CI_REVISABLE = ("test", "coverage", "e2e")   # code failures; gitleaks, tdd-order, agent-scope escalate at once
+CI_REVISABLE = ("test", "coverage", "e2e")   # code failures; gitleaks, tdd-order, agent-scope, evals escalate at once
 MAX_TEST_REPAIRS = 2              # coder reported tests-invalid: designer repairs before agent-error
 CODER_DEADLINE_S = 7_200           # sent in every job; the coder stops itself at this point
 MAX_CODER_RESUMES = 3              # restarts of an interrupted job before giving up

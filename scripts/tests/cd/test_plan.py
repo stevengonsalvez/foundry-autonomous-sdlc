@@ -110,7 +110,7 @@ def check(
 
 
 def green_checks() -> list[dict]:
-    """The six required checks, green, and the optional CI jobs, one of them red."""
+    """The seven required checks, green, and the optional CI jobs, one of them red."""
     required = [check(name, run_id=i) for i, name in enumerate(plan.REQUIRED_CHECKS, 1)]
     return [
         *required,
@@ -411,7 +411,7 @@ def test_a_bad_soak_time_fails_the_plan_before_anything_is_staged(
 
 
 class TestRequiredChecks:
-    """CD waits for the six required checks, not for the CI workflow as a whole."""
+    """CD waits for the seven required checks, not for the CI workflow as a whole."""
 
     def test_the_list_is_the_one_the_ruleset_requires(self) -> None:
         from scripts import setup_repo
@@ -452,7 +452,7 @@ class TestRequiredChecks:
         gh.checks[gh.head] = [check("test"), check("gitleaks", "failure")]
         assert build(gh).reason == (
             "required checks are not green: coverage=missing, e2e=missing, "
-            "gitleaks=failure, tdd-order=missing, agent-scope=missing"
+            "gitleaks=failure, tdd-order=missing, agent-scope=missing, evals=missing"
         )
 
     def test_the_newest_attempt_of_a_check_decides(self) -> None:

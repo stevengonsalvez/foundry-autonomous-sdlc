@@ -1,0 +1,28 @@
+{
+  "prompt_sha256": "f5c2e19f70f6b7ead22a5f4d756b586b3858f76e8e63d075c00bdd8c8ee6ac5d",
+  "recorded_by": "manual",
+  "synthetic": true,
+  "synthetic_fields": [
+    "criteria",
+    "acceptance_criteria",
+    "questions",
+    "summary"
+  ],
+  "response": {
+    "criteria": {
+      "clear_goal": 20,
+      "testable_acceptance_criteria": 20,
+      "defined_scope": 19,
+      "edge_cases": 19
+    },
+    "score": 78,
+    "summary": "Accept tracking numbers case-insensitively by normalising inputs (trim, strip invisible chars, uppercase) across web UI and all API endpoints, while still rejecting genuinely malformed numbers and not migrating stored DB values.",
+    "acceptance_criteria": [
+      "Normalize tracking numbers across all surfaces"
+    ],
+    "questions": [
+      "Which surfaces should be changed: web UI only, API only, or both?"
+    ]
+  },
+  "raw_output": "{\"criteria\": {\"clear_goal\": 20, \"testable_acceptance_criteria\": 20, \"defined_scope\": 19, \"edge_cases\": 19}, \"score\": 78, \"summary\": \"Accept tracking numbers case-insensitively by normalising inputs (trim, strip invisible chars, uppercase) across web UI and all API endpoints, while still rejecting genuinely malformed numbers and not migrating stored DB values.\", \"acceptance_criteria\": [\"Normalize tracking numbers across all surfaces\"], \"questions\": [\"Which surfaces should be changed: web UI only, API only, or both?\"]}"
+}

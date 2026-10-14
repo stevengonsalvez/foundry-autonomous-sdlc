@@ -24,7 +24,7 @@ from urllib.parse import quote
 
 REPO = "stevengonsalvez/foundry-autonomous-sdlc"
 RULESET_NAME = "main-gates"
-REQUIRED_CHECKS = ("test", "coverage", "e2e", "gitleaks", "tdd-order", "agent-scope")
+REQUIRED_CHECKS = ("test", "coverage", "e2e", "gitleaks", "tdd-order", "agent-scope", "evals")
 GITHUB_ACTIONS_APP_ID = 15368  # pins each check to Actions, so a commit status cannot fake it
 
 # (name, description) by prefix group; the group decides the colour.

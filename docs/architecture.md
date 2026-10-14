@@ -202,7 +202,7 @@ Coder steps, all in code (the CLI only edits files):
 
 ## Gates
 
-CI jobs, all run on every pull request with no path filters so the names always report. These six are required status checks in the branch ruleset on `main`.
+CI jobs, all run on every pull request with no path filters so the names always report. These seven are required status checks in the branch ruleset on `main`.
 
 | Check | Passes when |
 |-------|-------------|
@@ -212,12 +212,15 @@ CI jobs, all run on every pull request with no path filters so the names always 
 | `gitleaks` | zero findings in the PR range and in the working tree |
 | `tdd-order` | see below |
 | `agent-scope` | for branches `agent/*`, every changed file is under `app/` |
+| `evals` | offline replay of recorded gate outputs against golden expectations passes with trusted checks |
+
+`evals`: offline replay of recorded prompt gate outputs against frozen golden expectations and mutation checks. Test code and golden expectations execute exclusively from the trusted default branch checkout (`trusted/evals` with `EVALS_TRUSTED_DIR`), while recordings and their prompt hashes are evaluated from the PR worktree. Future prompt gate re-recordings (such as T2) must store the real rendered input (`tick._issue_section`), not a simplified Title/Body query.
 
 `tdd-order` (script `scripts/gates/tdd_order.py`): for a branch named `agent/*`, list commits `base..head` oldest first and classify each as test-only (every changed file matches a test glob) or not. Pass when (a) the first commit is test-only, (b) no non-test commit precedes the last leading test-only commit, (c) the tip of the leading test-only commits fails `npm test` when run in a clean worktree, and that red is real: at least one assertion failure and no invalid failure (`ReferenceError`, `TypeError`, `SyntaxError`, `is not defined`, `is not a function`, `Cannot find module`, `Failed to resolve import`, a test file that fails to load) among the test files those commits added or changed, read from the vitest JSON report (result `tests-invalid-red` otherwise), and (d) later commits never modify or delete a test file that exists at that tip. A branch whose commits are all test-only (maintenance) passes with note `test-only`. Non-`agent/*` branches pass with note `not-agent-branch`.
 
 Test globs: `**/*.test.ts`, `**/*.test.tsx`, `**/*.spec.ts`, `app/e2e/**`, `**/tests/**`, `**/__fixtures__/**`.
 
-The orchestrator merges a PR only when all of the following hold on the PR head sha: all six checks `success`, a review marker `<!-- sdlc-review:v1 {"verdict":"approve","head":"<sha>"} -->` from the reviewer agent for exactly that sha, the PR and its issue are owner-authored, cost is under the cap, the branch is `agent/*` or the PR is labelled `maintenance:test-repair`, and every file the PR changes (including rename sources) is under `app/`. The last rule applies to every PR the orchestrator merges, because for `pull_request` events GitHub runs the workflow files from the PR head, so a PR touching `.github/` could weaken its own checks; a violation escalates `escalated:build-failed` at once. Check runs GitHub ties to the PR win over other runs on the same sha (a fork PR cannot override them). Merge method is a merge commit (keeps commit order visible on `main`). The ruleset enforces the six checks again server-side with no bypass actors, so the orchestrator cannot merge around them.
+The orchestrator merges a PR only when all of the following hold on the PR head sha: all seven checks `success`, a review marker `<!-- sdlc-review:v1 {"verdict":"approve","head":"<sha>"} -->` from the reviewer agent for exactly that sha, the PR and its issue are owner-authored, cost is under the cap, the branch is `agent/*` or the PR is labelled `maintenance:test-repair`, and every file the PR changes (including rename sources) is under `app/`. The last rule applies to every PR the orchestrator merges, because for `pull_request` events GitHub runs the workflow files from the PR head, so a PR touching `.github/` could weaken its own checks; a violation escalates `escalated:build-failed` at once. Check runs GitHub ties to the PR win over other runs on the same sha (a fork PR cannot override them). Merge method is a merge commit (keeps commit order visible on `main`). The ruleset enforces the seven checks again server-side with no bypass actors, so the orchestrator cannot merge around them.
 
 ## UI Testing and Proof
 
@@ -311,7 +314,7 @@ The record (`ledger/model.py`, pure functions) is derived from the state comment
 
 A change released before CD existed was published to the root by `pages.yml` straight from `main`; the ledger shows it in prod with one hop labelled `legacy-publish`, never as a fake staging pass.
 
-Fields: `issue`, `kind` (`issue` or `pr`), `title`, `type`, `scenario`, `url`, `opened_at`, `closed_at`, `updated_at`, `stage`, `sdlc_stage`, `env` (`none`, `staging`, `prod`, `rolled-back`), `escalation` (`label`, `reasons`, `attempts`, `tried`, `evidence_url`), `stage_history` (backlog first, each with `at` and `seconds`), `pr`, `commits`, `release`, `hops` (environment hops), `gates` (the six CI checks plus `smoke` and `soak`), `gate_history`, `cost` (`usd`, `model_usd`, `coder_usd`, `ledger_usd`, tokens, per-agent rows, `cap_used_pct` against 1 USD), `agent_runs`, `coder`, `qa` (refinement questions and answers, answers labelled as the simulated product owner), `reviews`, `ci_triage`, `quality`, `triage`, `feasibility`, `summary`, `flags`, `digest`. A model writes only `summary`; it is shown only while the ticket's digest still matches, and is dropped when it contains a number, link or markup that the facts do not (`ledger/summary.py`).
+Fields: `issue`, `kind` (`issue` or `pr`), `title`, `type`, `scenario`, `url`, `opened_at`, `closed_at`, `updated_at`, `stage`, `sdlc_stage`, `env` (`none`, `staging`, `prod`, `rolled-back`), `escalation` (`label`, `reasons`, `attempts`, `tried`, `evidence_url`), `stage_history` (backlog first, each with `at` and `seconds`), `pr`, `commits`, `release`, `hops` (environment hops), `gates` (the seven CI checks plus `smoke` and `soak`), `gate_history`, `cost` (`usd`, `model_usd`, `coder_usd`, `ledger_usd`, tokens, per-agent rows, `cap_used_pct` against 1 USD), `agent_runs`, `coder`, `qa` (refinement questions and answers, answers labelled as the simulated product owner), `reviews`, `ci_triage`, `quality`, `triage`, `feasibility`, `summary`, `flags`, `digest`. A model writes only `summary`; it is shown only while the ticket's digest still matches, and is dropped when it contains a number, link or markup that the facts do not (`ledger/summary.py`).
 
 ### state.json
 

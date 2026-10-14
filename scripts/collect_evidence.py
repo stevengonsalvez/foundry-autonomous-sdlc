@@ -1,7 +1,7 @@
 """Collect the proof for the final report into docs/evidence.md, straight from GitHub.
 
 For every owner-authored issue and every maintenance PR it records the stage timeline, the pull
-request, the commit order (tests before implementation), the six CI checks on the head commit, the
+request, the commit order (tests before implementation), the seven CI checks on the head commit, the
 review verdict, the merge, the release and the cost, plus the totals and gate pass rates from the
 metrics branch. Read only: it never writes to GitHub.
 
@@ -22,7 +22,7 @@ from pathlib import Path
 REPO = "stevengonsalvez/foundry-autonomous-sdlc"
 OWNER = "stevengonsalvez"
 ROOT = Path(__file__).resolve().parent.parent
-GATES = ("test", "coverage", "e2e", "gitleaks", "tdd-order", "agent-scope")
+GATES = ("test", "coverage", "e2e", "gitleaks", "tdd-order", "agent-scope", "evals")
 STATE = re.compile(r"<!-- sdlc-state:v1\s*(.*?)-->", re.DOTALL)
 REVIEW = re.compile(r"<!-- sdlc-review:v1 (\{.*?\}) -->")
 Api = Callable[[str], object]

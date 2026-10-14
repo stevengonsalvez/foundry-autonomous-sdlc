@@ -1,0 +1,28 @@
+{
+  "prompt_sha256": "f5c2e19f70f6b7ead22a5f4d756b586b3858f76e8e63d075c00bdd8c8ee6ac5d",
+  "recorded_by": "manual",
+  "synthetic": true,
+  "synthetic_fields": [
+    "criteria",
+    "acceptance_criteria",
+    "questions",
+    "summary"
+  ],
+  "response": {
+    "criteria": {
+      "clear_goal": 2,
+      "testable_acceptance_criteria": 1,
+      "defined_scope": 1,
+      "edge_cases": 1
+    },
+    "score": 5,
+    "summary": "Add a client-side \"Filter by status\" control on the web UI (app/web and app/core) so recipients can quickly find a single parcel.",
+    "acceptance_criteria": [
+      "Specify concrete improvements to parcel tracker"
+    ],
+    "questions": [
+      "Which specific users or personas should benefit from this change?"
+    ]
+  },
+  "raw_output": "{\"criteria\": {\"clear_goal\": 2, \"testable_acceptance_criteria\": 1, \"defined_scope\": 1, \"edge_cases\": 1}, \"score\": 5, \"summary\": \"Add a client-side \\\"Filter by status\\\" control on the web UI (app/web and app/core) so recipients can quickly find a single parcel.\", \"acceptance_criteria\": [\"Specify concrete improvements to parcel tracker\"], \"questions\": [\"Which specific users or personas should benefit from this change?\"]}"
+}

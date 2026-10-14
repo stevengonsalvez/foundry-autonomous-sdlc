@@ -53,7 +53,7 @@ HOP_STATUSES = ("in_progress", "success", "failed", "rolled_back", "skipped")
 DEPLOY_FAILED_LABEL = "escalated:deploy-failed"
 
 # Which gate names the cost-free CI checks and CD steps report.
-GATE_NAMES = ("test", "coverage", "e2e", "gitleaks", "tdd-order", "agent-scope", "review", "smoke", "soak")
+GATE_NAMES = ("test", "coverage", "e2e", "gitleaks", "tdd-order", "agent-scope", "evals", "review", "smoke", "soak")
 
 RESOLVED_BY = ("simulated-human", "human", "system")
 RESOLVED_HOW = ("closed", "answered", "superseded")

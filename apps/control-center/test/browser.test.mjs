@@ -486,8 +486,9 @@ describe('views', { skip }, () => {
     assert.match(hops[0], /Deployed to staging/);
     assert.match(hops[1], /Skipped on staging/);
     assert.match(hops[2], /Promoted to production/);
-    assert.equal(await page.locator('#gates .gate').count(), 9);
-    assert.equal(await page.locator('#gates .gate-pass').count(), 9, 'all nine gates read as passed');
+    assert.equal(await page.locator('#gates .gate').count(), 10);
+    assert.equal(await page.locator('#gates .gate-pass').count(), 9, 'nine gates passed, evals not run');
+    assert.match(await text(page, '#gates'), /Evaluations\s+Not run/);
     assert.ok(await page.locator('#timeline svg.chart').count());
     assert.match(await text(page, '#cost'), /\$0\.08/);
     await page.setViewportSize({ width: 390, height: 800 });

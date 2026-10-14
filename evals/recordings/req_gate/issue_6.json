@@ -1,0 +1,28 @@
+{
+  "prompt_sha256": "f5c2e19f70f6b7ead22a5f4d756b586b3858f76e8e63d075c00bdd8c8ee6ac5d",
+  "recorded_by": "manual",
+  "synthetic": true,
+  "synthetic_fields": [
+    "criteria",
+    "acceptance_criteria",
+    "questions",
+    "summary"
+  ],
+  "response": {
+    "criteria": {
+      "clear_goal": 15,
+      "testable_acceptance_criteria": 15,
+      "defined_scope": 15,
+      "edge_cases": 15
+    },
+    "score": 60,
+    "summary": "Replace the production carrier integration with the new vendor, rotate production credentials/certificates, update production firewall and DNS to use the new gateway, and obtain vendor written sign-off for the cut\u2011over.",
+    "acceptance_criteria": [
+      "Plan cut-over to new carrier gateway without downtime"
+    ],
+    "questions": [
+      "How do you define no downtime quantitatively for this cut-over?"
+    ]
+  },
+  "raw_output": "{\"criteria\": {\"clear_goal\": 15, \"testable_acceptance_criteria\": 15, \"defined_scope\": 15, \"edge_cases\": 15}, \"score\": 60, \"summary\": \"Replace the production carrier integration with the new vendor, rotate production credentials/certificates, update production firewall and DNS to use the new gateway, and obtain vendor written sign-off for the cut\\u2011over.\", \"acceptance_criteria\": [\"Plan cut-over to new carrier gateway without downtime\"], \"questions\": [\"How do you define no downtime quantitatively for this cut-over?\"]}"
+}

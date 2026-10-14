@@ -88,7 +88,7 @@ az keyvault secret list --vault-name "$KV" --query "[].name" -o tsv
 
 ## 5. Repository settings
 
-Labels, Pages and Actions settings, then the branch ruleset with the six required checks:
+Labels, Pages and Actions settings, then the branch ruleset with the seven required checks:
 
 ```bash
 python3 scripts/setup_repo.py --phase bootstrap --dry-run
@@ -448,7 +448,7 @@ Findings from the security review of the coder (2026-10-10) that remain by desig
 Orchestrator findings (fail-open spend, trust boundary; 2026-10-10) that remain by design:
 
 - A per-issue spend floor from `metrics.json` only covers objects still listed: if a human both strips an issue's pipeline labels and deletes its state comment, its per-issue figure restarts, but `totals.usd` (and so the 22 USD halt) never decreases, and the issue gets no further spend unless it is relabelled.
-- The `checks` and `head` sections of the reviewer input are trusted: they hold only the head sha, the PR number, the six check names and GitHub's own conclusion values; branch names, titles, bodies, commits, diffs and logs are passed as untrusted data.
+- The `checks` and `head` sections of the reviewer input are trusted: they hold only the head sha, the PR number, the seven check names and GitHub's own conclusion values; branch names, titles, bodies, commits, diffs and logs are passed as untrusted data.
 - MCP agents can ask `get_file_contents` for any repository the `github-mcp` PAT can read, which is every repository of the account: the orchestrator only narrows this (one read-only tool, a two to four call budget, a prompt rule naming this repository, schema validation and sanitising before anything is posted); it cannot technically prevent a cross-repository read.
 - A coder status that cannot be read is billed as estimated time (wall clock since start, less 15 minutes of normal poll gap), which can over-count briefly; over-counting only stops spend earlier.
 - The `github-mcp` connection carries the same fine-grained PAT, which covers all repositories of the account (not just this one) and can write. The connection sends `X-MCP-Readonly: true` (the GitHub MCP server's read-only mode) and the prompt agents may call only `get_file_contents`, on this repository by instruction; reads of other repositories are prevented only by that instruction and the read-only header. No human is in the loop to mint another token; the follow-up is a separate read-only PAT scoped to this repository for the connection.

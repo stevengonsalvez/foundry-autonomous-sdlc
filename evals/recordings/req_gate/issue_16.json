@@ -1,0 +1,28 @@
+{
+  "prompt_sha256": "f5c2e19f70f6b7ead22a5f4d756b586b3858f76e8e63d075c00bdd8c8ee6ac5d",
+  "recorded_by": "manual",
+  "synthetic": true,
+  "synthetic_fields": [
+    "criteria",
+    "acceptance_criteria",
+    "questions",
+    "summary"
+  ],
+  "response": {
+    "criteria": {
+      "clear_goal": 2,
+      "testable_acceptance_criteria": 1,
+      "defined_scope": 1,
+      "edge_cases": 1
+    },
+    "score": 5,
+    "summary": "Add a client-side 'Filter by status' control on the home-page parcel list with URL query handling and defined error messaging, and show estimated delivery date on the parcel detail page (UI changes only).",
+    "acceptance_criteria": [
+      "Clarify requirements for parcel tracker improvements"
+    ],
+    "questions": [
+      "Which specific user persona should benefit and what tasks should be easier?"
+    ]
+  },
+  "raw_output": "{\"criteria\": {\"clear_goal\": 2, \"testable_acceptance_criteria\": 1, \"defined_scope\": 1, \"edge_cases\": 1}, \"score\": 5, \"summary\": \"Add a client-side 'Filter by status' control on the home-page parcel list with URL query handling and defined error messaging, and show estimated delivery date on the parcel detail page (UI changes only).\", \"acceptance_criteria\": [\"Clarify requirements for parcel tracker improvements\"], \"questions\": [\"Which specific user persona should benefit and what tasks should be easier?\"]}"
+}
