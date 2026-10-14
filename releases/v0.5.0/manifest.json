@@ -1,0 +1,62 @@
+{
+  "version": 1,
+  "head_sha": "2d014c7387673fc282b4848b18636f9a64c53642",
+  "screenshots": [
+    {
+      "filename": "home-desktop.png",
+      "route": "home",
+      "viewport": "desktop",
+      "sha256": "5a0318dda600442f9d8c79d6cb5cde7759f77b08065a64cd8af818eb0169c1fb",
+      "size": 114305
+    },
+    {
+      "filename": "parcel-found-desktop.png",
+      "route": "parcel-found",
+      "viewport": "desktop",
+      "sha256": "9226075e0092e26d7f24e862efb80ea9a09b93518a3744bee528691758094196",
+      "size": 107594
+    },
+    {
+      "filename": "not-found-desktop.png",
+      "route": "not-found",
+      "viewport": "desktop",
+      "sha256": "85a1bc4cededc2a33733894de74eac7718e6f34e8e2ff0a3c990da451d41eeaa",
+      "size": 69424
+    },
+    {
+      "filename": "invalid-input-desktop.png",
+      "route": "invalid-input",
+      "viewport": "desktop",
+      "sha256": "dea585c18d72606665eba6149bad429297c61f0979b0a19338d29d4b3402dac7",
+      "size": 69832
+    },
+    {
+      "filename": "home-mobile.png",
+      "route": "home",
+      "viewport": "mobile",
+      "sha256": "520595966121bae2a207f09f99d8b34ab05a3846fca450bc2de7ff80331a8010",
+      "size": 71580
+    },
+    {
+      "filename": "parcel-found-mobile.png",
+      "route": "parcel-found",
+      "viewport": "mobile",
+      "sha256": "ea3f577b17b4201c4802e4da1f2100267c36374448bb8a526f3b70e7c66dd562",
+      "size": 80610
+    },
+    {
+      "filename": "not-found-mobile.png",
+      "route": "not-found",
+      "viewport": "mobile",
+      "sha256": "893678496e3a2c2113e17d23a13c882e1f554dceba5759aae44a6d10a7338ff0",
+      "size": 42502
+    },
+    {
+      "filename": "invalid-input-mobile.png",
+      "route": "invalid-input",
+      "viewport": "mobile",
+      "sha256": "2c9322d3ddeb3560754dac9f9931861bcdc0610f1245a6f7c71b14e94d79a752",
+      "size": 43716
+    }
+  ]
+}
