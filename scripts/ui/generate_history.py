@@ -949,26 +949,40 @@ def render_html(
     then_img_html = ""
     if oldest_entry:
         tag_q = html.escape(oldest_entry["tag"], quote=True)
-        fn_desktop = html.escape(
-            oldest_entry["screenshots"].get("home", {}).get("desktop", "home-desktop.png"),
-            quote=True,
-        )
-        then_img_html = (
-            f'<img src="./screenshots/{tag_q}/{fn_desktop}" alt="{tag_q} home desktop" '
-            f'loading="lazy" width="600" height="375" />'
-        )
+        desktop_fn = oldest_entry.get("screenshots", {}).get("home", {}).get("desktop")
+        if oldest_entry.get("reproducible") and desktop_fn:
+            fn_desktop = html.escape(desktop_fn, quote=True)
+            then_img_html = (
+                f'<img src="./screenshots/{tag_q}/{fn_desktop}" alt="{tag_q} home desktop" '
+                f'loading="lazy" width="600" height="375" />'
+            )
+        else:
+            reason = html.escape(oldest_entry.get("not_reproducible_reason") or "not captured")
+            then_img_html = (
+                f'<div class="not-reproducible-box">'
+                f'<span class="badge-alert">Not Reproducible</span>'
+                f'<p>Reason: {reason}</p>'
+                f'</div>'
+            )
 
     now_img_html = ""
     if newest_entry:
         tag_q = html.escape(newest_entry["tag"], quote=True)
-        fn_desktop = html.escape(
-            newest_entry["screenshots"].get("home", {}).get("desktop", "home-desktop.png"),
-            quote=True,
-        )
-        now_img_html = (
-            f'<img src="./screenshots/{tag_q}/{fn_desktop}" alt="{tag_q} home desktop" '
-            f'loading="lazy" width="600" height="375" />'
-        )
+        desktop_fn = newest_entry.get("screenshots", {}).get("home", {}).get("desktop")
+        if newest_entry.get("reproducible") and desktop_fn:
+            fn_desktop = html.escape(desktop_fn, quote=True)
+            now_img_html = (
+                f'<img src="./screenshots/{tag_q}/{fn_desktop}" alt="{tag_q} home desktop" '
+                f'loading="lazy" width="600" height="375" />'
+            )
+        else:
+            reason = html.escape(newest_entry.get("not_reproducible_reason") or "not captured")
+            now_img_html = (
+                f'<div class="not-reproducible-box">'
+                f'<span class="badge-alert">Not Reproducible</span>'
+                f'<p>Reason: {reason}</p>'
+                f'</div>'
+            )
 
     # Build timeline items HTML
     timeline_items_html: list[str] = []
@@ -1334,6 +1348,9 @@ def build_history_site(
             oldest = entries[-1]
             if oldest.get("reproducible"):
                 rendered_tags.add(oldest["tag"])
+            newest = entries[0]
+            if newest.get("reproducible"):
+                rendered_tags.add(newest["tag"])
 
         for tag_name in sorted(rendered_tags):
             src_tag_dir = screenshots_dir / tag_name

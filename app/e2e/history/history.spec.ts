@@ -35,7 +35,7 @@ test.beforeAll(async () => {
   const routes = ["home", "parcel-found", "not-found", "invalid-input"];
   const viewports = ["desktop", "mobile"];
 
-  for (const tag of ["v0.1.0", "v0.4.0"]) {
+  for (const tag of ["v0.1.0", "v0.4.0", "v0.5.0"]) {
     const tagDir = path.join(tempScreenshotsDir, tag);
     fs.mkdirSync(tagDir, { recursive: true });
     const screenshots = [];
@@ -89,8 +89,12 @@ test.beforeAll(async () => {
       if (fs.existsSync(filePath) && fs.statSync(filePath).isFile()) {
         const ext = path.extname(filePath).toLowerCase();
         const contentType = MIME_TYPES[ext] ?? "application/octet-stream";
-        res.writeHead(200, { "Content-Type": contentType });
-        fs.createReadStream(filePath).pipe(res);
+        const content = fs.readFileSync(filePath);
+        res.writeHead(200, {
+          "Content-Type": contentType,
+          "Content-Length": content.length,
+        });
+        res.end(content);
       } else {
         res.writeHead(404);
         res.end("Not Found");
