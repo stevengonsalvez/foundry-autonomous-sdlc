@@ -16,8 +16,11 @@ import {
   gateOutcome,
   gateStatus,
   isNewer,
+  isOpenEscalation,
+  openEscalations,
   pipelineChain,
   releaseRows,
+  resolvedEscalations,
   rollbackRows,
   scenarioRows,
   sortRows,
@@ -29,6 +32,7 @@ import {
   withPending,
 } from '../js/model.js';
 import { pendingFromIssues } from '../js/data.js';
+import { parseState } from '../js/schema.js';
 import { NOW, rawIssues, sampleState } from './helpers.mjs';
 
 const ticket = (state, n) => state.tickets.find((t) => t.issue === n);
@@ -38,23 +42,23 @@ test('board columns match the ledger counts, in board order', () => {
   const cols = boardColumns(state, [], emptyFilters(), NOW);
   assert.deepEqual(cols.map((c) => c.stage), state.board_stages);
   for (const c of cols) assert.equal(c.tickets.length, state.flow.counts[c.stage], c.stage);
-  assert.equal(cols.reduce((n, c) => n + c.tickets.length, 0), 22);
+  assert.equal(cols.reduce((n, c) => n + c.tickets.length, 0), 6);
 });
 
 test('filters: type, number, title, finished-and-old', () => {
   const state = sampleState();
   const count = (filters) => boardColumns(state, [], filters, NOW).reduce((n, c) => n + c.tickets.length, 0);
-  assert.equal(count({ ...emptyFilters(), types: new Set(['bug']) }), 4);
-  assert.equal(count({ ...emptyFilters(), types: new Set(['bug', 'maintenance']) }), 9);
+  assert.equal(count({ ...emptyFilters(), types: new Set(['bug']) }), 1);
+  assert.equal(count({ ...emptyFilters(), types: new Set(['bug', 'maintenance']) }), 2);
   assert.equal(count({ ...emptyFilters(), query: '24' }), 1);
   assert.equal(count({ ...emptyFilters(), query: '#24' }), 1);
-  assert.equal(count({ ...emptyFilters(), query: 'lowercase' }), 4);
-  assert.equal(count({ ...emptyFilters(), query: 'LOWERCASE tracking' }), 4);
+  assert.equal(count({ ...emptyFilters(), query: 'lowercase' }), 1);
+  assert.equal(count({ ...emptyFilters(), query: 'LOWERCASE tracking' }), 1);
   assert.equal(count({ ...emptyFilters(), query: 'zzz' }), 0);
-  assert.equal(count({ ...emptyFilters(), hideOld: true }), 22, 'nothing is older than 7 days yet');
+  assert.equal(count({ ...emptyFilters(), hideOld: true }), 6, 'nothing is older than 7 days yet');
   const later = NOW + 10 * 86_400_000;
   const hidden = boardColumns(state, [], { ...emptyFilters(), hideOld: true }, later).reduce((n, c) => n + c.tickets.length, 0);
-  assert.ok(hidden < 22 && hidden >= 1, `finished old tickets are hidden (left ${hidden})`);
+  assert.ok(hidden < 6 && hidden >= 1, `finished old tickets are hidden (left ${hidden})`);
   assert.ok(boardColumns(state, [], { ...emptyFilters(), hideOld: true }, later).find((c) => c.stage === 'staging').tickets.length === 1, 'unfinished tickets stay');
 });
 
@@ -160,6 +164,10 @@ test('billing story: the gap in plain words, honest when unread', () => {
 
 test('cost rows sort and flag over-cap', () => {
   const state = sampleState();
+  const t23 = state.tickets.find((t) => t.issue === 23);
+  if (t23) t23.cost.cap_used_pct = 120;
+  const t27 = state.tickets.find((t) => t.issue === 27);
+  if (t27) t27.cost.cap_used_pct = 80;
   const rows = costRows(state);
   const top = sortRows(rows, 'usd', 'desc')[0];
   assert.equal(top.issue, 27);
@@ -177,6 +185,36 @@ test('escalations newest first, with the rollback one included', () => {
   assert.ok(list.some((t) => t.issue === 25));
   const times = list.map((t) => Date.parse(t.escalation.at));
   assert.deepEqual(times, [...times].sort((a, b) => b - a));
+  assert.equal(openEscalations(state).length, 2);
+  assert.equal(resolvedEscalations(state).length, 16);
+  const resTimes = resolvedEscalations(state).map((t) => Date.parse(t.escalation.resolved.at));
+  assert.deepEqual(resTimes, [...resTimes].sort((a, b) => b - a));
+  assert.equal(isOpenEscalation(list.find((t) => t.issue === 25)), true);
+  assert.equal(isOpenEscalation(list.find((t) => t.issue === 2)), false);
+});
+
+test('old state without resolved field normalizes safely and renders', () => {
+  const raw = sampleState();
+  for (const t of raw.tickets) {
+    if (t.escalation) {
+      delete t.escalation.resolved;
+      delete t.escalation.open;
+    }
+  }
+  const res = parseState(raw);
+  assert.equal(res.status, 'ok');
+  const parsed = res.state;
+  for (const t of parsed.tickets) {
+    if (t.escalation) {
+      assert.equal(t.escalation.resolved, null);
+      assert.equal(t.escalation.open, true);
+      assert.equal(isOpenEscalation(t), true);
+    }
+  }
+  const cols = boardColumns(parsed, [], emptyFilters(), NOW);
+  assert.equal(cols.find((c) => c.stage === 'escalated').tickets.length, 18);
+  assert.equal(openEscalations(parsed).length, 18);
+  assert.equal(resolvedEscalations(parsed).length, 0);
 });
 
 test('trail groups: questions, reviews, CI triage, filterable', () => {

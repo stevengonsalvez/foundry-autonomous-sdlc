@@ -763,7 +763,7 @@
   "counts": {
    "backlog": 0,
    "building": 0,
-   "escalated": 18,
+   "escalated": 2,
    "feasible": 0,
    "prod": 3,
    "refining": 0,
@@ -909,28 +909,28 @@
   },
   "mode": "hosted",
   "recent_ids": [
-   "1bf92dd0d4cfdc31",
-   "b4765efa89569deb",
-   "88124266fa03dc98",
-   "6d7fabde8c9d67f3",
-   "2d7443cf71f625d9",
-   "36256458d476523e",
-   "08b436a6342bfa5f",
-   "d43ec08b11298973",
-   "49ed43a369063c6d",
-   "e063fab05253a9c7",
-   "38ea85514cdb287d",
-   "a267d2de329b6093",
-   "ea8af0f91b3c4299",
-   "a4c85b75a38beaef",
-   "f5242379b960d63d",
-   "f2ef6e0678a50b3f",
-   "75a68909e7723fa0",
-   "f9ab0a2cdb504d38",
-   "80b060a2760f6f5d",
-   "7963c76bca123669",
-   "1cb11209cb389b23",
-   "c20164347c496dbf",
+   "593b72fb974ad769",
+   "c10b6fa7f6818c16",
+   "fb865fd8d39d64bf",
+   "f22129fc9213ab33",
+   "698db94b3fce1a85",
+   "fa44cc18fbba693d",
+   "1afe68a45b19e7d3",
+   "977b8ed286588468",
+   "ba1c6c2809ea82a6",
+   "04172881d415f2ae",
+   "46905c735eba32d0",
+   "b43dd9570a367170",
+   "e43a1eef31c92539",
+   "3f5e3a7467e342f1",
+   "fcdf7911936d9ba3",
+   "83d8c4274f74a090",
+   "c73b8d62c28a08c2",
+   "ca95e38bf407cb96",
+   "22341d6da1740b94",
+   "f5426f14addb8389",
+   "69850d9e5d13ff46",
+   "b38f377165cbc428",
    "3ce8bbe0b06b03d7",
    "354bec80b474ed08",
    "109a09fc55afe7c8",
@@ -980,16 +980,22 @@
     "total_usd": 0.001248,
     "usd": 0.001248
    },
-   "digest": "6f56f6694468",
+   "digest": "51f9617ce8a3",
    "env": "none",
    "escalation": {
     "at": "2026-10-10T12:27:47Z",
     "attempts": 0,
     "evidence_url": "https://github.com/stevengonsalvez/foundry-autonomous-sdlc/issues/2#issuecomment-6097462947",
     "label": "escalated:not-agent-suitable",
+    "open": false,
     "reasons": [
      "feasibility failed 3 times: AgentRunError: sdlc-feasibility: HTTP 429: Error code: 429 - {'error': {'code': 'rate_limit_exceeded', 'message': 'Model deployment rate limit exceeded. Your requests to gpt-5-mini for sdlc-default in uksouth have exceeded token rate limit.. To request more quota, see ..."
     ],
+    "resolved": {
+     "at": "2026-10-10T12:28:43Z",
+     "by": "human",
+     "how": "closed"
+    },
     "tried": [
      "Requirement scored 100/100 after 0 refinement round(s)."
     ]
@@ -1113,17 +1119,23 @@
     "total_usd": 0.017287,
     "usd": 0.017287
    },
-   "digest": "b69119eb155d",
+   "digest": "dc556544cb55",
    "env": "none",
    "escalation": {
     "at": "2026-10-10T12:59:33Z",
     "attempts": 1,
     "evidence_url": "https://github.com/stevengonsalvez/foundry-autonomous-sdlc/issues/4#issuecomment-6097499821",
     "label": "escalated:build-failed",
+    "open": false,
     "reasons": [
      "coder failed (max-iterations) in phase implement",
      "154 tests: 1 failed, 153 passed, 0 files failed to load"
     ],
+    "resolved": {
+     "at": "2026-10-10T13:15:45Z",
+     "by": "human",
+     "how": "closed"
+    },
     "tried": [
      "Requirement scored 100/100 after 0 refinement round(s).",
      "Feasibility: suitable, risk low.",
@@ -1295,17 +1307,23 @@
     "total_usd": 0.02651,
     "usd": 0.02651
    },
-   "digest": "19f1c0e7e8a2",
+   "digest": "f8a903290d87",
    "env": "none",
    "escalation": {
     "at": "2026-10-10T13:16:01Z",
     "attempts": 1,
     "evidence_url": "https://github.com/stevengonsalvez/foundry-autonomous-sdlc/issues/5#issuecomment-6097500819",
     "label": "escalated:build-failed",
+    "open": false,
     "reasons": [
      "coder failed (max-iterations) in phase implement",
      "157 tests: 5 failed, 152 passed, 0 files failed to load"
     ],
+    "resolved": {
+     "at": "2026-10-10T15:22:15Z",
+     "by": "human",
+     "how": "closed"
+    },
     "tried": [
      "Requirement scored 98/100 after 1 refinement round(s).",
      "Feasibility: suitable, risk medium.",
@@ -1497,19 +1515,25 @@
     "total_usd": 0.007688,
     "usd": 0.007688
    },
-   "digest": "4b0b2f4ac3fe",
+   "digest": "b8beb5bc2c71",
    "env": "none",
    "escalation": {
     "at": "2026-10-10T12:54:01Z",
     "attempts": 0,
     "evidence_url": "https://github.com/stevengonsalvez/foundry-autonomous-sdlc/issues/6#issuecomment-6097502431",
     "label": "escalated:not-agent-suitable",
+    "open": false,
     "reasons": [
      "Requires production credentials, secrets and certificate rotation (sensitive operations not possible inside app/)",
      "Requires infrastructure changes (firewall allow-lists and DNS) and rollback on live systems outside the repository",
      "Needs coordination and written sign-off with an external vendor/account manager (third‑party agreement)",
      "Requires platform/Ops and SRE/Engineering Manager involvement and access to production key store and systems"
     ],
+    "resolved": {
+     "at": "2026-10-10T15:22:17Z",
+     "by": "human",
+     "how": "closed"
+    },
     "tried": [
      "Requirement scored 87/100 after 1 refinement round(s).",
      "Feasibility: not suitable, risk high."
@@ -1698,17 +1722,23 @@
     "total_usd": 0.017121,
     "usd": 0.017121
    },
-   "digest": "af65807efb15",
+   "digest": "94ac9c6c030a",
    "env": "none",
    "escalation": {
     "at": "2026-10-10T12:59:36Z",
     "attempts": 1,
     "evidence_url": "https://github.com/stevengonsalvez/foundry-autonomous-sdlc/issues/7#issuecomment-6097503094",
     "label": "escalated:build-failed",
+    "open": false,
     "reasons": [
      "coder failed (max-iterations) in phase implement",
      "154 tests: 2 failed, 152 passed, 0 files failed to load"
     ],
+    "resolved": {
+     "at": "2026-10-10T13:15:47Z",
+     "by": "human",
+     "how": "closed"
+    },
     "tried": [
      "Requirement scored 80/100 after 0 refinement round(s).",
      "Feasibility: suitable, risk low.",
@@ -1864,17 +1894,23 @@
     "total_usd": 0.036404,
     "usd": 0.036404
    },
-   "digest": "02cbe561f3cd",
+   "digest": "0c434899c16e",
    "env": "none",
    "escalation": {
     "at": "2026-10-10T13:23:29Z",
     "attempts": 1,
     "evidence_url": "https://github.com/stevengonsalvez/foundry-autonomous-sdlc/issues/8#issuecomment-6097891035",
     "label": "escalated:build-failed",
+    "open": false,
     "reasons": [
      "coder failed (engines-exhausted) in phase implement",
      "every engine in the chain failed"
     ],
+    "resolved": {
+     "at": "2026-10-10T13:54:16Z",
+     "by": "human",
+     "how": "closed"
+    },
     "tried": [
      "Requirement scored 100/100 after 0 refinement round(s).",
      "Feasibility: suitable, risk low.",
@@ -2058,17 +2094,23 @@
     "total_usd": 0.032339,
     "usd": 0.032339
    },
-   "digest": "d0928fe9da22",
+   "digest": "9496a2569a45",
    "env": "none",
    "escalation": {
     "at": "2026-10-10T13:24:32Z",
     "attempts": 1,
     "evidence_url": "https://github.com/stevengonsalvez/foundry-autonomous-sdlc/issues/9#issuecomment-6097891870",
     "label": "escalated:build-failed",
+    "open": false,
     "reasons": [
      "coder failed (max-iterations) in phase implement",
      "155 tests: 3 failed, 152 passed, 0 files failed to load"
     ],
+    "resolved": {
+     "at": "2026-10-10T13:54:19Z",
+     "by": "human",
+     "how": "closed"
+    },
     "tried": [
      "Requirement scored 95/100 after 1 refinement round(s).",
      "Feasibility: suitable, risk medium.",
@@ -2261,17 +2303,23 @@
     "total_usd": 0.083069,
     "usd": 0.083069
    },
-   "digest": "458482445bdd",
+   "digest": "27f2d06e9854",
    "env": "none",
    "escalation": {
     "at": "2026-10-10T14:12:50Z",
     "attempts": 1,
     "evidence_url": "https://github.com/stevengonsalvez/foundry-autonomous-sdlc/issues/10#issuecomment-6098209873",
     "label": "escalated:build-failed",
+    "open": false,
     "reasons": [
      "coder failed (max-iterations) in phase implement",
      "126 tests: 2 failed, 124 passed, 3 files failed to load"
     ],
+    "resolved": {
+     "at": "2026-10-10T14:36:49Z",
+     "by": "human",
+     "how": "closed"
+    },
     "tried": [
      "Requirement scored 100/100 after 0 refinement round(s).",
      "Feasibility: suitable, risk low.",
@@ -2424,17 +2472,23 @@
     "total_usd": 0.00857,
     "usd": 0.00857
    },
-   "digest": "1691b91fda6b",
+   "digest": "be3e6090cd7c",
    "env": "none",
    "escalation": {
     "at": "2026-10-10T14:42:42Z",
     "attempts": 1,
     "evidence_url": "https://github.com/stevengonsalvez/foundry-autonomous-sdlc/issues/11#issuecomment-6098615963",
     "label": "escalated:build-failed",
+    "open": false,
     "reasons": [
      "coder failed (scope-violation) in phase setup",
      "install created symlinks or links leaving the checkout (removed): app/node_modules/`@parcel/api`, app/node_modules/`@parcel/carrier-mock`, app/node_modules/`@parcel/contracts`, app/node_modules/`@parcel/core`, app/node_modules/`@parcel/e2e`, app/node_modules/`@parcel/web`"
     ],
+    "resolved": {
+     "at": "2026-10-10T14:53:50Z",
+     "by": "human",
+     "how": "closed"
+    },
     "tried": [
      "Requirement scored 100/100 after 0 refinement round(s).",
      "Feasibility: suitable, risk low.",
@@ -2613,7 +2667,7 @@
     "total_usd": 0.074565,
     "usd": 0.073015
    },
-   "digest": "d74eddb5b5b9",
+   "digest": "c153c0a1f0f7",
    "env": "prod",
    "escalation": null,
    "feasibility": {
@@ -2871,16 +2925,22 @@
     "total_usd": 0.045963,
     "usd": 0.045963
    },
-   "digest": "480680cfbed3",
+   "digest": "958f6777aa70",
    "env": "none",
    "escalation": {
     "at": "2026-10-10T15:55:16Z",
     "attempts": 1,
     "evidence_url": "https://github.com/stevengonsalvez/foundry-autonomous-sdlc/issues/15#issuecomment-6099070352",
     "label": "escalated:build-failed",
+    "open": false,
     "reasons": [
      "required checks failed on 9ad5e89: test, e2e"
     ],
+    "resolved": {
+     "at": "2026-10-10T16:42:31Z",
+     "by": "human",
+     "how": "closed"
+    },
     "tried": [
      "Requirement scored 93/100 after 0 refinement round(s).",
      "Feasibility: suitable, risk low.",
@@ -3084,17 +3144,23 @@
     "total_usd": 0.091895,
     "usd": 0.091895
    },
-   "digest": "512f5fe62867",
+   "digest": "9e56b6f3a26a",
    "env": "none",
    "escalation": {
     "at": "2026-10-10T16:05:14Z",
     "attempts": 1,
     "evidence_url": "https://github.com/stevengonsalvez/foundry-autonomous-sdlc/issues/16#issuecomment-6099071296",
     "label": "escalated:build-failed",
+    "open": false,
     "reasons": [
      "coder failed (max-iterations) in phase implement",
      "126 tests: 0 failed, 126 passed, 4 files failed to load"
     ],
+    "resolved": {
+     "at": "2026-10-10T16:42:34Z",
+     "by": "human",
+     "how": "closed"
+    },
     "tried": [
      "Requirement scored 95/100 after 1 refinement round(s).",
      "Feasibility: suitable, risk medium.",
@@ -3292,19 +3358,21 @@
     "total_usd": 0.015305,
     "usd": 0.015305
    },
-   "digest": "998cf4a1faea",
+   "digest": "a03d3323b51c",
    "env": "none",
    "escalation": {
     "at": "2026-10-10T15:45:50Z",
     "attempts": 0,
     "evidence_url": "https://github.com/stevengonsalvez/foundry-autonomous-sdlc/issues/17#issuecomment-6099072665",
     "label": "escalated:not-agent-suitable",
+    "open": true,
     "reasons": [
      "Requires production credentials, certificates and secret rotation in live keystore",
      "Needs firewall, DNS and infrastructure changes outside the app/ workspace",
      "Requires coordination and written sign-off from an external vendor (account manager)",
      "Requires operational cut-over, monitoring, and rollback automation in production environments"
     ],
+    "resolved": null,
     "tried": [
      "Requirement scored 90/100 after 1 refinement round(s).",
      "Feasibility: not suitable, risk high."
@@ -3511,17 +3579,23 @@
     "total_usd": 0.123206,
     "usd": 0.123206
    },
-   "digest": "f24289b66e03",
+   "digest": "710b3da957e9",
    "env": "none",
    "escalation": {
     "at": "2026-10-10T16:20:14Z",
     "attempts": 1,
     "evidence_url": "https://github.com/stevengonsalvez/foundry-autonomous-sdlc/issues/18#issuecomment-6099073370",
     "label": "escalated:build-failed",
+    "open": false,
     "reasons": [
      "coder failed (max-iterations) in phase implement",
      "121 tests: 0 failed, 121 passed, 3 files failed to load"
     ],
+    "resolved": {
+     "at": "2026-10-10T16:42:36Z",
+     "by": "human",
+     "how": "closed"
+    },
     "tried": [
      "Requirement scored 100/100 after 1 refinement round(s).",
      "Feasibility: suitable, risk medium.",
@@ -3756,7 +3830,7 @@
     "total_usd": 0.066426,
     "usd": 0.066426
    },
-   "digest": "8d07092ee70d",
+   "digest": "f7ee2ff7ef52",
    "env": "none",
    "escalation": null,
    "feasibility": {
@@ -4032,7 +4106,7 @@
     "total_usd": 0.083172,
     "usd": 0.081622
    },
-   "digest": "c6126292cc5d",
+   "digest": "a00ab6c24150",
    "env": "prod",
    "escalation": null,
    "feasibility": {
@@ -4368,16 +4442,18 @@
     "total_usd": 0.036788,
     "usd": 0.036788
    },
-   "digest": "bbad1a1820f9",
+   "digest": "f05a1c9a09bb",
    "env": "rolled-back",
    "escalation": {
     "at": "2026-10-10T17:15:00Z",
     "attempts": 0,
     "evidence_url": "https://github.com/stevengonsalvez/foundry-autonomous-sdlc/actions/runs/3",
     "label": "escalated:deploy-failed",
+    "open": true,
     "reasons": [
      "smoke failed on staging"
     ],
+    "resolved": null,
     "synthetic": true,
     "tried": []
    },
@@ -4610,17 +4686,23 @@
     "total_usd": 0.137488,
     "usd": 0.137488
    },
-   "digest": "f49c77b5a8fd",
+   "digest": "20fe38bb6570",
    "env": "none",
    "escalation": {
     "at": "2026-10-10T18:10:17Z",
     "attempts": 1,
     "evidence_url": "https://github.com/stevengonsalvez/foundry-autonomous-sdlc/pull/27#issuecomment-6100622758",
     "label": "escalated:build-failed",
+    "open": false,
     "reasons": [
      "coder failed (scope-violation) in phase implement",
      "reverted out-of-scope edits: app/web/tests/home-page.test.tsx, app/web/tests/parcel-page.test.tsx"
     ],
+    "resolved": {
+     "at": "2026-10-10T18:17:12Z",
+     "by": "human",
+     "how": "closed"
+    },
     "tried": [
      "Coder job j-pr27-1: failed, engine agy-unrestricted, 2 iteration(s), attempt 1."
     ]
@@ -4747,17 +4829,23 @@
     "total_usd": 0.023086,
     "usd": 0.023086
    },
-   "digest": "d270332226dc",
+   "digest": "771b86836b8a",
    "env": "none",
    "escalation": {
     "at": "2026-10-10T18:35:16Z",
     "attempts": 1,
     "evidence_url": "https://github.com/stevengonsalvez/foundry-autonomous-sdlc/pull/33#issuecomment-6100853937",
     "label": "escalated:build-failed",
+    "open": false,
     "reasons": [
      "coder failed (max-iterations) in phase implement",
      "136 tests: 0 failed, 136 passed, 2 files failed to load"
     ],
+    "resolved": {
+     "at": "2026-10-10T18:42:13Z",
+     "by": "human",
+     "how": "closed"
+    },
     "tried": [
      "Coder job j-pr33-1: failed, engine loop, 5 iteration(s), attempt 1."
     ]
@@ -4884,16 +4972,22 @@
     "total_usd": 0.06731,
     "usd": 0.06731
    },
-   "digest": "37518011a242",
+   "digest": "1e804a5ad8dc",
    "env": "none",
    "escalation": {
     "at": "2026-10-10T19:55:16Z",
     "attempts": 1,
     "evidence_url": "https://github.com/stevengonsalvez/foundry-autonomous-sdlc/pull/36#issuecomment-6101350093",
     "label": "escalated:build-failed",
+    "open": false,
     "reasons": [
      "required checks failed on 6b13130: e2e"
     ],
+    "resolved": {
+     "at": "2026-10-10T20:07:08Z",
+     "by": "human",
+     "how": "closed"
+    },
     "tried": [
      "Coder job j-pr36-1: succeeded, engine agy-unrestricted, 2 iteration(s), attempt 1."
     ]
@@ -5051,16 +5145,22 @@
     "total_usd": 0.06352,
     "usd": 0.06352
    },
-   "digest": "1605daac3eff",
+   "digest": "8da16cdfc899",
    "env": "none",
    "escalation": {
     "at": "2026-10-10T21:20:18Z",
     "attempts": 6,
     "evidence_url": "https://github.com/stevengonsalvez/foundry-autonomous-sdlc/pull/38#issuecomment-6101702616",
     "label": "escalated:build-failed",
+    "open": false,
     "reasons": [
      "pull request #38 closed without merge"
     ],
+    "resolved": {
+     "at": "2026-10-10T21:20:18Z",
+     "by": "human",
+     "how": "closed"
+    },
     "tried": [
      "Coder job j-pr38-6: succeeded, engine n/a, 0 iteration(s), attempt 6.",
      "Reviewer verdict: request-changes."
@@ -5325,7 +5425,7 @@
     "total_usd": 0.04632,
     "usd": 0.04342
    },
-   "digest": "fb22c913447b",
+   "digest": "dfe747c4359c",
    "env": "prod",
    "escalation": null,
    "feasibility": null,

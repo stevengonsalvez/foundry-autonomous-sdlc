@@ -60,7 +60,7 @@ schema_version="$(sed -n 's/^export const SCHEMA_VERSION = \([0-9][0-9]*\);.*/\1
 check_dist() {
   local dist="$1" label="$2" reserved
   [ -f "$dist/index.html" ] || die "$label build has no index.html: $dist"
-  for reserved in dashboard staging control-center; do
+  for reserved in dashboard staging control-center history; do
     [ ! -e "$dist/$reserved" ] || die "$label build already contains a $reserved path: $dist/$reserved"
   done
   if [ -e "$dist/build.json" ]; then
@@ -113,6 +113,25 @@ if [ -n "$cc_src" ] && [ -f "$cc_src/index.html" ]; then
   control_center_note="control center published at /control-center/"
 fi
 
+# 2c. App evolution history: build /history/ at Pages build time from origin/pr-screenshots:releases/*
+history_note="no app history source, /history/ is not published"
+pr_screenshots_dir="${PR_SCREENSHOTS_DIR:-}"
+state_path="${STATE_PATH:-}"
+
+if [ -n "$pr_screenshots_dir" ] && [ -d "$pr_screenshots_dir/releases" ]; then
+  mkdir -p "$out/history"
+  echo "building /history/ from pr-screenshots releases..."
+  state_args=()
+  if [ -n "$state_path" ] && [ -f "$state_path" ]; then
+    state_args=(--state "$state_path")
+  fi
+  python3 "$repo_root/scripts/ui/generate_history.py" \
+    --output-dir "$out/history" \
+    --screenshots-dir "$pr_screenshots_dir/releases" \
+    "${state_args[@]}"
+  history_note="app history built at /history/ from pr-screenshots releases"
+fi
+
 # 3. Metrics, only when present and readable by this dashboard version
 metrics_note="no metrics checkout given, dashboard will show its no-data state"
 if [ -n "$metrics_dir" ]; then
@@ -133,7 +152,7 @@ touch "$out/.nojekyll"
 
 # Guard rail: nothing test-shaped, and no symlink, may reach the published site from the two
 # source-copied apps (built apps are checked by check_dist).
-for copied in dashboard control-center; do
+for copied in dashboard control-center history; do
   [ -d "$out/$copied" ] || continue
   leaks="$(cd "$out/$copied" && find . \( -iname '*fixture*' -o -iname '*.sample.json' -o -iname '*.test.*' -o -name test -o -name node_modules -o -name package.json -o -name README.md -o -type l \) -print)"
   if [ -n "$leaks" ]; then
@@ -142,8 +161,18 @@ for copied in dashboard control-center; do
   fi
 done
 
+# Extended guard rail for history screenshots: untrusted data must only contain png and manifest.json
+if [ -d "$out/history/screenshots" ]; then
+  bad_files="$(cd "$out/history/screenshots" && find . -type f ! -name '*.png' ! -name 'manifest.json' -print)"
+  if [ -n "$bad_files" ]; then
+    echo "$bad_files" >&2
+    die "refusing to publish: disallowed file types found in history/screenshots: $bad_files"
+  fi
+fi
+
 echo "$staging_note"
 echo "$control_center_note"
+echo "$history_note"
 echo "$metrics_note"
 echo "published tree ($out):"
 (cd "$out" && find . -type f | sort | sed 's|^\./|  |')

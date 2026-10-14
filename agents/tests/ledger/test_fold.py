@@ -8,8 +8,8 @@ from typing import Any
 
 import pytest
 
-from sdlc_agents.ledger import events, fold
-from tests.ledger.conftest import NOW, ticket_event
+from sdlc_agents.ledger import events, fold, model
+from tests.ledger.conftest import NOW, ticket_event, ticket_of
 
 
 def deploy_doc(history: list[dict[str, Any]], **extra: Any) -> dict[str, Any]:
@@ -157,7 +157,7 @@ def test_flow_metrics_cover_lead_time_gates_defects_and_counts(real) -> None:
     assert flow["lead_time"]["median_s"] > 0 and {x["issue"] for x in flow["lead_time"]["by_ticket"]} >= {12, 24, 25}
     assert flow["gate_first_pass"]["test"]["total"] >= 3
     assert any(d["issue"] == 25 and d["severity"] == "s3" and d["owner"] == "api" for d in flow["defects"])
-    assert sum(flow["counts"].values()) == 22 and flow["counts"]["prod"] == 5 and flow["counts"]["escalated"] == 17
+    assert sum(flow["counts"].values()) == 6 and flow["counts"]["prod"] == 5 and flow["counts"]["escalated"] == 1
 
 
 def test_agents_view_lists_the_ten_agents_and_the_ledger(real) -> None:
@@ -358,3 +358,91 @@ def test_a_release_flagged_by_cd_without_a_state_comment_still_says_why_and_link
         and esc["evidence_url"].endswith("/runs/7")
         and esc["tried"]
     )
+
+
+def test_escalation_resolution_recomputed_on_fold_and_does_not_stick(real) -> None:
+    # 1. Ticket with resolved escalation
+    t17 = copy.deepcopy(ticket_of(real[17]))
+    t17["escalation"]["resolved"] = {"at": "2026-10-10T16:00:00Z", "by": "simulated-human", "how": "closed"}
+    t17["escalation"]["open"] = False
+    ev_resolved = events.make("ticket.updated", t17["updated_at"], {"ticket": t17}, issue=17, source="reconcile")
+    doc1 = fold.fold([ev_resolved], NOW)
+    folded17 = next(t for t in doc1["tickets"] if t["issue"] == 17)
+    assert folded17["escalation"]["resolved"] is not None
+    assert folded17["escalation"]["open"] is False
+    assert doc1["flow"]["counts"]["escalated"] == 0
+
+    # 2. Re-opened / re-escalated ticket arriving later (without resolved) must NOT stick via _keep_richer
+    t17_reopened = copy.deepcopy(t17)
+    t17_reopened["closed_at"] = None
+    t17_reopened["updated_at"] = "2026-10-14T20:00:00Z"
+    t17_reopened["escalation"] = {
+        "label": "escalated:not-agent-suitable",
+        "reasons": ["reopened and escalated again"],
+        "at": "2026-10-14T20:00:00Z",
+        "attempts": 0,
+        "tried": [],
+        "evidence_url": t17["url"],
+        "resolved": None,
+        "open": True,
+    }
+    ev_reopened = events.make(
+        "ticket.updated", "2026-10-14T20:00:00Z", {"ticket": t17_reopened}, issue=17, source="orchestrator"
+    )
+    doc2 = fold.fold([ev_resolved, ev_reopened], NOW)
+    folded17_reopened = next(t for t in doc2["tickets"] if t["issue"] == 17)
+    assert folded17_reopened["escalation"]["resolved"] is None
+    assert folded17_reopened["escalation"]["open"] is True
+    assert doc2["flow"]["counts"]["escalated"] == 1
+
+    # Determinism: rebuilding from scratch produces identical state
+    doc3 = fold.fold([ev_resolved, ev_reopened], NOW)
+    assert doc2 == doc3
+
+
+def test_old_state_json_without_resolved_backwards_compatible(real) -> None:
+    # Simulate an old state where tickets have escalation without "resolved" key
+    ev17 = ticket_event(real[17])
+    # Deliberately remove resolved and open from event ticket data
+    ev17["data"]["ticket"]["escalation"].pop("resolved", None)
+    ev17["data"]["ticket"]["escalation"].pop("open", None)
+
+    doc = fold.fold([ev17], NOW)
+    t17 = next(t for t in doc["tickets"] if t["issue"] == 17)
+    assert "resolved" in t17["escalation"]
+    assert t17["escalation"]["resolved"] is None
+    assert t17["escalation"]["open"] is True
+
+
+def test_rollback_on_ticket_with_earlier_resolved_escalation_replaces_with_open_synthetic_escalation(
+    real,
+) -> None:
+    item = copy.deepcopy(real[12])
+    sha = item["state_data"]["pr"]["merge_sha"]
+    t = ticket_of(item)
+    t["escalation"] = {
+        "label": "escalated:build-failed",
+        "reasons": ["earlier build failure"],
+        "at": "2026-10-10T14:00:00Z",
+        "attempts": 1,
+        "tried": [],
+        "evidence_url": t["url"],
+        "resolved": {"at": "2026-10-10T14:30:00Z", "by": "human", "how": "closed"},
+        "open": False,
+    }
+    t_ev = events.make("ticket.updated", "2026-10-10T14:30:00Z", {"ticket": t}, issue=12)
+    first = hop("stage", "f" * 40, "2026-10-09T10:00:00Z")
+    history = [
+        first,
+        hop("stage", sha, "2026-10-10T15:20:00Z", pr=13, issue=12),
+        hop("rollback", sha, "2026-10-10T15:30:00Z", pr=13, issue=12, reason="smoke failed on staging"),
+    ]
+    doc = fold.fold([t_ev, env_event(deploy_doc(history), "2026-10-10T15:30:00Z")], NOW)
+    ticket12 = doc["tickets"][0]
+    assert ticket12["env"] == "rolled-back"
+    assert ticket12["stage"] == "escalated"
+    assert ticket12["escalation"]["label"] == model.DEPLOY_FAILED_LABEL
+    assert ticket12["escalation"]["synthetic"] is True
+    assert ticket12["escalation"]["resolved"] is None
+    assert ticket12["escalation"]["open"] is True
+    assert "smoke failed on staging" in ticket12["escalation"]["reasons"][0]

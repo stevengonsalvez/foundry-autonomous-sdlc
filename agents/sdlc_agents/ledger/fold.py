@@ -343,7 +343,7 @@ def overlay(ticket: dict[str, Any], deploy: dict[str, Any] | None) -> dict[str, 
                 "CD built the release, deployed it to staging and ran the smoke tests.",
                 "The failed gate triggered the automatic rollback to the previous artifact.",
             ]
-    if env == "rolled-back" and esc is None:
+    if env == "rolled-back" and (esc is None or esc.get("resolved") is not None):
         last = next((h for h in reversed(hops) if h["status"] in ("rolled_back", "failed")), hops[-1])
         t["escalation"] = {
             "label": model.DEPLOY_FAILED_LABEL,
@@ -353,6 +353,8 @@ def overlay(ticket: dict[str, Any], deploy: dict[str, Any] | None) -> dict[str, 
             "tried": [],
             "evidence_url": last.get("run_url") or t["url"],
             "synthetic": True,
+            "resolved": None,
+            "open": True,
         }
         label = model.DEPLOY_FAILED_LABEL
     sdlc = t["sdlc_stage"]
@@ -567,7 +569,14 @@ def _flow(doc: dict[str, Any], now: str) -> dict[str, Any]:
     releases = _releases(doc.get("deploy"))
     failed = sum(1 for r in releases if r["outcome"] == "failed")
     done = sum(1 for r in releases if r["outcome"] in ("ok", "failed"))
-    counts = {s: sum(1 for t in tickets if t["stage"] == s) for s in model.BOARD_STAGES}
+    counts = {
+        s: sum(
+            1
+            for t in tickets
+            if t["stage"] == s and (s != "escalated" or (t.get("escalation") or {}).get("resolved") is None)
+        )
+        for s in model.BOARD_STAGES
+    }
     return {
         "generated_at": now,
         "lead_time": {
@@ -624,6 +633,10 @@ def finalise(doc: dict[str, Any], now: str) -> dict[str, Any]:
     tickets = []
     for t in doc["tickets"]:
         t = overlay(t, doc.get("deploy"))
+        if t.get("escalation"):
+            res = model.clean_resolved(t["escalation"].get("resolved"))
+            t["escalation"]["resolved"] = res
+            t["escalation"]["open"] = res is None
         saved = doc.get("summaries", {}).get(str(t["issue"]))
         if saved and saved.get("digest") == t.get("digest"):
             t["summary"] = saved["text"]

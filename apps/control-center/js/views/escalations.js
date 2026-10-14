@@ -2,7 +2,7 @@
 
 import { badge, emptyState, ghLink, h, timeEl } from '../dom.js';
 import { escalationLabel, formatInteger, plural } from '../format.js';
-import { escalationList } from '../model.js';
+import { openEscalations, resolvedEscalations } from '../model.js';
 import { dataLink } from '../safe.js';
 import { envBadgeFor, externalLabel, flagBadges, pageHead, ticketHref, ticketRef, typeBadge } from './common.js';
 
@@ -10,9 +10,10 @@ import { envBadgeFor, externalLabel, flagBadges, pageHead, ticketHref, ticketRef
 export function escalationCard(ticket, nowMs, { header = true } = {}) {
   const esc = ticket.escalation;
   const evidence = dataLink(esc.evidence_url);
+  const resolved = esc.resolved;
   return h(
     'article',
-    { class: 'esc-card', 'aria-label': `Escalation: ${escalationLabel(esc.label)}` },
+    { class: resolved ? 'esc-card esc-card-resolved' : 'esc-card', 'aria-label': `Escalation: ${escalationLabel(esc.label)}` },
     h(
       'header',
       { class: 'esc-head' },
@@ -20,7 +21,8 @@ export function escalationCard(ticket, nowMs, { header = true } = {}) {
       h(
         'div',
         { class: 'esc-tags' },
-        badge(escalationLabel(esc.label), 'bad'),
+        badge(escalationLabel(esc.label), resolved ? 'neutral' : 'bad'),
+        resolved ? badge(`Resolved: ${resolved.how}`, 'good') : null,
         h('code', { class: 'esc-code' }, esc.label),
         header ? [typeBadge(ticket.type), envBadgeFor(ticket), ...flagBadges(ticket.flags)] : null,
       ),
@@ -29,6 +31,19 @@ export function escalationCard(ticket, nowMs, { header = true } = {}) {
       'dl',
       { class: 'esc-meta' },
       h('div', null, h('dt', null, 'Escalated'), h('dd', null, esc.at ? timeEl(esc.at, nowMs) : '-')),
+      resolved
+        ? h(
+            'div',
+            null,
+            h('dt', null, 'Resolved'),
+            h(
+              'dd',
+              null,
+              `${resolved.how} by ${resolved.by}`,
+              resolved.at ? [' ', timeEl(resolved.at, nowMs)] : null,
+            ),
+          )
+        : null,
       h('div', null, h('dt', null, 'Agent attempts'), h('dd', null, formatInteger(esc.attempts))),
       h('div', null, h('dt', null, 'Evidence'), h('dd', null, evidence ? ghLink(evidence, externalLabel('Open evidence'), { class: 'ext' }) : h('span', { class: 'muted' }, 'none recorded'))),
     ),
@@ -54,14 +69,31 @@ export function escalationCard(ticket, nowMs, { header = true } = {}) {
 
 export function renderEscalations(ctx) {
   const { state, now } = ctx;
-  const list = escalationList(state);
+  const open = openEscalations(state);
+  const resolved = resolvedEscalations(state);
   return h(
     'div',
     { class: 'view' },
     pageHead({
       title: 'Escalations',
-      lede: list.length ? `${formatInteger(list.length)} ${plural(list.length, 'ticket')} stopped for a human, newest first.` : 'Tickets the pipeline stopped on and handed to a human.',
+      lede: open.length
+        ? `${formatInteger(open.length)} ${plural(open.length, 'ticket')} stopped for a human, newest first.`
+        : 'Tickets the pipeline stopped on and handed to a human.',
     }),
-    list.length === 0 ? emptyState('Nothing escalated', 'Every ticket is moving, or has finished. Escalations appear here the moment an agent gives up.') : h('div', { class: 'esc-list' }, ...list.map((t) => escalationCard(t, now))),
+    open.length === 0 && resolved.length === 0
+      ? emptyState('Nothing escalated', 'Every ticket is moving, or has finished. Escalations appear here the moment an agent gives up.')
+      : [
+          open.length === 0
+            ? emptyState('No open escalations', 'All escalations have been resolved.')
+            : h('div', { class: 'esc-list' }, ...open.map((t) => escalationCard(t, now))),
+          resolved.length > 0
+            ? h(
+                'details',
+                { class: 'disclosure esc-resolved-disclosure' },
+                h('summary', null, `Resolved (${formatInteger(resolved.length)})`),
+                h('div', { class: 'esc-list esc-resolved-list' }, ...resolved.map((t) => escalationCard(t, now))),
+              )
+            : null,
+        ],
   );
 }

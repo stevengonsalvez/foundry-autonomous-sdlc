@@ -166,6 +166,121 @@ def test_reconcile_rebuilds_tickets_from_github_and_is_quiet_when_nothing_change
     assert again["ok"] and types.count("ticket.updated") == 2
 
 
+def test_reconcile_emits_no_events_when_only_updated_at_changed(real) -> None:
+    gh = FakeGitHub(Clock())
+    item = real[6]
+    number = gh.open_issue(item["title"], "body", labels=tuple(item["labels"]))
+    gh.create_comment(number, state.render(state.State(item["state_data"])))
+    led, store = ledger(github=gh)
+    first = led.handle({"op": "reconcile"})
+    assert first["ok"] and first["tickets"] == 1
+    types1 = [json.loads(line)["type"] for line in store.files[EVENTS_FILE].splitlines()]
+    assert types1.count("ticket.updated") == 1
+
+    # Bump updated_at on the issue: digest must stay unchanged and reconcile emits 0 events
+    gh.issues[number]["updated_at"] = "2026-10-12T10:00:00Z"
+    second = led.handle({"op": "reconcile"})
+    assert second["ok"]
+    types2 = [json.loads(line)["type"] for line in store.files[EVENTS_FILE].splitlines()]
+    assert types2.count("ticket.updated") == 1
+
+
+def test_reconcile_open_issue_with_escalated_label_and_marker_stays_open_across_reconciles(real) -> None:
+    gh = FakeGitHub(Clock())
+    item = real[6]
+    state_data = {
+        **item["state_data"],
+        "escalation": {
+            "label": "escalated:cost-cap",
+            "at": "2026-10-10T12:00:00Z",
+            "reasons": ["Cost cap exceeded"],
+        },
+    }
+    number = gh.open_issue(item["title"], "body", labels=("escalated:cost-cap",))
+    gh.create_comment(number, state.render(state.State(state_data)))
+    gh.clock.advance(600.0)
+    gh.create_comment(number, "### Simulated human (antigravity)\nLooking into the budget.")
+
+    led, store = ledger(github=gh)
+
+    # First reconcile
+    first = led.handle({"op": "reconcile"})
+    assert first["ok"]
+    doc1 = json.loads(store.files[STATE_FILE])
+    t1 = next(t for t in doc1["tickets"] if t["issue"] == number)
+    assert t1["stage"] == "escalated"
+    assert t1["escalation"]["resolved"] is None
+    assert t1["escalation"]["open"] is True
+    assert doc1["flow"]["counts"]["escalated"] == 1
+
+    # Second reconcile (previous is the output of the first run)
+    second = led.handle({"op": "reconcile"})
+    assert second["ok"]
+    doc2 = json.loads(store.files[STATE_FILE])
+    t2 = next(t for t in doc2["tickets"] if t["issue"] == number)
+    assert t2["stage"] == "escalated"
+    assert t2["escalation"]["resolved"] is None
+    assert t2["escalation"]["open"] is True
+    assert doc2["flow"]["counts"]["escalated"] == 1
+
+
+def test_reconcile_closed_then_reopened_issue_stays_open_across_reconciles(real) -> None:
+    gh = FakeGitHub(Clock())
+    item = real[17]
+    state_data = {
+        **item["state_data"],
+        "escalation": {
+            "label": "escalated:agent-error",
+            "at": "2026-10-10T12:00:00Z",
+            "reasons": ["Agent error"],
+        },
+    }
+    number = gh.open_issue(item["title"], "body", labels=("escalated:agent-error",))
+    gh.create_comment(number, state.render(state.State(state_data)))
+    gh.create_comment(number, "### Simulated human (antigravity)\nClosing this issue.")
+    gh.issues[number]["state"] = "closed"
+    gh.issues[number]["closed_at"] = "2026-10-10T13:00:00Z"
+
+    led, store = ledger(github=gh)
+
+    # First reconcile: issue is closed, escalation resolves
+    first = led.handle({"op": "reconcile"})
+    assert first["ok"]
+    doc1 = json.loads(store.files[STATE_FILE])
+    t1 = next(t for t in doc1["tickets"] if t["issue"] == number)
+    assert t1["escalation"]["resolved"] == {
+        "at": "2026-10-10T13:00:00Z",
+        "by": "simulated-human",
+        "how": "closed",
+    }
+    assert t1["escalation"]["open"] is False
+
+    # Issue is now reopened in GitHub (closed_at is cleared, label remains)
+    gh.issues[number]["state"] = "open"
+    gh.issues[number]["closed_at"] = None
+    gh.issues[number]["updated_at"] = "2026-10-10T14:00:00Z"
+
+    # Second reconcile: issue is now open and has escalated:agent-error label
+    second = led.handle({"op": "reconcile"})
+    assert second["ok"]
+    doc2 = json.loads(store.files[STATE_FILE])
+    t2 = next(t for t in doc2["tickets"] if t["issue"] == number)
+    assert t2["stage"] == "escalated"
+    assert t2["escalation"]["resolved"] is None
+    assert t2["escalation"]["open"] is True
+    assert doc2["flow"]["counts"]["escalated"] == 1
+
+    # Third reconcile: previous is output of second run; must STILL stay open
+    third = led.handle({"op": "reconcile"})
+    assert third["ok"]
+    doc3 = json.loads(store.files[STATE_FILE])
+    t3 = next(t for t in doc3["tickets"] if t["issue"] == number)
+    assert t3["stage"] == "escalated"
+    assert t3["escalation"]["resolved"] is None
+    assert t3["escalation"]["open"] is True
+    assert doc3["flow"]["counts"]["escalated"] == 1
+
+
 def test_fold_of_the_written_log_equals_the_written_state(real) -> None:
     led, store = ledger()
     led.handle({"op": "ingest", "events": [ticket_event(real[12]), ticket_event(real[24]), ticket_event(real[17])]})

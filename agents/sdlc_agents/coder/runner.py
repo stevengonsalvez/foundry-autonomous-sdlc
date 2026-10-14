@@ -1022,9 +1022,19 @@ class CoderService:
     def _settle(self, state: JobState | None) -> JobState | None:
         """A job recorded as running with no live thread in this process was killed by an eviction."""
         if state is not None and state.status is Status.RUNNING and not self._alive_locked(state.job_id):
+            fresh = self._store.load(state.job_id)
+            if fresh is not None and fresh.status is not Status.RUNNING:
+                return fresh
+            entry = self._threads.get(state.job_id)
+            if entry is not None:
+                entry[0].join(timeout=1.0)
+                fresh = self._store.load(state.job_id)
+                if fresh is not None and fresh.status is not Status.RUNNING:
+                    return fresh
             state.status = Status.FAILED
             state.reason = "interrupted"
             state.detail = "the session restarted while the job ran; start the same job_id to resume"
             self._store.save(state)
             self._store.log(state.job_id, "marked interrupted: no live worker for a running job")
         return state
+

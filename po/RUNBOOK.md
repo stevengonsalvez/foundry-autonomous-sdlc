@@ -21,7 +21,7 @@ The Simulated Human loop is an automated counterpart that replaces the human pro
 ```
 
 The persona operates with four primary hats:
-1. **Product Owner**: Assesses the repository state, control center, and open work to file exactly ONE high-value improvement with testable acceptance criteria tied to a real gap, strictly when the pipeline is idle.
+1. **Product Owner**: Selects the NEXT unblocked improvement from `po/ROADMAP.md` by dependency order and files exactly ONE high-value improvement with testable acceptance criteria, strictly when the pipeline is idle. When fewer than 5 `todo` items remain, logs a one-line extension request to the run log; files no issue.
 2. **Requirements Answerer**: Answers clarification questions from `sdlc-req-gate` on issues in `stage:needs-refinement`.
 3. **Triage Lead**: Assigns severity and component ownership (`owner:web`, `owner:api`, `owner:carrier-mock`) to incoming defects.
 4. **Escalation Owner**: Resolves escalations under strict guardrails: reframes or closes `escalated:not-agent-suitable`, closes or parks `escalated:cost-cap` without raising caps, and files targeted fix issues for `escalated:deploy-failed` (CD rollbacks) without re-releasing the failed build.
@@ -47,8 +47,9 @@ The loop participates in the repository state machine using these exact labels:
 | | `escalated:cost-cap` | Issue exceeded 3.00 USD cap. Persona parks or closes. NEVER raises cap. |
 | | `escalated:deploy-failed` | CD smoke or soak failed; build rolled back. Persona comments findings and files fix issue. |
 | | `escalated:requirements` | Two refinement rounds failed to reach 80. Persona reframes or closes. |
-| | `escalated:build-failed` | Coder exhausted attempts or CI check timeout. Persona reviews diagnostics. |
-| | `escalated:agent-error` | Non-transient failure streak. Persona investigates. |
+| | `escalated:build-failed` | Coder exhausted attempts or CI check timeout. Persona posts failure findings with `<!-- po-answered:v1 -->` and closes the issue to unblock pipeline. |
+| | `escalated:review-failed` | PR review failed with unresolved comments. Persona posts findings with `<!-- po-answered:v1 -->` and closes the issue. |
+| | `escalated:agent-error` | Agent output streak failure (e.g. invalid test generation). Persona posts finding with `<!-- po-answered:v1 -->` and closes issue. |
 | **Triage** | `bug:triaged`, `severity:s1`..`s4`, `owner:web`, `owner:api`, `owner:carrier-mock` | Applied by Triage Lead hat on `type:bug` issues. |
 | **Type** | `type:feature`, `type:bug`, `type:maintenance` | Work item type categorization. |
 
@@ -87,10 +88,10 @@ Every execution cycle enforces the following security boundaries (verified by `s
    - Permitted commands:
      - `gh issue create`, `gh issue comment`, `gh issue edit`, `gh issue close`, `gh issue list`, `gh issue view`
      - `gh pr list`, `gh pr view` (read-only)
-     - `gh api` (GET requests only on this repository)
-     - `git fetch origin state`, `git show origin/state:state.json`
-     - `jq`, `cat`
-   - *Credential Risk Note*: The machine uses an account-wide `gh` CLI credential. This accepted risk is mitigated by strictly enforcing the command allow-list in the persona definition and automated lint checks.
+     - `gh api --method GET repos/stevengonsalvez/foundry-autonomous-sdlc/*` (read-only endpoints only)
+     - `git fetch origin main state`, `git show origin/state:state.json`, `git show origin/main:po/ROADMAP.md`
+     - `jq` (stdin filter only, never with file arguments)
+   - *Credential Risk Note*: The machine uses an account-wide `gh` CLI credential. This accepted risk is mitigated by strictly enforcing the command allow-list in the persona definition and automated lint checks (`scripts/po/lint_persona.sh`), which enforce a strict deny-list preventing write commands, PR merges, or unauthorized access to other repositories.
 5. **Spend Cap Protection**:
    - NEVER raise a spend cap.
    - NEVER instruct the orchestrator to continue past the 22.00 USD halt limit.
@@ -99,23 +100,61 @@ Every execution cycle enforces the following security boundaries (verified by `s
    - NEVER instruct a re-release of a rolled-back build.
    - Retrying deployment is permitted only after a NEW fix PR exists and passes all 6 gates on main.
    - The persona posts failure findings on the ticket and files a dedicated fix issue.
-7. **Single Issue Intake**:
+7. **Single Issue Intake and Deduplication**:
    - At most ONE new issue filed per scheduled run, and only when the repository is verified idle.
-   - Requires conventional title, problem description, testable acceptance criteria, and explicit link to a real gap in `app/`, `apps/control-center`, `docs`, `scenarios`, or `scripts`.
+   - Requires conventional title, problem description, testable acceptance criteria, and explicit link to a real gap in `app/`.
+   - Check open issues and recent closed issues before creating a new one.
+   - Check existing issues idempotently via `gh issue list --author stevengonsalvez --state all --search '"Roadmap item: ITEM-0NN" in:body'`.
+   - Every roadmap issue body must contain the exact marker line: `Roadmap item: ITEM-0NN`.
+   - *Taxonomy Requirement*: The repository maintainer must ensure label `simulated-human` exists in GitHub taxonomy before execution. If missing, the persona logs `BLOCKED: label simulated-human missing, maintainer must create it` and plans no command.
 
 ---
 
-## 5. Memory Conventions (`po/MEMORY.md`)
+## 5. Product Roadmap (`po/ROADMAP.md`) and Progressive Backlog
+
+The continuous self-building loop operates from an ordered, progressive product roadmap defined in `po/ROADMAP.md`. Rather than inventing random or disconnected tasks, the simulated human advances the parcel tracker (`app/`) along a coherent architectural and user-experience progression.
+
+### Backlog Structure:
+Each item in `po/ROADMAP.md` is structured with:
+- **Identifier**: Standard prefix (`ITEM-001`, `ITEM-002`, ...).
+- **Title**: Conventional commit style (`feat(web): ...` or `feat(api): ...`).
+- **User Value**: Concrete user or stakeholder benefit.
+- **Testable Acceptance Criteria**: Numbered, deterministic criteria with exact values and assertions (minimum 3 words each, no TBDs).
+- **Files Touched**: Strictly restricted to paths under `app/` (`app/core`, `app/contracts`, `app/carrier-mock`, `app/api`, `app/web`, `app/e2e`). Every line must be backtick-enclosed (`- \`app/...\``). Agent pull requests touching files outside `app/` are blocked by the `agent-scope` gate.
+- **Dependencies**: Explicit list of prerequisite item IDs that must be completed before the item becomes eligible for intake.
+- **Cost Class**:
+  - `S`: Small, focused change (single component, isolated helper, or test addition), budget under 1.00 USD (observed spend ~0.02 to 0.15 USD per ticket).
+  - `M`: Multi-component or cross-workspace change (storage persistence, i18n translation, responsive layout refactors, API pagination), budget 1.00 to 3.00 USD (observed spend ~0.15 to 0.32 USD per ticket; well within the 3.00 USD per-issue cap).
+- **Tags**: Functional groupings (`ui`, `accessibility`, `timeline`, `api`, `storage`, `theme`).
+- **Status**: `todo`, `filed`, or `done`.
+
+### Intake and Selection Algorithm:
+1. **Canonical Source from origin/main**: The persona runs `git fetch origin main` and reads the roadmap via `git show origin/main:po/ROADMAP.md`. Because the persona runs in a persistent, resumed session, reading from `origin/main` ensures it immediately picks up newly merged roadmap PRs without relying on stale local worktree state.
+2. **Dependency Resolution**: When the repository is idle and within spend limits, the persona inspects the roadmap and verifies candidate dependencies against GitHub issues. A dependency counts as satisfied ONLY when its corresponding issue carries label `stage:released` or `stage:merged` (or status is `done` in the roadmap), NOT when merely filed.
+3. **Deduplication Check**: The persona searches GitHub via `gh issue list --author stevengonsalvez --state all --search '"Roadmap item: ITEM-0NN" in:body'` to verify the candidate item has not already been filed or closed.
+4. **Sequential Pick**: The persona takes the first unblocked `todo` item in sequential order that has not been filed.
+5. **Issue Creation**: The persona generates an issue containing the title, marker line `Roadmap item: ITEM-0NN`, user story, acceptance criteria, and explicit `app/` scope, referencing the roadmap ID.
+6. **Authority Notice**: GitHub is the sole authoritative source of truth for filed items (derived from issue markers). `po/MEMORY.md` serves only as local session scratchpad.
+7. **PR-Only Modification**: The persona NEVER edits `po/ROADMAP.md` directly during scheduled runs. Changes to `po/ROADMAP.md` occur strictly through merged pull requests.
+8. **Maintainer Extension Logging**: If fewer than 5 `status: todo` items remain unfiled in `po/ROADMAP.md`:
+   - The persona records a one-line request to its run log: `Roadmap extension requested: fewer than 5 todo items remaining (N left in po/ROADMAP.md). Maintainer extension needed.`
+   - It does NOT file an issue for roadmap extension (as any owner issue enters the SDLC machine, triggering scope failures against `po/ROADMAP.md`).
+   - It continues intake with the remaining `todo` items, filing the next unblocked item while the request is pending.
+
+---
+
+## 6. Memory Conventions (`po/MEMORY.md`)
 
 Because the session is resumed across scheduled runs, the persona maintains `po/MEMORY.md` to ensure continuity:
+- **Notice on Persistence and Authority**: The persona command allow-list permits GitHub CLI operations (`gh issue ...`) but does not permit git commit or push operations, and resumed worktrees do not synchronize uncommitted local edits across distinct host machines. Therefore, `po/MEMORY.md` serves as a local session scratchpad. GitHub (`Roadmap item: ITEM-0NN` markers, issue state, and comments) is the authoritative source of truth for filed and completed work.
 - **Themes Covered**: Tracks broad features previously developed (e.g. parcel timelines, delivery date formatting).
 - **Issues Filed**: Audit table of issues created, reasons, and eventual outcomes.
+- **Escalations Handled**: Log of closed or reframed escalations (cost-cap, deploy-failed, agent-error, not-agent-suitable).
 - **Ideas Rejected**: Records proposals evaluated and rejected (e.g. multi-select filters, third-party vendor integrations) to prevent repeating ideas.
-- **Backlog Candidates**: Real gaps identified in code, OpenAPI contracts, or control center views awaiting idle cycles.
 
 ---
 
-## 6. Reading the Run Log and Monitoring
+## 7. Reading the Run Log and Monitoring
 
 To monitor what the persona has done:
 
@@ -139,7 +178,7 @@ To monitor what the persona has done:
 
 ---
 
-## 7. How to Stop the Loop
+## 8. How to Stop the Loop
 
 ### Emergency Stop (Orca Automation):
 To pause or stop the persona from running on its 4-hour schedule:
@@ -156,7 +195,7 @@ Or cancel a running coder job via curl as documented in `docs/runbook.md` sectio
 
 ---
 
-## 8. Orca Automation Setup Command
+## 9. Orca Automation Setup Command
 
 Do NOT create the Orca automation during development; the orchestrator session will wire it after the draft PR is reviewed and merged.
 
@@ -179,10 +218,11 @@ orca automations create \
 - `--reuse-session`: Submits recurring runs to the existing live session to preserve persona memory and context.
 - `--precheck "scripts/po/precheck.sh"`: Runs precheck guardrails before each cycle. If precheck exits non-zero, the run is safely skipped.
 - `--prompt "$(cat po/PERSONA.md)"`: Injects the persona prompt and operating rules.
+  - *Prompt Capture Notice*: Because `--prompt "$(cat po/PERSONA.md)"` captures the prompt text at automation creation time, any future changes to `po/PERSONA.md` require the Orca automation to be re-created (or updated) to take effect.
 
 ---
 
-## 9. Blocked Items and Notes
+## 10. Blocked Items and Notes
 
 - **Live Automation Creation**: As instructed, the Orca automation has NOT been created in this session; it will be created by the orchestrator session after PR merge.
 - **Antigravity Quota Tracking**: The precheck script validates `$HOME/.gemini/antigravity-cli/antigravity-oauth-token` presence and supports `AGY_QUOTA_EXHAUSTED=1` overrides for test harnesses.

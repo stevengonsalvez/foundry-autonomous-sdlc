@@ -199,16 +199,23 @@ def test_ui_tester_skips_when_stage_not_in_review(
     monkeypatch.setenv(UI_TESTER_FEATURE_FLAG, "1")
     n, pr_num, _ = _setup_open_agent_pr(world, ui_proof=True)
 
-    # Change issue stage back to BUILDING
-    st = world.gh.state_of(n)
-    st_obj = state.State(st)
-    st_obj.enter(state.BUILDING, world.clock.now_iso())
-    world.gh.comments[n][0] = Comment(100, OWNER, state.render(st_obj), world.clock.now_iso())
-
+    # First tick: stage is IN_REVIEW, reviewer approves and tester runs
     world.tick()
+    assert len(world.foundry.agent_calls("sdlc-ui-tester")) == 1
+    assert state.State(world.gh.state_of(n)).stage == state.IN_REVIEW
 
-    assert not world.foundry.agent_calls("sdlc-ui-tester")
-    assert not any(UI_TESTER_MARKER_PREFIX in c.body for c in world.gh.comments[pr_num])
+    # Strip the OWNER marker so marker deduplication would not suppress a second call
+    world.gh.comments[pr_num] = [
+        c
+        for c in world.gh.comments[pr_num]
+        if not (c.author == OWNER and c.body.startswith(UI_TESTER_MARKER_PREFIX))
+    ]
+
+    # Second tick: reviewer has approved, tick merges the PR into MERGED
+    world.tick()
+    assert state.State(world.gh.state_of(n)).stage == state.MERGED
+    # No extra tester call because stage is now MERGED (not IN_REVIEW)
+    assert len(world.foundry.agent_calls("sdlc-ui-tester")) == 1
 
 
 def test_ui_tester_skips_when_no_ui_proof(world: World, monkeypatch: pytest.MonkeyPatch) -> None:

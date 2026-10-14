@@ -3,14 +3,17 @@
 from __future__ import annotations
 
 import datetime
+import hashlib
 import json
 from pathlib import Path
 from unittest.mock import patch
 
+from scripts.tests.ui.test_validate_artifact import _make_valid_artifact
 from scripts.ui.publish_proof import (
     MARKER,
     format_pr_comment,
     prune_old_prs,
+    publish,
     resolve_pr_number,
 )
 
@@ -87,11 +90,12 @@ def test_resolve_pr_number() -> None:
     payload = json.dumps([{"number": 99, "head": {"ref": "agent/issue-1", "sha": "abcdef12"}}])
     assert resolve_pr_number("abcdef12", "owner/repo", payload) == 99
 
-    # Mismatched sha in pull_requests_json returns None
+    # Mismatched sha in pull_requests_json returns None (patched run_cmd: hermetic)
     mismatch_payload = json.dumps(
         [{"number": 99, "head": {"ref": "agent/issue-1", "sha": "00000000"}}]
     )
-    assert resolve_pr_number("abcdef12", "owner/repo", mismatch_payload) is None
+    with patch("scripts.ui.publish_proof.run_cmd", return_value=""):
+        assert resolve_pr_number("abcdef12", "owner/repo", mismatch_payload) is None
 
     # Ambiguous multiple PR matches return None
     multi_payload = json.dumps([
@@ -100,8 +104,9 @@ def test_resolve_pr_number() -> None:
     ])
     assert resolve_pr_number("abcdef12", "owner/repo", multi_payload) is None
 
-    # From empty json
-    assert resolve_pr_number("abcdef12", "owner/repo", "[]") is None
+    # From empty json (patched run_cmd so fallback does not call gh api)
+    with patch("scripts.ui.publish_proof.run_cmd", return_value=""):
+        assert resolve_pr_number("abcdef12", "owner/repo", "[]") is None
 
     # Fallback to gh api with slurped paginated results
     slurped_pages = [
@@ -140,3 +145,43 @@ def test_prune_old_prs(tmp_path: Path) -> None:
     assert not pr_old.exists()
     assert pr_recent.exists()
     assert pr_open.exists()
+
+
+def test_publish_comment_hash_matches_published_manifest(tmp_path: Path) -> None:
+    artifact_dir = tmp_path / "artifacts"
+    artifact_dir.mkdir()
+    _make_valid_artifact(artifact_dir, count=2)
+    raw_manifest_bytes = (artifact_dir / "manifest.json").read_bytes()
+    raw_hash = hashlib.sha256(raw_manifest_bytes).hexdigest()
+
+    posted_comments: list[str] = []
+    written_manifest_bytes: list[bytes] = []
+    orig_write_bytes = Path.write_bytes
+
+    def record_write_bytes(self: Path, b: bytes) -> int:
+        if self.name == "manifest.json":
+            written_manifest_bytes.append(b)
+        return orig_write_bytes(self, b)
+
+    with (
+        patch("scripts.ui.publish_proof.run_cmd", return_value=""),
+        patch(
+            "scripts.ui.publish_proof.post_or_update_comment",
+            side_effect=lambda repo, pr, body: posted_comments.append(body),
+        ),
+        patch.object(Path, "write_bytes", side_effect=record_write_bytes, autospec=True),
+    ):
+        publish(
+            artifacts_dir=str(artifact_dir),
+            head_sha="0123456789abcdef0123456789abcdef01234567",
+            repo="stevengonsalvez/foundry-autonomous-sdlc",
+            pr_number=42,
+        )
+
+    assert written_manifest_bytes, "No manifest.json was written"
+    published_hash = hashlib.sha256(written_manifest_bytes[-1]).hexdigest()
+    assert len(posted_comments) == 1
+    comment = posted_comments[0]
+    assert f"- Manifest SHA-256: `{published_hash}`" in comment
+    assert published_hash != raw_hash
+    assert raw_hash not in comment

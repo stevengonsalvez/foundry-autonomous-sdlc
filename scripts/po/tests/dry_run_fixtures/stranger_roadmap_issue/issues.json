@@ -1,0 +1,16 @@
+[
+  {
+    "number": 99,
+    "title": "feat(web): base layout",
+    "state": "OPEN",
+    "author": {
+      "login": "stranger_user"
+    },
+    "body": "Roadmap item: ITEM-001\n\nStranger trying to block ITEM-001 by filing it without permission.",
+    "labels": [
+      {
+        "name": "type:feature"
+      }
+    ]
+  }
+]

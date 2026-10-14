@@ -231,7 +231,8 @@ describe('views', { skip }, () => {
       for (const lensName of ['Delivery', 'Cost', 'Gates']) {
         await page.getByRole('button', { name: lensName }).click();
         const chips = await page.locator('article.card').count();
-        assert.equal(chips, rawSample.tickets.length, `group=${groupName} lens=${lensName} total chips`);
+        const openTotal = Object.values(rawSample.flow.counts).reduce((a, b) => a + b, 0);
+        assert.equal(chips, openTotal, `group=${groupName} lens=${lensName} total chips`);
         for (const stage of rawSample.board_stages) {
           const colCount = Number(await page.locator(`.col-${stage} .col-count`).innerText());
           const stageCards = await page.locator(`.col-${stage} article.card`).count();
@@ -272,14 +273,22 @@ describe('views', { skip }, () => {
             allIds.add(el.id);
           }
 
+          const laneHeads = Array.from(document.querySelectorAll('.matrix-spine .lane-head'));
           const cellAudits = [];
-          for (const el of document.querySelectorAll('.matrix-cell[aria-labelledby]')) {
-            const raw = el.getAttribute('aria-labelledby') || '';
+          for (const cell of document.querySelectorAll('.matrix-cell[aria-labelledby]')) {
+            const raw = cell.getAttribute('aria-labelledby') || '';
             const tokens = raw.trim().split(/\s+/).filter(Boolean);
             const el0 = tokens[0] ? document.getElementById(tokens[0]) : null;
             const el1 = tokens[1] ? document.getElementById(tokens[1]) : null;
-            if (!el0) missing.push({ id: tokens[0], tag: el.tagName, class: el.className });
-            if (!el1) missing.push({ id: tokens[1], tag: el.tagName, class: el.className });
+            if (!el0) missing.push({ id: tokens[0], tag: cell.tagName, class: cell.className });
+            if (!el1) missing.push({ id: tokens[1], tag: cell.tagName, class: cell.className });
+
+            const rowIdx = Array.from(cell.parentElement.children).indexOf(cell);
+            const expectedLaneEl = laneHeads[rowIdx] ? laneHeads[rowIdx].querySelector('.lane-name') : null;
+            const expectedColEl = cell.closest('.col') ? cell.closest('.col').querySelector('.col-title') : null;
+
+            const matchesLane = el0 !== null && el0 === expectedLaneEl;
+            const matchesStage = el1 !== null && el1 === expectedColEl;
 
             const isLaneName = el0 ? el0.classList.contains('lane-name') : false;
             const laneName = el0 ? el0.innerText.trim() : '';
@@ -288,6 +297,9 @@ describe('views', { skip }, () => {
 
             cellAudits.push({
               tokens,
+              rowIdx,
+              matchesLane,
+              matchesStage,
               isLaneName,
               laneName,
               stageTitle,
@@ -304,6 +316,8 @@ describe('views', { skip }, () => {
         assert.ok(evaluation.cellAudits.length > 0, 'must have matrix cells');
         for (const cell of evaluation.cellAudits) {
           assert.equal(cell.tokens.length, 2, 'cell aria-labelledby must contain exactly 2 tokens (lane name and stage title)');
+          assert.equal(cell.matchesLane, true, `first token in aria-labelledby must match laneHeads[rowIdx].querySelector('.lane-name') for row ${cell.rowIdx}`);
+          assert.equal(cell.matchesStage, true, 'second token in aria-labelledby must match cell.closest(".col").querySelector(".col-title")');
           assert.equal(cell.isLaneName, true, 'first token in aria-labelledby must point directly to an element with class .lane-name');
           assert.equal(cell.accessibleName, `${cell.laneName} ${cell.stageTitle}`, 'accessible name must strictly match laneName + " " + stageTitle');
           assert.ok(cell.laneName.length > 0, 'lane name must not be empty');
@@ -433,7 +447,7 @@ describe('views', { skip }, () => {
       assert.equal(Number(count), rawSample.flow.counts[stage], stage);
       assert.equal(await page.locator(`.col-${stage} article.card`).count(), rawSample.flow.counts[stage]);
     }
-    assert.equal(await page.locator('article.card').count(), 22);
+    assert.equal(await page.locator('article.card').count(), 6);
     assert.equal(await page.locator('.col-escalated').getAttribute('class'), 'col col-escalated');
     const href = await page.locator('article.card .card-link').first().getAttribute('href');
     assert.match(href, /^#\/ticket\/\d+$/);
@@ -443,15 +457,15 @@ describe('views', { skip }, () => {
   test('board: type chips, search, and the new-ticket buttons', async () => {
     const { context, page } = await open('normal');
     await page.getByRole('button', { name: 'bug', exact: true }).click();
-    assert.equal(await page.locator('article.card').count(), 4);
+    assert.equal(await page.locator('article.card').count(), 1);
     await page.getByRole('button', { name: 'bug', exact: true }).click();
     await page.getByLabel('Search by ticket number or title').fill('24');
     assert.equal(await page.locator('article.card').count(), 1);
     assert.match(await text(page, 'article.card'), /Make the parcel tracker better/);
     await page.getByLabel('Search by ticket number or title').fill('lowercase');
-    assert.equal(await page.locator('article.card').count(), 4);
+    assert.equal(await page.locator('article.card').count(), 1);
     await page.getByRole('button', { name: 'Clear filters' }).click();
-    assert.equal(await page.locator('article.card').count(), 22);
+    assert.equal(await page.locator('article.card').count(), 6);
 
     const create = page.getByRole('link', { name: 'New ticket' });
     assert.equal(await create.getAttribute('href'), `${REPO}/issues/new?template=feature_request.yml`);
@@ -503,6 +517,30 @@ describe('views', { skip }, () => {
     assert.equal(await esc.count(), 1);
     assert.match(await esc.innerText(), /smoke failed on staging/);
     assert.equal(await page.locator('.esc-card').count(), 18);
+
+    const openCards = page.locator('.view > .esc-list .esc-card');
+    assert.equal(await openCards.count(), 2);
+    const details = page.locator('details.esc-resolved-disclosure');
+    assert.equal(await details.count(), 1);
+    assert.equal(await details.evaluate((el) => el.open), false);
+    const summary = await page.locator('details.esc-resolved-disclosure summary').innerText();
+    assert.equal(summary.trim(), 'Resolved (16)');
+    const resolvedCards = page.locator('details.esc-resolved-disclosure .esc-card');
+    assert.equal(await resolvedCards.count(), 16);
+
+    const domOrder = await page.evaluate(() => {
+      const openList = document.querySelector('.view > .esc-list');
+      const disclosure = document.querySelector('details.esc-resolved-disclosure');
+      if (!openList || !disclosure) return false;
+      return Boolean(openList.compareDocumentPosition(disclosure) & Node.DOCUMENT_POSITION_FOLLOWING);
+    });
+    assert.equal(domOrder, true, 'open .esc-list must appear before details.esc-resolved-disclosure in DOM');
+
+    await page.goto(`${servers.normal.url}?data=state.json#/ticket/2`);
+    await page.waitForSelector('.ticket-head');
+    const ticketResolved = page.locator('.esc-meta');
+    assert.match(await ticketResolved.innerText(), /Resolved[\s\S]*by human/i);
+
     await context.close();
   });
 
@@ -857,18 +895,19 @@ describe('fetch strategy in the browser (scripted GitHub, no ?data=)', { skip },
     await context.close();
   });
 
-  test('row hover non-fill cue bolds first cell in environments table and pending chip preserves dashed border on hover', async () => {
-    // 1. Environments table row hover bolds :is(td, th):first-child (which is a th)
+  test('row hover non-fill cue bolds first cell in agents table, documents environments th weight, and pending chip preserves dashed border on hover', async () => {
+    // 1. Environments table first cell is a th already bold (700) before hover
     const { context: envCtx, page: envPage } = await open('normal', { hash: '#/environments', width: 1280, height: 900 });
     await envPage.waitForSelector('#app[aria-busy="false"] .view-environments');
-    const row = envPage.locator('.view-environments table.data tbody tr').first();
-    const firstCell = row.locator(':is(td, th):first-child');
-    const tag = await firstCell.evaluate((el) => el.tagName.toLowerCase());
-    assert.equal(tag, 'th', 'environments table first cell must be a th');
-
-    await row.hover();
+    const envRow = envPage.locator('.view-environments table.data tbody tr').first();
+    const envFirstCell = envRow.locator(':is(td, th):first-child');
+    const envTag = await envFirstCell.evaluate((el) => el.tagName.toLowerCase());
+    assert.equal(envTag, 'th', 'environments table first cell must be a th');
+    const envPreWeight = await envFirstCell.evaluate((el) => window.getComputedStyle(el).fontWeight);
+    assert.ok(envPreWeight === '700' || envPreWeight === 'bold', 'environments table first cell (th) is already bold (700) before hover');
+    await envRow.hover();
     await envPage.waitForTimeout(50);
-    const rowHover = await firstCell.evaluate((el) => {
+    const envRowHover = await envFirstCell.evaluate((el) => {
       const comp = window.getComputedStyle(el);
       const trComp = window.getComputedStyle(el.closest('tr'));
       return {
@@ -876,11 +915,35 @@ describe('fetch strategy in the browser (scripted GitHub, no ?data=)', { skip },
         outlineStyle: trComp.outlineStyle,
       };
     });
-    assert.ok(rowHover.fontWeight === '700' || rowHover.fontWeight === 'bold', 'environments row first cell must become bold on hover');
-    assert.equal(rowHover.outlineStyle, 'solid', 'row hover must have solid outline non-fill cue');
+    assert.ok(envRowHover.fontWeight === '700' || envRowHover.fontWeight === 'bold', 'environments row th remains 700 on hover');
+    assert.equal(envRowHover.outlineStyle, 'solid', 'environments row hover must have solid outline non-fill cue');
     await envCtx.close();
 
-    // 2. Pending card intake chip hover preserves dashed border
+    // 2. Agents table row hover bolds td:first-child (which has weight < 700 before hover)
+    const { context: agCtx, page: agPage } = await open('normal', { hash: '#/agents', width: 1280, height: 900 });
+    await agPage.waitForSelector('#app[aria-busy="false"] .view');
+    const agRow = agPage.locator('.view table.data tbody tr').first();
+    const agFirstCell = agRow.locator(':is(td, th):first-child');
+    const agTag = await agFirstCell.evaluate((el) => el.tagName.toLowerCase());
+    assert.equal(agTag, 'td', 'agents table first cell must be a td');
+    const agPreWeight = await agFirstCell.evaluate((el) => window.getComputedStyle(el).fontWeight);
+    const agPreWeightNum = parseInt(agPreWeight, 10);
+    assert.ok(agPreWeightNum < 700 || agPreWeight === 'normal' || agPreWeight === '400', 'agents table td first cell weight must be < 700 before hover');
+    await agRow.hover();
+    await agPage.waitForTimeout(50);
+    const agRowHover = await agFirstCell.evaluate((el) => {
+      const comp = window.getComputedStyle(el);
+      const trComp = window.getComputedStyle(el.closest('tr'));
+      return {
+        fontWeight: comp.fontWeight,
+        outlineStyle: trComp.outlineStyle,
+      };
+    });
+    assert.ok(agRowHover.fontWeight === '700' || agRowHover.fontWeight === 'bold', 'agents table td first cell must become bold (700) on hover');
+    assert.equal(agRowHover.outlineStyle, 'solid', 'agents row hover must have solid outline non-fill cue');
+    await agCtx.close();
+
+    // 3. Pending card intake chip hover preserves dashed border and borderTopColor is unchanged
     const issues = [
       { number: 301, title: 'new intake item', user: { login: 'stevengonsalvez' }, created_at: '2026-10-11T20:06:40Z', updated_at: '2026-10-11T20:06:40Z' },
     ];
@@ -888,8 +951,14 @@ describe('fetch strategy in the browser (scripted GitHub, no ?data=)', { skip },
     const pendingChip = pendingPage.locator('.chip-pill.card-pending').first();
     assert.equal(await pendingChip.count(), 1, 'card-pending chip must be rendered');
 
-    const preHover = await pendingChip.evaluate((el) => window.getComputedStyle(el).borderTopStyle);
-    assert.equal(preHover, 'dashed', 'pending chip must have dashed border before hover');
+    const preHover = await pendingChip.evaluate((el) => {
+      const s = window.getComputedStyle(el);
+      return {
+        borderStyle: s.borderTopStyle,
+        borderColor: s.borderTopColor,
+      };
+    });
+    assert.equal(preHover.borderStyle, 'dashed', 'pending chip must have dashed border before hover');
 
     await pendingChip.hover();
     await pendingPage.waitForTimeout(50);
@@ -898,14 +967,37 @@ describe('fetch strategy in the browser (scripted GitHub, no ?data=)', { skip },
       const s = window.getComputedStyle(el);
       return {
         borderStyle: s.borderTopStyle,
+        borderColor: s.borderTopColor,
         outlineStyle: s.outlineStyle,
         outlineWidth: s.outlineWidth,
       };
     });
     assert.equal(postHover.borderStyle, 'dashed', 'pending chip border must remain dashed on hover');
+    assert.equal(postHover.borderColor, preHover.borderColor, 'pending chip borderTopColor must be unchanged on hover');
     assert.equal(postHover.outlineStyle, 'solid', 'pending chip must display outline on hover');
     assert.ok(parseFloat(postHover.outlineWidth) >= 1, 'outline width must be at least 1px');
     await pendingCtx.close();
+
+    // 4. PR marker text and screen-reader accessibility check
+    const { context: boardCtx, page: boardPage } = await open('normal', { hash: '#/', width: 1280, height: 900 });
+    await boardPage.waitForSelector('#app[aria-busy="false"] .view-board');
+    const prChip = boardPage.locator('.card:has(a[href="#/ticket/40"], a[href="#/ticket/27"]) .chip-pill').first();
+    assert.ok((await prChip.count()) > 0, 'must have a PR chip on board');
+
+    const prAudit = await prChip.evaluate((el) => {
+      const numEl = el.querySelector('.chip-num');
+      const srEl = el.querySelector('.sr-only');
+      return {
+        numText: numEl?.innerText ?? '',
+        numAriaHidden: numEl?.getAttribute('aria-hidden') ?? null,
+        srText: srEl?.innerText ?? '',
+      };
+    });
+
+    assert.match(prAudit.numText, /\bPR\s+#\d+/, 'chip-num must contain PR marker text "PR #"');
+    assert.match(prAudit.srText, /\bPR\s+#\d+/, 'sr-only must contain PR text "PR #"');
+    assert.equal(prAudit.numAriaHidden, 'true', 'chip-num on PR chip must be aria-hidden to prevent screen reader double announcement');
+    await boardCtx.close();
   });
 
   test('rate budget: under 15 remaining the API is left alone, raw keeps polling', async () => {

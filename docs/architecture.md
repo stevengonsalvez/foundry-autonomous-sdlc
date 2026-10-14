@@ -235,7 +235,7 @@ Deterministic UI visual testing runs alongside every pull request as an advisory
 
 2. **Vision Tester Agent (Phase 2)**:
    - **Prompt Agent**: `sdlc-ui-tester` is defined with a strict JSON schema (`verdict` pass or concerns, `findings[]` with route, viewport, issue, severity, and `summary`).
-   - **Tick Integration**: Behind feature flag `UI_TESTER_ENABLED` (defaulting to 0/OFF), the orchestrator tick inspects open agent PRs. When a PR has a `<!-- ui-proof:v1 -->` comment and lacks a marker for the current head sha, the orchestrator invokes `sdlc-ui-tester` with image URLs and PR context, and posts `<!-- ui-tester:v1 <head_sha> -->` with its advisory evaluation.
+   - **Tick Integration**: Behind feature flag `UI_TESTER_ENABLED` (defaulting to 0/OFF), the orchestrator tick inspects open agent PRs. The tester runs only when the issue stage is `IN_REVIEW` and the PR has a `<!-- ui-proof:v1 -->` comment that names the current head commit sha in backticks. When the PR lacks an advisory evaluation marker for the current head sha, the orchestrator invokes `sdlc-ui-tester` with image URLs and PR context, and posts `<!-- ui-tester:v1 <head_sha> -->` with its advisory evaluation.
    - **Strictly Advisory**: The UI tester verdict never blocks required status checks or merge verification. Model spend for the vision tester is billed to the object ledger and counts toward the spend cap, which can push the issue to cost-cap escalation if exceeded.
 
 ## Release

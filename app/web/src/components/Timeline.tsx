@@ -1,5 +1,6 @@
 import type { ParcelEvent } from "@parcel/core";
 import { formatDateTime } from "../format";
+import { LocationPinIcon } from "./Icons";
 
 /** Events oldest first; the last one is the latest. */
 export function Timeline({ events, labelledBy }: { events: ParcelEvent[]; labelledBy: string }) {
@@ -13,7 +14,10 @@ export function Timeline({ events, labelledBy }: { events: ParcelEvent[]; labell
               {event.description}
               {latest && <span className="tag">Latest</span>}
             </p>
-            <p className="timeline__where">{event.location}</p>
+            <p className="timeline__where">
+              <LocationPinIcon />
+              {event.location}
+            </p>
             <time className="timeline__when" dateTime={event.timestamp}>
               {formatDateTime(event.timestamp)}
             </time>

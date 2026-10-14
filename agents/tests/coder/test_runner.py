@@ -1591,3 +1591,26 @@ def test_a_repeated_start_reports_a_finished_job_even_while_its_thread_winds_dow
     service._alive_locked = lambda job_id: True        # type: ignore[method-assign]
     code, after = service.handle_raw(body, session_id="sess-a")
     assert (code, after["status"]) == (200, "succeeded")
+
+
+def test_settle_preserves_terminal_state_when_runner_thread_finishes(world: World) -> None:
+    # A status poll can read state.json while the runner is in _finish right before
+    # writing the terminal checkpoint, and by the time _settle inspects the thread it has exited.
+    # _settle must not overwrite the newly saved terminal state with "interrupted".
+    world.engines = [ScriptedEngine("agy", [])]
+    service = world.service()
+    start(service, job(install_cmd=f"{sys.executable} ../tools/install_fail.py"))
+    entry = service._threads["j-12-1"]
+    entry[0].join(timeout=10)
+    assert not entry[0].is_alive()
+    stale = service._store.load("j-12-1")
+    assert stale is not None
+    assert stale.status == runner_mod.Status.FAILED
+    assert stale.reason == "install-failed"
+    stale.status = runner_mod.Status.RUNNING
+    stale.reason = None
+    settled = service._settle(stale)
+    assert settled is not None
+    assert settled.status == runner_mod.Status.FAILED
+    assert settled.reason == "install-failed"
+

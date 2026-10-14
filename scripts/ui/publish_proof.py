@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import argparse
 import datetime
+import hashlib
 import json
 import os
 import shutil
@@ -326,6 +327,9 @@ def publish(
 
     work_dir = Path(tempfile.mkdtemp(dir=os.environ.get("RUNNER_TEMP")))
 
+    published_manifest_sha256 = ""
+    target_ref = f"refs/heads/{BRANCH_NAME}"
+
     try:
         # Initialize or clone pr-screenshots branch
         run_cmd(["git", "init"], cwd=work_dir)
@@ -337,7 +341,12 @@ def publish(
             cwd=work_dir,
             check=False,
         )
-        if BRANCH_NAME in remote_branches:
+        remote_heads = [
+            line.split()[1]
+            for line in remote_branches.splitlines()
+            if len(line.split()) >= 2
+        ]
+        if target_ref in remote_heads:
             run_cmd(["git", "fetch", "origin", BRANCH_NAME, "--depth=1"], cwd=work_dir)
             run_cmd(["git", "checkout", BRANCH_NAME], cwd=work_dir)
         else:
@@ -366,10 +375,11 @@ def publish(
                 for s in res.screenshots
             ],
         }
-        (target_dir / "manifest.json").write_text(
-            json.dumps(rebuilt_manifest, indent=2, sort_keys=True) + "\n",
-            encoding="utf-8",
-        )
+        manifest_bytes = (
+            json.dumps(rebuilt_manifest, indent=2, sort_keys=True) + "\n"
+        ).encode("utf-8")
+        (target_dir / "manifest.json").write_bytes(manifest_bytes)
+        published_manifest_sha256 = hashlib.sha256(manifest_bytes).hexdigest()
 
         # Prune old PRs closed more than 14 days ago
         pruned = prune_old_prs(work_dir, repo)
@@ -406,7 +416,7 @@ def publish(
                     )
                     if pull_res.returncode != 0:
                         run_cmd(["git", "rebase", "--abort"], cwd=work_dir, check=False)
-                        if BRANCH_NAME in remote_branches:
+                        if target_ref in remote_heads:
                             raise RuntimeError(
                                 f"git pull --rebase failed: {pull_res.stderr.strip()}"
                             )
@@ -430,7 +440,7 @@ def publish(
         repo=repo,
         pr_number=pr_number,
         head_sha=head_sha,
-        manifest_sha256=res.manifest_sha256,
+        manifest_sha256=published_manifest_sha256,
         screenshots=res.screenshots,
     )
     post_or_update_comment(repo, pr_number, comment_body)

@@ -30,6 +30,7 @@ class Issue:
     created_at: str       # ISO 8601 UTC
     closed_at: str | None = None
     is_pull_request: bool = False
+    updated_at: str | None = None
 
 
 @dataclass(frozen=True)
