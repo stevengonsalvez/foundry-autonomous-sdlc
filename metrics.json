@@ -4,41 +4,41 @@
     "agent-scope": {
       "fail": 0,
       "first_fail": 0,
-      "first_pass": 11,
-      "pass": 14
+      "first_pass": 12,
+      "pass": 15
     },
     "coverage": {
       "fail": 5,
       "first_fail": 5,
-      "first_pass": 6,
-      "pass": 9
+      "first_pass": 7,
+      "pass": 10
     },
     "e2e": {
       "fail": 7,
       "first_fail": 6,
-      "first_pass": 5,
-      "pass": 7
+      "first_pass": 6,
+      "pass": 8
     },
     "gitleaks": {
       "fail": 0,
       "first_fail": 0,
-      "first_pass": 11,
-      "pass": 14
+      "first_pass": 12,
+      "pass": 15
     },
     "tdd-order": {
       "fail": 0,
       "first_fail": 0,
-      "first_pass": 11,
-      "pass": 14
+      "first_pass": 12,
+      "pass": 15
     },
     "test": {
       "fail": 6,
       "first_fail": 6,
-      "first_pass": 5,
-      "pass": 8
+      "first_pass": 6,
+      "pass": 9
     }
   },
-  "generated_at": "2026-10-14T20:09:58Z",
+  "generated_at": "2026-10-14T20:10:47Z",
   "issues": [
     {
       "closed_at": "2026-10-10T12:28:43Z",
@@ -1891,16 +1891,42 @@
       "coder_engine": "agy-unrestricted",
       "coder_sessions_lost": 0,
       "cost": {
-        "calls": 3,
+        "calls": 4,
         "coder_model_usd": 0.0,
         "coder_usd": 0.176038,
-        "model_usd": 0.007289,
-        "usd": 0.183327
+        "model_usd": 0.009633,
+        "usd": 0.18567
       },
       "deferred": null,
       "escalation": null,
-      "gate_attempts": {},
-      "gates": {},
+      "gate_attempts": {
+        "agent-scope": [
+          "success"
+        ],
+        "coverage": [
+          "success"
+        ],
+        "e2e": [
+          "success"
+        ],
+        "gitleaks": [
+          "success"
+        ],
+        "tdd-order": [
+          "success"
+        ],
+        "test": [
+          "success"
+        ]
+      },
+      "gates": {
+        "agent-scope": "success",
+        "coverage": "success",
+        "e2e": "success",
+        "gitleaks": "success",
+        "tdd-order": "success",
+        "test": "success"
+      },
       "kind": "issue",
       "number": 83,
       "opened_at": "2026-10-14T19:45:00Z",
@@ -1945,7 +1971,7 @@
     }
   ],
   "ledger": {
-    "emitted_at": "2026-10-14T20:09:28Z",
+    "emitted_at": "2026-10-14T20:10:34Z",
     "reconciled_at": "2026-10-14T19:50:28Z"
   },
   "repo": "stevengonsalvez/foundry-autonomous-sdlc",
@@ -1953,10 +1979,10 @@
     "deferred": 0,
     "escalated": 19,
     "issues": 27,
-    "ledger_usd": 0.443219,
-    "orchestrator_usd": 4.29783,
+    "ledger_usd": 0.445649,
+    "orchestrator_usd": 4.310494,
     "released": 6,
-    "usd": 6.62666
+    "usd": 6.644098
   },
   "version": 1
 }
