@@ -14,17 +14,17 @@
 
 ---
 
-### ITEM-002: feat(web): clear search query button
+### ITEM-002: feat(web): secondary widget
 - **Status**: todo
-- **Dependencies**: []
+- **Dependencies**: [ITEM-001]
 - **Cost Class**: S
 - **Tags**: ui, web
-- **Gap Anchor**: `app/web/src/components/SearchForm.tsx#L25`. Quick clear button.
-- **User Value**: Reset search input with one click.
+- **Gap Anchor**: `app/web/src/App.tsx#L60`. Secondary widget container.
+- **User Value**: Secondary layout component.
 - **Files Touched**:
-  - `app/web/src/components/SearchForm.tsx`
+  - `app/web/src/App.tsx`
 - **Acceptance Criteria**:
-  1. Clicking clear resets input text cleanly.
+  1. Secondary widget renders sidebar layout.
 
 ---
 
@@ -53,3 +53,31 @@
   - `app/web/src/pages/HomePage.tsx`
 - **Acceptance Criteria**:
   1. Saves active filter in local storage.
+
+---
+
+### ITEM-006: feat(web): clear search query button
+- **Status**: todo
+- **Dependencies**: []
+- **Cost Class**: S
+- **Tags**: ui, web
+- **Gap Anchor**: `app/web/src/components/SearchForm.tsx#L25`. Quick clear button.
+- **User Value**: Reset search input with one click.
+- **Files Touched**:
+  - `app/web/src/components/SearchForm.tsx`
+- **Acceptance Criteria**:
+  1. Clicking clear resets input text cleanly.
+
+---
+
+### ITEM-007: feat(web): export search results
+- **Status**: todo
+- **Dependencies**: []
+- **Cost Class**: S
+- **Tags**: export, web
+- **Gap Anchor**: `app/web/src/components/ParcelTable.tsx#L30`. Export data.
+- **User Value**: Download CSV of results.
+- **Files Touched**:
+  - `app/web/src/components/ParcelTable.tsx`
+- **Acceptance Criteria**:
+  1. Exports table to CSV cleanly.

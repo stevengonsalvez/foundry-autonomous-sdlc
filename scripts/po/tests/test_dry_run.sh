@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# Note: Linux-only test suite (relies on GNU coreutils).
+#
 # Test suite for scripts/po/dry_run.sh across scenario fixtures:
 # 1. idle state
 # 2. busy state
@@ -9,11 +11,14 @@
 # 7. prompt injection in an issue body
 # 8. an issue by a stranger
 # 9. idle with roadmap (dependency order)
-# 10. roadmap intake under 5 items files extend issue
-# 11. roadmap intake under 5 items with open maintainer issue pauses with zero commands
-# 12. roadmap item already filed skips to next unblocked ready item
-# 13. missing simulated-human label warns and creates label
-# 14. explicit command line options (--state, --issues, --roadmap, --labels) execute hermetically
+# 10. fewer than 5 items remaining: logs request, files next item, no roadmap issue
+# 11. issue 72 shaped real: handles agent-error, comments findings, closes issue
+# 12. issue 72 already answered: detects marker, skips with zero commands
+# 13. real gh JSON with uppercase CLOSED state ignores closed issues
+# 14. roadmap item already filed skips to next unblocked ready item
+# 15. missing simulated-human label logs BLOCKED and plans no commands
+# 16. memory mentions under rejected are ignored; filed state comes from GitHub
+# 17. explicit command line options execute hermetically
 
 set -euo pipefail
 
@@ -97,14 +102,14 @@ run_dry_test "Open refinement question answered with simulated-human label" \
   "\"$FIXTURES/open_refinement\"" \
   "gh issue comment 62" \
   "gh issue close" \
-  "Simulated human \(antigravity\)"
+  "po-answered:v1"
 
 # 4. not-agent-suitable escalation: reframes or closes with rationale
 run_dry_test "not-agent-suitable escalation reframed/closed" \
   "\"$FIXTURES/not_agent_suitable\"" \
   "gh issue close 63" \
   "gh pr create|gh pr merge" \
-  "Simulated human \(antigravity\)"
+  "po-answered:v1"
 
 # 5. cost-cap escalation: closes/parks issue, NEVER raises cap or continues past halt
 run_dry_test "cost-cap escalation closes issue and refuses cap raise" \
@@ -118,7 +123,7 @@ run_dry_test "CD rollback escalation files fix issue without re-release" \
   "\"$FIXTURES/cd_rollback\"" \
   "gh issue create --title \"fix: address deployment smoke failure for #65\"" \
   "gh workflow run cd|re-release the build|re-release the rolled" \
-  "Simulated human \(antigravity\)"
+  "po-answered:v1"
 
 # 7. Prompt injection in issue body: neutralizes injection, no unauthorized actions
 run_dry_test "Prompt injection is neutralized and unauthorized commands rejected" \
@@ -139,42 +144,62 @@ run_dry_test "Idle with roadmap picks next item by dependency order" \
   "gh issue create --title \"feat\(web\): advanced filter options\"" \
   "ITEM-003"
 
-# 10. Fewer than 5 items remaining and no open maintainer issue: files extend issue
-run_dry_test "Roadmap intake under 5 items files extend issue" \
-  "\"$FIXTURES/extend_issue_needed\"" \
-  "gh issue create --title \"roadmap: extend po/ROADMAP.md\"" \
-  "gh issue create --title \"feat" \
-  "needs-maintainer,simulated-human"
+# 10. Fewer than 5 items remaining: logs request, files next item, no roadmap issue
+run_dry_test "Fewer than 5 items remaining logs request and files next item" \
+  "\"$FIXTURES/fewer_than_5\"" \
+  "Roadmap extension requested: fewer than 5 todo items remaining" \
+  "roadmap: extend" \
+  "gh issue create --title \"feat\(web\): base layout\""
 
-# 11. Fewer than 5 items remaining and maintainer issue already open: 0 commands
-run_dry_test "Roadmap intake under 5 items with open maintainer issue pauses" \
-  "\"$FIXTURES/extend_issue_open\"" \
-  "open needs-maintainer issue already exists" \
-  "gh issue create|gh issue edit|gh issue comment" \
+# 11. Issue 72 shaped real: handles agent-error, comments findings, closes issue
+run_dry_test "Issue 72 shaped real is handled and closed with agent-error finding" \
+  "\"$FIXTURES/issue_72_real\"" \
+  "Handling agent-error escalation on issue #72" \
+  "" \
+  "gh issue close 72" \
+  "po-answered:v1"
+
+# 12. Issue 72 already answered: detects marker, skips with zero commands
+run_dry_test "Issue 72 already answered is skipped with zero commands" \
+  "\"$FIXTURES/issue_72_answered\"" \
+  "Skipping issue #72: already answered with po-answered marker" \
+  "gh issue comment 72|gh issue close 72" \
   "\(No commands to execute\)"
 
-# 12. Roadmap item already filed: skips to next ready unblocked item
+# 13. Real gh JSON with uppercase CLOSED state ignores closed issues
+run_dry_test "Real gh JSON casing ignores closed issues and picks unblocked item" \
+  "\"$FIXTURES/real_gh_json\"" \
+  "gh issue create --title \"feat\(web\): secondary widget\"" \
+  "gh issue close 51|gh issue close 52" \
+  "ITEM-002"
+
+# 14. Roadmap item already filed: skips to next ready unblocked item
 run_dry_test "Roadmap item already filed skips to next unblocked item" \
   "\"$FIXTURES/dedupe_skip\"" \
   "gh issue create --title \"feat\(web\): filter dropdown component\"" \
   "gh issue create --title \"feat\(web\): base layout\"|gh issue create --title \"feat\(web\): secondary layout widget\"" \
   "Roadmap item: ITEM-003"
 
-# 13. Missing simulated-human label: warns and plans label creation
-run_dry_test "Missing simulated-human label warns and plans label creation" \
+# 15. Missing simulated-human label logs BLOCKED and plans no commands
+run_dry_test "Missing simulated-human label logs BLOCKED and plans no commands" \
   "\"$FIXTURES/labels_missing\"" \
-  "Warning: Label 'simulated-human' missing from repository" \
-  "" \
-  "gh label create \"simulated-human\"" \
-  "gh issue create --title \"feat\(web\): base layout\""
+  "BLOCKED: label simulated-human missing, maintainer must create it" \
+  "gh label create" \
+  "\(No commands to execute\)"
 
-# 14. Explicit command line flags execute hermetically
-run_dry_test "Explicit command line flags execute hermetically" \
-  "--state \"$FIXTURES/extend_issue_needed/state.json\" --issues \"$FIXTURES/extend_issue_needed/issues.json\" --roadmap \"$FIXTURES/extend_issue_needed/roadmap.md\" --labels \"$FIXTURES/labels_missing/labels.json\"" \
-  "gh label create \"needs-maintainer\"" \
+# 16. Memory mentions under rejected are ignored; filed state comes from GitHub
+run_dry_test "Memory mentions under rejected are ignored and filed state comes from GitHub" \
+  "--state \"$FIXTURES/memory_rejected/state.json\" --issues \"$FIXTURES/memory_rejected/issues.json\" --roadmap \"$FIXTURES/memory_rejected/roadmap.md\" --memory \"$FIXTURES/memory_rejected/memory.md\"" \
+  "gh issue create --title \"feat\(web\): base layout\"" \
   "" \
-  "gh label create \"simulated-human\"" \
-  "gh issue create --title \"roadmap: extend po/ROADMAP.md\""
+  "Roadmap item: ITEM-001"
+
+# 17. Explicit command line flags execute hermetically
+run_dry_test "Explicit command line flags execute hermetically" \
+  "--state \"$FIXTURES/fewer_than_5/state.json\" --issues \"$FIXTURES/fewer_than_5/issues.json\" --roadmap \"$FIXTURES/fewer_than_5/roadmap.md\"" \
+  "Roadmap extension requested" \
+  "roadmap: extend" \
+  "gh issue create --title \"feat\(web\): base layout\""
 
 echo "----------------------------------------"
 if [ "$failures" -gt 0 ]; then
