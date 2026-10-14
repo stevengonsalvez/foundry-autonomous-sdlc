@@ -323,7 +323,7 @@ jobs:
         run: |
           if [ -d trusted/evals ]; then
             export EVALS_TRUSTED_DIR="$GITHUB_WORKSPACE/trusted/evals"
-            uv run --project agents --locked --with "pytest==$PYTEST_VERSION" python -m pytest -q trusted/evals/
+            uv run --project agents --locked --with "pytest==$PYTEST_VERSION" python -m pytest -q -c /dev/null --rootdir trusted/evals --confcutdir trusted/evals trusted/evals/
           else
             echo "::error::trusted/evals missing on main"
             exit 1

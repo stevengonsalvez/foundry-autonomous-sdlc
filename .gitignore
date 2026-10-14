@@ -8,7 +8,6 @@ __pycache__/
 .pytest_cache/
 .venv/
 *.egg-info/
-evals/results/
 
 # terraform state and local variable files
 .terraform/
