@@ -222,6 +222,22 @@ describe('views', { skip }, () => {
     assert.equal(await esc.count(), 1);
     assert.match(await esc.innerText(), /smoke failed on staging/);
     assert.equal(await page.locator('.esc-card').count(), 18);
+
+    const openCards = page.locator('.view > .esc-list .esc-card');
+    assert.equal(await openCards.count(), 2);
+    const details = page.locator('details.esc-resolved-disclosure');
+    assert.equal(await details.count(), 1);
+    assert.equal(await details.evaluate((el) => el.open), false);
+    const summary = await page.locator('details.esc-resolved-disclosure summary').innerText();
+    assert.equal(summary.trim(), 'Resolved (16)');
+    const resolvedCards = page.locator('details.esc-resolved-disclosure .esc-card');
+    assert.equal(await resolvedCards.count(), 16);
+
+    await page.goto(`${servers.normal.url}?data=state.json#/ticket/2`);
+    await page.waitForSelector('.ticket-head');
+    const ticketResolved = page.locator('.esc-meta');
+    assert.match(await ticketResolved.innerText(), /Resolved[\s\S]*by human/i);
+
     await context.close();
   });
 
