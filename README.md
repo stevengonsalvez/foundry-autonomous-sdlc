@@ -1,10 +1,39 @@
 <p align="center">
+  <a href="https://stevengonsalvez.github.io/foundry-autonomous-sdlc/"><b>Live app</b></a> &nbsp;|&nbsp;
+  <a href="https://stevengonsalvez.github.io/foundry-autonomous-sdlc/control-center/"><b>Control center</b></a> &nbsp;|&nbsp;
+  <a href="https://stevengonsalvez.github.io/foundry-autonomous-sdlc/history/"><b>Evolution</b></a> &nbsp;|&nbsp;
+  <a href="https://stevengonsalvez.github.io/foundry-autonomous-sdlc/staging/">Staging</a> &nbsp;|&nbsp;
+  <a href="https://stevengonsalvez.github.io/foundry-autonomous-sdlc/dashboard/">Metrics dashboard</a> &nbsp;|&nbsp;
+  <a href="docs/evidence.md">Evidence</a> &nbsp;|&nbsp;
+  <a href="#documentation">Docs</a>
+</p>
+
+<p align="center">
   <img src="docs/media/hero.svg" alt="Autonomous SDLC motion header: live topology network and 4 delivery flow lanes for feature, bug, escalation, and rollback" width="100%" />
 </p>
 
 # foundry-autonomous-sdlc
 
 An issue is filed. Agents on Azure AI Foundry score and refine the requirement, judge whether an agent can do the work, write failing tests first, build until the tests pass, review independently, merge and release. No human step. This repository is the demonstration, and every claim below links to a command you can run or a trace you can click.
+
+## How the app evolved
+
+See the visual timeline of every release and merged feature on the [**App Evolution Showcase**](https://stevengonsalvez.github.io/foundry-autonomous-sdlc/history/).
+
+<p align="center">
+  <a href="https://stevengonsalvez.github.io/foundry-autonomous-sdlc/history/">
+    <img src="history/screenshots/v0.1.0/home-desktop.png" alt="v0.1.0 initial release home view" width="31%" />
+  </a>
+  <a href="https://stevengonsalvez.github.io/foundry-autonomous-sdlc/history/">
+    <img src="history/screenshots/v0.2.0/home-desktop.png" alt="v0.2.0 carrier integrations home view" width="31%" />
+  </a>
+  <a href="https://stevengonsalvez.github.io/foundry-autonomous-sdlc/history/">
+    <img src="history/screenshots/v0.4.0/home-desktop.png" alt="v0.4.0 current release home view" width="31%" />
+  </a>
+</p>
+<p align="center">
+  <sub><b>Left:</b> v0.1.0 (initial release) &nbsp;|&nbsp; <b>Center:</b> v0.2.0 (carrier badges) &nbsp;|&nbsp; <b>Right:</b> v0.4.0 (current delivery view) | <a href="https://stevengonsalvez.github.io/foundry-autonomous-sdlc/history/">Explore interactive history &rarr;</a></sub>
+</p>
 
 ## System topology
 
