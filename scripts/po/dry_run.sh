@@ -84,7 +84,7 @@ try:
             existing.add(entry)
     print(f"missing_simulated_human={1 if 'simulated-human' not in existing else 0}")
 except Exception:
-    print("missing_simulated_human=0")
+    print("missing_simulated_human=1")
 PYEOF
   )"
   eval "$labels_check"
@@ -96,6 +96,7 @@ issues_json="$(cat "$issues_file")"
 
 billed_usd="$(jq -r '.cost.billing.billed_usd // .cost.totals.billed_usd // 0' <<< "$state_json")"
 echo "[DRY RUN] Current billed spend: ${billed_usd} USD (Cap: 18.00 USD)"
+echo "[DRY RUN] Note: dry-run evaluates persona logic; scripts/po/precheck.sh is the authoritative spend gate."
 
 # Track commands to output
 declare -a commands=()
@@ -148,17 +149,41 @@ print("1" if pattern.search(body) else "0")
     is_busy=1
   fi
 
-  # Check if issue was already answered by persona with <!-- po-answered:v1 -->
+  # Check if issue was already answered by persona with <!-- po-answered:v1 --> (owner-only)
   already_answered="$(python3 -c '
 import sys, json
 try:
     issue_data = json.loads(sys.argv[1])
     comments = issue_data.get("comments", [])
-    answered = any("<!-- po-answered:v1 -->" in (c.get("body") or "") for c in comments)
+    answered = any(
+        "<!-- po-answered:v1 -->" in (c.get("body") or "")
+        and (c.get("author") or {}).get("login") == "stevengonsalvez"
+        for c in comments
+    )
     print("1" if answered else "0")
 except Exception:
     print("0")
 ' "$issue")"
+
+  # Handle build-failed and review-failed escalations (close even if already answered)
+  if grep -q "escalated:build-failed" <<< "$labels" || grep -q "escalated:review-failed" <<< "$labels"; then
+    hat_escalation=$((hat_escalation + 1))
+    if [ "$already_answered" = "1" ]; then
+      echo "[HAT] Escalation Owner: Issue #$number (build-failed/review-failed) was answered with po-answered marker but remains open. Closing issue."
+      commands+=("gh issue close $number")
+    else
+      echo "[HAT] Escalation Owner: Handling build-failed/review-failed escalation on issue #$number"
+      comment_body="### Simulated human (antigravity)
+<!-- po-answered:v1 -->
+
+Reviewing failed pipeline attempts from coder logs or PR review.
+Closing issue to unblock pipeline."
+      commands+=("gh issue comment $number --body \"$comment_body\"")
+      commands+=("gh issue edit $number --add-label \"simulated-human\"")
+      commands+=("gh issue close $number")
+    fi
+    continue
+  fi
 
   if [ "$already_answered" = "1" ]; then
     echo "[HAT] Skipping issue #$number: already answered with po-answered marker."
@@ -185,11 +210,11 @@ except Exception:
   if grep -q "type:bug" <<< "$labels" && ! grep -q "bug:triaged" <<< "$labels"; then
     hat_triage=$((hat_triage + 1))
     echo "[HAT] Triage Lead: Triaging defect #$number ('$title')"
-    commands+=("gh issue edit $number --add-label \"bug:triaged,severity:s2,owner:web,simulated-human\"")
+    commands+=("gh issue edit $number --add-label \"bug:triaged,severity:s3,owner:web,simulated-human\"")
     comment_body="### Simulated human (antigravity)
 <!-- po-answered:v1 -->
 
-Triaged as severity s2 (workaround available) owned by web workspace."
+Triaged as severity s3 (workaround available) owned by web workspace."
     commands+=("gh issue comment $number --body \"$comment_body\"")
     continue
   fi
@@ -205,7 +230,7 @@ Triaged as severity s2 (workaround available) owned by web workspace."
 <!-- po-answered:v1 -->
 
 Agent encountered persistent failure streak or invalid test assertions after coder repair iterations.
-Closing ticket to unblock autonomous SDLC pipeline. The roadmap item can be re-filed in a subsequent run with clarified criteria."
+Closing ticket to unblock autonomous SDLC pipeline; work is dropped as out of roadmap scope."
       commands+=("gh issue comment $number --body \"$comment_body\"")
       commands+=("gh issue edit $number --add-label \"simulated-human\"")
       commands+=("gh issue close $number")
@@ -275,7 +300,7 @@ Closing external-scope request; please use carrier-mock integration tests for lo
       continue
     fi
 
-    # Other escalations (e.g. escalated:requirements, escalated:build-failed)
+    # Other escalations (e.g. escalated:requirements)
     echo "[HAT] Escalation Owner: Reviewing escalation on issue #$number"
     comment_body="### Simulated human (antigravity)
 <!-- po-answered:v1 -->
@@ -287,8 +312,8 @@ Reviewing failed pipeline attempts. Storing findings in run log."
   fi
 done
 
-# Hat 4: Product Owner (Only when idle, no active escalations or questions being answered)
-if [ "$hat_refinement" -eq 0 ] && [ "$hat_escalation" -eq 0 ]; then
+# Hat 4: Product Owner (Only when idle, no active escalations, triage, or questions being answered)
+if [ "$hat_refinement" -eq 0 ] && [ "$hat_triage" -eq 0 ] && [ "$hat_escalation" -eq 0 ]; then
   if [ "$is_busy" -eq 1 ]; then
     echo "[PIPELINE] Pipeline is busy with active building or review. Product Owner hat skipped."
   else
@@ -350,12 +375,21 @@ items_by_id = {it["id"]: it for it in items}
 done_items = {it["id"] for it in items if it["status"] == "done"}
 filed_items = {it["id"] for it in items if it["status"] == "filed"}
 
-# Scan issues.json for filed/done items (authoritative source of truth)
+# Scan issues.json for filed/done items (authoritative source of truth, owner only)
 if issues_file and os.path.isfile(issues_file):
     try:
         with open(issues_file, "r", encoding="utf-8") as f:
             issues_data = json.load(f)
         for iss in issues_data:
+            author_login = ""
+            author_obj = iss.get("author")
+            if isinstance(author_obj, dict):
+                author_login = author_obj.get("login", "")
+            elif isinstance(author_obj, str):
+                author_login = str(author_obj)
+            if author_login != "stevengonsalvez":
+                continue
+
             title = iss.get("title", "")
             body = iss.get("body", "")
             raw_labels = iss.get("labels", [])
@@ -423,7 +457,9 @@ PYEOF
 
         echo "[HAT] Product Owner: Pipeline is idle. Selecting next roadmap item by dependency order: $item_id ('$item_title')"
 
-        new_issue_body="### Simulated human (antigravity)
+        body_file="$(mktemp /tmp/po-issue-XXXXXX.md)"
+        cat > "$body_file" << EOF
+### Simulated human (antigravity)
 
 Roadmap item: $item_id
 
@@ -440,9 +476,13 @@ $item_ac
 $item_files
 
 ## Out of scope
-Work outside app/ or unrelated refactoring."
+Work outside app/ or unrelated refactoring.
+EOF
 
-        commands+=("gh issue create --title \"$item_title\" --body \"$new_issue_body\" --label \"type:feature,simulated-human\"")
+        echo "[DRY RUN] Staged issue body at $body_file:"
+        cat "$body_file"
+
+        commands+=("gh issue create --title \"$item_title\" --body-file \"$body_file\" --label \"type:feature,simulated-human\"")
       else
         echo "[HAT] Product Owner: Pipeline is idle but all remaining roadmap items are blocked by unsatisfied dependencies."
       fi
