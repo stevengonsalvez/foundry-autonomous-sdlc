@@ -846,6 +846,7 @@ main {
 .board.matrix-grid {
   display: grid;
   grid-template-columns: 134px repeat(9, minmax(104px, 1fr));
+  grid-template-rows: 56px repeat(var(--lane-count, 10), auto);
   width: 100%;
   min-width: 1070px;
 }
@@ -853,6 +854,9 @@ main {
 /* Sticky swimlane spine */
 .matrix-spine {
   grid-column: 1;
+  grid-row: 1 / -1;
+  display: grid;
+  grid-template-rows: subgrid;
   position: sticky;
   left: 0;
   z-index: 20;
@@ -878,6 +882,8 @@ main {
 
 .lane-head {
   min-height: 54px;
+  height: 100%;
+  box-sizing: border-box;
   padding: 6px 8px;
   border-bottom: 1px solid var(--edge-subtle);
   display: flex;
@@ -912,9 +918,10 @@ main {
 
 /* Stage columns */
 .col {
+  grid-row: 1 / -1;
+  display: grid;
+  grid-template-rows: subgrid;
   border-right: 1px solid var(--edge);
-  display: flex;
-  flex-direction: column;
   min-width: 104px;
   background: var(--surface-0);
 }
@@ -993,13 +1000,14 @@ main {
 }
 
 .col-cells {
-  display: flex;
-  flex-direction: column;
+  display: contents;
 }
 
 /* Matrix cell */
 .matrix-cell {
   min-height: 54px;
+  height: 100%;
+  box-sizing: border-box;
   padding: 4px 5px;
   border-bottom: 1px solid var(--edge-subtle);
   display: flex;
@@ -1054,7 +1062,7 @@ main {
   display: flex;
   flex-direction: column;
   gap: 2px;
-  padding: 3px 5px;
+  padding: 3px 4px;
   background: var(--surface-2);
   border: 1px solid var(--edge);
   border-radius: var(--radius-sm);
@@ -1069,6 +1077,8 @@ main {
 .chip-pill:hover {
   background: var(--surface-3);
   border-color: var(--edge-focus);
+  outline: 1px solid var(--edge-focus);
+  outline-offset: -1px;
 }
 
 /* Chip state multi-channel styling (distinct outline styles + tints) */
@@ -1111,7 +1121,7 @@ main {
 .chip-head {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: 3px;
   min-width: 0;
   width: 100%;
   line-height: 1.2;
@@ -1151,28 +1161,22 @@ main {
   background: var(--surface-1);
   color: var(--fg-dim);
   border: 1px solid var(--edge-subtle);
-  flex-shrink: 0;
+  flex-shrink: 1;
+  min-width: 0;
   line-height: 14px;
 }
 
 .chip-lens {
   margin-left: auto;
   flex-shrink: 0;
-  max-width: 44px;
-  overflow: hidden;
-  text-overflow: ellipsis;
   white-space: nowrap;
   font-size: 9px;
   color: var(--fg-muted);
   line-height: 1;
 }
 
-.chip-lens time,
-.chip-lens span {
+.chip-lens time {
   display: inline-block;
-  max-width: 100%;
-  overflow: hidden;
-  text-overflow: ellipsis;
   white-space: nowrap;
   vertical-align: bottom;
 }
@@ -1181,6 +1185,23 @@ main {
   display: inline-flex;
   align-items: center;
   gap: 3px;
+  flex-shrink: 0;
+}
+
+.chip-cost-val {
+  flex: none;
+  white-space: nowrap;
+}
+
+.chip-cost-track {
+  width: 14px;
+  min-width: 6px;
+  height: 3px;
+  background: var(--edge);
+  border-radius: 2px;
+  overflow: hidden;
+  display: inline-block;
+  flex-shrink: 1;
 }
 
 .chip-body {
@@ -1190,7 +1211,8 @@ main {
   line-height: 1.2;
 }
 
-.card-link {
+.card-link,
+.chip-title {
   display: block;
   flex: 1 1 auto;
   min-width: 0;
@@ -1202,7 +1224,8 @@ main {
   text-decoration: none;
 }
 
-.card-link:hover {
+.card-link:hover,
+.chip-title:hover {
   text-decoration: underline;
 }
 
@@ -1218,33 +1241,18 @@ main {
     border-radius: var(--radius-pill);
   }
   .chip-head {
-    width: auto;
-    flex-shrink: 0;
+    display: contents;
   }
   .chip-body {
+    order: 2;
     flex: 1 1 auto;
+    min-width: 0;
   }
   .chip-lens {
     order: 3;
     margin-left: auto;
-    max-width: none;
+    flex-shrink: 0;
   }
-}
-
-
-.chip-cost {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-}
-
-.chip-cost-track {
-  width: 24px;
-  height: 3px;
-  background: var(--edge);
-  border-radius: 2px;
-  overflow: hidden;
-  display: inline-block;
 }
 
 .chip-cost-bar {
@@ -1340,6 +1348,12 @@ table.data {
 
 .data tbody tr:hover {
   background: var(--surface-2);
+  outline: 1px solid var(--edge-subtle);
+  outline-offset: -1px;
+}
+
+.data tbody tr:hover td:first-child {
+  font-weight: 700;
 }
 
 .row-bad {
@@ -2142,10 +2156,17 @@ select.input, input.input, select, input {
   }
 
   .col {
+    display: flex;
+    flex-direction: column;
     min-width: 0;
     width: 100%;
     border-right: none;
     border-bottom: 1px solid var(--edge);
+  }
+
+  .col-cells {
+    display: flex;
+    flex-direction: column;
   }
 
   .matrix-cell {

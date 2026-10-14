@@ -309,6 +309,88 @@ describe('views', { skip }, () => {
     }
   });
 
+  test('in every lens at 1280 and 1440, chip lens right edge stays inside chip content box and chip-cost-val does not overflow', async () => {
+    for (const width of [1280, 1440]) {
+      const { context, page } = await open('normal', { width, height: 900 });
+      await page.waitForSelector('#app[aria-busy="false"] .view-board');
+
+      for (const lens of ['delivery', 'cost', 'gates']) {
+        const lensBtn = page.getByRole('button', { name: lens.charAt(0).toUpperCase() + lens.slice(1) });
+        await lensBtn.click();
+        await page.waitForTimeout(50);
+
+        const check = await page.evaluate(() => {
+          const chips = Array.from(document.querySelectorAll('.chip-pill'));
+          const failures = [];
+          for (const chip of chips) {
+            const chipRect = chip.getBoundingClientRect();
+            const lensEl = chip.querySelector('.chip-lens');
+            if (lensEl) {
+              const lensRect = lensEl.getBoundingClientRect();
+              if (lensRect.right > chipRect.right + 1.0) {
+                failures.push({
+                  type: 'lens_overflow',
+                  chipText: chip.innerText.slice(0, 30),
+                  chipRight: chipRect.right,
+                  lensRight: lensRect.right,
+                });
+              }
+            }
+            const costVal = chip.querySelector('.chip-cost-val');
+            if (costVal) {
+              if (costVal.scrollWidth > costVal.clientWidth) {
+                failures.push({
+                  type: 'cost_clipped',
+                  text: costVal.innerText,
+                  scrollWidth: costVal.scrollWidth,
+                  clientWidth: costVal.clientWidth,
+                });
+              }
+            }
+          }
+          return { chipCount: chips.length, failures };
+        });
+
+        assert.ok(check.chipCount > 0, `must have chips at width=${width} lens=${lens}`);
+        assert.deepEqual(check.failures, [], `no chip lens overflow or cost clipping at width=${width} lens=${lens}`);
+      }
+
+      await context.close();
+    }
+  });
+
+  test('matrix swimlane rows align horizontally with zero vertical drift across all columns', async () => {
+    const { context, page } = await open('normal', { width: 1440, height: 900 });
+    await page.waitForSelector('#app[aria-busy="false"] .view-board');
+
+    const driftCheck = await page.evaluate(() => {
+      const laneHeads = Array.from(document.querySelectorAll('.matrix-spine .lane-head'));
+      const cols = Array.from(document.querySelectorAll('.col'));
+      const rowDrifts = [];
+
+      for (let i = 0; i < laneHeads.length; i++) {
+        const headRect = laneHeads[i].getBoundingClientRect();
+        for (const col of cols) {
+          const cells = col.querySelectorAll('.matrix-cell');
+          const cell = cells[i];
+          if (cell) {
+            const cellRect = cell.getBoundingClientRect();
+            const topDiff = Math.abs(cellRect.top - headRect.top);
+            const bottomDiff = Math.abs(cellRect.bottom - headRect.bottom);
+            if (topDiff > 1.5 || bottomDiff > 1.5) {
+              rowDrifts.push({ laneIndex: i, topDiff, bottomDiff });
+            }
+          }
+        }
+      }
+      return { laneCount: laneHeads.length, rowDrifts };
+    });
+
+    assert.ok(driftCheck.laneCount > 0, 'must have lanes');
+    assert.deepEqual(driftCheck.rowDrifts, [], 'matrix cell row boundaries must align with lane headers');
+    await context.close();
+  });
+
   test('board column counts equal the ledger counts, and every card links to its ticket', async () => {
     const { context, page } = await open('normal');
     for (const stage of rawSample.board_stages) {

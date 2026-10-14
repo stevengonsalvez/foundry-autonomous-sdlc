@@ -68,8 +68,8 @@ function ticketChip(ticket, nowMs, lens) {
   else if (ticket.stage === 'prod') stateTone = 'done';
 
   const link = ticket.pending
-    ? ghLink(ticketGithubUrl(ticket), [ticket.title || 'Untitled', icon('external', { size: 12, className: 'icon-ext' })], { class: 'card-link clamp-1' })
-    : h('a', { class: 'card-link clamp-1', href: ticketHref(ticket.issue), 'data-fkey': `t${ticket.issue}` }, ticket.title || 'Untitled');
+    ? ghLink(ticketGithubUrl(ticket), [ticket.title || 'Untitled', icon('external', { size: 12, className: 'icon-ext' })], { class: 'card-link chip-title clamp-1' })
+    : h('a', { class: 'card-link chip-title clamp-1', href: ticketHref(ticket.issue), 'data-fkey': `t${ticket.issue}` }, ticket.title || 'Untitled');
 
   const stateGlyphs = {
     active: '',
@@ -85,7 +85,7 @@ function ticketChip(ticket, nowMs, lens) {
     blocked: 'blocked',
     done: 'done',
   }[stateTone] ?? stateTone;
-  const chipNum = h('span', { class: 'chip-num' }, ticket.kind === 'pr' ? `PR #${ticket.issue}` : `#${ticket.issue}`);
+  const chipNum = h('span', { class: 'chip-num', title: ticket.kind === 'pr' ? `PR #${ticket.issue}` : `#${ticket.issue}` }, `#${ticket.issue}`);
   const chipDot = h('span', { class: `chip-dot dot-${stateTone}`, 'aria-hidden': 'true', title: stateSrText }, stateGlyphs[stateTone]);
   const chipAgent = h('span', { class: 'chip-agent', title: agentName || 'unassigned' }, tag);
 
@@ -109,8 +109,8 @@ function ticketChip(ticket, nowMs, lens) {
       h('span', { class: 'chip-gate-verdict' }, totalGates > 0 ? `${passCount}/${totalGates}` : 'none'),
     );
   } else {
-    // Delivery lens: time in stage
-    lensContent = h('span', { class: 'chip-lens chip-time' }, sinceEl(inStage.since, nowMs));
+    // Delivery lens: compact time in stage for chip
+    lensContent = h('span', { class: 'chip-lens chip-time' }, sinceEl(inStage.since, nowMs, true));
   }
 
   const flags = flagBadges(ticket.flags);
@@ -419,6 +419,7 @@ export function renderBoard(ctx) {
 
     const stageCols = columns.map((c, colIdx) => stageColumn(c, colIdx, now, isFiltered(), ui.board.lens || 'delivery', ui.board.group || 'type', lanes));
 
+    boardMatrix.style.setProperty('--lane-count', String(lanes.length));
     boardMatrix.replaceChildren(laneSpine(lanes), ...stageCols);
 
     const shown = columns.reduce((n, c) => n + c.tickets.length, 0);

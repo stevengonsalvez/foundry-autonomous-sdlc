@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { escalationLabel, formatDuration, formatInteger, formatPercent, formatRatio, formatRelative, formatShortTime, formatTimestamp, formatUsd, formatUsdWords, shortSha, truncate } from '../js/format.js';
+import { escalationLabel, formatDuration, formatDurationCompact, formatInteger, formatPercent, formatRatio, formatRelative, formatShortTime, formatTimestamp, formatUsd, formatUsdWords, shortSha, truncate } from '../js/format.js';
 
 test('money: two decimals, four under a cent, never invented', () => {
   assert.equal(formatUsd(13.0194), '$13.02');
@@ -27,6 +27,15 @@ test('durations read the way people say them', () => {
   assert.equal(formatDuration(93600), '1d 2h');
   assert.equal(formatDuration(-1), '-');
   assert.equal(formatDuration(null), '-');
+
+  assert.equal(formatDurationCompact(0), '0s');
+  assert.equal(formatDurationCompact(59), '59s');
+  assert.equal(formatDurationCompact(167), '2m');
+  assert.equal(formatDurationCompact(3600), '1h');
+  assert.equal(formatDurationCompact(80460), '22h');
+  assert.equal(formatDurationCompact(93600), '1d');
+  assert.equal(formatDurationCompact(-1), '-');
+  assert.equal(formatDurationCompact(null), '-');
 });
 
 test('relative and absolute times are UTC and tolerate bad input', () => {

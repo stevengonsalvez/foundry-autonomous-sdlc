@@ -3,7 +3,7 @@
 
 import { badge, classToken, ghLink, h } from '../dom.js';
 import { icon } from '../icons.js';
-import { escalationLabel, formatDuration, formatTimestamp, formatUsd, parseTime, shortSha, titleCase } from '../format.js';
+import { escalationLabel, formatDuration, formatDurationCompact, formatTimestamp, formatUsd, parseTime, shortSha, titleCase } from '../format.js';
 import { commitUrl, dataLink, issueUrl, pullUrl, releaseUrl, safeGithubUrl } from '../safe.js';
 import { costBand, stageLabel } from '../model.js';
 import { BOARD_STAGES } from '../schema.js';
@@ -193,10 +193,12 @@ export function seconds(iso, nowMs) {
 }
 
 /** A running duration since `iso`, kept current by the page ticker. */
-export function sinceEl(iso, nowMs) {
+export function sinceEl(iso, nowMs, compact = false) {
   const s = seconds(iso, nowMs);
   if (s === null) return h('span', { class: 'muted' }, '-');
-  return h('time', { datetime: iso, title: `since ${formatTimestamp(iso)}`, 'data-since': iso }, formatDuration(s));
+  const full = formatDuration(s);
+  const text = compact ? formatDurationCompact(s) : full;
+  return h('time', { datetime: iso, title: `since ${formatTimestamp(iso)} (${full})`, 'data-since': iso }, text);
 }
 
 // ------------------------------------------------------------------ deploy events
