@@ -157,13 +157,22 @@ class FoundryClient:
             self._project = self._project_factory(self._endpoint, self._credential)
         return self._project
 
-    def call_prompt_agent(self, agent: str, input_text: str, *, max_output_tokens: int = 8000) -> AgentResult:
+    def call_prompt_agent(self, agent: str, input_text: str, *, image_urls: list[str] | None = None,
+                          max_output_tokens: int = 8000) -> AgentResult:
         import openai  # deferred: the SDK import is slow and only this method needs it
+
+        if image_urls:
+            input_payload: str | list[dict[str, Any]] = [
+                {"type": "input_text", "text": input_text},
+                *[{"type": "input_image", "image_url": url} for url in image_urls],
+            ]
+        else:
+            input_payload = input_text
 
         with self._client().get_openai_client(max_retries=0, timeout=CALL_TIMEOUT_S) as oc:
             try:
                 resp = oc.responses.create(
-                    input=input_text,
+                    input=input_payload,
                     max_output_tokens=min(max_output_tokens, HARD_MAX_OUTPUT_TOKENS),
                     extra_body={"agent_reference": {"type": "agent_reference", "name": agent}},
                 )
@@ -295,7 +304,8 @@ def _always() -> str | None:
 
 
 def _call_once(foundry: FoundryPort, agent_name: str, sections: list[Section], bill: Bill,
-               retry: RetryPolicy | None, allow: Allow) -> AgentResult:
+               retry: RetryPolicy | None, allow: Allow,
+               image_urls: list[str] | None = None) -> AgentResult:
     agent = AGENT_BY_NAME[agent_name]
     text = build_input(sections, new_nonce())
 
@@ -303,7 +313,8 @@ def _call_once(foundry: FoundryPort, agent_name: str, sections: list[Section], b
         if stop := allow():
             raise AgentBudgetError(f"{agent_name}: {stop}")
         try:
-            return foundry.call_prompt_agent(agent_name, text, max_output_tokens=agent.max_output_tokens)
+            return foundry.call_prompt_agent(agent_name, text, image_urls=image_urls,
+                                            max_output_tokens=agent.max_output_tokens)
         except AgentRunError as exc:
             if exc.input_tokens or exc.output_tokens:   # incomplete answers were still generated
                 bill(agent_name, exc.input_tokens, exc.output_tokens)
@@ -326,12 +337,13 @@ def _parse(agent_name: str, text: str, check: Check | None) -> dict[str, Any]:
 
 
 def run_agent(foundry: FoundryPort, agent_name: str, sections: list[Section], *,
+              image_urls: list[str] | None = None,
               bill: Bill = _no_bill, retry: RetryPolicy | None = None, allow: Allow = _always,
               check: Check | None = None) -> AgentOutput:
     """`allow` is asked before every call, retries and the repair included, so a cap reached part way
     through a step stops it (AgentBudgetError) instead of spending past the cap. `check` adds the
     caller's own validation (for example against the repository); its errors get the same one repair."""
-    result = _call_once(foundry, agent_name, sections, bill, retry, allow)
+    result = _call_once(foundry, agent_name, sections, bill, retry, allow, image_urls=image_urls)
     if AGENT_BY_NAME[agent_name].output_kind == "markdown":
         return AgentOutput(None, sanitise_markdown(result.text), result.input_tokens, result.output_tokens)
     try:
@@ -343,7 +355,7 @@ def run_agent(foundry: FoundryPort, agent_name: str, sections: list[Section], *,
                                    "repair_reason. Answer again with exactly the required JSON object and "
                                    "nothing else.", trusted=True),
                  Section("repair_reason", str(exc))]
-    repaired = _call_once(foundry, agent_name, [*sections, *notes], bill, retry, allow)
+    repaired = _call_once(foundry, agent_name, [*sections, *notes], bill, retry, allow, image_urls=image_urls)
     try:
         data = _parse(agent_name, repaired.text, check)
     except ValueError as exc:

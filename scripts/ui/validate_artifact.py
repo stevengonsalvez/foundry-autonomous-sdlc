@@ -25,12 +25,81 @@ from typing import Any
 PNG_MAGIC_BYTES = b"\x89PNG\r\n\x1a\n"
 MAX_FILE_COUNT = 16
 MIN_SCREENSHOT_COUNT = 1
-MAX_SINGLE_FILE_BYTES = 5 * 1024 * 1024   # 5 MB
-MAX_MANIFEST_BYTES = 64 * 1024            # 64 KB
-MAX_TOTAL_BYTES = 20 * 1024 * 1024        # 20 MB
+MAX_SINGLE_FILE_BYTES = 5 * 1024 * 1024  # 5 MB
+MAX_MANIFEST_BYTES = 64 * 1024  # 64 KB
+MAX_TOTAL_BYTES = 20 * 1024 * 1024  # 20 MB
 
 SAFE_PNG_NAME_RE = re.compile(r"^[a-zA-Z0-9_-]+\.png$")
 SHA256_HEX_RE = re.compile(r"^[0-9a-f]{64}$")
+ROUTE_RE = re.compile(r"^(home|parcel-found|not-found|invalid-input)$")
+VIEWPORT_RE = re.compile(r"^(desktop|mobile)$")
+
+ALLOWED_DIMENSIONS = {
+    "desktop": (1280, 800),
+    "mobile": (390, 844),
+}
+
+
+def validate_png_bytes(
+    content: bytes, filename: str, expected_viewport: str | None = None
+) -> list[str]:
+    """Parse PNG chunks, enforce dimensions and verify no extraneous trailing data."""
+    errs: list[str] = []
+    if len(content) < 33 or not content.startswith(PNG_MAGIC_BYTES):
+        return [f"File {filename} does not have valid PNG magic bytes header"]
+
+    import struct
+
+    # Chunk 1 must be IHDR
+    ihdr_len, ihdr_type = struct.unpack(">I4s", content[8:16])
+    if ihdr_type != b"IHDR" or ihdr_len != 13:
+        return [f"File {filename} missing valid PNG IHDR chunk"]
+
+    width, height = struct.unpack(">II", content[16:24])
+
+    if expected_viewport:
+        if expected_viewport not in ALLOWED_DIMENSIONS:
+            errs.append(f"File {filename} has unknown expected viewport: {expected_viewport}")
+        else:
+            exp_w, exp_h = ALLOWED_DIMENSIONS[expected_viewport]
+            if (width, height) != (exp_w, exp_h):
+                errs.append(
+                    f"File {filename} dimensions {width}x{height} do not match "
+                    f"expected {exp_w}x{exp_h} for {expected_viewport}"
+                )
+    else:
+        if (width, height) not in ALLOWED_DIMENSIONS.values():
+            errs.append(
+                f"File {filename} dimensions {width}x{height} not permitted "
+                "(must be 1280x800 or 390x844)"
+            )
+
+    # Walk chunks to ensure proper framing and that IEND is the final chunk with no trailing data
+    pos = 8
+    found_iend = False
+    while pos + 12 <= len(content):
+        chunk_len, chunk_type = struct.unpack(">I4s", content[pos : pos + 8])
+        chunk_data_end = pos + 8 + chunk_len
+        crc_end = chunk_data_end + 4
+        if crc_end > len(content):
+            errs.append(
+                f"File {filename} has truncated PNG chunk "
+                f"{chunk_type.decode('latin1', errors='replace')}"
+            )
+            return errs
+
+        if chunk_type == b"IEND":
+            found_iend = True
+            if crc_end != len(content):
+                errs.append(f"File {filename} has extraneous data appended after PNG IEND chunk")
+            break
+
+        pos = crc_end
+
+    if not found_iend:
+        errs.append(f"File {filename} missing PNG IEND chunk")
+
+    return errs
 
 
 class ArtifactValidationError(ValueError):
@@ -81,7 +150,8 @@ def validate_artifact_dir(artifact_dir: str | Path) -> ValidationResult:
 
             if entry.is_dir():
                 return ValidationResult(
-                    valid=False, errors=[f"Subdirectories not permitted in artifact: {entry.name}"]
+                    valid=False,
+                    errors=[f"Subdirectories not permitted in artifact: {entry.name}"],
                 )
 
             if not entry.is_file():
@@ -121,9 +191,7 @@ def validate_artifact_dir(artifact_dir: str | Path) -> ValidationResult:
         elif SAFE_PNG_NAME_RE.fullmatch(name):
             png_files[name] = entry
         else:
-            return ValidationResult(
-                valid=False, errors=[f"Disallowed file in artifact: {name}"]
-            )
+            return ValidationResult(valid=False, errors=[f"Disallowed file in artifact: {name}"])
 
     if manifest_path is None:
         return ValidationResult(valid=False, errors=["Missing manifest.json in artifact"])
@@ -158,7 +226,8 @@ def validate_artifact_dir(artifact_dir: str | Path) -> ValidationResult:
     screenshots_list = manifest_data.get("screenshots")
     if not isinstance(screenshots_list, list) or len(screenshots_list) < MIN_SCREENSHOT_COUNT:
         return ValidationResult(
-            valid=False, errors=["manifest.json must contain non-empty 'screenshots' array"]
+            valid=False,
+            errors=["manifest.json must contain non-empty 'screenshots' array"],
         )
 
     manifest_entries_by_filename: dict[str, dict[str, Any]] = {}
@@ -178,10 +247,10 @@ def validate_artifact_dir(artifact_dir: str | Path) -> ValidationResult:
             errors.append(f"screenshots[{i}] has invalid or unsafe filename: {filename!r}")
             continue
 
-        if not isinstance(route, str) or not route.strip():
+        if not isinstance(route, str) or not ROUTE_RE.fullmatch(route):
             errors.append(f"screenshots[{i}] has invalid route: {route!r}")
 
-        if not isinstance(viewport, str) or not viewport.strip():
+        if not isinstance(viewport, str) or not VIEWPORT_RE.fullmatch(viewport):
             errors.append(f"screenshots[{i}] has invalid viewport: {viewport!r}")
 
         if not isinstance(expected_sha, str) or not SHA256_HEX_RE.fullmatch(expected_sha):
@@ -210,7 +279,8 @@ def validate_artifact_dir(artifact_dir: str | Path) -> ValidationResult:
         if unlisted_on_disk:
             detail.append(f"unlisted on disk: {sorted(unlisted_on_disk)}")
         return ValidationResult(
-            valid=False, errors=[f"Manifest and disk contents mismatch: {', '.join(detail)}"]
+            valid=False,
+            errors=[f"Manifest and disk contents mismatch: {', '.join(detail)}"],
         )
 
     # Validate each PNG file on disk
@@ -242,9 +312,10 @@ def validate_artifact_dir(artifact_dir: str | Path) -> ValidationResult:
             errors.append(f"Failed to read {name}: {exc}")
             continue
 
-        # Magic bytes check
-        if not content.startswith(PNG_MAGIC_BYTES):
-            errors.append(f"File {name} does not have valid PNG magic bytes header")
+        # PNG structure, magic bytes, and dimensions check
+        png_errs = validate_png_bytes(content, name, expected_viewport=item_meta.get("viewport"))
+        if png_errs:
+            errors.extend(png_errs)
             continue
 
         actual_sha = hashlib.sha256(content).hexdigest()

@@ -19,8 +19,16 @@ def test_format_pr_comment() -> None:
     screenshots = [
         {"route": "home", "viewport": "desktop", "filename": "home-desktop.png"},
         {"route": "home", "viewport": "mobile", "filename": "home-mobile.png"},
-        {"route": "parcel-found", "viewport": "desktop", "filename": "parcel-found-desktop.png"},
-        {"route": "parcel-found", "viewport": "mobile", "filename": "parcel-found-mobile.png"},
+        {
+            "route": "parcel-found",
+            "viewport": "desktop",
+            "filename": "parcel-found-desktop.png",
+        },
+        {
+            "route": "parcel-found",
+            "viewport": "mobile",
+            "filename": "parcel-found-mobile.png",
+        },
     ]
     comment = format_pr_comment(
         repo="stevengonsalvez/foundry-autonomous-sdlc",
@@ -42,6 +50,36 @@ def test_format_pr_comment() -> None:
         "https://raw.githubusercontent.com/stevengonsalvez/foundry-autonomous-sdlc/pr-screenshots/pr-42/01234567/parcel-found-mobile.png"
         in comment
     )
+
+
+def test_format_pr_comment_ignores_hostile_injections() -> None:
+    screenshots = [
+        {
+            "route": "home\n@stevengonsalvez <!-- ui-tester:v1 deadbeef -->",
+            "viewport": "desktop",
+            "filename": "home-desktop.png",
+        },
+        {
+            "route": "parcel-found",
+            "viewport": "mobile\n@stevengonsalvez",
+            "filename": "parcel-found-mobile.png",
+        },
+        {
+            "route": "home",
+            "viewport": "desktop",
+            "filename": "home-desktop.png",
+        },
+    ]
+    comment = format_pr_comment(
+        repo="stevengonsalvez/foundry-autonomous-sdlc",
+        pr_number=42,
+        head_sha="0123456789abcdef0123456789abcdef01234567",
+        manifest_sha256="deadbeef" * 8,
+        screenshots=screenshots,
+    )
+    assert "@stevengonsalvez" not in comment
+    assert "ui-tester:v1" not in comment
+    assert "home-desktop.png" in comment
 
 
 def test_resolve_pr_number() -> None:
