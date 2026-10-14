@@ -574,11 +574,13 @@ class _Tick:
         return RetryPolicy(sleep=self.sleep, monotonic=self.clock.monotonic, deadline=self.deadline)
 
     def _call(self, obj: _Object, agent: str, sections: list[Section],
-              check: Callable[[dict[str, Any]], None] | None = None) -> AgentOutput:
+              check: Callable[[dict[str, Any]], None] | None = None,
+              image_urls: list[str] | None = None) -> AgentOutput:
         """Run a prompt agent with retries; every answered call (valid or not) is billed to the object."""
         return run_agent(self.foundry, agent, sections, retry=self._retry(), allow=lambda: self._spend_stop(obj),
                          check=check,
-                         bill=lambda name, tokens_in, tokens_out: self._bill(obj, name, tokens_in, tokens_out))
+                         bill=lambda name, tokens_in, tokens_out: self._bill(obj, name, tokens_in, tokens_out),
+                         image_urls=image_urls)
 
     def _hosted(self, body: dict[str, Any], session_id: str | None,
                 retry_if: Callable[[AgentRunError], bool] | None = None) -> tuple[dict[str, Any], str]:
@@ -1391,15 +1393,31 @@ class _Tick:
 
         try:
             pr_comments = obj.comments if obj.kind == "pr" else self.github.list_comments(ctx.pr.number)
-            ui_proof = next((c for c in pr_comments if UI_PROOF_MARKER in c.body), None)
+            ui_proof = next(
+                (c for c in pr_comments if c.author == "github-actions[bot]" and c.body.startswith(UI_PROOF_MARKER)),
+                None,
+            )
             if ui_proof is None:
                 return
 
-            target_marker = render_ui_tester_marker(ctx.pr.head_sha)
-            if any(target_marker in c.body for c in pr_comments):
+            # Dedupe only on markers authored by OWNER; upsert one marker comment instead of one per sha
+            existing = next(
+                (c for c in pr_comments if c.author == OWNER and c.body.startswith(UI_TESTER_MARKER_PREFIX)),
+                None,
+            )
+            if existing is not None and ctx.pr.head_sha in existing.body:
                 return
 
-            image_urls = re.findall(r"https://raw\.githubusercontent\.com/[^\s\"\'\)]+\.png", ui_proof.body)
+            url_re = re.compile(
+                r"^https://raw\.githubusercontent\.com/"
+                + re.escape(REPO)
+                + r"/pr-screenshots/pr-\d+/[0-9a-f]{8}/[a-z-]+\.png$"
+            )
+            raw_urls = re.findall(
+                r"https://raw\.githubusercontent\.com/[^\s\"\'\)<>]+",
+                ui_proof.body,
+            )
+            image_urls = [u for u in dict.fromkeys(raw_urls) if url_re.match(u)]
             if not image_urls:
                 return
 
@@ -1412,7 +1430,7 @@ class _Tick:
                     f"head sha: {ctx.pr.head_sha}\npull request: #{ctx.pr.number}",
                     trusted=True,
                 ),
-                Section("images", "\n".join(image_urls), trusted=True),
+                Section("images", "\n".join(image_urls), trusted=False),
                 Section(
                     "routes",
                     "Routes tested: home, parcel-found, not-found, invalid-input at "
@@ -1422,31 +1440,32 @@ class _Tick:
                 Section("pr", f"title: {ctx.pr.title}\n\n{ctx.pr.body}"),
             ]
 
-            output = self._call(obj, "sdlc-ui-tester", sections)
+            output = self._call(obj, "sdlc-ui-tester", sections, image_urls=image_urls)
             data = output.data or {}
-            verdict = data.get("verdict", "pass")
+            verdict = sanitise_markdown(one_line(str(data.get("verdict", "pass")), 50))
             findings = data.get("findings", [])
-            summary = data.get("summary", "")
+            summary = sanitise_markdown(one_line(str(data.get("summary", "")), 400))
 
+            target_marker = render_ui_tester_marker(ctx.pr.head_sha)
             lines = [
                 target_marker,
                 f"**UI Vision Tester** (sdlc-ui-tester) for `{ctx.pr.head_sha[:7]}`: **{verdict.upper()}** (advisory).",
                 "",
-                sanitise_markdown(one_line(summary, 400)),
+                summary,
                 "",
             ]
             if findings:
                 lines.append("### Findings")
                 for f in findings:
-                    route = f.get("route", "")
-                    vp = f.get("viewport", "")
-                    sev = f.get("severity", "info")
-                    issue = sanitise_markdown(one_line(f.get("issue", ""), 300))
+                    route = sanitise_markdown(one_line(str(f.get("route", "")), 100))
+                    vp = sanitise_markdown(one_line(str(f.get("viewport", "")), 50))
+                    sev = sanitise_markdown(one_line(str(f.get("severity", "info")), 50))
+                    issue = sanitise_markdown(one_line(str(f.get("issue", "")), 300))
                     lines.append(f"- [{sev}] {route}/{vp}: {issue}")
             else:
                 lines.append("No visual UI anomalies detected.")
 
-            self.github.create_comment(ctx.pr.number, "\n".join(lines))
+            self._upsert(ctx.pr.number, pr_comments, UI_TESTER_MARKER_PREFIX, "\n".join(lines), existing=existing)
             if obj.state is not None:
                 obj.state.data["ui_tester"] = {
                     "verdict": verdict,

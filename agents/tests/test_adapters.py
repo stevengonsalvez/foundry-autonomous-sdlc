@@ -96,6 +96,22 @@ def test_prompt_agent_call_uses_an_agent_reference_by_name_and_returns_usage() -
     project.get_openai_client.assert_called_with(max_retries=0, timeout=120.0)
 
 
+def test_prompt_agent_call_with_image_urls_sends_input_image_content_parts() -> None:
+    project = project_returning(response())
+    client = FoundryClient(ENDPOINT, Token(), project_factory=lambda e, c: project)
+    urls = [
+        "https://raw.githubusercontent.com/stevengonsalvez/foundry-autonomous-sdlc/pr-screenshots/pr-1/abcd1234/home-desktop.png",
+        "https://raw.githubusercontent.com/stevengonsalvez/foundry-autonomous-sdlc/pr-screenshots/pr-1/abcd1234/home-mobile.png",
+    ]
+    client.call_prompt_agent("sdlc-ui-tester", "prompt text", image_urls=urls)
+    kwargs = project.get_openai_client.return_value.responses.create.call_args.kwargs
+    assert kwargs["input"] == [
+        {"type": "input_text", "text": "prompt text"},
+        {"type": "input_image", "image_url": urls[0]},
+        {"type": "input_image", "image_url": urls[1]},
+    ]
+
+
 @pytest.mark.parametrize("result, message", [
     (response(status="incomplete"), "not completed: max_output_tokens"),
     (response(text="  "), "empty text"),
