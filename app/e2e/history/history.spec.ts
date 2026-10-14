@@ -1,5 +1,7 @@
+import { execSync } from "node:child_process";
 import fs from "node:fs";
 import http from "node:http";
+import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import AxeBuilder from "@axe-core/playwright";
@@ -8,7 +10,6 @@ import { expect, test } from "@playwright/test";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const REPO_ROOT = path.resolve(__dirname, "../../..");
-const HISTORY_DIR = path.resolve(REPO_ROOT, "history");
 
 const MIME_TYPES: Record<string, string> = {
   ".html": "text/html; charset=utf-8",
@@ -19,10 +20,59 @@ const MIME_TYPES: Record<string, string> = {
   ".svg": "image/svg+xml",
 };
 
+let tempScreenshotsDir: string;
+let tempHistoryDir: string;
 let server: http.Server;
 let historyUrl: string;
 
 test.beforeAll(async () => {
+  // 1. Create temporary mock screenshots fixture
+  tempScreenshotsDir = fs.mkdtempSync(path.join(os.tmpdir(), "history-e2e-screenshots-"));
+  const stubPng = Buffer.from(
+    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=",
+    "base64"
+  );
+  const routes = ["home", "parcel-found", "not-found", "invalid-input"];
+  const viewports = ["desktop", "mobile"];
+
+  for (const tag of ["v0.1.0", "v0.4.0"]) {
+    const tagDir = path.join(tempScreenshotsDir, tag);
+    fs.mkdirSync(tagDir, { recursive: true });
+    const screenshots = [];
+    for (const r of routes) {
+      for (const vp of viewports) {
+        const fn = `${r}-${vp}.png`;
+        fs.writeFileSync(path.join(tagDir, fn), stubPng);
+        screenshots.push({
+          route: r,
+          viewport: vp,
+          filename: fn,
+          sha256: "stub",
+          size_bytes: stubPng.length,
+        });
+      }
+    }
+    fs.writeFileSync(
+      path.join(tagDir, "manifest.json"),
+      JSON.stringify({
+        version: 1,
+        tag,
+        commit_sha: "a1b2c3d4e5f60718",
+        reproducible: true,
+        screenshots,
+      })
+    );
+  }
+
+  // 2. Create temporary output directory and generate history site dynamically
+  tempHistoryDir = fs.mkdtempSync(path.join(os.tmpdir(), "history-e2e-output-"));
+  const generatorScript = path.join(REPO_ROOT, "scripts/ui/generate_history.py");
+  execSync(
+    `python3 "${generatorScript}" --output-dir "${tempHistoryDir}" --screenshots-dir "${tempScreenshotsDir}"`,
+    { cwd: REPO_ROOT, stdio: "pipe" }
+  );
+
+  // 3. Serve dynamically generated site
   await new Promise<void>((resolve, reject) => {
     server = http.createServer((req, res) => {
       const parsedUrl = new URL(req.url ?? "/", "http://127.0.0.1");
@@ -30,8 +80,8 @@ test.beforeAll(async () => {
       if (relPath === "/" || relPath === "") {
         relPath = "/index.html";
       }
-      const filePath = path.join(HISTORY_DIR, relPath);
-      if (!filePath.startsWith(HISTORY_DIR)) {
+      const filePath = path.join(tempHistoryDir, relPath);
+      if (!filePath.startsWith(tempHistoryDir)) {
         res.writeHead(403);
         res.end("Forbidden");
         return;
@@ -41,15 +91,6 @@ test.beforeAll(async () => {
         const contentType = MIME_TYPES[ext] ?? "application/octet-stream";
         res.writeHead(200, { "Content-Type": contentType });
         fs.createReadStream(filePath).pipe(res);
-      } else if (relPath.startsWith("/screenshots/") && relPath.endsWith(".png")) {
-        // Screenshots are hosted on pr-screenshots and assembled at Pages build time.
-        // Provide a valid PNG stub if screenshots are not present on local disk.
-        const stubPng = Buffer.from(
-          "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=",
-          "base64"
-        );
-        res.writeHead(200, { "Content-Type": "image/png" });
-        res.end(stubPng);
       } else {
         res.writeHead(404);
         res.end("Not Found");
@@ -76,6 +117,13 @@ test.afterAll(async () => {
       resolve();
     }
   });
+
+  if (tempHistoryDir && fs.existsSync(tempHistoryDir)) {
+    fs.rmSync(tempHistoryDir, { recursive: true, force: true });
+  }
+  if (tempScreenshotsDir && fs.existsSync(tempScreenshotsDir)) {
+    fs.rmSync(tempScreenshotsDir, { recursive: true, force: true });
+  }
 });
 
 test.describe("App Evolution Showcase (/history/)", () => {
@@ -173,7 +221,7 @@ test.describe("App Evolution Showcase (/history/)", () => {
 
   test("renders then-vs-now strip and side-by-side timeline comparisons dynamically from data.json", async ({ page }) => {
     const dataJson = JSON.parse(
-      fs.readFileSync(path.join(HISTORY_DIR, "data.json"), "utf-8")
+      fs.readFileSync(path.join(tempHistoryDir, "data.json"), "utf-8")
     );
     const entries = dataJson.entries || [];
     const latestEntry = entries[0];
