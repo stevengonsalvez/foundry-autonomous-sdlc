@@ -8,7 +8,7 @@ from typing import Any
 
 import pytest
 
-from sdlc_agents.ledger import events, fold
+from sdlc_agents.ledger import events, fold, model
 from tests.ledger.conftest import NOW, ticket_event, ticket_of
 
 
@@ -412,3 +412,37 @@ def test_old_state_json_without_resolved_backwards_compatible(real) -> None:
     assert "resolved" in t17["escalation"]
     assert t17["escalation"]["resolved"] is None
     assert t17["escalation"]["open"] is True
+
+
+def test_rollback_on_ticket_with_earlier_resolved_escalation_replaces_with_open_synthetic_escalation(
+    real,
+) -> None:
+    item = copy.deepcopy(real[12])
+    sha = item["state_data"]["pr"]["merge_sha"]
+    t = ticket_of(item)
+    t["escalation"] = {
+        "label": "escalated:build-failed",
+        "reasons": ["earlier build failure"],
+        "at": "2026-10-10T14:00:00Z",
+        "attempts": 1,
+        "tried": [],
+        "evidence_url": t["url"],
+        "resolved": {"at": "2026-10-10T14:30:00Z", "by": "human", "how": "closed"},
+        "open": False,
+    }
+    t_ev = events.make("ticket.updated", "2026-10-10T14:30:00Z", {"ticket": t}, issue=12)
+    first = hop("stage", "f" * 40, "2026-10-09T10:00:00Z")
+    history = [
+        first,
+        hop("stage", sha, "2026-10-10T15:20:00Z", pr=13, issue=12),
+        hop("rollback", sha, "2026-10-10T15:30:00Z", pr=13, issue=12, reason="smoke failed on staging"),
+    ]
+    doc = fold.fold([t_ev, env_event(deploy_doc(history), "2026-10-10T15:30:00Z")], NOW)
+    ticket12 = doc["tickets"][0]
+    assert ticket12["env"] == "rolled-back"
+    assert ticket12["stage"] == "escalated"
+    assert ticket12["escalation"]["label"] == model.DEPLOY_FAILED_LABEL
+    assert ticket12["escalation"]["synthetic"] is True
+    assert ticket12["escalation"]["resolved"] is None
+    assert ticket12["escalation"]["open"] is True
+    assert "smoke failed on staging" in ticket12["escalation"]["reasons"][0]

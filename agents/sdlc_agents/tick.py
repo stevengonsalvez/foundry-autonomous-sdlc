@@ -1381,7 +1381,7 @@ class _Tick:
                 number=obj.item.number, kind=obj.kind, title=obj.item.title, author=obj.item.author,
                 opened_at=obj.item.created_at, closed_at=obj.item.closed_at, labels=obj.item.labels,
                 state_data=obj.st.data, comment_ids=comment_ids,
-                comments=[c for c in obj.comments if c.author == OWNER],
+                comments=obj.comments,
                 updated_at=getattr(obj.item, "updated_at", None),
                 reopened_at=getattr(obj.item, "reopened_at", None),
             )

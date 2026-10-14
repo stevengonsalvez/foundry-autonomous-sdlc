@@ -70,6 +70,10 @@ def build_ticket(
                 ]
         except GitHubError:
             pr_info = None
+    reopened_at = getattr(item, "reopened_at", None)
+    if reopened_at is None and previous and previous.get("closed_at") and item.closed_at is None:
+        reopened_at = item.updated_at
+
     return model.ticket(
         number=item.number,
         kind="pr" if item.is_pull_request else "issue",
@@ -82,13 +86,9 @@ def build_ticket(
         commits=commits,
         pr_info=pr_info,
         comment_ids=ids,
-        comments=[
-            c
-            for c in comments
-            if getattr(c, "author", None) == OWNER or (isinstance(c, dict) and c.get("author") == OWNER)
-        ],
+        comments=comments,
         updated_at=getattr(item, "updated_at", None),
-        reopened_at=getattr(item, "reopened_at", None),
+        reopened_at=reopened_at,
     ), None
 
 

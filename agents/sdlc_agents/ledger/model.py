@@ -307,8 +307,7 @@ def derive_resolution(
     closed_at: str | None,
     comments: list[Any] | None,
     reopened_at: str | None = None,
-    esc_label: str | None = None,
-    env: str = "none",
+    labels: tuple[str, ...] | list[str] = (),
 ) -> dict[str, Any] | None:
     """Derive resolution for an escalation from GitHub closed status and comments."""
     if not esc_at:
@@ -318,18 +317,17 @@ def derive_resolution(
     cutoff = max(esc_at, reopened_at) if reopened_at else esc_at
     marker_comments = []
     for c in comments or []:
-        c_author = getattr(c, "author", None) or (c.get("author") if isinstance(c, dict) else "") or ""
-        if c_author != OWNER:
+        if getattr(c, "author", None) != OWNER:
             continue
-        c_at = getattr(c, "created_at", None) or (c.get("created_at") if isinstance(c, dict) else "") or ""
+        c_at = getattr(c, "created_at", None)
         if not c_at or c_at < cutoff:
             continue
-        c_body = getattr(c, "body", None) or (c.get("body") if isinstance(c, dict) else "") or ""
-        if SIMULATED_HUMAN_MARKER in c_body:
+        c_body = getattr(c, "body", "") or ""
+        if c_body.lstrip().startswith("### " + SIMULATED_HUMAN_MARKER):
             marker_comments.append((c_at, c))
 
-    # Case 1: Issue closed (skip for escalated:deploy-failed and rolled-back tickets)
-    if closed_at and esc_label != DEPLOY_FAILED_LABEL and env != "rolled-back":
+    # Case 1: Issue closed (skip for escalated:deploy-failed tickets)
+    if closed_at and DEPLOY_FAILED_LABEL not in labels:
         return {
             "at": max(closed_at, esc_at),
             "by": "simulated-human" if marker_comments else "human",
@@ -345,14 +343,6 @@ def derive_resolution(
             "how": "answered",
         }
 
-    # Case 3: Deploy failed superseded by a successful release
-    if env == "prod" and esc_label == DEPLOY_FAILED_LABEL:
-        return {
-            "at": esc_at,
-            "by": "system",
-            "how": "superseded",
-        }
-
     return None
 
 
@@ -362,13 +352,11 @@ def escalation_block(
     label_only: str | None,
     evidence_url: str,
     at: str | None,
-    resolved: dict[str, Any] | None = None,
 ) -> dict[str, Any] | None:
     esc = data.get("escalation") if isinstance(data.get("escalation"), dict) else None
     if esc is None and label_only is None:
         return None
     coder = data.get("coder") if isinstance(data.get("coder"), dict) else {}
-    res = clean_resolved(resolved if resolved is not None else (esc or {}).get("resolved"))
     return {
         "label": clean((esc or {}).get("label") or label_only, 60),
         "reasons": [clean(r, 400) for r in (esc or {}).get("reasons", [])[:8]],
@@ -376,8 +364,8 @@ def escalation_block(
         "attempts": int(coder.get("attempts", 0) or 0),
         "tried": tried(data),
         "evidence_url": evidence_url,
-        "resolved": res,
-        "open": res is None,
+        "resolved": None,
+        "open": True,
     }
 
 
@@ -442,7 +430,6 @@ def ticket(
     gates_extra: dict[str, str] | None = None,
     summary: str | None = None,
     comments: list[Any] | None = None,
-    resolved: dict[str, Any] | None = None,
     updated_at: str | None = None,
     reopened_at: str | None = None,
 ) -> dict[str, Any]:
@@ -495,27 +482,26 @@ def ticket(
     evidence_url = url + (f"#issuecomment-{evidence_id}" if evidence_id else "")
     last_stage_at = state_stages[-1]["at"] if state_stages else opened_at
     esc_at = (data.get("escalation") or {}).get("at") or last_stage_at
-    resolved_val = resolved
-    if resolved_val is None and (is_escalation(esc_label) or DEPLOY_FAILED_LABEL in labels or env == "rolled-back"):
-        if (data.get("escalation") or {}).get("resolved"):
-            resolved_val = clean_resolved(data["escalation"]["resolved"])
-        elif comments is not None or closed_at is not None or env == "prod":
-            resolved_val = derive_resolution(
-                esc_at=esc_at,
-                closed_at=closed_at,
-                comments=comments,
-                reopened_at=reopened_at,
-                esc_label=esc_label,
-                env=env,
-            )
     escalation = escalation_block(
         data,
         label_only=esc_label if is_escalation(esc_label) or DEPLOY_FAILED_LABEL in labels else None,
         evidence_url=evidence_url,
         at=last_stage_at,
-        resolved=resolved_val,
     )
-    if env == "rolled-back" and escalation is None:
+    if escalation is not None:
+        resolved_val = None
+        if comments is not None or closed_at is not None:
+            resolved_val = derive_resolution(
+                esc_at=esc_at,
+                closed_at=closed_at,
+                comments=comments,
+                reopened_at=reopened_at,
+                labels=labels,
+            )
+        escalation["resolved"] = resolved_val
+        escalation["open"] = resolved_val is None
+
+    if env == "rolled-back" and (escalation is None or escalation.get("resolved") is not None):
         escalation = {
             "label": DEPLOY_FAILED_LABEL,
             "reasons": ["Release rolled back after a failed check"],
@@ -523,8 +509,8 @@ def ticket(
             "attempts": 0,
             "tried": tried(data),
             "evidence_url": evidence_url,
-            "resolved": clean_resolved(resolved_val),
-            "open": clean_resolved(resolved_val) is None,
+            "resolved": None,
+            "open": True,
         }
 
     history = stage_history(opened_at, state_stages)
@@ -645,5 +631,5 @@ def ticket(
 def digest(ticket_record: dict[str, Any]) -> str:
     """Fingerprint of what the ticket says, ignoring the summary and the digest itself, so a model summary
     is kept only while the facts it describes are unchanged."""
-    body = {k: v for k, v in ticket_record.items() if k not in ("summary", "digest")}
+    body = {k: v for k, v in ticket_record.items() if k not in ("summary", "digest", "updated_at")}
     return hashlib.sha256(json.dumps(body, sort_keys=True, separators=(",", ":")).encode()).hexdigest()[:12]

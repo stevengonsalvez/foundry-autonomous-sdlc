@@ -10,7 +10,7 @@ import pytest
 from fakes import FakeClock, FakeGitHub
 
 from sdlc_agents import state
-from sdlc_agents.ledger import events, fold
+from sdlc_agents.ledger import events, fold, reconcile
 from sdlc_agents.ledger.service import Ledger, LedgerError
 from sdlc_agents.ledger.store import EVENTS_FILE, STATE_FILE, MemoryBranchStore, StoreConflict
 from tests.ledger.conftest import ticket_event
@@ -164,6 +164,65 @@ def test_reconcile_rebuilds_tickets_from_github_and_is_quiet_when_nothing_change
     again = led.handle({"op": "reconcile"})
     types = [json.loads(line)["type"] for line in store.files[EVENTS_FILE].splitlines()]
     assert again["ok"] and types.count("ticket.updated") == 2
+
+
+def test_reconcile_emits_no_events_when_only_updated_at_changed(real) -> None:
+    gh = FakeGitHub(Clock())
+    item = real[6]
+    number = gh.open_issue(item["title"], "body", labels=tuple(item["labels"]))
+    gh.create_comment(number, state.render(state.State(item["state_data"])))
+    led, store = ledger(github=gh)
+    first = led.handle({"op": "reconcile"})
+    assert first["ok"] and first["tickets"] == 1
+    types1 = [json.loads(line)["type"] for line in store.files[EVENTS_FILE].splitlines()]
+    assert types1.count("ticket.updated") == 1
+
+    # Bump updated_at on the issue: digest must stay unchanged and reconcile emits 0 events
+    gh.issues[number]["updated_at"] = "2026-10-12T10:00:00Z"
+    second = led.handle({"op": "reconcile"})
+    assert second["ok"]
+    types2 = [json.loads(line)["type"] for line in store.files[EVENTS_FILE].splitlines()]
+    assert types2.count("ticket.updated") == 1
+
+
+def test_build_ticket_with_reopen_derives_reopened_at(real) -> None:
+    gh = FakeGitHub(Clock())
+    item = real[17]
+    number = gh.open_issue(item["title"], "body", labels=tuple(item["labels"]))
+    gh.create_comment(number, state.render(state.State(item["state_data"])))
+    # Add a marker comment posted before reopen (at 20:00:02)
+    gh.create_comment(number, "### Simulated human (antigravity)\nOld answer")
+    # Simulate previous state where the issue was closed
+    previous = {
+        "issue": number,
+        "closed_at": "2026-10-11T20:00:00Z",
+        "updated_at": "2026-10-11T20:00:00Z",
+        "digest": "abc",
+    }
+    # Issue is now reopened in GitHub: closed_at is None, updated_at is bumped after the comment
+    gh.issues[number]["closed_at"] = None
+    gh.issues[number]["updated_at"] = "2026-10-11T20:05:00Z"
+    issue_obj = gh.get_issue(number)
+
+    ticket, problem = reconcile.build_ticket(gh, issue_obj, previous, "2026-10-11T20:10:00Z")
+    assert problem is None
+    assert ticket is not None
+    # Because old marker was posted at 20:00:02 (before reopened_at 20:05:00), it does NOT resolve the escalation
+    assert ticket["escalation"]["resolved"] is None
+    assert ticket["escalation"]["open"] is True
+
+    # Post a new marker comment after reopened_at
+    gh.clock.advance(600.0)
+    new_comment = gh.create_comment(number, "### Simulated human (antigravity)\nNew answer")
+    ticket2, problem2 = reconcile.build_ticket(gh, issue_obj, previous, "2026-10-11T20:20:00Z")
+    assert problem2 is None
+    assert ticket2 is not None
+    assert ticket2["escalation"]["resolved"] == {
+        "at": new_comment.created_at,
+        "by": "simulated-human",
+        "how": "answered",
+    }
+    assert ticket2["escalation"]["open"] is False
 
 
 def test_fold_of_the_written_log_equals_the_written_state(real) -> None:

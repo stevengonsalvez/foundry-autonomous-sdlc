@@ -7,7 +7,7 @@ import json
 import pytest
 
 from sdlc_agents.ledger import events, model
-from sdlc_agents.ports import OWNER
+from sdlc_agents.ports import OWNER, Comment
 from tests.ledger.conftest import ticket_of
 
 
@@ -145,9 +145,7 @@ def test_derive_resolution_cases() -> None:
     assert res == {"at": "2026-10-10T16:00:00Z", "by": "human", "how": "closed"}
 
     # Closed issue, with simulated human marker from OWNER -> simulated-human, closed
-    comments = [
-        {"created_at": "2026-10-10T15:30:00Z", "author": OWNER, "body": "### Simulated human (antigravity)\nAnswer"}
-    ]
+    comments = [Comment(1, OWNER, "### Simulated human (antigravity)\nAnswer", "2026-10-10T15:30:00Z")]
     res = model.derive_resolution(esc_at=esc_at, closed_at="2026-10-10T16:00:00Z", comments=comments)
     assert res == {"at": "2026-10-10T16:00:00Z", "by": "simulated-human", "how": "closed"}
 
@@ -157,18 +155,12 @@ def test_derive_resolution_cases() -> None:
 
     # Non-owner marker comment -> resolved None
     non_owner_comments = [
-        {
-            "created_at": "2026-10-10T15:30:00Z",
-            "author": "other_user",
-            "body": "### Simulated human (antigravity)\nAnswer",
-        }
+        Comment(2, "other_user", "### Simulated human (antigravity)\nAnswer", "2026-10-10T15:30:00Z")
     ]
     assert model.derive_resolution(esc_at=esc_at, closed_at=None, comments=non_owner_comments) is None
 
     # Comment with no timestamp is ignored
-    no_time_comments = [
-        {"created_at": None, "author": OWNER, "body": "### Simulated human (antigravity)\nAnswer"}
-    ]
+    no_time_comments = [Comment(3, OWNER, "### Simulated human (antigravity)\nAnswer", "")]
     assert model.derive_resolution(esc_at=esc_at, closed_at=None, comments=no_time_comments) is None
 
     # Closed-then-reopened: old marker before reopen does not resolve it
@@ -193,28 +185,9 @@ def test_derive_resolution_cases() -> None:
         esc_at=esc_at,
         closed_at="2026-10-10T16:00:00Z",
         comments=[],
-        esc_label=model.DEPLOY_FAILED_LABEL,
+        labels=(model.DEPLOY_FAILED_LABEL,),
     )
     assert res is None
-
-    # Rolled-back env stays open even with closed_at
-    res = model.derive_resolution(
-        esc_at=esc_at,
-        closed_at="2026-10-10T16:00:00Z",
-        comments=[],
-        env="rolled-back",
-    )
-    assert res is None
-
-    # Deploy-failed resolves as superseded when env == "prod"
-    res = model.derive_resolution(
-        esc_at=esc_at,
-        closed_at="2026-10-10T16:00:00Z",
-        comments=[],
-        esc_label=model.DEPLOY_FAILED_LABEL,
-        env="prod",
-    )
-    assert res == {"at": esc_at, "by": "system", "how": "superseded"}
 
     # Closed before escalation -> bounded by esc_at
     res = model.derive_resolution(esc_at="2026-10-10T21:20:00Z", closed_at="2026-10-10T21:14:00Z", comments=[])
@@ -224,9 +197,7 @@ def test_derive_resolution_cases() -> None:
 def test_ticket_with_escalation_derives_resolution(real) -> None:
     # Item 18 is closed
     item = real[18]
-    comments = [
-        {"created_at": "2026-10-10T16:30:00Z", "author": OWNER, "body": "### Simulated human (antigravity)\nDone"}
-    ]
+    comments = [Comment(1, OWNER, "### Simulated human (antigravity)\nDone", "2026-10-10T16:30:00Z")]
     t = model.ticket(
         number=item["number"],
         kind="issue",
@@ -245,6 +216,12 @@ def test_ticket_with_escalation_derives_resolution(real) -> None:
     }
     assert t["escalation"]["open"] is False
     assert t["updated_at"] >= t["escalation"]["resolved"]["at"]
+
+
+def test_digest_ignores_updated_at() -> None:
+    t1 = {"issue": 1, "stage": "prod", "updated_at": "2026-10-10T12:00:00Z"}
+    t2 = {"issue": 1, "stage": "prod", "updated_at": "2026-10-10T12:05:00Z"}
+    assert model.digest(t1) == model.digest(t2)
 
 
 def test_merged_pr_with_deploy_failed_stays_open() -> None:
