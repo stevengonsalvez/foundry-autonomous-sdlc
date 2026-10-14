@@ -8,7 +8,7 @@
     "deployed_at": "2026-10-14T20:20:52Z",
     "run_id": 38630964917,
     "run_url": "https://github.com/stevengonsalvez/foundry-autonomous-sdlc/actions/runs/38630964917",
-    "status": "deployed",
+    "status": "promoted",
     "pr": 86,
     "issue": 83,
     "includes": [
@@ -20,6 +20,30 @@
     ]
   },
   "prod": {
+    "sha": "2d014c7387673fc282b4848b18636f9a64c53642",
+    "short": "2d014c7",
+    "version": "main-2d014c7",
+    "built_at": "2026-10-14T20:20:39Z",
+    "promoted_at": "2026-10-14T20:34:22Z",
+    "run_id": 38630964917,
+    "run_attempt": 1,
+    "run_url": "https://github.com/stevengonsalvez/foundry-autonomous-sdlc/actions/runs/38630964917",
+    "gates": [
+      "smoke",
+      "soak"
+    ],
+    "pr": 86,
+    "issue": 83,
+    "tag": "prod/20261014-203422-2d014c7",
+    "includes": [
+      {
+        "pr": 86,
+        "issue": 83,
+        "sha": "2d014c7387673fc282b4848b18636f9a64c53642"
+      }
+    ]
+  },
+  "previous_prod": {
     "sha": "e9a5b24355a150af0c812a8b6ce9e740ba1c4226",
     "short": "e9a5b24",
     "version": "main-e9a5b24",
@@ -43,43 +67,7 @@
       }
     ]
   },
-  "previous_prod": {
-    "sha": "223c4a72d3e07b7d320b77578d5536f82787896b",
-    "short": "223c4a7",
-    "version": "main-223c4a7",
-    "built_at": "2026-10-14T19:40:23Z",
-    "promoted_at": "2026-10-14T19:53:04Z",
-    "run_id": 38625390562,
-    "run_attempt": 1,
-    "run_url": "https://github.com/stevengonsalvez/foundry-autonomous-sdlc/actions/runs/38625390562",
-    "gates": [
-      "smoke",
-      "soak"
-    ],
-    "pr": 73,
-    "issue": null,
-    "tag": "prod/20261014-195304-223c4a7",
-    "includes": [
-      {
-        "pr": 73,
-        "issue": null,
-        "sha": "223c4a72d3e07b7d320b77578d5536f82787896b"
-      }
-    ]
-  },
   "history": [
-    {
-      "at": "2026-10-11T21:55:00Z",
-      "action": "stage",
-      "env": "staging",
-      "sha": "f516371f651a9794214e7376af1d575cd60e08ca",
-      "version": "main-f516371",
-      "run_url": "https://github.com/stevengonsalvez/foundry-autonomous-sdlc/commit/f516371f651a9794214e7376af1d575cd60e08ca",
-      "reason": "seed: the app live at the root before CD existed, not gated",
-      "issue": null,
-      "pr": null,
-      "includes": []
-    },
     {
       "at": "2026-10-11T21:55:00Z",
       "action": "promote",
@@ -1137,6 +1125,24 @@
       "version": "main-2d014c7",
       "run_url": "https://github.com/stevengonsalvez/foundry-autonomous-sdlc/actions/runs/38630964917",
       "reason": "deployed to staging",
+      "issue": 83,
+      "pr": 86,
+      "includes": [
+        {
+          "pr": 86,
+          "issue": 83,
+          "sha": "2d014c7387673fc282b4848b18636f9a64c53642"
+        }
+      ]
+    },
+    {
+      "at": "2026-10-14T20:34:22Z",
+      "action": "promote",
+      "env": "prod",
+      "sha": "2d014c7387673fc282b4848b18636f9a64c53642",
+      "version": "main-2d014c7",
+      "run_url": "https://github.com/stevengonsalvez/foundry-autonomous-sdlc/actions/runs/38630964917",
+      "reason": "smoke and soak passed",
       "issue": 83,
       "pr": 86,
       "includes": [
