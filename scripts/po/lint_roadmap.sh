@@ -82,8 +82,11 @@ def lint_roadmap(roadmap_file: str) -> int:
         (r"--admin\b", "Forbidden flag '--admin'"),
         (r"\bpush\s+to\s+main\b", "Forbidden action 'push to main'"),
         (r"\bgit\s+push\b", "Forbidden command 'git push'"),
-        (r"\b(raise|increase)\s+(the\s+)?(cap|budget)\b", "Forbidden spend action 'raise/increase the cap or budget'"),
+        (r"\bgit\b.{0,40}\bpush\b", "Forbidden command 'git ... push'"),
+        (r"\b(raise|increase|bump|lift|disable|ignore|remove)\b.{0,30}\b(cap|budget|limit)\b", "Forbidden cap bypass phrasing"),
+        (r"\b(cap|budget|limit)\b.{0,30}\b(raise|increase|bump|lift|disable|ignore|remove)\b", "Forbidden cap bypass phrasing"),
         (r"\bmerge\b", "Forbidden verb/term 'merge'"),
+        (r"\bMEMORY\.md\b", "Forbidden mention 'MEMORY.md'"),
     ]
     for pattern, desc in forbidden_patterns:
         if re.search(pattern, content, re.IGNORECASE):
