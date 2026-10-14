@@ -1,21 +1,31 @@
 {
   "version": 1,
   "staging": {
-    "sha": "c66d8ce286590bd1b3f3b451801387be743b0ce6",
-    "short": "c66d8ce",
-    "version": "main-c66d8ce",
-    "built_at": "2026-10-14T18:48:10Z",
-    "deployed_at": "2026-10-14T19:18:40Z",
-    "run_id": 38617992862,
-    "run_url": "https://github.com/stevengonsalvez/foundry-autonomous-sdlc/actions/runs/38617992862",
-    "status": "rolled-back",
-    "pr": 82,
+    "sha": "8ad5d68edd455837d6ed5337b3436e337d5a9e38",
+    "short": "8ad5d68",
+    "version": "main-8ad5d68",
+    "built_at": "2026-10-14T19:22:34Z",
+    "deployed_at": "2026-10-14T19:22:47Z",
+    "run_id": 38622875285,
+    "run_url": "https://github.com/stevengonsalvez/foundry-autonomous-sdlc/actions/runs/38622875285",
+    "status": "deployed",
+    "pr": 76,
     "issue": null,
     "includes": [
       {
-        "pr": 82,
+        "pr": 81,
         "issue": null,
-        "sha": "c66d8ce286590bd1b3f3b451801387be743b0ce6"
+        "sha": "b5ff373831c126b37c8a5b01d7ec923be25a7d00"
+      },
+      {
+        "pr": 77,
+        "issue": null,
+        "sha": "f54d273876485a87e403f7587f8fbe19ea5eff7e"
+      },
+      {
+        "pr": 76,
+        "issue": null,
+        "sha": "8ad5d68edd455837d6ed5337b3436e337d5a9e38"
       }
     ]
   },
@@ -977,6 +987,34 @@
       "reason": "promote",
       "issue": null,
       "pr": 81
+    },
+    {
+      "at": "2026-10-14T19:22:47Z",
+      "action": "stage",
+      "env": "staging",
+      "sha": "8ad5d68edd455837d6ed5337b3436e337d5a9e38",
+      "version": "main-8ad5d68",
+      "run_url": "https://github.com/stevengonsalvez/foundry-autonomous-sdlc/actions/runs/38622875285",
+      "reason": "deployed to staging",
+      "issue": null,
+      "pr": 76,
+      "includes": [
+        {
+          "pr": 81,
+          "issue": null,
+          "sha": "b5ff373831c126b37c8a5b01d7ec923be25a7d00"
+        },
+        {
+          "pr": 77,
+          "issue": null,
+          "sha": "f54d273876485a87e403f7587f8fbe19ea5eff7e"
+        },
+        {
+          "pr": 76,
+          "issue": null,
+          "sha": "8ad5d68edd455837d6ed5337b3436e337d5a9e38"
+        }
+      ]
     }
   ]
 }
