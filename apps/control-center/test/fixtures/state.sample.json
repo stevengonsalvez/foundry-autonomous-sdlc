@@ -909,28 +909,28 @@
   },
   "mode": "hosted",
   "recent_ids": [
-   "1bf92dd0d4cfdc31",
-   "ffd44c0c90355bfa",
-   "36d2f5e1b7ef179f",
-   "f4451feeb75d9325",
-   "bb3926db2244e6cd",
-   "36256458d476523e",
-   "08b436a6342bfa5f",
-   "d43ec08b11298973",
-   "706d25c9a573f2dd",
-   "7a3864236fc8b764",
-   "96e35d8b57284ccf",
-   "0993e6899905cbc3",
-   "ea8af0f91b3c4299",
-   "f1b7d430d9c26f92",
-   "bfb07a2a71316e02",
-   "32db883733795eca",
-   "104f67d9857812a6",
-   "fd628985f6e14a2e",
-   "03f6bd94f5d8fe48",
-   "c069792303b0b4d9",
-   "b8cf0447c5fb4ed1",
-   "da21db11f89bd164",
+   "593b72fb974ad769",
+   "c10b6fa7f6818c16",
+   "fb865fd8d39d64bf",
+   "f22129fc9213ab33",
+   "698db94b3fce1a85",
+   "fa44cc18fbba693d",
+   "1afe68a45b19e7d3",
+   "977b8ed286588468",
+   "406a8076c594f133",
+   "04172881d415f2ae",
+   "46905c735eba32d0",
+   "b43dd9570a367170",
+   "e43a1eef31c92539",
+   "3f5e3a7467e342f1",
+   "fcdf7911936d9ba3",
+   "83d8c4274f74a090",
+   "c73b8d62c28a08c2",
+   "ca95e38bf407cb96",
+   "22341d6da1740b94",
+   "f5426f14addb8389",
+   "69850d9e5d13ff46",
+   "b38f377165cbc428",
    "3ce8bbe0b06b03d7",
    "354bec80b474ed08",
    "109a09fc55afe7c8",
@@ -980,7 +980,7 @@
     "total_usd": 0.001248,
     "usd": 0.001248
    },
-   "digest": "4c15ad1aa2f5",
+   "digest": "51f9617ce8a3",
    "env": "none",
    "escalation": {
     "at": "2026-10-10T12:27:47Z",
@@ -1119,7 +1119,7 @@
     "total_usd": 0.017287,
     "usd": 0.017287
    },
-   "digest": "c5cc593ab031",
+   "digest": "dc556544cb55",
    "env": "none",
    "escalation": {
     "at": "2026-10-10T12:59:33Z",
@@ -1307,7 +1307,7 @@
     "total_usd": 0.02651,
     "usd": 0.02651
    },
-   "digest": "da6ebc990902",
+   "digest": "f8a903290d87",
    "env": "none",
    "escalation": {
     "at": "2026-10-10T13:16:01Z",
@@ -1515,7 +1515,7 @@
     "total_usd": 0.007688,
     "usd": 0.007688
    },
-   "digest": "8e571b248b34",
+   "digest": "b8beb5bc2c71",
    "env": "none",
    "escalation": {
     "at": "2026-10-10T12:54:01Z",
@@ -1722,7 +1722,7 @@
     "total_usd": 0.017121,
     "usd": 0.017121
    },
-   "digest": "d1a20046c52e",
+   "digest": "94ac9c6c030a",
    "env": "none",
    "escalation": {
     "at": "2026-10-10T12:59:36Z",
@@ -1894,7 +1894,7 @@
     "total_usd": 0.036404,
     "usd": 0.036404
    },
-   "digest": "9c8a9cc49e50",
+   "digest": "0c434899c16e",
    "env": "none",
    "escalation": {
     "at": "2026-10-10T13:23:29Z",
@@ -2094,7 +2094,7 @@
     "total_usd": 0.032339,
     "usd": 0.032339
    },
-   "digest": "b543bedaa0d4",
+   "digest": "9496a2569a45",
    "env": "none",
    "escalation": {
     "at": "2026-10-10T13:24:32Z",
@@ -2303,7 +2303,7 @@
     "total_usd": 0.083069,
     "usd": 0.083069
    },
-   "digest": "dbe809292736",
+   "digest": "27f2d06e9854",
    "env": "none",
    "escalation": {
     "at": "2026-10-10T14:12:50Z",
@@ -2472,7 +2472,7 @@
     "total_usd": 0.00857,
     "usd": 0.00857
    },
-   "digest": "3cb679ad8359",
+   "digest": "be3e6090cd7c",
    "env": "none",
    "escalation": {
     "at": "2026-10-10T14:42:42Z",
@@ -2667,7 +2667,7 @@
     "total_usd": 0.074565,
     "usd": 0.073015
    },
-   "digest": "d74eddb5b5b9",
+   "digest": "c153c0a1f0f7",
    "env": "prod",
    "escalation": null,
    "feasibility": {
@@ -2925,7 +2925,7 @@
     "total_usd": 0.045963,
     "usd": 0.045963
    },
-   "digest": "2c2094b0cf13",
+   "digest": "958f6777aa70",
    "env": "none",
    "escalation": {
     "at": "2026-10-10T15:55:16Z",
@@ -3144,7 +3144,7 @@
     "total_usd": 0.091895,
     "usd": 0.091895
    },
-   "digest": "448badb61855",
+   "digest": "9e56b6f3a26a",
    "env": "none",
    "escalation": {
     "at": "2026-10-10T16:05:14Z",
@@ -3358,7 +3358,7 @@
     "total_usd": 0.015305,
     "usd": 0.015305
    },
-   "digest": "2f5fb788c8bb",
+   "digest": "a03d3323b51c",
    "env": "none",
    "escalation": {
     "at": "2026-10-10T15:45:50Z",
@@ -3579,7 +3579,7 @@
     "total_usd": 0.123206,
     "usd": 0.123206
    },
-   "digest": "c9cf28f89423",
+   "digest": "b65bb0bb1438",
    "env": "none",
    "escalation": {
     "at": "2026-10-10T16:20:14Z",
@@ -3830,7 +3830,7 @@
     "total_usd": 0.066426,
     "usd": 0.066426
    },
-   "digest": "8d07092ee70d",
+   "digest": "f7ee2ff7ef52",
    "env": "none",
    "escalation": null,
    "feasibility": {
@@ -4106,7 +4106,7 @@
     "total_usd": 0.083172,
     "usd": 0.081622
    },
-   "digest": "c6126292cc5d",
+   "digest": "a00ab6c24150",
    "env": "prod",
    "escalation": null,
    "feasibility": {
@@ -4442,7 +4442,7 @@
     "total_usd": 0.036788,
     "usd": 0.036788
    },
-   "digest": "bbad1a1820f9",
+   "digest": "f05a1c9a09bb",
    "env": "rolled-back",
    "escalation": {
     "at": "2026-10-10T17:15:00Z",
@@ -4686,7 +4686,7 @@
     "total_usd": 0.137488,
     "usd": 0.137488
    },
-   "digest": "1880d2e131fb",
+   "digest": "20fe38bb6570",
    "env": "none",
    "escalation": {
     "at": "2026-10-10T18:10:17Z",
@@ -4829,7 +4829,7 @@
     "total_usd": 0.023086,
     "usd": 0.023086
    },
-   "digest": "9aeb51f00a18",
+   "digest": "771b86836b8a",
    "env": "none",
    "escalation": {
     "at": "2026-10-10T18:35:16Z",
@@ -4972,7 +4972,7 @@
     "total_usd": 0.06731,
     "usd": 0.06731
    },
-   "digest": "32087d267e24",
+   "digest": "1e804a5ad8dc",
    "env": "none",
    "escalation": {
     "at": "2026-10-10T19:55:16Z",
@@ -5145,7 +5145,7 @@
     "total_usd": 0.06352,
     "usd": 0.06352
    },
-   "digest": "f02431b59f6f",
+   "digest": "8da16cdfc899",
    "env": "none",
    "escalation": {
     "at": "2026-10-10T21:20:18Z",
@@ -5425,7 +5425,7 @@
     "total_usd": 0.04632,
     "usd": 0.04342
    },
-   "digest": "fb22c913447b",
+   "digest": "dfe747c4359c",
    "env": "prod",
    "escalation": null,
    "feasibility": null,

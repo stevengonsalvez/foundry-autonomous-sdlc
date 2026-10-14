@@ -22,7 +22,7 @@ ROOT = HERE.parents[2]
 sys.path.insert(0, str(ROOT / "agents"))
 
 from sdlc_agents.ledger import events, fold, model  # noqa: E402
-from sdlc_agents.ports import OWNER  # noqa: E402
+from sdlc_agents.ports import OWNER, Comment  # noqa: E402
 
 OUT = ROOT / "apps" / "control-center" / "test" / "fixtures" / "state.sample.json"
 NOW = "2026-10-11T20:05:00Z"
@@ -55,11 +55,12 @@ def build() -> dict[str, Any]:
         comments = None
         if h["number"] == 18:
             comments = [
-                {
-                    "created_at": "2026-10-10T16:30:00Z",
-                    "author": OWNER,
-                    "body": "### Simulated human (antigravity)\nAnswering escalation and closing issue.",
-                }
+                Comment(
+                    1,
+                    OWNER,
+                    "### Simulated human (antigravity)\nAnswering escalation and closing issue.",
+                    "2026-10-10T16:30:00Z",
+                )
             ]
         t = model.ticket(
             number=h["number"],

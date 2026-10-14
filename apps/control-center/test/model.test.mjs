@@ -160,11 +160,16 @@ test('billing story: the gap in plain words, honest when unread', () => {
 
 test('cost rows sort and flag over-cap', () => {
   const state = sampleState();
+  const t23 = state.tickets.find((t) => t.issue === 23);
+  if (t23) t23.cost.cap_used_pct = 120;
+  const t27 = state.tickets.find((t) => t.issue === 27);
+  if (t27) t27.cost.cap_used_pct = 80;
   const rows = costRows(state);
   const top = sortRows(rows, 'usd', 'desc')[0];
   assert.equal(top.issue, 27);
   assert.equal(sortRows(rows, 'usd', 'asc')[0].issue, 2);
-  assert.equal(rows.some((r) => r.over), false);
+  assert.equal(rows.find((r) => r.issue === 23).over, true);
+  assert.equal(rows.find((r) => r.issue === 27).over, false);
   state.tickets[0].cost.cap_used_pct = 140;
   assert.equal(costRows(state)[0].over, true);
 });
