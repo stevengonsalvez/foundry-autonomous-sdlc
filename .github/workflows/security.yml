@@ -37,9 +37,5 @@ jobs:
           python-version: "3.12"
       - name: ggshield secret scan
         run: |
-          if [ -z "$GITGUARDIAN_API_KEY" ]; then
-            echo "::warning::GITGUARDIAN_API_KEY not set — add it via 'gh secret set GITGUARDIAN_API_KEY' to enable ggshield."
-            exit 0
-          fi
           pip install --quiet ggshield
-          ggshield secret scan ci
+          python scripts/gates/run_ggshield.py secret scan ci

@@ -39,4 +39,4 @@ jobs:
       - name: Scan full history
         run: |
           export PATH="$HOME/.local/bin:$PATH"
-          ggshield secret scan repo .
+          python3 scripts/gates/run_ggshield.py secret scan repo .
