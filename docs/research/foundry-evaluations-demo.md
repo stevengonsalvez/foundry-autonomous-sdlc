@@ -89,7 +89,7 @@ tests/evals/test_score_band.py:32: AssertionError
 =========================== 1 failed, 2 passed in 0.04s ===========================
 Error: Process completed with exit code 1.
 ```
-*Result*: The pull request is blocked by branch protection rules. The prompt regression cannot reach the live routine on `main`.
+*Result*: The pull request will be blocked by branch protection rules once evals is required (PR 69). The prompt regression cannot reach the live routine on `main`.
 
 ---
 
@@ -105,9 +105,9 @@ python run_eval.py --mode cloud --dataset req_gate_golden.jsonl
 
 ### Real Proof Run Findings Summary (from Proof Run against `proj-sdlc`)
 The proof run against `proj-sdlc` using `gpt-5-mini` as LLM judge yielded:
-- **ScoreBandEvaluator** (custom code): 12/12 passing (100% in-band, 100% gate match).
+- **ScoreBandEvaluator** (custom code): 12/12 passing (100% in-band, 100% gate match; this proves the wiring, not agent quality: scores were pre-computed, bands set around them, responses synthetic).
 - **TaskAdherenceEvaluator** (built-in): 6 passing (50%), 6 failing (50%).
-- **Per-Row Reality**: Rows #2, #4, #7, #8, #11, and #12 **failed** task adherence (score 0.0), while rows #5, #6, #9, #10, #15, and #52 **passed** (score 1.0).
+- **Per-Row Reality**: Rows #2, #4, #7, #8, #11, and #12 **failed** task adherence (score 0.0), while rows #5, #6, #9, #10, #15, and #52 **passed** (score 1.0; proof run also included #6, scenario c).
 - **Root Cause of Failures**: The golden dataset rows contained synthetic placeholder criteria (`['Specific acceptance criteria derived from issue']`) and did not supply a system message describing the agent's scoring role. The LLM judge evaluated whether the response implemented the full feature described in the issue, rather than evaluating requirement gate scoring behavior. Furthermore, the judge exhibited noticeable noise across near-identical inputs (row #10 passed while rows #2, #4, #8, #11, and #12 with identical or similar inputs failed).
 
 ### Aggregate Summary (from Real Proof Run against `proj-sdlc`)
@@ -167,18 +167,18 @@ rule = project_client.evaluation_rules.create_or_update(
 )
 ```
 
-#### Live Observability Spans in Application Insights (illustrative, not observed)
-Every sampled turn generates an OpenTelemetry span logged to `appi-fsdlcd-demo-cnfoi`:
+#### Live Observability Log Events in Application Insights (illustrative, not observed)
+Every sampled turn generates an OpenTelemetry log event logged to `appi-fsdlcd-demo-cnfoi` (emitted via `EventLogger` and `AzureMonitorLogExporter`, `_evaluate.py:1359`, not a span):
 ```json
 {
   "name": "gen_ai.evaluation",
   "attributes": {
     "gen_ai.agent.name": "sdlc-req-gate",
     "gen_ai.evaluation.name": "score_band",
-    "gen_ai.evaluation.score": 1.0,
+    "gen_ai.evaluation.score.value": 1.0,
     "gen_ai.evaluation.properties": "{\"score_in_band\": 1.0, \"gate_match\": 1.0}",
-    "gen_ai.usage.input_tokens": 1463,
-    "gen_ai.usage.output_tokens": 441
+    "gen_ai.evaluation.usage.input_tokens": 10000,
+    "gen_ai.evaluation.usage.output_tokens": 2500
   }
 }
 ```

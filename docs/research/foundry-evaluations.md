@@ -51,14 +51,14 @@ Azure AI Foundry provides two evaluation SDKs: `azure-ai-evaluation` (the evalua
 * **Execution Engine**:
   * Local evaluation (`evaluate()` in `azure-ai-evaluation`): Runs on developer workstation or CI runner via `ThreadPoolExecutorWithContext`. Serializes outputs to local JSON files [Verified: SDK codebase, 2026-10].
   * Cloud evaluation (`AIProjectClient.get_openai_client().evals.runs.create()` in `azure-ai-projects`): Dispatches cloud batch jobs to Azure AI Foundry compute [Verified: SDK codebase, 2026-10].
-  * Hybrid local-to-cloud tracking: Passing `azure_ai_project="https://<account>.services.ai.azure.com/api/projects/<project>"` into local `evaluate()` runs evaluation locally on the developer machine or CI runner, but automatically logs metrics, instance rows, and artifacts to the Azure AI Foundry portal, returning a live `studio_url` (this was the mode used in the proof run, not Foundry cloud evaluation) [Verified: Proof run output, 2026-10].
+  * Hybrid local-to-cloud tracking: Passing `azure_ai_project="https://<account>.services.ai.azure.com/api/projects/<project>"` into local `evaluate()` runs evaluation locally on the developer machine or CI runner, but automatically logs metrics, instance rows, and artifacts to the Azure AI Foundry portal, returning a live `studio_url` (this was the mode used in the proof run, not Foundry cloud evaluation) [Observed in proof run, artifacts not committed].
 
 ### 4. Continuous Evaluation and Online Monitoring
 
 * **Evaluation Rules (`project_client.evaluation_rules`)**: Configures continuous evaluation rules triggered on agent completion events (`EvaluationRuleEventType.RESPONSE_COMPLETED`) [Verified: `azure-ai-projects` samples, 2026-10].
 * **Traffic Sampling**: Uses `ContinuousEvaluationRuleAction(max_hourly_runs=...)` to limit hourly evaluation volume and control spend [Verified: SDK codebase, 2026-10].
 * **Scheduled Runs (`project_client.beta.schedules`)**: Configures recurring batch evaluations (e.g. daily or weekly recurrence) on captured production traces [Verified: SDK codebase, 2026-10].
-* **OpenTelemetry and Application Insights**: Emits GenAI spans (`gen_ai.agent.name`, `gen_ai.usage.*`) and evaluation events directly into Application Insights using `AzureMonitorLogExporter` and `gen_ai.evaluation.properties` [Verified: `azure-ai-evaluation` codebase, 2026-10].
+* **OpenTelemetry and Application Insights**: Emits OpenTelemetry log events via `EventLogger` and `AzureMonitorLogExporter` (`_evaluate.py:1359`), not spans; attributes include `gen_ai.agent.name`, `gen_ai.evaluation.name`, `gen_ai.evaluation.score.value`, `gen_ai.evaluation.usage.input_tokens`, and `gen_ai.evaluation.usage.output_tokens` (no `gen_ai.usage.*`) [Verified: `azure-ai-evaluation` codebase, 2026-10].
 
 ### 5. Adversarial Red Teaming and PyRIT
 
@@ -80,7 +80,7 @@ Azure AI Foundry provides two evaluation SDKs: `azure-ai-evaluation` (the evalua
 
 * **Yes, verified live**. In our real proof run against `aif-fsdlcd-demo-cnfoi`, `gpt-5-mini` (`sdlc-default`, version `2025-08-07`, GlobalStandard) acted as the LLM judge for `TaskAdherenceEvaluator` [Verified: Proof run execution log, 2026-10].
 * **Reasoning Model Handling (`is_reasoning_model=True`)**: Because `gpt-5-mini` is an advanced reasoning model, it rejects standard parameters like `max_tokens` (requires `max_completion_tokens`) and `temperature != 1.0`, `top_p`, `frequency_penalty`, and `presence_penalty`. While `TaskAdherenceEvaluator`'s internal prompty already specifies `max_completion_tokens`, standard evaluators such as `RelevanceEvaluator` and `CoherenceEvaluator` specify `max_tokens: 800` (`azure/ai/evaluation/_evaluators/_relevance/relevance.prompty:8`, `coherence.prompty:8`), failing on reasoning models with HTTP 400 `unsupported_parameter: 'max_tokens' is not supported with this model. Use 'max_completion_tokens' instead.` Setting `is_reasoning_model=True` strips `temperature`, `top_p`, `frequency_penalty`, and `presence_penalty` and remaps token limit parameters to `max_completion_tokens` [Verified: SDK codebase, 2026-10].
-* **Completion Tokens Budget**: In reasoning models, `completion_tokens` includes internal `reasoning_tokens`. In our proof run, single evaluations consumed about 958 completion tokens on average (range 570 to 1,224 tokens per row, comprising reasoning tokens plus output JSON) [Verified: Proof run output, 2026-10].
+* **Completion Tokens Budget**: In reasoning models, `completion_tokens` includes internal `reasoning_tokens`. In our proof run, single evaluations consumed about 958 completion tokens on average (range 570 to 1,224 tokens per row, comprising reasoning tokens plus output JSON) [Observed in proof run, artifacts not committed].
 
 ### 2. Free Trial and Quota Limits
 
@@ -97,7 +97,7 @@ Azure AI Foundry provides two evaluation SDKs: `azure-ai-evaluation` (the evalua
 | **Coder** (`sdlc-coder`) | Invocations (`{"op": "start"}`, `{"op": "status"}`) | **Unsupported**: Long-running asynchronous polling (up to 2 hours) times out | Supported via pre-computed datasets (evaluating PR diffs / vitest reports) or long-running callable | Evaluate artifacts offline (code vulnerability, test validity, scope checks) |
 | **Ledger** (`sdlc-ledger`) | Invocations (`{"op": "reconcile"}`) | Supported for single turn | Supported via custom callable | Evaluate state schema and billing derivation deterministically |
 
-* **Critical Architectural Finding**: Cloud Evaluation target schemas for `AzureAIAgentTarget` in `azure-ai-projects 2.8.0` define only `name`, `version`, `tool_descriptions`, and `tools` (`models/_models.py:4985-5040`). They do not support dynamic session headers like `x-agent-session-id`, nor asynchronous multi-hour polling loops. Therefore, hosted coder and orchestrator evaluations must be executed either via custom Python target wrappers in the local SDK, or against pre-computed output datasets captured from real execution traces.
+* **Critical Architectural Finding**: Cloud Evaluation target schemas for `AzureAIAgentTarget` in `azure-ai-projects 2.8.0` define only `name`, `version`, `tool_descriptions`, and `tools` (`models/_models.py:4986-5040`). They do not support dynamic session headers like `x-agent-session-id`, nor asynchronous multi-hour polling loops. Therefore, hosted coder and orchestrator evaluations must be executed either via custom Python target wrappers in the local SDK, or against pre-computed output datasets captured from real execution traces.
 
 ---
 
@@ -184,13 +184,13 @@ The following candidate dataset items were sourced from repository history recor
 ## Proof Run Evidence
 
 ### Environment and Setup
-* **Service Principal**: `sp-fsdlc-hetzner-agents` authenticated via Entra ID credentials (`~/.secrets/azure-sp.env`).
+* **Service Principal**: `sp-fsdlc-hetzner-agents` authenticated via Entra ID credentials.
 * **Resource Group**: `rg-fsdlcd-demo` (UK South).
 * **Foundry Project**: `aif-fsdlcd-demo-cnfoi/proj-sdlc`.
 * **Model Deployment**: `sdlc-default` (`gpt-5-mini`, version `2025-08-07`, GlobalStandard, 50k TPM).
 * **SDK Packages**: `azure-ai-evaluation==1.18.8`, `azure-ai-projects==2.8.0`, `azure-identity==1.26.0`.
 
-### Executed Command
+### Executed Command (script not in repo)
 ```bash
 python run_eval.py --mode cloud --dataset req_gate_golden.jsonl
 ```
@@ -207,7 +207,7 @@ Rows Evaluated: 12
 Execution Time: 20.45s
 In-Band Pass Rate: 1.0 (100% of rows within +/- 10 points of expected band)
 Gate Match Rate:  1.0 (100% of pass/fail gate decisions matched expectations)
-Task Adherence:   0.5 (6 passing: #5, #6, #9, #10, #15, #52; 6 failing: #2, #4, #7, #8, #11, #12)
+Task Adherence:   0.5 (6 passing: #5, #6, #9, #10, #15, #52; 6 failing: #2, #4, #7, #8, #11, #12; proof run also included #6, scenario c)
 Prompt Tokens:    21,778
 Comp Tokens:      11,495 (including internal reasoning tokens)
 Total Tokens:     33,273
@@ -215,6 +215,7 @@ Estimated Cost:   ~$0.0284 USD (21,778 prompt @ $0.25/M + 11,495 completion @ $2
 Foundry Studio URL: https://ai.azure.com/resource/build/evaluation/15a378df-5abe-48a1-8ffb-6c93d3ad910f?wsid=/subscriptions/<sub>/resourceGroups/rg-fsdlcd-demo/providers/Microsoft.CognitiveServices/accounts/aif-fsdlcd-demo-cnfoi/projects/proj-sdlc&tid=<tenant>
 ==============================
 ```
+*(Note on the 100% in-band result: this proves the wiring, not agent quality: scores were pre-computed, bands set around them, responses synthetic).*
 
 ### What Failed and How It Was Resolved
 1. **ARM Resource Triad vs. Foundry Endpoint URL**:
@@ -238,7 +239,7 @@ Foundry Studio URL: https://ai.azure.com/resource/build/evaluation/15a378df-5abe
 | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
 | **Option 1: Local Deterministic Pytest Gates** | Pure Python custom evaluators run via `pytest` in GitHub Actions on PRs (no path filter to comply with `ci.yml:11-12`) | Very Low (1 day) | **$0.00** | Schema violations, score drift outside tolerance bands, false passes on vague issues, basic regex/scope regressions | Subjective text nuance, creative prompt hallucinations, subtle phrasing drift | **None** (plain Python/pytest) | **High / GA** |
 | **Option 2: Offline Golden Evaluation with LLM Judge** | Parameterized test run calling `gpt-5-mini` judge on demand or in release CI | Low (2 days) | **~$0.028** per 12 items | Prompt drift, intent degradation, task adherence failures, vague question quality | Live environment latency, production data shifts, coder runtime crashes | Minimal (Prompty / standard OpenAI API) | **Mixed** (Relevance/Coherence GA; TaskAdherence Preview) |
-| **Option 3: Hybrid Cloud-Tracked Runs** | Local execution with `azure_ai_project` logging to Azure AI Foundry portal (hybrid, not cloud evaluation) | Low (already proven in proof run) | **~$0.028** per 12 items | Same as Option 2, plus row-level failure clustering and visual diffs across agent versions in portal | Production trace anomalies | Medium (Foundry portal tracking) | **High** |
+| **Option 3: Hybrid Cloud-Tracked Runs** | Local execution with `azure_ai_project` logging to Azure AI Foundry portal (hybrid, not cloud evaluation) | Low (already proven in proof run) | **~$0.028** per 12 items | Same as Option 2, plus row-level failure clustering and visual diffs across agent versions in portal | Production trace anomalies | Medium (Foundry portal tracking) | **Mixed** (TaskAdherence Preview; hybrid logging GA) |
 | **Option 4: Continuous / Online Evaluation on Live Ticks** | `EvaluationRule` triggered on `RESPONSE_COMPLETED` for every live agent turn | High (1-2 weeks) | **$0.50 to $2.00+ per day** [Estimate, as of 2026-10-14] | Live production drift, real-world customer queries failing gate | Pre-merge regressions (catches failures after they happen in prod); exhausts TPM quota rapidly | **High** (Foundry evaluation rules and SAMI roles) | **Preview** (Agent insight monitors are beta) |
 | **Option 5: Automated Adversarial Red Teaming (PyRIT)** | Scheduled automated jailbreak probe sweeps against prompt agents | Medium (3-5 days) | **~$0.10 to $0.50** per sweep | Prompt injection vulnerabilities in untrusted issue intake | Normal functional logic, test generation errors | Medium (PyRIT framework) | **Preview** (XPIA in uksouth unverified) |
 
@@ -268,7 +269,7 @@ Foundry Studio URL: https://ai.azure.com/resource/build/evaluation/15a378df-5abe
 * **T1 = offline req-gate replay gate**, specified in the T1 issue and implemented in [PR #69](https://github.com/stevengonsalvez/foundry-autonomous-sdlc/pull/69).
 * Replays recorded req-gate outputs through `foundry._parse` + `_check_req_gate` + `machine.after_score`, asserting `READY`, `NEEDS_REFINEMENT`, or `escalate` verdicts against a provenance-tagged golden dataset built from `origin/state`.
 * Computes prompt sha256 fingerprint; zero Azure imports, zero external network dependencies, zero spend.
-* Runs in `ci.yml` as a required check (`evals`) without path filters, ensuring status reports reliably on every PR to satisfy GitHub branch rulesets.
+* Will run in `ci.yml` as a required check once PR 69 merges (`evals`) without path filters, ensuring status reports reliably on every PR to satisfy GitHub branch rulesets.
 * Cost: **$0.00**, runtime < 1 second.
 
 ### Phase 2: Advisory Cloud-Tracked Evaluations (T2)
@@ -301,7 +302,7 @@ Foundry Studio URL: https://ai.azure.com/resource/build/evaluation/15a378df-5abe
 1. **Do NOT enable continuous online evaluation on live ticks on the free trial**:
    * With ticks running every 5 minutes and quota capped ("The model deployment was capped at 10 requests and 10K tokens per minute", raised to 50K TPM in Terraform; `docs/findings.md` row 39), continuous evaluation will trigger HTTP 429 throttling on operational agent traffic and rapidly exhaust promotional credit balances.
 2. **Do NOT run multi-evaluator LLM suites on every commit in pull request CI**:
-   * Running 5 LLM-as-a-judge evaluators on 50 rows requires 250 model calls (~350,000 tokens), taking 10+ minutes and risking CI timeouts and rate limit failures. Keep PR checks deterministic and local.
+   * Running 5 LLM-as-a-judge evaluators on 50 rows requires 250 model calls (about 690k tokens based on 33,273 / 12 = ~2,773 per call [Estimate]), taking 10+ minutes and risking CI timeouts and rate limit failures. Keep PR checks deterministic and local.
 3. **Do NOT use Azure ML Workspace ARM syntax for modern Foundry Projects**:
    * Passing `azure_ai_project={"subscription_id": ..., "resource_group_name": ..., "project_name": ...}` targets legacy `Microsoft.MachineLearningServices/workspaces` and returns HTTP 404. Always use the project endpoint URL `https://<account>.services.ai.azure.com/api/projects/<project>`.
 4. **Do NOT omit `is_reasoning_model=True` when using `gpt-5-mini` as judge**:
