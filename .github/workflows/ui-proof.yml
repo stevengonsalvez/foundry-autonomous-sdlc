@@ -12,7 +12,7 @@ on:
     types: [completed]
 
 concurrency:
-  group: pr-screenshots-writer
+  group: ui-proof-${{ github.event.workflow_run.head_branch }}
   cancel-in-progress: false
 
 defaults:
