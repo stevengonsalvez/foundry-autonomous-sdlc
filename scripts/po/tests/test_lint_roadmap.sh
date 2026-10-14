@@ -1,0 +1,103 @@
+#!/usr/bin/env bash
+# Test suite for scripts/po/lint_roadmap.sh verifying that strict validation
+# catches invalid roadmap mutations:
+# 1. Path traversal: app/../.github/workflows/ci.yml
+# 2. Path without backticks: - app/web/src/App.tsx
+# 3. Invalid cost class: XXL
+# 4. Incomplete acceptance criteria: '1. TBD'
+# 5. Short acceptance criteria under 3 words: '1. Fix bug'
+
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
+LINTER="$SCRIPT_DIR/../lint_roadmap.sh"
+
+failures=0
+total=0
+
+run_mutation_test() {
+  local name="$1"
+  local content="$2"
+  local expected_err="$3"
+
+  total=$((total + 1))
+  echo -n "Test $total: $name ... "
+
+  local tmpfile
+  tmpfile="$(mktemp --suffix=.md)"
+  echo "$content" > "$tmpfile"
+
+  local output
+  local exit_code=0
+  output="$("$LINTER" "$tmpfile" 2>&1)" || exit_code=$?
+  rm -f "$tmpfile"
+
+  if [ "$exit_code" -eq 0 ]; then
+    echo "FAIL (expected linter to reject, but it succeeded!)"
+    echo "  Output: $output"
+    failures=$((failures + 1))
+    return
+  fi
+
+  if ! grep -qiE "$expected_err" <<< "$output"; then
+    echo "FAIL (expected error regex '$expected_err' not found)"
+    echo "  Output: $output"
+    failures=$((failures + 1))
+    return
+  fi
+
+  echo "PASS"
+}
+
+BASE_VALID_ITEM='### ITEM-001: feat(web): test item
+- **Status**: todo
+- **Dependencies**: []
+- **Cost Class**: S
+- **Tags**: test
+- **Gap Anchor**: `app/web/src/App.tsx#L1`.
+- **User Value**: Test value.
+- **Files Touched**:
+  - `app/web/src/App.tsx`
+- **Acceptance Criteria**:
+  1. This is a valid acceptance criterion with more than three words.'
+
+echo "Running lint_roadmap.sh mutation tests..."
+
+# 1. Path traversal: app/../.github/workflows/ci.yml
+TRAVERSAL_CONTENT="${BASE_VALID_ITEM//app\/web\/src\/App.tsx/app\/..\/..github\/workflows\/ci.yml}"
+run_mutation_test "Rejects path traversal with '..'" \
+  "$TRAVERSAL_CONTENT" \
+  "Path traversal forbidden|contains '\.\.'"
+
+# 2. Path without backticks: - app/web/src/App.tsx
+NO_BACKTICKS_CONTENT="${BASE_VALID_ITEM/- \`app\/web\/src\/App.tsx\`/- app\/web\/src\/App.tsx}"
+run_mutation_test "Rejects path without backticks" \
+  "$NO_BACKTICKS_CONTENT" \
+  "must be enclosed in backticks"
+
+# 3. Invalid cost class: XXL
+XXL_CONTENT="${BASE_VALID_ITEM/Cost Class\*\*: S/Cost Class\*\*: XXL}"
+run_mutation_test "Rejects Cost Class XXL" \
+  "$XXL_CONTENT" \
+  "Invalid Cost Class 'XXL'"
+
+# 4. Acceptance criterion equal to TBD
+TBD_CONTENT="${BASE_VALID_ITEM/This is a valid acceptance criterion with more than three words./TBD}"
+run_mutation_test "Rejects acceptance criteria equal to TBD" \
+  "$TBD_CONTENT" \
+  "cannot be TBD"
+
+# 5. Acceptance criterion under 3 words
+SHORT_CONTENT="${BASE_VALID_ITEM/This is a valid acceptance criterion with more than three words./Fix bug}"
+run_mutation_test "Rejects acceptance criteria under 3 words" \
+  "$SHORT_CONTENT" \
+  "too short \(under 3 words\)"
+
+echo "----------------------------------------"
+if [ "$failures" -gt 0 ]; then
+  echo "FAILED: $failures of $total tests failed."
+  exit 1
+fi
+
+echo "ALL $total LINT_ROADMAP MUTATION TESTS PASSED."
+exit 0
