@@ -39,13 +39,16 @@ TINY_PNG = bytes.fromhex(
 
 @pytest.fixture(autouse=True)
 def mock_commit_metadata(monkeypatch: pytest.MonkeyPatch, request: pytest.FixtureRequest) -> None:
-    if request.node.name == "test_get_commit_metadata_raises_on_invalid_ref":
+    if request.node.name in (
+        "test_get_commit_metadata_raises_on_invalid_ref",
+        "test_get_commit_metadata_utc_date_with_tz_offset",
+    ):
         return
 
-    def fake_meta(ref: str) -> dict[str, str]:
+    def fake_meta(ref: str, repo_root: Path | None = None) -> dict[str, str]:
         return {
             "sha": f"0123456789abcdef0123456789abcdef{ref[:8]}",
-            "date": "2026-10-10T12:00:00+00:00",
+            "date": "2026-10-10T12:00:00Z",
             "subject": f"Commit for {ref}",
         }
 
@@ -319,6 +322,10 @@ def test_size_budget() -> None:
     assert html_bytes < BUDGET_HTML_BYTES, (
         f"HTML ({html_bytes} bytes) exceeds budget of {BUDGET_HTML_BYTES} bytes"
     )
+    # Assert every single entry is present in the output (no silent dropping)
+    assert all(e["tag"] in html_str for e in entries)
+    assert html_str.count('class="timeline-item">') == 5
+    assert html_str.count('timeline-item-compact') == 25
 
 
 def test_update_history_validates_untrusted_artifacts() -> None:
@@ -498,3 +505,122 @@ def test_get_commit_metadata_raises_on_invalid_ref() -> None:
 
     with pytest.raises(RuntimeError, match="Cannot resolve commit metadata"):
         get_commit_metadata("nonexistent-ref-00000000")
+
+
+def test_get_commit_metadata_utc_date_with_tz_offset() -> None:
+    """get_commit_metadata must convert non-UTC committer tz (+01:00) to UTC (Z)."""
+    import os
+    import subprocess
+
+    from scripts.ui.generate_history import get_commit_metadata
+
+    with tempfile.TemporaryDirectory() as td:
+        subprocess.run(["git", "init"], cwd=td, check=True, capture_output=True)
+        subprocess.run(["git", "config", "user.name", "Tester"], cwd=td, check=True)
+        subprocess.run(["git", "config", "user.email", "test@example.com"], cwd=td, check=True)
+        (Path(td) / "test.txt").write_text("content", encoding="utf-8")
+        subprocess.run(["git", "add", "test.txt"], cwd=td, check=True)
+        env = os.environ.copy()
+        env["GIT_COMMITTER_DATE"] = "2026-10-10T12:30:00+01:00"
+        env["GIT_AUTHOR_DATE"] = "2026-10-10T12:30:00+01:00"
+        subprocess.run(
+            ["git", "commit", "-m", "Commit with offset tz"],
+            cwd=td,
+            env=env,
+            check=True,
+            capture_output=True,
+        )
+
+        meta = get_commit_metadata("HEAD", repo_root=Path(td))
+        assert meta["date"] == "2026-10-10T11:30:00Z"
+        assert meta["subject"] == "Commit with offset tz"
+
+
+def test_render_html_raises_when_over_budget(monkeypatch: pytest.MonkeyPatch) -> None:
+    """When HTML exceeds budget, it must raise ValueError rather than dropping entries."""
+    import scripts.ui.generate_history as gh
+
+    entries = [
+        {
+            "tag": f"v0.{i}.0",
+            "commit_sha": f"sha{i:04d}",
+            "short_sha": f"sha{i:04d}"[:8],
+            "date": "2026-10-14T08:00:00Z",
+            "title": f"Feature release {i}",
+            "issue_number": 100 + i,
+            "issue_url": f"https://github.com/issues/{100 + i}",
+            "pr_number": 200 + i,
+            "pr_url": f"https://github.com/pull/{200 + i}",
+            "cost_usd": 0.05,
+            "reproducible": True,
+            "not_reproducible_reason": None,
+            "screenshots": {r: {vp: f"{r}-{vp}.png" for vp in VIEWPORTS} for r in ROUTES},
+            "before": None,
+        }
+        for i in range(5, 0, -1)
+    ]
+    # Set an artificially small budget
+    monkeypatch.setattr(gh, "BUDGET_HTML_BYTES", 500)
+    with pytest.raises(ValueError, match="exceeds budget"):
+        render_html(entries)
+
+
+def test_collect_evolution_entries_retains_zero_cost() -> None:
+    """Explicit None check must retain cost_usd 0.0 (not drop to None)."""
+    with tempfile.TemporaryDirectory() as td:
+        screenshots_dir = Path(td)
+        create_release_fixture(screenshots_dir, "v0.1.0")
+        state_data = {
+            "tickets": [
+                {
+                    "release": {"tag": "v0.1.0"},
+                    "title": "Free tier release",
+                    "cost": {"total_usd": 0.0},
+                }
+            ]
+        }
+        entries = collect_evolution_entries(state_data, screenshots_dir, tags=["v0.1.0"])
+        assert entries[0]["cost_usd"] == 0.0
+
+        # Also when usd is 0.0 and total_usd is None
+        state_data_2 = {
+            "tickets": [
+                {
+                    "release": {"tag": "v0.1.0"},
+                    "title": "Free tier release",
+                    "cost": {"total_usd": None, "usd": 0.0},
+                }
+            ]
+        }
+        entries_2 = collect_evolution_entries(state_data_2, screenshots_dir, tags=["v0.1.0"])
+        assert entries_2[0]["cost_usd"] == 0.0
+
+
+def test_collect_evolution_entries_handles_malformed_ledger_types() -> None:
+    """Malformed issue, PR or cost fields must not crash the Pages deploy."""
+    with tempfile.TemporaryDirectory() as td:
+        screenshots_dir = Path(td)
+        create_release_fixture(screenshots_dir, "v0.1.0")
+        state_data = {
+            "tickets": [
+                {
+                    "release": {"tag": "v0.1.0"},
+                    "title": "Bad types ticket",
+                    "issue": "not-an-int",
+                    "pr": {"number": "not-an-int", "url": "https://example.com"},
+                    "cost": {"total_usd": "invalid-float"},
+                }
+            ]
+        }
+        entries = collect_evolution_entries(state_data, screenshots_dir, tags=["v0.1.0"])
+        assert entries[0]["issue_number"] is None
+        assert entries[0]["pr_number"] is None
+        assert entries[0]["cost_usd"] is None
+
+
+def test_csp_disallows_raw_githubusercontent() -> None:
+    """CSP must not allow external requests to raw.githubusercontent.com."""
+    from scripts.ui.generate_history import CSP_CONTENT
+
+    assert "https://raw.githubusercontent.com" not in CSP_CONTENT
+    assert "img-src 'self' data:;" in CSP_CONTENT
