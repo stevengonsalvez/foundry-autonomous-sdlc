@@ -10,7 +10,7 @@ import pytest
 from fakes import FakeClock, FakeGitHub
 
 from sdlc_agents import state
-from sdlc_agents.ledger import events, fold, reconcile
+from sdlc_agents.ledger import events, fold
 from sdlc_agents.ledger.service import Ledger, LedgerError
 from sdlc_agents.ledger.store import EVENTS_FILE, STATE_FILE, MemoryBranchStore, StoreConflict
 from tests.ledger.conftest import ticket_event
@@ -185,44 +185,100 @@ def test_reconcile_emits_no_events_when_only_updated_at_changed(real) -> None:
     assert types2.count("ticket.updated") == 1
 
 
-def test_build_ticket_with_reopen_derives_reopened_at(real) -> None:
+def test_reconcile_open_issue_with_escalated_label_and_marker_stays_open_across_reconciles(real) -> None:
+    gh = FakeGitHub(Clock())
+    item = real[6]
+    state_data = {
+        **item["state_data"],
+        "escalation": {
+            "label": "escalated:cost-cap",
+            "at": "2026-10-10T12:00:00Z",
+            "reasons": ["Cost cap exceeded"],
+        },
+    }
+    number = gh.open_issue(item["title"], "body", labels=("escalated:cost-cap",))
+    gh.create_comment(number, state.render(state.State(state_data)))
+    gh.clock.advance(600.0)
+    gh.create_comment(number, "### Simulated human (antigravity)\nLooking into the budget.")
+
+    led, store = ledger(github=gh)
+
+    # First reconcile
+    first = led.handle({"op": "reconcile"})
+    assert first["ok"]
+    doc1 = json.loads(store.files[STATE_FILE])
+    t1 = next(t for t in doc1["tickets"] if t["issue"] == number)
+    assert t1["stage"] == "escalated"
+    assert t1["escalation"]["resolved"] is None
+    assert t1["escalation"]["open"] is True
+    assert doc1["flow"]["counts"]["escalated"] == 1
+
+    # Second reconcile (previous is the output of the first run)
+    second = led.handle({"op": "reconcile"})
+    assert second["ok"]
+    doc2 = json.loads(store.files[STATE_FILE])
+    t2 = next(t for t in doc2["tickets"] if t["issue"] == number)
+    assert t2["stage"] == "escalated"
+    assert t2["escalation"]["resolved"] is None
+    assert t2["escalation"]["open"] is True
+    assert doc2["flow"]["counts"]["escalated"] == 1
+
+
+def test_reconcile_closed_then_reopened_issue_stays_open_across_reconciles(real) -> None:
     gh = FakeGitHub(Clock())
     item = real[17]
-    number = gh.open_issue(item["title"], "body", labels=tuple(item["labels"]))
-    gh.create_comment(number, state.render(state.State(item["state_data"])))
-    # Add a marker comment posted before reopen (at 20:00:02)
-    gh.create_comment(number, "### Simulated human (antigravity)\nOld answer")
-    # Simulate previous state where the issue was closed
-    previous = {
-        "issue": number,
-        "closed_at": "2026-10-11T20:00:00Z",
-        "updated_at": "2026-10-11T20:00:00Z",
-        "digest": "abc",
+    state_data = {
+        **item["state_data"],
+        "escalation": {
+            "label": "escalated:agent-error",
+            "at": "2026-10-10T12:00:00Z",
+            "reasons": ["Agent error"],
+        },
     }
-    # Issue is now reopened in GitHub: closed_at is None, updated_at is bumped after the comment
-    gh.issues[number]["closed_at"] = None
-    gh.issues[number]["updated_at"] = "2026-10-11T20:05:00Z"
-    issue_obj = gh.get_issue(number)
+    number = gh.open_issue(item["title"], "body", labels=("escalated:agent-error",))
+    gh.create_comment(number, state.render(state.State(state_data)))
+    gh.create_comment(number, "### Simulated human (antigravity)\nClosing this issue.")
+    gh.issues[number]["state"] = "closed"
+    gh.issues[number]["closed_at"] = "2026-10-10T13:00:00Z"
 
-    ticket, problem = reconcile.build_ticket(gh, issue_obj, previous, "2026-10-11T20:10:00Z")
-    assert problem is None
-    assert ticket is not None
-    # Because old marker was posted at 20:00:02 (before reopened_at 20:05:00), it does NOT resolve the escalation
-    assert ticket["escalation"]["resolved"] is None
-    assert ticket["escalation"]["open"] is True
+    led, store = ledger(github=gh)
 
-    # Post a new marker comment after reopened_at
-    gh.clock.advance(600.0)
-    new_comment = gh.create_comment(number, "### Simulated human (antigravity)\nNew answer")
-    ticket2, problem2 = reconcile.build_ticket(gh, issue_obj, previous, "2026-10-11T20:20:00Z")
-    assert problem2 is None
-    assert ticket2 is not None
-    assert ticket2["escalation"]["resolved"] == {
-        "at": new_comment.created_at,
+    # First reconcile: issue is closed, escalation resolves
+    first = led.handle({"op": "reconcile"})
+    assert first["ok"]
+    doc1 = json.loads(store.files[STATE_FILE])
+    t1 = next(t for t in doc1["tickets"] if t["issue"] == number)
+    assert t1["escalation"]["resolved"] == {
+        "at": "2026-10-10T13:00:00Z",
         "by": "simulated-human",
-        "how": "answered",
+        "how": "closed",
     }
-    assert ticket2["escalation"]["open"] is False
+    assert t1["escalation"]["open"] is False
+
+    # Issue is now reopened in GitHub (closed_at is cleared, label remains)
+    gh.issues[number]["state"] = "open"
+    gh.issues[number]["closed_at"] = None
+    gh.issues[number]["updated_at"] = "2026-10-10T14:00:00Z"
+
+    # Second reconcile: issue is now open and has escalated:agent-error label
+    second = led.handle({"op": "reconcile"})
+    assert second["ok"]
+    doc2 = json.loads(store.files[STATE_FILE])
+    t2 = next(t for t in doc2["tickets"] if t["issue"] == number)
+    assert t2["stage"] == "escalated"
+    assert t2["escalation"]["resolved"] is None
+    assert t2["escalation"]["open"] is True
+    assert doc2["flow"]["counts"]["escalated"] == 1
+
+    # Third reconcile: previous is output of second run; must STILL stay open
+    third = led.handle({"op": "reconcile"})
+    assert third["ok"]
+    doc3 = json.loads(store.files[STATE_FILE])
+    t3 = next(t for t in doc3["tickets"] if t["issue"] == number)
+    assert t3["stage"] == "escalated"
+    assert t3["escalation"]["resolved"] is None
+    assert t3["escalation"]["open"] is True
+    assert doc3["flow"]["counts"]["escalated"] == 1
 
 
 def test_fold_of_the_written_log_equals_the_written_state(real) -> None:

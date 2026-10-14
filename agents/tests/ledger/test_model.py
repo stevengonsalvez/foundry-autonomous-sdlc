@@ -149,8 +149,17 @@ def test_derive_resolution_cases() -> None:
     res = model.derive_resolution(esc_at=esc_at, closed_at="2026-10-10T16:00:00Z", comments=comments)
     assert res == {"at": "2026-10-10T16:00:00Z", "by": "simulated-human", "how": "closed"}
 
-    # Open issue, with simulated human marker from OWNER -> simulated-human, answered
-    res = model.derive_resolution(esc_at=esc_at, closed_at=None, comments=comments)
+    # Open issue with escalated:* label and marker comment stays unresolved (None)
+    res = model.derive_resolution(
+        esc_at=esc_at,
+        closed_at=None,
+        comments=comments,
+        labels=("escalated:cost-cap",),
+    )
+    assert res is None
+
+    # Open issue with de-escalated label (no escalated:* label) and marker -> simulated-human, answered
+    res = model.derive_resolution(esc_at=esc_at, closed_at=None, comments=comments, labels=())
     assert res == {"at": "2026-10-10T15:30:00Z", "by": "simulated-human", "how": "answered"}
 
     # Non-owner marker comment -> resolved None
@@ -163,12 +172,12 @@ def test_derive_resolution_cases() -> None:
     no_time_comments = [Comment(3, OWNER, "### Simulated human (antigravity)\nAnswer", "")]
     assert model.derive_resolution(esc_at=esc_at, closed_at=None, comments=no_time_comments) is None
 
-    # Closed-then-reopened: old marker before reopen does not resolve it
+    # Closed-then-reopened with escalated label stays open
     res = model.derive_resolution(
         esc_at=esc_at,
         closed_at=None,
         comments=comments,
-        reopened_at="2026-10-10T17:00:00Z",
+        labels=("escalated:agent-error",),
     )
     assert res is None
 
