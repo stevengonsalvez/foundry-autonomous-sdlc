@@ -21,7 +21,7 @@ The Simulated Human loop is an automated counterpart that replaces the human pro
 ```
 
 The persona operates with four primary hats:
-1. **Product Owner**: Assesses the repository state, control center, and open work to file exactly ONE high-value improvement with testable acceptance criteria tied to a real gap, strictly when the pipeline is idle.
+1. **Product Owner**: Selects the NEXT unblocked improvement from `po/ROADMAP.md` by dependency order and files exactly ONE high-value improvement with testable acceptance criteria, strictly when the pipeline is idle. When fewer than 5 `todo` items remain, files an alert for maintainers to extend the roadmap.
 2. **Requirements Answerer**: Answers clarification questions from `sdlc-req-gate` on issues in `stage:needs-refinement`.
 3. **Triage Lead**: Assigns severity and component ownership (`owner:web`, `owner:api`, `owner:carrier-mock`) to incoming defects.
 4. **Escalation Owner**: Resolves escalations under strict guardrails: reframes or closes `escalated:not-agent-suitable`, closes or parks `escalated:cost-cap` without raising caps, and files targeted fix issues for `escalated:deploy-failed` (CD rollbacks) without re-releasing the failed build.
@@ -35,6 +35,7 @@ The loop participates in the repository state machine using these exact labels:
 | Label Category | Labels | Meaning / Action |
 |---|---|---|
 | **Identity** | `simulated-human` | Mandatory on every issue filed or comment posted by this persona. Header `### Simulated human (antigravity)` is required. |
+| **Maintainer** | `needs-maintainer` | Applied to `roadmap: extend po/ROADMAP.md` when fewer than 5 `todo` items remain in `po/ROADMAP.md`. |
 | **Stage** | `stage:needs-refinement` | Requirement scored < 80. Persona wears Requirements Answerer hat to supply answers. |
 | | `stage:ready` | Requirements passed gate (>= 80). Waiting for feasibility check. |
 | | `stage:feasible` | Feasibility passed. Test designer agent generates failing tests. |
@@ -105,7 +106,33 @@ Every execution cycle enforces the following security boundaries (verified by `s
 
 ---
 
-## 5. Memory Conventions (`po/MEMORY.md`)
+## 5. Product Roadmap (`po/ROADMAP.md`) and Progressive Backlog
+
+The continuous self-building loop operates from an ordered, progressive product roadmap defined in `po/ROADMAP.md`. Rather than inventing random or disconnected tasks, the simulated human advances the parcel tracker (`app/`) along a coherent architectural and user-experience progression.
+
+### Backlog Structure:
+Each item in `po/ROADMAP.md` is structured with:
+- **Identifier**: Standard prefix (`ITEM-001`, `ITEM-002`, ...).
+- **Title**: Conventional commit style (`feat(web): ...` or `feat(api): ...`).
+- **User Value**: Concrete user or stakeholder benefit.
+- **Testable Acceptance Criteria**: Numbered, deterministic criteria with exact values and assertions.
+- **Files Touched**: Strictly restricted to paths under `app/` (`app/core`, `app/contracts`, `app/carrier-mock`, `app/api`, `app/web`, `app/e2e`). Agent pull requests touching files outside `app/` are blocked by the `agent-scope` gate.
+- **Dependencies**: Explicit list of prerequisite item IDs that must be completed before the item becomes eligible for intake.
+- **Cost Class**: Rough budget estimate (`S` under 1 USD, or `M`).
+- **Tags**: Functional groupings (`ui`, `accessibility`, `timeline`, `api`, `storage`, `theme`).
+- **Status**: `todo`, `filed`, or `done`.
+
+### Intake and Selection Algorithm:
+1. **Dependency Resolution**: When the repository is idle and within spend limits, the persona inspects `po/ROADMAP.md` and filters for items whose dependencies are all satisfied (`done` in `po/ROADMAP.md` or marked `filed`/`done` in `po/MEMORY.md`).
+2. **Sequential Pick**: The persona takes the first unblocked `todo` item in sequential order.
+3. **Issue Creation**: The persona generates an issue containing the title, user story, acceptance criteria, and explicit `app/` scope, referencing the roadmap ID.
+4. **Memory Tracking**: The persona records the item as `filed` in `po/MEMORY.md` along with the created issue number.
+5. **PR-Only Modification**: The persona NEVER edits `po/ROADMAP.md` directly during scheduled runs. Changes to `po/ROADMAP.md` occur strictly through merged pull requests.
+6. **Maintainer Extension Rule**: If fewer than 5 `status: todo` items remain in `po/ROADMAP.md`, the persona files ONE issue titled `roadmap: extend po/ROADMAP.md` carrying the label `needs-maintainer` and pauses new feature intake until maintainers supply new roadmap items.
+
+---
+
+## 6. Memory Conventions (`po/MEMORY.md`)
 
 Because the session is resumed across scheduled runs, the persona maintains `po/MEMORY.md` to ensure continuity:
 - **Themes Covered**: Tracks broad features previously developed (e.g. parcel timelines, delivery date formatting).
@@ -115,7 +142,7 @@ Because the session is resumed across scheduled runs, the persona maintains `po/
 
 ---
 
-## 6. Reading the Run Log and Monitoring
+## 7. Reading the Run Log and Monitoring
 
 To monitor what the persona has done:
 
@@ -139,7 +166,7 @@ To monitor what the persona has done:
 
 ---
 
-## 7. How to Stop the Loop
+## 8. How to Stop the Loop
 
 ### Emergency Stop (Orca Automation):
 To pause or stop the persona from running on its 4-hour schedule:
@@ -156,7 +183,7 @@ Or cancel a running coder job via curl as documented in `docs/runbook.md` sectio
 
 ---
 
-## 8. Orca Automation Setup Command
+## 9. Orca Automation Setup Command
 
 Do NOT create the Orca automation during development; the orchestrator session will wire it after the draft PR is reviewed and merged.
 
@@ -182,7 +209,7 @@ orca automations create \
 
 ---
 
-## 9. Blocked Items and Notes
+## 10. Blocked Items and Notes
 
 - **Live Automation Creation**: As instructed, the Orca automation has NOT been created in this session; it will be created by the orchestrator session after PR merge.
 - **Antigravity Quota Tracking**: The precheck script validates `$HOME/.gemini/antigravity-cli/antigravity-oauth-token` presence and supports `AGY_QUOTA_EXHAUSTED=1` overrides for test harnesses.

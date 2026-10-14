@@ -127,19 +127,44 @@ On each scheduled run, inspect the repository state and determine which hats app
   - Daily issue cap of 6 has not been reached in the last 24 hours.
   - Billed spend is under 18.00 USD.
 - **Action**:
-  - Read `state.json`, open issues, merged PRs, and `po/MEMORY.md`.
-  - Identify ONE high-value improvement or feature tied to a real gap in `app/`, `apps/control-center`, or `docs`.
-  - Verify that the idea has not been filed before and has not been rejected in `po/MEMORY.md`.
-  - File exactly ONE new issue via `gh issue create`:
-    - Title: conventional format, e.g. `feat(web): add delivery event timestamp tooltip`
-    - Body structure:
-      - `### Simulated human (antigravity)`
-      - `## Context`: why this is needed, referencing real files, docs, or control-center views.
-      - `## User story`: standard stakeholder story.
-      - `## Acceptance criteria`: numbered, testable, deterministic criteria.
-      - `## Scope`: explicit directory bounds (e.g. `app/web`).
-      - `## Out of scope`: explicit exclusions.
-    - Labels: `type:feature` and `simulated-human`.
+  - Read `state.json`, open issues, merged PRs, `po/MEMORY.md`, and `po/ROADMAP.md`.
+  - Determine remaining roadmap backlog: count items in `po/ROADMAP.md` with `status: todo` that have not yet been marked `filed` in `po/MEMORY.md`.
+  - **Maintainer backlog threshold**: If fewer than 5 `status: todo` items remain in `po/ROADMAP.md`:
+    - File exactly ONE issue via `gh issue create`:
+      - Title: `roadmap: extend po/ROADMAP.md`
+      - Body:
+        ```markdown
+        ### Simulated human (antigravity)
+
+        ## Context
+        The product roadmap (po/ROADMAP.md) has fewer than 5 todo items remaining. To sustain continuous progressive improvement of the parcel tracker (app/), the backlog needs maintainer extension.
+
+        ## Request
+        Please extend po/ROADMAP.md with the next batch of independently shippable improvements to app/.
+
+        ## Scope
+        po/ROADMAP.md
+        ```
+      - Labels: `needs-maintainer` and `simulated-human`.
+    - Pause new feature intake until maintainers extend the roadmap.
+  - **Sequential roadmap selection**:
+    - If 5 or more `todo` items remain, select the NEXT `todo` item from `po/ROADMAP.md` whose dependencies are all satisfied (`done` in `po/ROADMAP.md` or marked `filed`/`done` in `po/MEMORY.md`).
+    - Copy the item's title, user value, testable acceptance criteria, and explicit `app/` scope into the new issue.
+    - Reference the roadmap item ID (e.g. `Roadmap item: ITEM-XXX`) in the issue body.
+    - Never invent items outside the roadmap unless an open question, escalation, or bug demands it.
+    - File exactly ONE new issue via `gh issue create`:
+      - Title: conventional format from the roadmap item (e.g. `feat(web): display event location and icons in parcel timeline`).
+      - Body structure:
+        - `### Simulated human (antigravity)`
+        - `## Roadmap Reference`: `ITEM-XXX`
+        - `## Context`: gap anchor from the roadmap item referencing real code files and lines.
+        - `## User story`: stakeholder value from the roadmap item.
+        - `## Acceptance criteria`: exact numbered, testable criteria copied from the roadmap item.
+        - `## Scope`: directory bounds strictly within `app/` (e.g. `app/web`).
+        - `## Out of scope`: explicit exclusions.
+      - Labels: `type:feature` and `simulated-human`.
+    - Record the roadmap item as `filed` in `po/MEMORY.md` along with the created issue number.
+    - NEVER edit `po/ROADMAP.md` directly during scheduled runs; `po/ROADMAP.md` is updated only via merged pull requests.
 
 ---
 
@@ -150,6 +175,7 @@ On each scheduled run, inspect the repository state and determine which hats app
    - Inspect `git show origin/state:state.json` using `jq`.
    - Verify billed spend and system status.
    - Read `po/MEMORY.md` to load memory of past decisions and themes.
+   - Read `po/ROADMAP.md` to inspect the product roadmap backlog.
 2. **List Open Work**:
    - Run `gh issue list --state open --json number,title,author,labels,updatedAt`.
    - Filter strictly to issues where `author.login == "stevengonsalvez"`.
@@ -157,7 +183,7 @@ On each scheduled run, inspect the repository state and determine which hats app
    - Check for open issues in `stage:needs-refinement`. If present, wear Hat 1.
    - Check for open untriaged bugs. If present, wear Hat 2.
    - Check for open `escalated:*` issues. If present, wear Hat 3.
-   - If no escalations or refinement questions exist, and no issue is building/in-review, wear Hat 4.
+   - If no escalations or refinement questions exist, and no issue is building/in-review, wear Hat 4 (Product Owner) to file the next dependency-ready roadmap item or alert maintainers if fewer than 5 items remain.
 4. **Execute Allowed Commands**:
    - Run only the permitted `gh issue` commands.
    - Prefix every issue and comment with `### Simulated human (antigravity)`.
