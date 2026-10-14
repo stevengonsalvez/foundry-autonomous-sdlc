@@ -11,7 +11,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const REPO_ROOT = path.resolve(__dirname, "../..");
 const APP_DIR = path.resolve(REPO_ROOT, "app");
-const WEB_DIST_DIR = path.resolve(APP_DIR, "web/dist");
+const DEFAULT_WEB_DIST_DIR = path.resolve(APP_DIR, "web/dist");
 
 // Resolve Playwright from app dependencies
 const requireFromApp = createRequire(path.resolve(APP_DIR, "package.json"));
@@ -154,15 +154,24 @@ function parseArgs() {
   let outDir = path.resolve(REPO_ROOT, "ui-screenshots");
   let skipBuild = false;
   let headSha = process.env.HEAD_SHA || "";
+  let distDir = process.env.UI_WEB_DIST_DIR
+    ? path.resolve(process.env.UI_WEB_DIST_DIR)
+    : DEFAULT_WEB_DIST_DIR;
 
   for (let i = 0; i < args.length; i++) {
     const arg = args[i];
     if (arg === "--out-dir" && i + 1 < args.length) {
       outDir = path.resolve(process.cwd(), args[++i]);
+    } else if (arg === "--dist" && i + 1 < args.length) {
+      distDir = path.resolve(process.cwd(), args[++i]);
+      skipBuild = true;
     } else if (arg === "--skip-build") {
       skipBuild = true;
     } else if (arg === "--head-sha" && i + 1 < args.length) {
       headSha = args[++i];
+    } else {
+      console.error(`capture.mjs: unknown or invalid argument: ${arg}`);
+      process.exit(1);
     }
   }
 
@@ -177,7 +186,7 @@ function parseArgs() {
     }
   }
 
-  return { outDir, skipBuild, headSha };
+  return { outDir, skipBuild, headSha, distDir };
 }
 
 function buildWeb() {
@@ -235,15 +244,15 @@ function createStaticServer(distDir) {
 }
 
 async function capture() {
-  const { outDir, skipBuild, headSha } = parseArgs();
+  const { outDir, skipBuild, headSha, distDir } = parseArgs();
 
-  if (!skipBuild || !fs.existsSync(WEB_DIST_DIR)) {
+  if (!skipBuild || !fs.existsSync(distDir)) {
     buildWeb();
   }
 
   fs.mkdirSync(outDir, { recursive: true });
 
-  const server = createStaticServer(WEB_DIST_DIR);
+  const server = createStaticServer(distDir);
   await new Promise((resolve, reject) => {
     server.once("error", reject);
     server.listen(0, "127.0.0.1", resolve);
