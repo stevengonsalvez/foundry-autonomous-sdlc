@@ -1,7 +1,12 @@
 {
   "prompt_sha256": "f5c2e19f70f6b7ead22a5f4d756b586b3858f76e8e63d075c00bdd8c8ee6ac5d",
   "recorded_by": "manual",
-  "synthetic": false,
+  "synthetic": true,
+  "synthetic_fields": [
+    "criteria",
+    "acceptance_criteria",
+    "questions"
+  ],
   "response": {
     "criteria": {
       "clear_goal": 25,
@@ -12,10 +17,10 @@
     "score": 100,
     "summary": "Display the parcel's estimated delivery date on the web parcel page below the status badge when appropriate.",
     "acceptance_criteria": [
-      "Show estimated delivery date below status badge",
-      "Hidden when delivered or null"
+      "Display estimatedDelivery date below status badge on web parcel page",
+      "Only show when estimatedDelivery is present"
     ],
     "questions": []
   },
-  "raw_output": "{\"criteria\": {\"clear_goal\": 25, \"testable_acceptance_criteria\": 25, \"defined_scope\": 25, \"edge_cases\": 25}, \"score\": 100, \"summary\": \"Display the parcel's estimated delivery date on the web parcel page below the status badge when appropriate.\", \"acceptance_criteria\": [\"Show estimated delivery date below status badge\", \"Hidden when delivered or null\"], \"questions\": []}"
+  "raw_output": "{\"criteria\": {\"clear_goal\": 25, \"testable_acceptance_criteria\": 25, \"defined_scope\": 25, \"edge_cases\": 25}, \"score\": 100, \"summary\": \"Display the parcel's estimated delivery date on the web parcel page below the status badge when appropriate.\", \"acceptance_criteria\": [\"Display estimatedDelivery date below status badge on web parcel page\", \"Only show when estimatedDelivery is present\"], \"questions\": []}"
 }

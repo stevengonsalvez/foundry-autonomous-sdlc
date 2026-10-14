@@ -1,22 +1,27 @@
 {
   "prompt_sha256": "f5c2e19f70f6b7ead22a5f4d756b586b3858f76e8e63d075c00bdd8c8ee6ac5d",
   "recorded_by": "manual",
-  "synthetic": false,
+  "synthetic": true,
+  "synthetic_fields": [
+    "criteria",
+    "acceptance_criteria",
+    "questions"
+  ],
   "response": {
     "criteria": {
-      "clear_goal": 18,
-      "testable_acceptance_criteria": 15,
-      "defined_scope": 20,
-      "edge_cases": 15
+      "clear_goal": 20,
+      "testable_acceptance_criteria": 20,
+      "defined_scope": 15,
+      "edge_cases": 13
     },
     "score": 68,
-    "summary": "Cut over production carrier integration to new provider and rotate keys.",
+    "summary": "Replace the production carrier integration with the new vendor, rotate production credentials/certificates, update firewall/DNS to route traffic to the new gateway, and obtain written vendor sign-off with rollback automation and monitoring in place.",
     "acceptance_criteria": [
-      "Update carrier routes"
+      "Rotate production credentials and cut over traffic safely"
     ],
     "questions": [
-      "Which exact DNS records must be altered?"
+      "How do you define no downtime numerically?"
     ]
   },
-  "raw_output": "{\"criteria\": {\"clear_goal\": 18, \"testable_acceptance_criteria\": 15, \"defined_scope\": 20, \"edge_cases\": 15}, \"score\": 68, \"summary\": \"Cut over production carrier integration to new provider and rotate keys.\", \"acceptance_criteria\": [\"Update carrier routes\"], \"questions\": [\"Which exact DNS records must be altered?\"]}"
+  "raw_output": "{\"criteria\": {\"clear_goal\": 20, \"testable_acceptance_criteria\": 20, \"defined_scope\": 15, \"edge_cases\": 13}, \"score\": 68, \"summary\": \"Replace the production carrier integration with the new vendor, rotate production credentials/certificates, update firewall/DNS to route traffic to the new gateway, and obtain written vendor sign-off with rollback automation and monitoring in place.\", \"acceptance_criteria\": [\"Rotate production credentials and cut over traffic safely\"], \"questions\": [\"How do you define no downtime numerically?\"]}"
 }

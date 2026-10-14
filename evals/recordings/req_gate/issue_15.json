@@ -1,21 +1,26 @@
 {
   "prompt_sha256": "f5c2e19f70f6b7ead22a5f4d756b586b3858f76e8e63d075c00bdd8c8ee6ac5d",
   "recorded_by": "manual",
-  "synthetic": false,
+  "synthetic": true,
+  "synthetic_fields": [
+    "criteria",
+    "acceptance_criteria",
+    "questions"
+  ],
   "response": {
     "criteria": {
-      "clear_goal": 23,
+      "clear_goal": 24,
       "testable_acceptance_criteria": 23,
       "defined_scope": 23,
-      "edge_cases": 24
+      "edge_cases": 23
     },
     "score": 93,
     "summary": "Display a 'Last updated' timestamp below the status badge on the parcel page using the newest event's timestamp.",
     "acceptance_criteria": [
-      "Show Last updated timestamp below badge",
-      "Format in UTC UK format"
+      "Display Last updated line below status badge",
+      "Format date as UTC timestamp"
     ],
     "questions": []
   },
-  "raw_output": "{\"criteria\": {\"clear_goal\": 23, \"testable_acceptance_criteria\": 23, \"defined_scope\": 23, \"edge_cases\": 24}, \"score\": 93, \"summary\": \"Display a 'Last updated' timestamp below the status badge on the parcel page using the newest event's timestamp.\", \"acceptance_criteria\": [\"Show Last updated timestamp below badge\", \"Format in UTC UK format\"], \"questions\": []}"
+  "raw_output": "{\"criteria\": {\"clear_goal\": 24, \"testable_acceptance_criteria\": 23, \"defined_scope\": 23, \"edge_cases\": 23}, \"score\": 93, \"summary\": \"Display a 'Last updated' timestamp below the status badge on the parcel page using the newest event's timestamp.\", \"acceptance_criteria\": [\"Display Last updated line below status badge\", \"Format date as UTC timestamp\"], \"questions\": []}"
 }
