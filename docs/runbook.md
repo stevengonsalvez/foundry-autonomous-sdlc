@@ -88,7 +88,7 @@ az keyvault secret list --vault-name "$KV" --query "[].name" -o tsv
 
 ## 5. Repository settings
 
-Labels, Pages and Actions settings, then the branch ruleset with the six required checks:
+Labels, Pages and Actions settings, then the branch ruleset with the seven required checks:
 
 ```bash
 python3 scripts/setup_repo.py --phase bootstrap --dry-run

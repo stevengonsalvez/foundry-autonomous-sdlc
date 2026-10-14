@@ -16,7 +16,7 @@ The `github_issue` trigger needs a GitHub OAuth consent in a browser, a human st
 
 ## D4. Gates are enforced three times
 
-Server side by the branch ruleset (six required checks, no bypass actors), in CI by the check scripts, and in the orchestrator by an explicit pre-merge check on the head sha. The review marker is bound to the head sha so a later push invalidates the approval.
+Server side by the branch ruleset (seven required checks, no bypass actors), in CI by the check scripts, and in the orchestrator by an explicit pre-merge check on the head sha. The review marker is bound to the head sha so a later push invalidates the approval.
 
 ## D5. Auto-merge with a merge commit
 
