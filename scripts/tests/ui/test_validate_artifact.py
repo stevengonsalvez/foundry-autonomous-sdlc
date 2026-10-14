@@ -335,3 +335,57 @@ def test_malicious_fixture_mismatched_dimensions_and_viewport(tmp_path: Path) ->
     result = validate_artifact_dir(tmp_path)
     assert result.valid is False
     assert any("do not match expected" in err and "for desktop" in err for err in result.errors)
+
+
+def test_malicious_fixture_disallowed_png_chunk_type(tmp_path: Path) -> None:
+    _make_valid_artifact(tmp_path, count=1)
+    fn = "home-desktop-0.png"
+    valid_png = make_test_png(1280, 800)
+    # Inject a disallowed chunk type (e.g. tEXt or evil)
+    bad_tag = b"tEXt"
+    bad_data = b"Some comment"
+    crc = zlib.crc32(bad_tag + bad_data) & 0xFFFFFFFF
+    chunk = struct.pack(">I", len(bad_data)) + bad_tag + bad_data + struct.pack(">I", crc)
+    # Insert right before IEND chunk (last 12 bytes of valid_png)
+    tampered_png = valid_png[:-12] + chunk + valid_png[-12:]
+    (tmp_path / fn).write_bytes(tampered_png)
+
+    manifest = json.loads((tmp_path / "manifest.json").read_text(encoding="utf-8"))
+    manifest["screenshots"][0]["sha256"] = hashlib.sha256(tampered_png).hexdigest()
+    manifest["screenshots"][0]["size"] = len(tampered_png)
+    (tmp_path / "manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
+
+    result = validate_artifact_dir(tmp_path)
+    assert result.valid is False
+    assert any("disallowed PNG chunk type" in err for err in result.errors)
+
+
+def test_malicious_fixture_corrupted_png_chunk_crc(tmp_path: Path) -> None:
+    _make_valid_artifact(tmp_path, count=1)
+    fn = "home-desktop-0.png"
+    valid_png = bytearray(make_test_png(1280, 800))
+    # Corrupt a byte in the IHDR CRC (bytes 29-32)
+    valid_png[30] ^= 0xFF
+    bad_data = bytes(valid_png)
+    (tmp_path / fn).write_bytes(bad_data)
+
+    manifest = json.loads((tmp_path / "manifest.json").read_text(encoding="utf-8"))
+    manifest["screenshots"][0]["sha256"] = hashlib.sha256(bad_data).hexdigest()
+    manifest["screenshots"][0]["size"] = len(bad_data)
+    (tmp_path / "manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
+
+    result = validate_artifact_dir(tmp_path)
+    assert result.valid is False
+    assert any("has invalid CRC" in err for err in result.errors)
+
+
+def test_manifest_rejects_boolean_size(tmp_path: Path) -> None:
+    _make_valid_artifact(tmp_path, count=1)
+    manifest = json.loads((tmp_path / "manifest.json").read_text(encoding="utf-8"))
+    manifest["screenshots"][0]["size"] = True
+    (tmp_path / "manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
+
+    result = validate_artifact_dir(tmp_path)
+    assert result.valid is False
+    assert any("has invalid size: True" in err for err in result.errors)
+
