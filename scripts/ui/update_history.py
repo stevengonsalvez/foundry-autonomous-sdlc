@@ -16,6 +16,7 @@ import os
 import shutil
 import subprocess
 import sys
+import tempfile
 import time
 from pathlib import Path
 from typing import Any
@@ -77,63 +78,76 @@ def publish_to_pr_screenshots(
     push: bool = False,
 ) -> None:
     """Store release screenshots on pr-screenshots branch under releases/<key>/."""
-    work_dir = Path("/tmp/history-screenshots-worktree")
-    if work_dir.exists():
-        shutil.rmtree(work_dir)
-    work_dir.mkdir(parents=True)
+    work_dir = Path(tempfile.mkdtemp(dir=os.environ.get("RUNNER_TEMP")))
 
-    run_cmd(["git", "init"], cwd=work_dir)
-    remote_url = f"https://github.com/{repo}.git"
-    run_cmd(["git", "remote", "add", "origin", remote_url], cwd=work_dir)
+    try:
+        run_cmd(["git", "init"], cwd=work_dir)
+        remote_url = f"https://github.com/{repo}.git"
+        run_cmd(["git", "remote", "add", "origin", remote_url], cwd=work_dir)
 
-    remote_branches = run_cmd(
-        ["git", "ls-remote", "--heads", "origin", BRANCH_NAME], cwd=work_dir, check=False
-    )
-    if BRANCH_NAME in remote_branches:
-        run_cmd(["git", "fetch", "origin", BRANCH_NAME, "--depth=1"], cwd=work_dir)
-        run_cmd(["git", "checkout", BRANCH_NAME], cwd=work_dir)
-    else:
-        run_cmd(["git", "checkout", "--orphan", BRANCH_NAME], cwd=work_dir)
+        remote_branches = run_cmd(
+            ["git", "ls-remote", "--heads", "origin", BRANCH_NAME], cwd=work_dir, check=False
+        )
+        if BRANCH_NAME in remote_branches:
+            run_cmd(["git", "fetch", "origin", BRANCH_NAME, "--depth=1"], cwd=work_dir)
+            run_cmd(["git", "checkout", BRANCH_NAME], cwd=work_dir)
+        else:
+            run_cmd(["git", "checkout", "--orphan", BRANCH_NAME], cwd=work_dir)
 
-    target_dir = work_dir / "releases" / key
-    target_dir.mkdir(parents=True, exist_ok=True)
+        target_dir = work_dir / "releases" / key
+        target_dir.mkdir(parents=True, exist_ok=True)
 
-    # Copy files
-    for item in artifacts_dir.iterdir():
-        if item.is_file() and (item.name.endswith(".png") or item.name == "manifest.json"):
-            shutil.copy2(item, target_dir / item.name)
+        # Copy files
+        for item in artifacts_dir.iterdir():
+            if item.is_file() and (item.name.endswith(".png") or item.name == "manifest.json"):
+                shutil.copy2(item, target_dir / item.name)
 
-    run_cmd(["git", "config", "user.name", "github-actions[bot]"], cwd=work_dir)
-    run_cmd(
-        ["git", "config", "user.email", "41898282+github-actions[bot]@users.noreply.github.com"],
-        cwd=work_dir,
-    )
-    run_cmd(["git", "add", "-A"], cwd=work_dir)
-    status = run_cmd(["git", "status", "--porcelain"], cwd=work_dir)
+        run_cmd(["git", "config", "user.name", "github-actions[bot]"], cwd=work_dir)
+        run_cmd(
+            [
+                "git",
+                "config",
+                "user.email",
+                "41898282+github-actions[bot]@users.noreply.github.com",
+            ],
+            cwd=work_dir,
+        )
+        run_cmd(["git", "add", "-A"], cwd=work_dir)
+        status = run_cmd(["git", "status", "--porcelain"], cwd=work_dir)
 
-    if status:
-        msg = f"proof(history): UI screenshots for release {key}"
-        run_cmd(["git", "commit", "-m", msg], cwd=work_dir)
-        print(f"Committed screenshots for {key} to {BRANCH_NAME}")
-        if push:
-            for attempt in range(3):
-                try:
-                    run_cmd(
-                        ["git", "pull", "--rebase", "origin", BRANCH_NAME],
-                        cwd=work_dir,
-                        check=False,
-                    )
-                    run_cmd(["git", "push", "origin", BRANCH_NAME], cwd=work_dir)
-                    print(f"Pushed {BRANCH_NAME} to origin")
-                    break
-                except Exception as exc:
-                    if attempt == 2:
-                        raise RuntimeError(
-                            f"Failed to push to {BRANCH_NAME} after 3 attempts: {exc}"
-                        ) from exc
-                    time.sleep(1)
-    else:
-        print(f"No changes in screenshots for release {key}")
+        if status:
+            msg = f"proof(history): UI screenshots for release {key}"
+            run_cmd(["git", "commit", "-m", msg], cwd=work_dir)
+            print(f"Committed screenshots for {key} to {BRANCH_NAME}")
+            if push:
+                for attempt in range(3):
+                    try:
+                        pull_res = subprocess.run(
+                            ["git", "pull", "--rebase", "origin", BRANCH_NAME],
+                            cwd=work_dir,
+                            capture_output=True,
+                            text=True,
+                        )
+                        if pull_res.returncode != 0:
+                            run_cmd(["git", "rebase", "--abort"], cwd=work_dir, check=False)
+                            if BRANCH_NAME in remote_branches:
+                                raise RuntimeError(
+                                    f"git pull --rebase failed: {pull_res.stderr.strip()}"
+                                )
+                        run_cmd(["git", "push", "origin", BRANCH_NAME], cwd=work_dir)
+                        print(f"Pushed {BRANCH_NAME} to origin")
+                        break
+                    except Exception as exc:
+                        run_cmd(["git", "rebase", "--abort"], cwd=work_dir, check=False)
+                        if attempt == 2:
+                            raise RuntimeError(
+                                f"Failed to push to {BRANCH_NAME} after 3 attempts: {exc}"
+                            ) from exc
+                        time.sleep(1)
+        else:
+            print(f"No changes in screenshots for release {key}")
+    finally:
+        shutil.rmtree(work_dir, ignore_errors=True)
 
 
 def update_history(

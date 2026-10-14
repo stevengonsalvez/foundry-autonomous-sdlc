@@ -24,7 +24,7 @@ on:
         default: ""
 
 concurrency:
-  group: pr-screenshots-writer
+  group: app-history
   cancel-in-progress: false
 
 defaults:

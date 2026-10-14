@@ -205,9 +205,10 @@ function createStaticServer(distDir) {
       relativePath = "/index.html";
     }
 
-    const filePath = path.join(distDir, relativePath);
+    const filePath = path.resolve(distDir, "." + relativePath);
+    const rel = path.relative(distDir, filePath);
     // Security: avoid path traversal
-    if (!filePath.startsWith(distDir)) {
+    if (rel.startsWith("..") || path.isAbsolute(rel)) {
       res.writeHead(403);
       res.end("Forbidden");
       return;
