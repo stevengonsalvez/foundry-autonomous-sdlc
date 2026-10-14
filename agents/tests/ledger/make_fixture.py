@@ -22,6 +22,7 @@ ROOT = HERE.parents[2]
 sys.path.insert(0, str(ROOT / "agents"))
 
 from sdlc_agents.ledger import events, fold, model  # noqa: E402
+from sdlc_agents.ports import OWNER  # noqa: E402
 
 OUT = ROOT / "apps" / "control-center" / "test" / "fixtures" / "state.sample.json"
 NOW = "2026-10-11T20:05:00Z"
@@ -56,6 +57,7 @@ def build() -> dict[str, Any]:
             comments = [
                 {
                     "created_at": "2026-10-10T16:30:00Z",
+                    "author": OWNER,
                     "body": "### Simulated human (antigravity)\nAnswering escalation and closing issue.",
                 }
             ]
