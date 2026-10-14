@@ -40,6 +40,7 @@ TYPES = (
     "summary.written",
     "summary.failed",
     "ledger.invoked",
+    "escalation.resolved",
 )
 SOURCES = ("orchestrator", "reconcile", "cd", "ledger", "operator")
 MAX_EVENT_BYTES = 96_000
@@ -203,6 +204,28 @@ def validate(event: Any) -> None:
                 data,
                 "event.data",
             )
+        elif event["type"] == "escalation.resolved":
+            schema_check.check(
+                {
+                    "type": "object",
+                    "required": ["resolved"],
+                    "properties": {
+                        "resolved": {
+                            "type": "object",
+                            "required": ["at", "by", "how"],
+                            "properties": {
+                                "at": _TIME,
+                                "by": {"type": "string", "enum": list(model.RESOLVED_BY)},
+                                "how": {"type": "string", "enum": list(model.RESOLVED_HOW)},
+                            },
+                        }
+                    },
+                },
+                data,
+                "event.data",
+            )
+            if event["issue"] is None:
+                raise ValueError("an escalation.resolved event needs an issue")
     except (ValueError, TypeError, KeyError) as exc:
         raise EventError(str(exc)) from exc
 

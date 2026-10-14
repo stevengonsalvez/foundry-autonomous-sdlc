@@ -25,6 +25,18 @@ export const textOrNull = (v) => (typeof v === 'string' && v !== '' ? v : null);
 export const iso = (v) => (typeof v === 'string' && !Number.isNaN(Date.parse(v)) ? v : null);
 const texts = (v) => list(v).filter((x) => typeof x === 'string');
 
+const RESOLVED_BY = ['simulated-human', 'human', 'system'];
+const RESOLVED_HOW = ['closed', 'answered', 'superseded'];
+
+export function normalizeResolved(v) {
+  if (!isRecord(v)) return null;
+  const by = RESOLVED_BY.includes(v.by) ? v.by : null;
+  const how = RESOLVED_HOW.includes(v.how) ? v.how : null;
+  const at = iso(v.at);
+  if (!by || !how || !at) return null;
+  return { at, by, how };
+}
+
 // ------------------------------------------------------------------ tickets
 
 function normalizeEscalation(v) {
@@ -36,6 +48,7 @@ function normalizeEscalation(v) {
     attempts: num(v.attempts),
     tried: texts(v.tried),
     evidence_url: textOrNull(v.evidence_url),
+    resolved: normalizeResolved(v.resolved),
   };
 }
 

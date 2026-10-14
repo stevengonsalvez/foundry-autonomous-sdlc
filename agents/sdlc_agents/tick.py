@@ -1380,7 +1380,7 @@ class _Tick:
             ticket = ledger_model.ticket(
                 number=obj.item.number, kind=obj.kind, title=obj.item.title, author=obj.item.author,
                 opened_at=obj.item.created_at, closed_at=obj.item.closed_at, labels=obj.item.labels,
-                state_data=obj.st.data, comment_ids=comment_ids)
+                state_data=obj.st.data, comment_ids=comment_ids, comments=obj.comments)
             self.pending_events[obj.item.number] = ledger_events.make(
                 "ticket.updated", ticket["updated_at"], {"ticket": ticket}, issue=obj.item.number)
         except Exception as exc:        # the ledger must never break a transition

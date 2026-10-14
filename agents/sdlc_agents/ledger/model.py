@@ -55,6 +55,11 @@ DEPLOY_FAILED_LABEL = "escalated:deploy-failed"
 # Which gate names the cost-free CI checks and CD steps report.
 GATE_NAMES = ("test", "coverage", "e2e", "gitleaks", "tdd-order", "agent-scope", "review", "smoke", "soak")
 
+RESOLVED_BY = ("simulated-human", "human", "system")
+RESOLVED_HOW = ("closed", "answered", "superseded")
+SIMULATED_HUMAN_MARKER = "Simulated human (antigravity)"
+_RESOLUTION_RE = re.compile(r"<!-- sdlc-resolution:v1\s+(\{.*?\})\s*-->")
+
 _CONTROL = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]")
 
 
@@ -286,13 +291,83 @@ def tried(data: dict[str, Any]) -> list[str]:
     return steps
 
 
+def clean_resolved(val: Any) -> dict[str, Any] | None:
+    if not isinstance(val, dict):
+        return None
+    at = clean(val.get("at"), 40)
+    by = clean(val.get("by"), 30)
+    how = clean(val.get("how"), 30)
+    if not at or by not in RESOLVED_BY or how not in RESOLVED_HOW:
+        return None
+    return {"at": at, "by": by, "how": how}
+
+
+def derive_resolution(
+    *,
+    esc_at: str | None,
+    closed_at: str | None,
+    comments: list[Any] | None,
+) -> dict[str, Any] | None:
+    """Derive resolution for an escalation from GitHub closed status and comments."""
+    if not esc_at:
+        return None
+
+    # Check for explicit resolution comment after esc_at
+    for c in comments or []:
+        c_body = getattr(c, "body", None) or (c.get("body") if isinstance(c, dict) else "") or ""
+        c_at = getattr(c, "created_at", None) or (c.get("created_at") if isinstance(c, dict) else "") or ""
+        if c_at and c_at >= esc_at:
+            m = _RESOLUTION_RE.search(c_body)
+            if m:
+                try:
+                    parsed = json.loads(m.group(1))
+                    cleaned = clean_resolved({**parsed, "at": c_at})
+                    if cleaned:
+                        return cleaned
+                except (ValueError, TypeError):
+                    pass
+
+    # Find marker comments at or after esc_at
+    marker_comments = []
+    for c in comments or []:
+        c_body = getattr(c, "body", None) or (c.get("body") if isinstance(c, dict) else "") or ""
+        c_at = getattr(c, "created_at", None) or (c.get("created_at") if isinstance(c, dict) else "") or ""
+        if SIMULATED_HUMAN_MARKER in c_body and (not c_at or c_at >= esc_at):
+            marker_comments.append((c_at, c))
+
+    # Case 1: Issue closed
+    if closed_at:
+        return {
+            "at": max(closed_at, esc_at),
+            "by": "simulated-human" if marker_comments else "human",
+            "how": "closed",
+        }
+
+    # Case 2: Open issue with simulated human answer comment after escalation
+    if marker_comments:
+        first_at = marker_comments[0][0] or esc_at
+        return {
+            "at": first_at,
+            "by": "simulated-human",
+            "how": "answered",
+        }
+
+    return None
+
+
 def escalation_block(
-    data: dict[str, Any], *, label_only: str | None, evidence_url: str, at: str | None
+    data: dict[str, Any],
+    *,
+    label_only: str | None,
+    evidence_url: str,
+    at: str | None,
+    resolved: dict[str, Any] | None = None,
 ) -> dict[str, Any] | None:
     esc = data.get("escalation") if isinstance(data.get("escalation"), dict) else None
     if esc is None and label_only is None:
         return None
     coder = data.get("coder") if isinstance(data.get("coder"), dict) else {}
+    res = clean_resolved(resolved if resolved is not None else (esc or {}).get("resolved"))
     return {
         "label": clean((esc or {}).get("label") or label_only, 60),
         "reasons": [clean(r, 400) for r in (esc or {}).get("reasons", [])[:8]],
@@ -300,6 +375,7 @@ def escalation_block(
         "attempts": int(coder.get("attempts", 0) or 0),
         "tried": tried(data),
         "evidence_url": evidence_url,
+        "resolved": res,
     }
 
 
@@ -363,6 +439,8 @@ def ticket(
     ledger_usd: float = 0.0,
     gates_extra: dict[str, str] | None = None,
     summary: str | None = None,
+    comments: list[Any] | None = None,
+    resolved: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Build one ticket record. `state_data` is the parsed state comment (None before the first tick)."""
     data = state_data or {}
@@ -412,11 +490,19 @@ def ticket(
     evidence_id = comment_ids.get("coder_log") or comment_ids.get("state")
     evidence_url = url + (f"#issuecomment-{evidence_id}" if evidence_id else "")
     last_stage_at = state_stages[-1]["at"] if state_stages else opened_at
+    esc_at = (data.get("escalation") or {}).get("at") or last_stage_at
+    resolved_val = resolved
+    if resolved_val is None and (is_escalation(esc_label) or DEPLOY_FAILED_LABEL in labels or env == "rolled-back"):
+        if (data.get("escalation") or {}).get("resolved"):
+            resolved_val = clean_resolved(data["escalation"]["resolved"])
+        elif comments is not None or closed_at is not None:
+            resolved_val = derive_resolution(esc_at=esc_at, closed_at=closed_at, comments=comments)
     escalation = escalation_block(
         data,
         label_only=esc_label if is_escalation(esc_label) or DEPLOY_FAILED_LABEL in labels else None,
         evidence_url=evidence_url,
         at=last_stage_at,
+        resolved=resolved_val,
     )
     if env == "rolled-back" and escalation is None:
         escalation = {
@@ -426,6 +512,7 @@ def ticket(
             "attempts": 0,
             "tried": tried(data),
             "evidence_url": evidence_url,
+            "resolved": clean_resolved(resolved_val),
         }
 
     history = stage_history(opened_at, state_stages)
@@ -433,6 +520,11 @@ def ticket(
     quality = data.get("quality") if isinstance(data.get("quality"), dict) else None
     triage = data.get("triage") if isinstance(data.get("triage"), dict) else None
     feas = data.get("feasibility") if isinstance(data.get("feasibility"), dict) else None
+    esc_resolved_at = (
+        (escalation or {}).get("resolved", {}).get("at")
+        if escalation and escalation.get("resolved")
+        else None
+    )
     updated_at = max(
         [
             now_
@@ -440,6 +532,7 @@ def ticket(
                 opened_at,
                 closed_at or opened_at,
                 last_stage_at,
+                esc_resolved_at,
                 *[h.get("finished_at") or h.get("at") for h in (hops or [])],
             ]
             if now_

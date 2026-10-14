@@ -157,7 +157,7 @@ def test_flow_metrics_cover_lead_time_gates_defects_and_counts(real) -> None:
     assert flow["lead_time"]["median_s"] > 0 and {x["issue"] for x in flow["lead_time"]["by_ticket"]} >= {12, 24, 25}
     assert flow["gate_first_pass"]["test"]["total"] >= 3
     assert any(d["issue"] == 25 and d["severity"] == "s3" and d["owner"] == "api" for d in flow["defects"])
-    assert sum(flow["counts"].values()) == 22 and flow["counts"]["prod"] == 5 and flow["counts"]["escalated"] == 17
+    assert sum(flow["counts"].values()) == 6 and flow["counts"]["prod"] == 5 and flow["counts"]["escalated"] == 1
 
 
 def test_agents_view_lists_the_ten_agents_and_the_ledger(real) -> None:
@@ -358,3 +358,44 @@ def test_a_release_flagged_by_cd_without_a_state_comment_still_says_why_and_link
         and esc["evidence_url"].endswith("/runs/7")
         and esc["tried"]
     )
+
+
+def test_escalation_resolved_event_and_determinism(real) -> None:
+    # Issue 17 starts as open escalation
+    ev17 = ticket_event(real[17])
+    res_at = "2026-10-10T16:00:00Z"
+    ev_res = events.make(
+        "escalation.resolved",
+        res_at,
+        {"resolved": {"at": res_at, "by": "simulated-human", "how": "closed"}},
+        issue=17,
+        source="reconcile",
+    )
+    all_evs = [ev17, ev_res]
+
+    # Fold from events
+    doc1 = fold.fold(all_evs, NOW)
+    t17 = next(t for t in doc1["tickets"] if t["issue"] == 17)
+    assert t17["escalation"]["resolved"] == {
+        "at": res_at,
+        "by": "simulated-human",
+        "how": "closed",
+    }
+    # Escalated count in flow should now be 0 since ticket 17 was resolved
+    assert doc1["flow"]["counts"]["escalated"] == 0
+
+    # Determinism: rebuilding from scratch produces identical state
+    doc2 = fold.fold(all_evs, NOW)
+    assert doc1 == doc2
+
+
+def test_old_state_json_without_resolved_backwards_compatible(real) -> None:
+    # Simulate an old state where tickets have escalation without "resolved" key
+    ev17 = ticket_event(real[17])
+    # Deliberately remove resolved from event ticket data
+    ev17["data"]["ticket"]["escalation"].pop("resolved", None)
+
+    doc = fold.fold([ev17], NOW)
+    t17 = next(t for t in doc["tickets"] if t["issue"] == 17)
+    assert "resolved" in t17["escalation"]
+    assert t17["escalation"]["resolved"] is None

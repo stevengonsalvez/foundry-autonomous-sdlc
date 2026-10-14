@@ -118,3 +118,70 @@ def test_a_tickets_cost_is_the_orchestrators_figure_and_the_ledger_share_sits_be
     for t in doc["tickets"]:
         assert t["cost"]["usd"] == pytest.approx(real[t["issue"]]["state_data"]["cost"]["usd"], rel=0.05)
         assert t["cost"]["total_usd"] == pytest.approx(t["cost"]["usd"] + t["cost"]["ledger_usd"], abs=1e-6)
+
+
+def test_clean_resolved() -> None:
+    assert model.clean_resolved(None) is None
+    assert model.clean_resolved("not a dict") is None
+    assert model.clean_resolved({"at": "2026-10-10T12:00:00Z", "by": "invalid", "how": "closed"}) is None
+    assert model.clean_resolved({"at": "2026-10-10T12:00:00Z", "by": "human", "how": "invalid"}) is None
+    assert model.clean_resolved({"at": "", "by": "human", "how": "closed"}) is None
+    valid = {"at": "2026-10-10T12:00:00Z", "by": "simulated-human", "how": "answered"}
+    assert model.clean_resolved(valid) == valid
+
+
+def test_derive_resolution_cases() -> None:
+    esc_at = "2026-10-10T15:00:00Z"
+
+    # None if no esc_at
+    assert model.derive_resolution(esc_at=None, closed_at="2026-10-10T16:00:00Z", comments=None) is None
+
+    # Open issue, no marker
+    assert model.derive_resolution(esc_at=esc_at, closed_at=None, comments=[]) is None
+
+    # Closed issue, no marker -> human, closed
+    res = model.derive_resolution(esc_at=esc_at, closed_at="2026-10-10T16:00:00Z", comments=[])
+    assert res == {"at": "2026-10-10T16:00:00Z", "by": "human", "how": "closed"}
+
+    # Closed issue, with simulated human marker -> simulated-human, closed
+    comments = [{"created_at": "2026-10-10T15:30:00Z", "body": "### Simulated human (antigravity)\nAnswer"}]
+    res = model.derive_resolution(esc_at=esc_at, closed_at="2026-10-10T16:00:00Z", comments=comments)
+    assert res == {"at": "2026-10-10T16:00:00Z", "by": "simulated-human", "how": "closed"}
+
+    # Open issue, with simulated human marker -> simulated-human, answered
+    res = model.derive_resolution(esc_at=esc_at, closed_at=None, comments=comments)
+    assert res == {"at": "2026-10-10T15:30:00Z", "by": "simulated-human", "how": "answered"}
+
+    # Explicit resolution comment takes precedence
+    explicit_comments = [
+        {"created_at": "2026-10-10T15:40:00Z", "body": '<!-- sdlc-resolution:v1 {"by": "system", "how": "superseded"} -->'}
+    ]
+    res = model.derive_resolution(esc_at=esc_at, closed_at="2026-10-10T16:00:00Z", comments=explicit_comments)
+    assert res == {"at": "2026-10-10T15:40:00Z", "by": "system", "how": "superseded"}
+
+    # Closed before escalation -> bounded by esc_at
+    res = model.derive_resolution(esc_at="2026-10-10T21:20:00Z", closed_at="2026-10-10T21:14:00Z", comments=[])
+    assert res == {"at": "2026-10-10T21:20:00Z", "by": "human", "how": "closed"}
+
+
+def test_ticket_with_escalation_derives_resolution(real) -> None:
+    # Item 18 is closed
+    item = real[18]
+    comments = [{"created_at": "2026-10-10T16:30:00Z", "body": "### Simulated human (antigravity)\nDone"}]
+    t = model.ticket(
+        number=item["number"],
+        kind="issue",
+        title=item["title"],
+        author=item["author"],
+        opened_at=item["created_at"],
+        closed_at=item["closed_at"],
+        labels=tuple(item["labels"]),
+        state_data=item["state_data"],
+        comments=comments,
+    )
+    assert t["escalation"]["resolved"] == {
+        "at": item["closed_at"],
+        "by": "simulated-human",
+        "how": "closed",
+    }
+    assert t["updated_at"] >= t["escalation"]["resolved"]["at"]

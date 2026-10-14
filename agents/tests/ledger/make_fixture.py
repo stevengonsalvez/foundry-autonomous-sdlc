@@ -51,6 +51,14 @@ def build() -> dict[str, Any]:
     by = {h["number"]: h for h in history}
     evs: list[dict[str, Any]] = []
     for h in history:
+        comments = None
+        if h["number"] == 18:
+            comments = [
+                {
+                    "created_at": "2026-10-10T16:30:00Z",
+                    "body": "### Simulated human (antigravity)\nAnswering escalation and closing issue.",
+                }
+            ]
         t = model.ticket(
             number=h["number"],
             kind="pr" if h["is_pr"] else "issue",
@@ -61,6 +69,7 @@ def build() -> dict[str, Any]:
             labels=tuple(h["labels"]),
             state_data=h["state_data"],
             comment_ids=h["comment_ids"],
+            comments=comments,
         )
         evs.append(events.make("ticket.updated", t["updated_at"], {"ticket": t}, issue=t["issue"], source="reconcile"))
     first = {

@@ -82,6 +82,7 @@ def build_ticket(
         commits=commits,
         pr_info=pr_info,
         comment_ids=ids,
+        comments=comments,
     ), None
 
 
