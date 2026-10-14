@@ -9,7 +9,7 @@ import { OUTCOME_GLYPH, NODE_STATES } from '../js/charts.js';
 import { MACROBANDS, CHIP_STATES, LANE_TONES } from '../js/views/board.js';
 import { GATE_STATUSES, CHAIN_STATUSES, SPLIT, HOP_STATUS } from '../js/views/ticket.js';
 import { HOP_ACTIONS, MODE_TONES } from '../js/views/common.js';
-import { BADGE_TONES } from '../js/dom.js';
+import { BADGE_TONES, classToken } from '../js/dom.js';
 import { COST_BANDS } from '../js/model.js';
 
 const root = fileURLToPath(new URL('..', import.meta.url));
@@ -138,7 +138,7 @@ test('every class name in JS has a corresponding rule in CSS stylesheets', async
     'mode-': MODE_TONES,
     'callout-': ['danger', 'info'],
     'env-': ['staging', 'production'],
-    'hop-': [...new Set([...Object.keys(HOP_STATUS), ...HOP_ACTIONS])],
+    'hop-': [...new Set([...Object.keys(HOP_STATUS).map(classToken), ...HOP_ACTIONS.map(classToken)])],
     'gate-': GATE_STATUSES,
     'chain-': CHAIN_STATUSES,
     'fill-': ['ok', 'high', 'over', 'warn', 'info', 'accent', 'bad'],

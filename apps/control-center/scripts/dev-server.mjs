@@ -56,6 +56,13 @@ function makeEdge(sample) {
     doc.tickets[1].cost.cap_used_pct = 80.0;
     doc.tickets[2].cost.cap_used_pct = 120.0;
   }
+  const t24 = doc.tickets.find((t) => t.issue === 24);
+  if (t24) {
+    t24.hops = [
+      { action: 'promote', status: 'in_progress', env: 'staging', at: '2026-10-11T20:05:00Z', sha: 'f677ba5a3f621dda89a35333e38249622bd7f8bd', version: 'v1.0.0' },
+      ...t24.hops,
+    ];
+  }
   const actions = ['promote', 'fail', 'rollback', 'skip', 'legacy-publish'];
   const statuses = ['success', 'failed', 'rolled_back', 'in_progress', 'skipped'];
   doc.environments.history = statuses.map((st, i) => ({
