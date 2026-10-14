@@ -38,7 +38,7 @@
       "pass": 8
     }
   },
-  "generated_at": "2026-10-14T20:09:01Z",
+  "generated_at": "2026-10-14T20:09:41Z",
   "issues": [
     {
       "closed_at": "2026-10-10T12:28:43Z",
@@ -1893,9 +1893,9 @@
       "cost": {
         "calls": 3,
         "coder_model_usd": 0.0,
-        "coder_usd": 0.080061,
+        "coder_usd": 0.176038,
         "model_usd": 0.007289,
-        "usd": 0.08735
+        "usd": 0.183327
       },
       "deferred": null,
       "escalation": null,
@@ -1906,7 +1906,7 @@
       "opened_at": "2026-10-14T19:45:00Z",
       "outcome": "open",
       "owner": null,
-      "pr": null,
+      "pr": 86,
       "quality_score": 90,
       "release": null,
       "resolution_seconds": null,
@@ -1930,9 +1930,14 @@
         },
         {
           "entered_at": "2026-10-14T20:00:19Z",
+          "seconds": 546,
+          "stage": "stage:building"
+        },
+        {
+          "entered_at": "2026-10-14T20:09:25Z",
           "in_progress": true,
           "seconds": 0,
-          "stage": "stage:building"
+          "stage": "stage:in-review"
         }
       ],
       "title": "feat(web): display event location pin in parcel timeline",
@@ -1940,7 +1945,7 @@
     }
   ],
   "ledger": {
-    "emitted_at": "2026-10-14T20:08:48Z",
+    "emitted_at": "2026-10-14T20:09:28Z",
     "reconciled_at": "2026-10-14T19:50:28Z"
   },
   "repo": "stevengonsalvez/foundry-autonomous-sdlc",
@@ -1948,10 +1953,10 @@
     "deferred": 0,
     "escalated": 19,
     "issues": 27,
-    "ledger_usd": 0.440793,
-    "orchestrator_usd": 4.27564,
+    "ledger_usd": 0.443219,
+    "orchestrator_usd": 4.287451,
     "released": 6,
-    "usd": 6.506067
+    "usd": 6.616281
   },
   "version": 1
 }
