@@ -6,22 +6,22 @@
 :root {
   color-scheme: dark;
 
-  /* Custom midnight-navy palette (hue 265, dark control room) */
-  --canvas: oklch(0.160 0.055 265);        /* Page canvas background behind all containers */
-  --surface-0: oklch(0.185 0.060 265);     /* Base matrix panel and shell background */
-  --surface-1: oklch(0.230 0.062 265);     /* Elevated table row and card surface */
-  --surface-2: oklch(0.275 0.064 265);     /* Active control surface and track background */
-  --surface-3: oklch(0.320 0.066 265);     /* Raised segmented button and hover surface */
+  /* Custom midnight-navy palette (hue 264, dark control room) */
+  --canvas: oklch(0.160 0.055 264);        /* Page canvas background behind all containers */
+  --surface-0: oklch(0.215 0.058 264);     /* Base matrix panel and shell background */
+  --surface-1: oklch(0.256 0.062 264);     /* Elevated table row and card surface */
+  --surface-2: oklch(0.292 0.063 264);     /* Active control surface and track background */
+  --surface-3: oklch(0.328 0.065 264);     /* Raised segmented button and hover surface */
 
   /* Hairlines and borders (uniform 1px grid strokes) */
-  --edge: oklch(0.480 0.045 265);         /* Container boundary and matrix grid hairlines */
-  --edge-subtle: oklch(0.420 0.040 265);   /* Interior table row and cell divider hairlines */
+  --edge: oklch(0.510 0.042 264);         /* Container boundary and matrix grid hairlines */
+  --edge-subtle: oklch(0.420 0.040 264);   /* Interior table row and cell divider hairlines */
   --edge-focus: oklch(0.72 0.16 190);     /* High-visibility keyboard focus outline */
 
   /* High-contrast system typography (WCAG AA compliant >= 4.5:1) */
-  --fg: oklch(0.985 0.005 265);           /* Primary high-contrast tabular text */
-  --fg-dim: oklch(0.810 0.018 265);        /* Secondary headers, units, and metrics */
-  --fg-muted: oklch(0.720 0.020 265);      /* Tertiary metadata, labels, and timestamps */
+  --fg: oklch(0.985 0.005 264);           /* Primary high-contrast tabular text */
+  --fg-dim: oklch(0.810 0.018 264);        /* Secondary headers, units, and metrics */
+  --fg-muted: oklch(0.720 0.020 264);      /* Tertiary metadata, labels, and timestamps */
 
   /* Custom lifecycle accent tones (independent from flowtron) */
   --tone-run: oklch(0.78 0.16 142);       /* Active execution, healthy state, and pass indicators */
@@ -785,9 +785,9 @@ main {
 /* Macroband header row */
 .band-strip {
   display: grid;
-  grid-template-columns: 134px repeat(9, minmax(104px, 1fr));
+  grid-template-columns: 134px repeat(9, minmax(134px, 1fr));
   width: 100%;
-  min-width: 1070px;
+  min-width: 1340px;
   background: var(--surface-1);
   border-bottom: 1px solid var(--edge);
   font-family: var(--font-mono);
@@ -845,10 +845,10 @@ main {
 /* Matrix grid */
 .board.matrix-grid {
   display: grid;
-  grid-template-columns: 134px repeat(9, minmax(104px, 1fr));
+  grid-template-columns: 134px repeat(9, minmax(134px, 1fr));
   grid-template-rows: 56px repeat(var(--lane-count, 10), auto);
   width: 100%;
-  min-width: 1070px;
+  min-width: 1340px;
 }
 
 /* Sticky swimlane spine */
@@ -1076,7 +1076,6 @@ main {
 
 .chip-pill:hover {
   background: var(--surface-3);
-  border-color: var(--edge-focus);
   outline: 1px solid var(--edge-focus);
   outline-offset: -1px;
 }
@@ -1121,7 +1120,7 @@ main {
 .chip-head {
   display: flex;
   align-items: center;
-  gap: 3px;
+  gap: 2px;
   min-width: 0;
   width: 100%;
   line-height: 1.2;
@@ -1132,6 +1131,7 @@ main {
   font-weight: 700;
   color: var(--fg-muted);
   flex-shrink: 0;
+  white-space: nowrap;
 }
 
 .chip-dot {
@@ -1161,8 +1161,8 @@ main {
   background: var(--surface-1);
   color: var(--fg-dim);
   border: 1px solid var(--edge-subtle);
-  flex-shrink: 1;
-  min-width: 0;
+  flex-shrink: 0;
+  white-space: nowrap;
   line-height: 14px;
 }
 
@@ -1184,7 +1184,7 @@ main {
 .chip-cost {
   display: inline-flex;
   align-items: center;
-  gap: 3px;
+  gap: 2px;
   flex-shrink: 0;
 }
 
@@ -1194,8 +1194,8 @@ main {
 }
 
 .chip-cost-track {
-  width: 14px;
-  min-width: 6px;
+  width: 10px;
+  min-width: 4px;
   height: 3px;
   background: var(--edge);
   border-radius: 2px;
@@ -1352,7 +1352,7 @@ table.data {
   outline-offset: -1px;
 }
 
-.data tbody tr:hover td:first-child {
+.data tbody tr:hover :is(td, th):first-child {
   font-weight: 700;
 }
 

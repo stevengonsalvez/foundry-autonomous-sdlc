@@ -85,7 +85,10 @@ function ticketChip(ticket, nowMs, lens) {
     blocked: 'blocked',
     done: 'done',
   }[stateTone] ?? stateTone;
-  const chipNum = h('span', { class: 'chip-num', title: ticket.kind === 'pr' ? `PR #${ticket.issue}` : `#${ticket.issue}` }, `#${ticket.issue}`);
+  const isPr = ticket.kind === 'pr';
+  const chipNumText = isPr ? `PR #${ticket.issue}` : `#${ticket.issue}`;
+  const chipNum = h('span', { class: 'chip-num', title: chipNumText }, chipNumText);
+  const srText = isPr ? `PR #${ticket.issue}, ${stateSrText}` : stateSrText;
   const chipDot = h('span', { class: `chip-dot dot-${stateTone}`, 'aria-hidden': 'true', title: stateSrText }, stateGlyphs[stateTone]);
   const chipAgent = h('span', { class: 'chip-agent', title: agentName || 'unassigned' }, tag);
 
@@ -120,7 +123,7 @@ function ticketChip(ticket, nowMs, lens) {
   const pill = h(
     'div',
     { class: `chip-pill card-${stateTone}${ticket.pending ? ' card-pending' : ''}` },
-    h('div', { class: 'chip-head' }, chipNum, chipDot, h('span', { class: 'sr-only' }, stateSrText), chipAgent, lensContent),
+    h('div', { class: 'chip-head' }, chipNum, chipDot, h('span', { class: 'sr-only' }, srText), chipAgent, lensContent),
     h('div', { class: 'chip-body' }, link),
   );
 
