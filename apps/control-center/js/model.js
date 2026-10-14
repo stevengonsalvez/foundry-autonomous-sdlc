@@ -148,7 +148,7 @@ export const emptyFilters = () => ({ types: new Set(), query: '', hideOld: false
 
 export function isOpenEscalation(ticket) {
   if (!ticket || !ticket.escalation) return false;
-  if (ticket.escalation.resolved !== null) return false;
+  if (ticket.escalation.resolved != null) return false;
   return ticket.escalation.open ?? true;
 }
 

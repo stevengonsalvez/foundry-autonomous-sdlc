@@ -917,7 +917,7 @@
    "fa44cc18fbba693d",
    "1afe68a45b19e7d3",
    "977b8ed286588468",
-   "406a8076c594f133",
+   "ba1c6c2809ea82a6",
    "04172881d415f2ae",
    "46905c735eba32d0",
    "b43dd9570a367170",
@@ -3579,7 +3579,7 @@
     "total_usd": 0.123206,
     "usd": 0.123206
    },
-   "digest": "b65bb0bb1438",
+   "digest": "710b3da957e9",
    "env": "none",
    "escalation": {
     "at": "2026-10-10T16:20:14Z",
@@ -3593,7 +3593,7 @@
     ],
     "resolved": {
      "at": "2026-10-10T16:42:36Z",
-     "by": "simulated-human",
+     "by": "human",
      "how": "closed"
     },
     "tried": [

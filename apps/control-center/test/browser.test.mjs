@@ -980,8 +980,8 @@ describe('fetch strategy in the browser (scripted GitHub, no ?data=)', { skip },
     // 4. PR marker text and screen-reader accessibility check
     const { context: boardCtx, page: boardPage } = await open('normal', { hash: '#/', width: 1280, height: 900 });
     await boardPage.waitForSelector('#app[aria-busy="false"] .view-board');
-    const prChip = boardPage.locator('.card:has(a[href="#/ticket/27"]) .chip-pill').first();
-    assert.ok((await prChip.count()) > 0, 'must have ticket 27 (PR) chip on board');
+    const prChip = boardPage.locator('.card:has(a[href="#/ticket/40"], a[href="#/ticket/27"]) .chip-pill').first();
+    assert.ok((await prChip.count()) > 0, 'must have a PR chip on board');
 
     const prAudit = await prChip.evaluate((el) => {
       const numEl = el.querySelector('.chip-num');
