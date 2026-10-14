@@ -38,7 +38,7 @@
       "pass": 8
     }
   },
-  "generated_at": "2026-10-14T19:40:53Z",
+  "generated_at": "2026-10-14T19:45:38Z",
   "issues": [
     {
       "closed_at": "2026-10-10T12:28:43Z",
@@ -1801,7 +1801,7 @@
       "type": "feature"
     },
     {
-      "closed_at": null,
+      "closed_at": "2026-10-14T19:41:34Z",
       "coder_engine": null,
       "coder_sessions_lost": 0,
       "cost": {
@@ -1885,21 +1885,58 @@
       ],
       "title": "feat(web): show current location in parcel header",
       "type": "feature"
+    },
+    {
+      "closed_at": null,
+      "coder_engine": null,
+      "coder_sessions_lost": 0,
+      "cost": {
+        "calls": 1,
+        "coder_model_usd": 0.0,
+        "coder_usd": 0.0,
+        "model_usd": 0.001453,
+        "usd": 0.001453
+      },
+      "deferred": null,
+      "escalation": null,
+      "gate_attempts": {},
+      "gates": {},
+      "kind": "issue",
+      "number": 83,
+      "opened_at": "2026-10-14T19:45:00Z",
+      "outcome": "open",
+      "owner": null,
+      "pr": null,
+      "quality_score": 90,
+      "release": null,
+      "resolution_seconds": null,
+      "scenario": "a",
+      "severity": null,
+      "stages": [
+        {
+          "entered_at": "2026-10-14T19:45:23Z",
+          "in_progress": true,
+          "seconds": 0,
+          "stage": "stage:ready"
+        }
+      ],
+      "title": "feat(web): display event location pin in parcel timeline",
+      "type": "feature"
     }
   ],
   "ledger": {
-    "emitted_at": "2026-10-14T19:40:18Z",
+    "emitted_at": "2026-10-14T19:45:25Z",
     "reconciled_at": "2026-10-14T18:50:17Z"
   },
   "repo": "stevengonsalvez/foundry-autonomous-sdlc",
   "totals": {
     "deferred": 0,
     "escalated": 19,
-    "issues": 26,
-    "ledger_usd": 0.412923,
-    "orchestrator_usd": 4.144453,
+    "issues": 27,
+    "ledger_usd": 0.415349,
+    "orchestrator_usd": 4.156423,
     "released": 6,
-    "usd": 6.25966
+    "usd": 6.275509
   },
   "version": 1
 }
