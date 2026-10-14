@@ -409,6 +409,11 @@ def default_responses() -> dict[str, Responder]:
                            "test_files": ["app/web/tests/home-page.test.tsx"]},
         "sdlc-release-notes": ("### Highlights\n- Shipped the change.\n\n### Changes\n- feat: change\n\n"
                                "### Quality\n- Tests added."),
+        "sdlc-ui-tester": {
+            "verdict": "pass",
+            "findings": [],
+            "summary": "No visual UI anomalies detected across viewports.",
+        },
     }
 
 

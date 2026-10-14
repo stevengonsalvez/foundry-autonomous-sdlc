@@ -331,7 +331,10 @@ def test_main_registers_every_agent_and_reports_azure_errors(capsys: pytest.Capt
     assert capsys.readouterr().out.count("created") == len(AGENTS)
 
     failing = _registry({})
-    failing.create_version.side_effect = [HttpResponseError(message="boom"), *[types.SimpleNamespace(version="1")] * 7]
+    failing.create_version.side_effect = [
+        HttpResponseError(message="boom"),
+        *[types.SimpleNamespace(version="1")] * (len(AGENTS) - 1),
+    ]
     with pytest.raises(SystemExit) as exc:
         _run_main(failing, {"FOUNDRY_PROJECT_ENDPOINT": ENDPOINT})
     assert exc.value.code == 1 and "ERROR registering sdlc-req-gate" in capsys.readouterr().err
