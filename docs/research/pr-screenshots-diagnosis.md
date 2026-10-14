@@ -259,13 +259,26 @@ Dimensions verified:
 - All mobile images: 390 x 844, 8-bit/color RGB, non-interlaced.
 
 Comparison across runs:
-1. Local capture vs PR 74 CI artifact: 6 of 8 PNGs are byte-identical. Two differ slightly:
-   - `home-desktop.png`: 114,305 bytes local vs 114,321 bytes in PR 74 CI (16-byte difference).
-   - `home-mobile.png`: 71,585 bytes local vs 71,580 bytes in PR 74 CI (5-byte difference).
+1. Local capture vs PR 74 CI artifact: 6 of 8 PNGs share the exact same byte size and SHA-256 hash. Two differ in both size and hash:
+   - `home-desktop.png`: 114,305 bytes (SHA-256 `5a0318dda600442f9d8c79d6cb5cde7759f77b08065a64cd8af818eb0169c1fb`) local vs 114,321 bytes (SHA-256 `9f101a4e11c5f061084ed717eeb7e932bc736b1ed0d9b70b6473ed6e07c40a8e`) in PR 74 CI (16-byte difference).
+   - `home-mobile.png`: 71,585 bytes (SHA-256 `365b91c3eda7f138ba1f9728a71378f7d040df29587eec0544d45d61578a4cc4`) local vs 71,580 bytes (SHA-256 `520595966121bae2a207f09f99d8b34ab05a3846fca450bc2de7ff80331a8010`) in PR 74 CI (5-byte difference).
+   - The remaining 6 files match local capture in both byte size and SHA-256 hash:
+     - `parcel-found-desktop.png`: 105,981 bytes, SHA-256 `2d4a7ac3272006bb5e549a2e12b3e3f7625cb9b69e8370e62e7a2b6e09946261`
+     - `not-found-desktop.png`: 69,424 bytes, SHA-256 `85a1bc4cededc2a33733894de74eac7718e6f34e8e2ff0a3c990da451d41eeaa`
+     - `invalid-input-desktop.png`: 69,832 bytes, SHA-256 `dea585c18d72606665eba6149bad429297c61f0979b0a19338d29d4b3402dac7`
+     - `parcel-found-mobile.png`: 78,951 bytes, SHA-256 `9eb037bea43871852edd2a89976f0667f1666921699a4a1de40075e2a92f1849`
+     - `not-found-mobile.png`: 42,502 bytes, SHA-256 `893678496e3a2c2113e17d23a13c882e1f554dceba5759aae44a6d10a7338ff0`
+     - `invalid-input-mobile.png`: 43,716 bytes, SHA-256 `2c9322d3ddeb3560754dac9f9931861bcdc0610f1245a6f7c71b14e94d79a752`
 2. Local capture vs PR 77 CI artifact (`origin/pr-screenshots:pr-77/24eb07d3`):
-   - `home-desktop.png`: 114,305 bytes in PR 77 CI (matches local capture size exactly; SHA-256 `5a0318dda600...` matches identically).
-   - `home-mobile.png`: 71,585 bytes in PR 77 CI (matches local capture size exactly; SHA-256 `365b91c3eda7...` matches identically).
-   - All 8 screenshot file sizes match local capture exactly, and all 8 SHA-256 hashes match identically.
+   - All 8 screenshots match local capture in both byte size and SHA-256 hash:
+     - `home-desktop.png`: 114,305 bytes, SHA-256 `5a0318dda600442f9d8c79d6cb5cde7759f77b08065a64cd8af818eb0169c1fb` (identical)
+     - `parcel-found-desktop.png`: 105,981 bytes, SHA-256 `2d4a7ac3272006bb5e549a2e12b3e3f7625cb9b69e8370e62e7a2b6e09946261` (identical)
+     - `not-found-desktop.png`: 69,424 bytes, SHA-256 `85a1bc4cededc2a33733894de74eac7718e6f34e8e2ff0a3c990da451d41eeaa` (identical)
+     - `invalid-input-desktop.png`: 69,832 bytes, SHA-256 `dea585c18d72606665eba6149bad429297c61f0979b0a19338d29d4b3402dac7` (identical)
+     - `home-mobile.png`: 71,585 bytes, SHA-256 `365b91c3eda7f138ba1f9728a71378f7d040df29587eec0544d45d61578a4cc4` (identical)
+     - `parcel-found-mobile.png`: 78,951 bytes, SHA-256 `9eb037bea43871852edd2a89976f0667f1666921699a4a1de40075e2a92f1849` (identical)
+     - `not-found-mobile.png`: 42,502 bytes, SHA-256 `893678496e3a2c2113e17d23a13c882e1f554dceba5759aae44a6d10a7338ff0` (identical)
+     - `invalid-input-mobile.png`: 43,716 bytes, SHA-256 `2c9322d3ddeb3560754dac9f9931861bcdc0610f1245a6f7c71b14e94d79a752` (identical)
 Conclusion: CI capture output itself varies slightly across runner runs (e.g. PR 74 CI vs PR 77 CI); cause unknown `[INFERRED]`, likely minor rendering differences in Chromium font rasterization or image compression timing.
 
 ---
@@ -324,7 +337,8 @@ Analysis:
    This prevents pull requests originating from forks from triggering `ui-proof.yml` with write access.
 
 ### 4.3 Agent PR Triggers and Authentication
-`[VERIFIED]` `docs/poc-findings.md:77` still states the `GITHUB_TOKEN` limitation as current; that documentation is stale from early PoC testing before the production orchestrator was configured with Key Vault secret `github-pat`.
+- `docs/poc-findings.md:77` states: "Agent PRs opened with `GITHUB_TOKEN` do not start workflows; the owner closes and reopens to run CI and review." `[VERIFIED]`
+- That this documentation is stale and reflects early PoC testing predating Key Vault secret `github-pat` is `[INFERRED]`.
 In the actual system (`agents/sdlc_agents/runtime.py`):
 ```python
 GITHUB_SECRET = "github-pat"
@@ -559,7 +573,7 @@ git push origin pr-screenshots
 
 ### 6.1 What Exists Today
 `[VERIFIED]` `apps/control-center` contains its own capture script at `apps/control-center/scripts/shots.mjs` (`package.json`: `"shots": "node scripts/shots.mjs"`).
-- In commit `1e443cd` (`docs(control-center): add proof captures for all viewports and lenses`), 35 PNGs were committed to git by hand into `apps/control-center/docs/proof/` (commits `fa26cf2` and `d8f7c8b` added 6 each, bringing the total in git to 47 PNGs today: 9 in `before/` and 38 at the top level). Additionally, `scripts/shots.mjs` writes up to 42 PNG files per execution.
+- In commit `1e443cd` (`docs(control-center): add proof captures for all viewports and lenses`), 35 PNGs were committed to git by hand into `apps/control-center/docs/proof/` (commits `fa26cf2` and `d8f7c8b` added 6 each, bringing the total in git to 47 PNGs today: 9 in `before/` and 38 at the top level). Additionally, `scripts/shots.mjs` writes up to 38 PNG files per execution (board: 4 sizes x 6 snaps = 24, plus 7 views x 2 sizes = 14).
 - PR 61 (`stevengonsalvez/ui-fixes`, merged as commit `4868ea8c`) regenerated and updated these static PNG files.
 - In `shots.mjs`:
   - Only `board` is captured across all 4 viewport sizes (`desktop`: 1440x900, `1280`: 1280x800, `mobile`: 390x844, `360`: 360x640) across 3 lenses (Delivery, Cost, Gates) and group filters.
@@ -573,7 +587,7 @@ git push origin pr-screenshots
    - Mocks routes for `/api/parcels`.
    - Captures only the 4 parcel tracking routes: `home`, `parcel-found`, `not-found`, `invalid-input`.
 2. `scripts/ui/validate_artifact.py`:
-   - Sets `MAX_FILE_COUNT = 16` (control center generates up to 42 images per run, with 47 PNGs currently tracked in `docs/proof/`).
+   - Sets `MAX_FILE_COUNT = 16` (control center generates up to 38 images per run, with 47 PNGs currently tracked in `docs/proof/`).
    - Validates routes with `ROUTE_RE = re.compile(r"^(home|parcel-found|not-found|invalid-input)$")`.
    - Validates viewports with `VIEWPORT_RE = re.compile(r"^(desktop|mobile)$")` and dimensions 1280x800 and 390x844 only (control center uses 1440x900, 360x640, and variable document scroll heights up to 3000px).
 3. `scripts/ui/publish_proof.py`:
