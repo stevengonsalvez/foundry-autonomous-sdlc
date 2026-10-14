@@ -1,25 +1,47 @@
 #!/usr/bin/env python3
-"""Lint script to verify po/ROADMAP.md structure, integrity, and constraints:
-1. IDs are unique and formatted cleanly (e.g. ITEM-XXX).
-2. All dependencies exist and form a directed acyclic graph (no cycles).
-3. Every item defines testable acceptance criteria (no TBD, minimum 3 words).
-4. Files touched contain strictly paths within app/, every line backtick-enclosed, rejecting '..' traversal.
-5. Cost Class is strictly 'S' or 'M'.
-6. No Unicode em-dashes (\u2014) or en-dashes (\u2013).
-7. No forbidden self-referential terms.
+"""Lint script to verify that po/ROADMAP.md adheres to autonomous SDLC constraints.
 
-Usage: scripts/po/lint_roadmap.sh [path_to_roadmap_md]
+Validates:
+1. No Unicode em-dashes (\\u2014) or en-dashes (\\u2013).
+2. No forbidden self-referential terms.
+3. Every header starting with '### ITEM' strictly matches: ^### (ITEM-\\d+): (.+)$
+4. Item block fields strictly conform to expected fields:
+   - **Status**: todo|filed|done
+   - **Dependencies**: [<deps>]
+   - **Cost Class**: S|M
+   - **Tags**: ...
+   - **Gap Anchor**: ...
+   - **User Value**: ...
+   - **Files Touched**:
+     - `app/...` (strictly one backtick pair per line, no '..' traversal, must begin with app/)
+   - **Acceptance Criteria**:
+     1. ... (at least 3 words, no \\bTBD\\b anywhere)
+   No invalid non-field lines allowed inside item blocks.
+5. Unique item IDs.
+6. Acyclic dependency graph (all dependencies exist and no cycles).
+7. At least 12 valid items.
 """
+
+from __future__ import annotations
 
 import os
 import re
 import sys
-from collections import defaultdict
 from pathlib import PurePosixPath
 
-def main() -> int:
-    roadmap_file = sys.argv[1] if len(sys.argv) > 1 else "po/ROADMAP.md"
+ALLOWED_FIELDS = {
+    "Status",
+    "Dependencies",
+    "Cost Class",
+    "Tags",
+    "Gap Anchor",
+    "User Value",
+    "Files Touched",
+    "Acceptance Criteria",
+}
 
+
+def lint_roadmap(roadmap_file: str) -> int:
     if not os.path.isfile(roadmap_file):
         print(f"FAIL: Roadmap file not found: {roadmap_file}", file=sys.stderr)
         return 1
@@ -52,7 +74,13 @@ def main() -> int:
     else:
         ok("No forbidden mentions")
 
-    # Split into items
+    # Check 3: Strict header regex on all lines starting with ### ITEM
+    for line_idx, line in enumerate(content.splitlines(), 1):
+        if re.match(r"^\s*###\s+ITEM", line):
+            if not re.match(r"^###\s+(ITEM-\d+):\s+(.+)$", line):
+                fail(f"Line {line_idx}: Malformed item header '{line}'. Header must match '### ITEM-0NN: Title' with a colon")
+
+    # Split into item blocks
     item_blocks = re.split(r"(?=^###\s+ITEM-\d+:)", content, flags=re.MULTILINE)
     items: dict[str, dict] = {}
 
@@ -64,7 +92,6 @@ def main() -> int:
         lines = block.splitlines()
         header_match = re.match(r"^###\s+(ITEM-\d+):\s+(.+)$", lines[0])
         if not header_match:
-            fail(f"Malformed item header: {lines[0]}")
             continue
 
         item_id = header_match.group(1).strip()
@@ -73,70 +100,92 @@ def main() -> int:
         if item_id in items:
             fail(f"Duplicate item ID detected: {item_id}")
 
-        # Cost Class check: strictly S or M
-        cost_m = re.search(r"^-\s+\*\*Cost Class\*\*:\s*([^\n]+)$", block, re.MULTILINE)
-        if not cost_m:
-            fail(f"{item_id}: Missing - **Cost Class** line")
-        else:
-            cost_val = cost_m.group(1).strip()
-            if cost_val not in ("S", "M"):
-                fail(f"{item_id}: Invalid Cost Class '{cost_val}'. Must be strictly 'S' or 'M'")
+        fields_present: set[str] = set()
+        current_field: str | None = None
+        status_val: str = ""
+        cost_val: str = ""
+        deps: list[str] = []
+        files: list[str] = []
+        ac_items: list[str] = []
 
-        # Status check
-        status_m = re.search(r"^-\s+\*\*Status\*\*:\s*(\w+)", block, re.MULTILINE)
-        if not status_m or status_m.group(1).lower() not in ("todo", "filed", "done"):
-            fail(f"{item_id}: Status must be one of todo, filed, done")
+        for line_num_in_block, raw_line in enumerate(lines[1:], 2):
+            stripped = raw_line.strip()
+            if not stripped:
+                continue
+            if stripped == "---":
+                current_field = None
+                continue
 
-        # Dependencies
-        dep_m = re.search(r"^-\s+\*\*Dependencies\*\*:\s*\[(.*?)\]", block, re.MULTILINE)
-        deps = []
-        if not dep_m:
-            fail(f"{item_id}: Missing - **Dependencies** line")
-        else:
-            raw_deps = dep_m.group(1).strip()
-            if raw_deps:
-                deps = [d.strip() for d in raw_deps.split(",") if d.strip()]
+            field_m = re.match(r"^-\s+\*\*([A-Za-z ]+)\*\*:(.*)$", stripped)
+            if field_m:
+                field_name = field_m.group(1).strip()
+                field_value = field_m.group(2).strip()
+                if field_name not in ALLOWED_FIELDS:
+                    fail(f"{item_id}: Unknown field '- **{field_name}**:'")
+                fields_present.add(field_name)
+                current_field = field_name
 
-        # Files Touched: every line must be backtick-enclosed and within app/
-        files_match = re.search(r"^-\s+\*\*Files Touched\*\*:\s*\n((?:[ \t]+-[^\n]+\n?)+)", block, re.MULTILINE)
-        files = []
-        if not files_match:
-            fail(f"{item_id}: Missing or malformed - **Files Touched** list")
-        else:
-            for raw_line in files_match.group(1).splitlines():
-                line = raw_line.strip()
-                if not line:
-                    continue
-                if not (line.startswith("- `") and line.endswith("`")):
-                    fail(f"{item_id}: Files Touched entry '{line}' must be enclosed in backticks, e.g. - `app/...`")
-                    continue
-                path_str = line[3:-1].strip()
-                pure_path = PurePosixPath(path_str)
-                if ".." in pure_path.parts:
-                    fail(f"{item_id}: Path traversal forbidden: '{path_str}' contains '..'")
-                    continue
-                if not pure_path.parts or pure_path.parts[0] != "app":
-                    fail(f"{item_id}: Scope violation: '{path_str}' is outside app/")
-                    continue
-                files.append(path_str)
+                if field_name == "Status":
+                    status_val = field_value.lower()
+                elif field_name == "Cost Class":
+                    cost_val = field_value
+                elif field_name == "Dependencies":
+                    dep_m = re.match(r"^\[(.*?)\]$", field_value)
+                    if dep_m:
+                        raw_deps = dep_m.group(1).strip()
+                        deps = [d.strip() for d in raw_deps.split(",") if d.strip()]
+                    else:
+                        fail(f"{item_id}: Malformed Dependencies field '{field_value}'. Expected '[...]'")
+                continue
 
-        # Acceptance Criteria: no TBD, at least 3 words
-        ac_match = re.search(r"^-\s+\*\*Acceptance Criteria\*\*:\s*\n((?:[ \t]+\d+\.[^\n]+\n?)+)", block, re.MULTILINE)
-        if not ac_match:
-            fail(f"{item_id}: Missing or malformed - **Acceptance Criteria** list")
-        else:
-            for raw_line in ac_match.group(1).splitlines():
-                line = raw_line.strip()
-                if not line:
-                    continue
-                item_m = re.match(r"^\d+\.\s+(.+)$", line)
-                if not item_m:
-                    continue
-                text = item_m.group(1).strip()
-                if text.upper() == "TBD":
-                    fail(f"{item_id}: Acceptance criterion cannot be TBD: '{line}'")
-                elif len(text.split()) < 3:
-                    fail(f"{item_id}: Acceptance criterion too short (under 3 words): '{line}'")
+            # Child lines under current field
+            if current_field == "Files Touched":
+                file_m = re.match(r"^-\s+`([^`]+)`$", stripped)
+                if not file_m:
+                    fail(f"{item_id}: Files Touched entry '{stripped}' must match '  - `app/...`' with exactly one backtick pair")
+                else:
+                    path_str = file_m.group(1).strip()
+                    pure_path = PurePosixPath(path_str)
+                    if ".." in pure_path.parts:
+                        fail(f"{item_id}: Path traversal forbidden: '{path_str}' contains '..'")
+                    elif not pure_path.parts or pure_path.parts[0] != "app":
+                        fail(f"{item_id}: Scope violation: '{path_str}' is outside app/")
+                    else:
+                        files.append(path_str)
+            elif current_field == "Acceptance Criteria":
+                ac_m = re.match(r"^\d+\.\s+(.+)$", stripped)
+                if not ac_m:
+                    fail(f"{item_id}: Acceptance criterion entry '{stripped}' must match '  1. ...'")
+                else:
+                    text = ac_m.group(1).strip()
+                    if re.search(r"\bTBD\b", text, re.IGNORECASE):
+                        fail(f"{item_id}: Acceptance criterion cannot contain TBD: '{stripped}'")
+                    if len(text.split()) < 3:
+                        fail(f"{item_id}: Acceptance criterion too short (under 3 words): '{stripped}'")
+                    ac_items.append(text)
+            else:
+                fail(f"{item_id}: Invalid non-field line inside item block: '{stripped}'")
+
+        # Validate mandatory fields
+        for req_field in ALLOWED_FIELDS:
+            if req_field not in fields_present:
+                fail(f"{item_id}: Missing mandatory field '- **{req_field}**:'")
+
+        # Validate status
+        if status_val not in ("todo", "filed", "done"):
+            fail(f"{item_id}: Invalid status '{status_val}'. Must be todo, filed, or done")
+
+        # Validate cost class
+        if cost_val not in ("S", "M"):
+            fail(f"{item_id}: Invalid Cost Class '{cost_val}'. Must be strictly 'S' or 'M'")
+
+        # Validate files count
+        if not files:
+            fail(f"{item_id}: No valid files listed under Files Touched")
+
+        # Validate acceptance criteria count
+        if not ac_items:
+            fail(f"{item_id}: No valid acceptance criteria listed")
 
         items[item_id] = {
             "title": title,
@@ -158,36 +207,44 @@ def main() -> int:
             if dep not in items:
                 fail(f"{item_id} depends on non-existent item {dep}")
 
-    # Cycle detection via topological sort
-    adj: dict[str, list[str]] = defaultdict(list)
-    in_degree: dict[str, int] = {i: 0 for i in items}
-    for item_id, data in items.items():
-        for dep in data["deps"]:
-            if dep in items:
-                adj[dep].append(item_id)
-                in_degree[item_id] += 1
+    # Check for cycles using DFS
+    visited: set[str] = set()
+    rec_stack: set[str] = set()
 
-    queue = [i for i, deg in in_degree.items() if deg == 0]
-    visited_count = 0
-    while queue:
-        curr = queue.pop(0)
-        visited_count += 1
-        for neighbor in adj[curr]:
-            in_degree[neighbor] -= 1
-            if in_degree[neighbor] == 0:
-                queue.append(neighbor)
+    def check_cycle(node: str, path: list[str]) -> bool:
+        visited.add(node)
+        rec_stack.add(node)
+        for neighbor in items.get(node, {}).get("deps", []):
+            if neighbor not in items:
+                continue
+            if neighbor not in visited:
+                if check_cycle(neighbor, path + [neighbor]):
+                    return True
+            elif neighbor in rec_stack:
+                cycle_str = " -> ".join(path + [neighbor])
+                fail(f"Circular dependency detected: {cycle_str}")
+                return True
+        rec_stack.remove(node)
+        return False
 
-    if visited_count != len(items):
-        fail(f"Cycle detected in roadmap dependencies! Visited {visited_count} of {len(items)} items.")
-    else:
+    has_cycle = False
+    for node in items:
+        if node not in visited:
+            if check_cycle(node, [node]):
+                has_cycle = True
+                break
+
+    if not has_cycle and items:
         ok("Dependency graph is verified directed acyclic graph (no cycles)")
 
     if failures > 0:
-        print(f"Roadmap lint failed with {failures} error(s).", file=sys.stderr)
+        print(f"FAIL: Roadmap file failed {failures} constraint check(s)", file=sys.stderr)
         return 1
 
     print("PASS: Roadmap file satisfies all integrity and scope constraints.")
     return 0
 
+
 if __name__ == "__main__":
-    sys.exit(main())
+    target = sys.argv[1] if len(sys.argv) > 1 else "po/ROADMAP.md"
+    sys.exit(lint_roadmap(target))
