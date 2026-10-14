@@ -1,12 +1,13 @@
-# PR Screenshots Diagnosis: Why PR Screenshots Do Not Appear and How to Prove Them
+# PR Screenshots Post-Mortem and Pipeline Diagnosis
 
-Investigation into why screenshots do not appear on pull requests in repository `stevengonsalvez/foundry-autonomous-sdlc`, verification of the screenshot capture and publishing pipeline, a comprehensive blocker audit, an end-to-end rehearsal plan, and an analysis of control center proof captures.
+Post-mortem investigation into why pull request screenshots were absent prior to commit `007d2ea5`, verification of the screenshot capture and publishing pipeline, evidence from the live post-merge execution across PRs 61, 76, and 77, and an analysis of control center proof captures.
 
 Research and documentation only: no code changes, no workflow modifications, no settings changes, and no branch merges were performed.
 
 Date: 2026-10-14  
 Repository: `stevengonsalvez/foundry-autonomous-sdlc`  
-Base commit: `ac680df75a0040d4b7c15010ce6d27c7260f8160` (origin/main)  
+Base commit: `007d2ea5d647a660cc991f0d7dd21741168dfcec` (origin/main)  
+Diagnosis starting commit: `ac680df75a0040d4b7c15010ce6d27c7260f8160` (origin/main before PR 74 merged)  
 Tags:
 - `[VERIFIED]`: Confirmed directly with exact command and output against the repository, GitHub API, or local execution.
 - `[INFERRED]`: Reasoned from verified facts, codebase logic, or GitHub Actions architectural specifications.
@@ -15,170 +16,122 @@ Tags:
 
 ## Executive Summary
 
-Pull requests currently display no screenshot preview comments for three direct reasons:
+Before commit `007d2ea5` (the merge of Pull Request 74), pull requests displayed no screenshot comments. The root cause was that `.github/workflows/ui-proof.yml` was absent from the default branch (`main`). Because `ui-proof.yml` relies on the `workflow_run` event triggered by the completion of `CI`, GitHub Actions strictly requires the workflow file to exist on the repository default branch; without it on `main`, the workflow was never registered or scheduled.
 
-1. `[VERIFIED]` Pull Request 74 (`stevengonsalvez/ui-tester`) is open and unmerged. The workflow file `.github/workflows/ui-proof.yml` and the script package `scripts/ui/` exist only on feature branches and do not exist on `origin/main`.
-2. `[VERIFIED]` The publishing workflow `ui-proof.yml` triggers via `workflow_run` on completion of the `CI` workflow. In GitHub Actions, workflows triggered by `workflow_run` execute exclusively from the repository default branch (`main`). Because `ui-proof.yml` is absent from `main`, the GitHub Actions engine does not register or execute it (`GET /actions/workflows/ui-proof.yml` returns HTTP 404).
-3. `[VERIFIED]` Pull Request 74 introduced the `ui-screenshots` job into `.github/workflows/ci.yml`. On `main` and on regular pull requests cut from `main` (such as PR 75), `ci.yml` lacks the `ui-screenshots` job entirely. On PR 74 itself, the `ui-screenshots` job did run and successfully uploaded an artifact containing 8 valid PNG images and `manifest.json`, but no comment was posted because `ui-proof.yml` could not trigger from `main`.
-
-Once PR 74 merges to `main`, the core pipeline is structurally ready: the target storage branch `pr-screenshots` exists, GitHub Actions workflow write permissions are appropriately elevated in `ui-proof.yml`, rulesets do not block pushes to `pr-screenshots`, `raw.githubusercontent.com` serves images for this public repository, and real agent pull requests opened by the orchestrator use a personal access token (`github-pat`) which triggers standard `pull_request` workflow runs.
+With the merge of PR 74 as commit `007d2ea5`, the screenshot pipeline is fully operational and proven in production:
+1. `[VERIFIED]` GitHub Actions workflow `UI Proof` runs automatically from `main` on `workflow_run` completion of `CI`.
+2. `[VERIFIED]` The branch `origin/pr-screenshots` dynamically stores captured screenshots under `pr-<number>/<head_short>/`.
+3. `[VERIFIED]` Pull Requests 61, 76, and 77 each display a live `<!-- ui-proof:v1 -->` comment posted by `github-actions[bot]` with embedded desktop (1280px) and mobile (390px) screenshots served by `raw.githubusercontent.com`.
 
 ---
 
-## 1. Root Cause Proof with Evidence
+## 1. Current State (Post 007d2ea5)
 
-### 1.1 CI Runs on PR 74 vs Main and Other PRs
+Following the merge of PR 74 as commit `007d2ea5`, the screenshot pipeline fired immediately across existing open and new pull requests.
 
-#### PR 74 Workflow Execution
-`[VERIFIED]` PR 74 (`stevengonsalvez/ui-tester`, head commit `c8bdf53912bc4b4fc4d31ed28d3153169a20f613`) ran workflow `CI` (run ID `38588155653`).
-
-Command:
-```bash
-gh run view 38588155653 --json jobs --jq '.jobs[] | {name: .name, conclusion: .conclusion}'
-```
-Output:
-```json
-{"conclusion":"success","name":"e2e"}
-{"conclusion":"success","name":"gates-tests"}
-{"conclusion":"success","name":"agent-scope"}
-{"conclusion":"success","name":"agents"}
-{"conclusion":"success","name":"tdd-order"}
-{"conclusion":"success","name":"control-center"}
-{"conclusion":"success","name":"gitleaks"}
-{"conclusion":"success","name":"test"}
-{"conclusion":"success","name":"ui-screenshots"}
-{"conclusion":"success","name":"coverage"}
-```
-
-The `ui-screenshots` job succeeded.
-
-#### Artifact Upload Verification on PR 74
-`[VERIFIED]` The `ui-screenshots` job uploaded an artifact named `ui-screenshots` (ID `11905958957`, size 567,986 bytes).
+### 1.1 Live UI Proof Workflow Runs
+`[VERIFIED]` The `UI Proof` workflow is now active and runs from `main` upon completion of `CI`.
 
 Command:
 ```bash
-gh api repos/stevengonsalvez/foundry-autonomous-sdlc/actions/runs/38588155653/artifacts
+gh run list --workflow="UI Proof" -L 5
 ```
 Output:
-```json
-{
-  "total_count": 1,
-  "artifacts": [
-    {
-      "id": 11905958957,
-      "name": "ui-screenshots",
-      "size_in_bytes": 567986,
-      "expired": false,
-      "workflow_run": {
-        "id": 38588155653,
-        "head_branch": "stevengonsalvez/ui-tester",
-        "head_sha": "c8bdf53912bc4b4fc4d31ed28d3153169a20f613"
-      }
-    }
-  ]
-}
+```
+STATUS  TITLE     WORKFLOW  BRANCH  EVENT         ID           ELAPSED  AGE
+✓       UI Proof  UI Proof  main    workflow_run  38600334489  21s      about 5 minutes ago
+✓       UI Proof  UI Proof  main    workflow_run  38599858786  11s      about 8 minutes ago
+✓       UI Proof  UI Proof  main    workflow_run  38599734193  38s      about 9 minutes ago
+✓       UI Proof  UI Proof  main    workflow_run  38599731922  20s      about 9 minutes ago
+-       UI Proof  UI Proof  main    workflow_run  38599684414  4s       about 9 minutes ago
 ```
 
-#### Artifact Content and Dimensions Verification
-`[VERIFIED]` The artifact was downloaded and inspected. All desktop PNG images have resolution 1280x800 and all mobile PNG images have resolution 390x844.
+Run details:
+- Run `38599734193`: Processed PR 61 (head commit `8121bbc9`).
+- Run `38599858786`: Processed PR 76 (head commit `1db251f6`).
+- Run `38600334489`: Processed PR 77 (head commit `24eb07d3`).
 
-Commands:
+### 1.2 Storage on pr-screenshots Branch
+`[VERIFIED]` The publishing job commits and pushes validated PNG artifacts to `origin/pr-screenshots` under per-PR directories.
+
+Command:
 ```bash
-gh run download 38588155653 -R stevengonsalvez/foundry-autonomous-sdlc -D /tmp/scratch/pr74-artifact
-file /tmp/scratch/pr74-artifact/ui-screenshots/*.png
+git log -n 4 --oneline origin/pr-screenshots
 ```
 Output:
 ```
-home-desktop.png:          PNG image data, 1280 x 800, 8-bit/color RGB, non-interlaced
-home-mobile.png:           PNG image data, 390 x 844, 8-bit/color RGB, non-interlaced
-invalid-input-desktop.png: PNG image data, 1280 x 800, 8-bit/color RGB, non-interlaced
-invalid-input-mobile.png:  PNG image data, 390 x 844, 8-bit/color RGB, non-interlaced
-not-found-desktop.png:     PNG image data, 1280 x 800, 8-bit/color RGB, non-interlaced
-not-found-mobile.png:      PNG image data, 390 x 844, 8-bit/color RGB, non-interlaced
-parcel-found-desktop.png:  PNG image data, 1280 x 800, 8-bit/color RGB, non-interlaced
-parcel-found-mobile.png:   PNG image data, 390 x 844, 8-bit/color RGB, non-interlaced
+c45f6c7 proof: UI screenshots for PR #77 at 24eb07d3
+6d7c025 proof: UI screenshots for PR #76 at 1db251f6
+4c11da7 proof: UI screenshots for PR #61 at 8121bbc9
+aedd0f0 chore(history): backfill release screenshots (v0.1.0 to v0.4.0)
 ```
 
 Command:
 ```bash
-cat /tmp/scratch/pr74-artifact/ui-screenshots/manifest.json
+git ls-tree origin/pr-screenshots
 ```
 Output:
-```json
-{
-  "version": 1,
-  "head_sha": "c8bdf53912bc4b4fc4d31ed28d3153169a20f613",
-  "screenshots": [
-    {"filename": "home-desktop.png", "route": "home", "viewport": "desktop", "sha256": "9f101a4e11c5f061084ed717eeb7e932bc736b1ed0d9b70b6473ed6e07c40a8e", "size": 114321},
-    {"filename": "parcel-found-desktop.png", "route": "parcel-found", "viewport": "desktop", "sha256": "2d4a7ac3272006bb5e549a2e12b3e3f7625cb9b69e8370e62e7a2b6e09946261", "size": 105981},
-    {"filename": "not-found-desktop.png", "route": "not-found", "viewport": "desktop", "sha256": "85a1bc4cededc2a33733894de74eac7718e6f34e8e2ff0a3c990da451d41eeaa", "size": 69424},
-    {"filename": "invalid-input-desktop.png", "route": "invalid-input", "viewport": "desktop", "sha256": "dea585c18d72606665eba6149bad429297c61f0979b0a19338d29d4b3402dac7", "size": 69832},
-    {"filename": "home-mobile.png", "route": "home", "viewport": "mobile", "sha256": "520595966121bae2a207f09f99d8b34ab05a3846fca450bc2de7ff80331a8010", "size": 71580},
-    {"filename": "parcel-found-mobile.png", "route": "parcel-found", "viewport": "mobile", "sha256": "9eb037bea43871852edd2a89976f0667f1666921699a4a1de40075e2a92f1849", "size": 78951},
-    {"filename": "not-found-mobile.png", "route": "not-found", "viewport": "mobile", "sha256": "893678496e3a2c2113e17d23a13c882e1f554dceba5759aae44a6d10a7338ff0", "size": 42502},
-    {"filename": "invalid-input-mobile.png", "route": "invalid-input", "viewport": "mobile", "sha256": "2c9322d3ddeb3560754dac9f9931861bcdc0610f1245a6f7c71b14e94d79a752", "size": 43716}
-  ]
-}
+```
+040000 tree 991b1b72929f0ffbab99cb24817b363a19a1a3f3	pr-61
+040000 tree 22cd50371591e77613716df02fc24f279ab2ee91	pr-76
+040000 tree 0217c8d7b5b65d33207815dd5fd5b3bdd18423b4	pr-77
+040000 tree 893c4967279778477bacd426ce2ff22215fea7e6	releases
 ```
 
-#### Comparison with Main CI Runs
-`[VERIFIED]` The latest CI run on `origin/main` (commit `ac680df75a0040d4b7c15010ce6d27c7260f8160`, run ID `38597626029`) does not contain the `ui-screenshots` job.
+Directory contents for each PR:
+```bash
+git ls-tree origin/pr-screenshots:pr-61
+git ls-tree origin/pr-screenshots:pr-76
+git ls-tree origin/pr-screenshots:pr-77
+```
+Output:
+```
+040000 tree 908ce5daf1a48c968fbaa5bfa6a37c355a00b52d	8121bbc9
+040000 tree 1e77991d76c64b8e6f2114656c4c60f4761e352f	1db251f6
+040000 tree 25cbb4f32dda85963b19e2d725c5c22c145a8ec8	24eb07d3
+```
+
+### 1.3 Verified Comments on Live PRs
+`[VERIFIED]` Live comments are now posted by `github-actions[bot]` on PR 61, PR 76, and PR 77.
 
 Command:
 ```bash
-gh run view 38597626029 --json jobs --jq '.jobs[].name'
+gh pr view 77 --json comments --jq '.comments[] | select(.body | startswith("<!-- ui-proof:v1 -->")) | .body'
 ```
 Output:
-```
-agent-scope
-gates-tests
-tdd-order
-test
-e2e
-coverage
-gitleaks
-agents
-control-center
+```markdown
+<!-- ui-proof:v1 -->
+### UI Screenshots for `24eb07d3`
+
+- Head commit: `24eb07d315c264f551628aaf0d9768b7bfd30bf8`
+- Manifest SHA-256: `4fff30dd34b05246e46cbfbce2a6252371e130889815dc05a332e7ba50aef084`
+- Storage: [`pr-screenshots`](https://github.com/stevengonsalvez/foundry-autonomous-sdlc/tree/pr-screenshots/pr-77/24eb07d3)
+
+<details open>
+<summary><b>Screenshots (8 captures)</b></summary>
+
+| Route | Desktop (1280px) | Mobile (390px) |
+|---|---|---|
+| **Home** | <img src="https://raw.githubusercontent.com/stevengonsalvez/foundry-autonomous-sdlc/pr-screenshots/pr-77/24eb07d3/home-desktop.png" alt="home desktop" width="320" /> | <img src="https://raw.githubusercontent.com/stevengonsalvez/foundry-autonomous-sdlc/pr-screenshots/pr-77/24eb07d3/home-mobile.png" alt="home mobile" width="160" /> |
+| **Parcel Found** | <img src="https://raw.githubusercontent.com/stevengonsalvez/foundry-autonomous-sdlc/pr-screenshots/pr-77/24eb07d3/parcel-found-desktop.png" alt="parcel-found desktop" width="320" /> | <img src="https://raw.githubusercontent.com/stevengonsalvez/foundry-autonomous-sdlc/pr-screenshots/pr-77/24eb07d3/parcel-found-mobile.png" alt="parcel-found mobile" width="160" /> |
+| **Not Found** | <img src="https://raw.githubusercontent.com/stevengonsalvez/foundry-autonomous-sdlc/pr-screenshots/pr-77/24eb07d3/not-found-desktop.png" alt="not-found desktop" width="320" /> | <img src="https://raw.githubusercontent.com/stevengonsalvez/foundry-autonomous-sdlc/pr-screenshots/pr-77/24eb07d3/not-found-mobile.png" alt="not-found mobile" width="160" /> |
+| **Invalid Input** | <img src="https://raw.githubusercontent.com/stevengonsalvez/foundry-autonomous-sdlc/pr-screenshots/pr-77/24eb07d3/invalid-input-desktop.png" alt="invalid-input desktop" width="320" /> | <img src="https://raw.githubusercontent.com/stevengonsalvez/foundry-autonomous-sdlc/pr-screenshots/pr-77/24eb07d3/invalid-input-mobile.png" alt="invalid-input mobile" width="160" /> |
+
+</details>
+
+*(Advisory UI proof captured deterministically via Playwright)*
 ```
 
-#### Comparison with Other Recent PRs
-`[VERIFIED]` Pull Request 75 (`stevengonsalvez/esc-resolved`, head commit `98c1514bcda91f3f0e336ae0b299f1329f616c1a`, run ID `38590271812`) does not contain the `ui-screenshots` job because it branched from `main` without PR 74.
+---
 
-Command:
-```bash
-gh run view 38590271812 --json jobs --jq '.jobs[].name'
-```
-Output:
-```
-coverage
-e2e
-tdd-order
-test
-agents
-gates-tests
-agent-scope
-gitleaks
-control-center
-```
+## 2. Root Cause Analysis: State at Time of Diagnosis (Before 007d2ea5)
 
-#### Check for Existing PR Comments
-`[VERIFIED]` Checking PR 74 and PR 76 reveals that neither PR received any automated comments.
+Before commit `007d2ea5`, the repository was at commit `ac680df75a0040d4b7c15010ce6d27c7260f8160`.
 
-Commands:
-```bash
-gh pr view 74 --json comments
-gh pr view 76 --json comments
-```
-Output:
-```json
-{"comments": []}
-{"comments": []}
-```
+### 2.1 Absence of ui-proof.yml on Default Branch
+`[VERIFIED]` The GitHub Actions workflow API returned HTTP 404 because `ui-proof.yml` was absent from `main`.
 
-#### Status of ui-proof.yml on Default Branch
-`[VERIFIED]` The GitHub Actions workflow API returns HTTP 404 for `ui-proof.yml` because the file does not exist on `main`.
-
-Command:
+Command (recorded before merge):
 ```bash
 gh api repos/stevengonsalvez/foundry-autonomous-sdlc/actions/workflows/ui-proof.yml
 ```
@@ -193,381 +146,381 @@ Output:
 
 Command:
 ```bash
-git show origin/main:.github/workflows/ui-proof.yml
+git show ac680df:.github/workflows/ui-proof.yml
 ```
 Output:
 ```
-fatal: path '.github/workflows/ui-proof.yml' does not exist in 'origin/main'
+fatal: path '.github/workflows/ui-proof.yml' does not exist in 'ac680df'
 ```
 
-### 1.2 Local Execution of Capture Script
+Because GitHub Actions restricts `workflow_run` workflows to definitions residing in the default branch, the presence of `ui-proof.yml` inside feature branches (such as `stevengonsalvez/ui-tester`) was ignored by the Actions scheduler.
 
-`[VERIFIED]` To verify that the capture script functions as expected on this machine without relying on external services, `scripts/ui/capture.mjs` was executed inside a throwaway git clone (isolated from all existing worktrees).
+### 2.2 Absence of ui-screenshots in Main ci.yml
+`[VERIFIED]` In `ac680df:.github/workflows/ci.yml`, the job `ui-screenshots` did not exist.
 
-Test execution commands:
+Command:
+```bash
+git show ac680df:.github/workflows/ci.yml | grep -n "ui-screenshots"
+```
+Output:
+```
+(exit code 1, no match)
+```
+
+Run `38597626029` on `main` executed:
+```
+agent-scope, gates-tests, tdd-order, test, e2e, coverage, gitleaks, agents, control-center
+```
+It did not contain `ui-screenshots`.
+
+### 2.3 PR 75 Pre-Merge Run
+`[INFERRED]` On PR 75 (`stevengonsalvez/esc-resolved`), run `38590271812` did not include the `ui-screenshots` job.
+A `pull_request` workflow run executes against GitHub's simulated merge ref (`refs/pull/:number/merge`). Because run `38590271812` completed at 15:32:00Z (prior to PR 74 merging at 16:37Z), the merge ref combined PR 75 with the pre-merge base `ac680df`, which did not have `ui-screenshots` defined.
+
+### 2.4 Pre-Merge PR Comments Check
+`[VERIFIED]` Prior to `007d2ea5`, neither PR 74 nor PR 76 contained screenshot comments.
+
+Command (recorded before merge):
+```bash
+gh pr view 74 --json comments
+gh pr view 76 --json comments
+```
+Output:
+```json
+{"comments": []}
+{"comments": []}
+```
+
+---
+
+## 3. Evidence from the PR 74 CI Artifact and Local Capture
+
+### 3.1 PR 74 CI Artifact
+`[VERIFIED]` While PR 74 was open, run `38588155653` executed the `ui-screenshots` job and uploaded artifact `ui-screenshots` (ID `11905958957`, 567,986 bytes).
+
+The artifact was downloaded into a temporary scratch directory. All 8 PNGs and `manifest.json` were confirmed:
+- Resolution: All 4 desktop images were 1280x800; all 4 mobile images were 390x844.
+- Content:
+  - `home-desktop.png`: 114,321 bytes
+  - `home-mobile.png`: 71,580 bytes
+  - `parcel-found-desktop.png`: 105,981 bytes
+  - `parcel-found-mobile.png`: 78,951 bytes
+  - `not-found-desktop.png`: 69,424 bytes
+  - `not-found-mobile.png`: 42,502 bytes
+  - `invalid-input-desktop.png`: 69,832 bytes
+  - `invalid-input-mobile.png`: 43,716 bytes
+
+### 3.2 Local Execution of scripts/ui/capture.mjs
+`[VERIFIED]` `capture.mjs` was executed in a throwaway clone against `@parcel/web`.
+
+Command:
 ```bash
 git clone --depth 1 --branch stevengonsalvez/ui-tester https://github.com/stevengonsalvez/foundry-autonomous-sdlc.git /tmp/scratch/throwaway-clone
 npm --prefix /tmp/scratch/throwaway-clone/app ci
 node /tmp/scratch/throwaway-clone/scripts/ui/capture.mjs --out-dir /tmp/scratch/local-capture
-```
-
-Output:
-```
-Building app/web for screenshot capture...
-
-> @parcel/web@0.1.0 build
-> tsc --noEmit && vite build
-
-vite v7.3.7 building client environment for production...
-transforming (1) src/main.tsx...
-dist/index.html                   0.83 kB │ gzip:  0.51 kB
-dist/assets/index-CSttkLXx.css   11.01 kB │ gzip:  2.99 kB
-dist/assets/index-qwhroTlM.js   156.00 kB │ gzip: 50.45 kB
-built in 1.05s
-Local web preview running at http://127.0.0.1:40925
-Setting up context for viewport desktop (1280x800)...
-Capturing route: home (desktop) -> http://127.0.0.1:40925/#/
-Saved home-desktop.png (114305 bytes, sha256: 5a0318dda600...)
-Capturing route: parcel-found (desktop) -> http://127.0.0.1:40925/#/parcel/PK1000000001
-Saved parcel-found-desktop.png (105981 bytes, sha256: 2d4a7ac32720...)
-Capturing route: not-found (desktop) -> http://127.0.0.1:40925/#/parcel/PK9999999999
-Saved not-found-desktop.png (69424 bytes, sha256: 85a1bc4ceded...)
-Capturing route: invalid-input (desktop) -> http://127.0.0.1:40925/#/parcel/12345
-Saved invalid-input-desktop.png (69832 bytes, sha256: dea585c18d72...)
-Setting up context for viewport mobile (390x844)...
-Capturing route: home (mobile) -> http://127.0.0.1:40925/#/
-Saved home-mobile.png (71585 bytes, sha256: 365b91c3eda7...)
-Capturing route: parcel-found (mobile) -> http://127.0.0.1:40925/#/parcel/PK1000000001
-Saved parcel-found-mobile.png (78951 bytes, sha256: 9eb037bea438...)
-Capturing route: not-found (mobile) -> http://127.0.0.1:40925/#/parcel/PK9999999999
-Saved not-found-mobile.png (42502 bytes, sha256: 893678496e3a...)
-Capturing route: invalid-input (mobile) -> http://127.0.0.1:40925/#/parcel/12345
-Saved invalid-input-mobile.png (43716 bytes, sha256: 2c9322d3ddeb...)
-Wrote manifest to /tmp/scratch/local-capture/manifest.json with 8 screenshots.
-Cleaned up browser and static server.
-```
-
-Verification command:
-```bash
 file /tmp/scratch/local-capture/*.png
 ```
 Output:
 ```
-home-desktop.png:          PNG image data, 1280 x 800, 8-bit/color RGB, non-interlaced
-home-mobile.png:           PNG image data, 390 x 844, 8-bit/color RGB, non-interlaced
-invalid-input-desktop.png: PNG image data, 1280 x 800, 8-bit/color RGB, non-interlaced
-invalid-input-mobile.png:  PNG image data, 390 x 844, 8-bit/color RGB, non-interlaced
-not-found-desktop.png:     PNG image data, 1280 x 800, 8-bit/color RGB, non-interlaced
-not-found-mobile.png:      PNG image data, 390 x 844, 8-bit/color RGB, non-interlaced
-parcel-found-desktop.png:  PNG image data, 1280 x 800, 8-bit/color RGB, non-interlaced
-parcel-found-mobile.png:   PNG image data, 390 x 844, 8-bit/color RGB, non-interlaced
+Building app/web for screenshot capture...
+vite built in 1.05s
+Local web preview running at http://127.0.0.1:40925
+Capturing route: home (desktop) -> Saved home-desktop.png (114305 bytes)
+Capturing route: parcel-found (desktop) -> Saved parcel-found-desktop.png (105981 bytes)
+Capturing route: not-found (desktop) -> Saved not-found-desktop.png (69424 bytes)
+Capturing route: invalid-input (desktop) -> Saved invalid-input-desktop.png (69832 bytes)
+Capturing route: home (mobile) -> Saved home-mobile.png (71585 bytes)
+Capturing route: parcel-found (mobile) -> Saved parcel-found-mobile.png (78951 bytes)
+Capturing route: not-found (mobile) -> Saved not-found-mobile.png (42502 bytes)
+Capturing route: invalid-input (mobile) -> Saved invalid-input-mobile.png (43716 bytes)
 ```
 
-Conclusion: `capture.mjs` runs deterministically, launches headless Chromium using Playwright, intercepts API calls, and outputs exact 1280x800 and 390x844 images along with `manifest.json`.
+Dimensions verified:
+- All desktop images: 1280 x 800, 8-bit/color RGB, non-interlaced.
+- All mobile images: 390 x 844, 8-bit/color RGB, non-interlaced.
+
+Comparison with CI artifact:
+6 of 8 PNGs are byte-identical between local execution and GitHub Actions CI. The two home viewports differ slightly:
+- `home-desktop.png`: 114,305 bytes locally vs 114,321 bytes in CI (16-byte difference).
+- `home-mobile.png`: 71,585 bytes locally vs 71,580 bytes in CI (5-byte difference).
+Cause of the difference: unknown `[INFERRED]`, likely minor rendering variations such as font anti-aliasing or image compression timing differences across Linux environments.
 
 ---
 
-## 2. Comprehensive Blocker Analysis
+## 4. Pipeline Infrastructure Audit
 
-This section audits every potential blocker between the current repository state and "a comment with images appears on a PR".
+### 4.1 pr-screenshots Storage Branch
+`[VERIFIED]` The branch `pr-screenshots` stores screenshots for both releases and pull requests.
+In `scripts/ui/publish_proof.py`, function `publish`:
+- Resolves the target directory as `work_dir / f"pr-{pr_number}" / head_sha[:8]`.
+- Creates directories dynamically via `mkdir(parents=True, exist_ok=True)`.
+- If the branch does not exist on origin, falls back to `git checkout --orphan pr-screenshots`.
+Pre-existing `pr-<n>` directories are not required.
 
-### 2.1 Blocker 1: Merge of Pull Request 74
-- Status: `[VERIFIED]` BLOCKER.
-- Details: PR 74 adds `.github/workflows/ui-proof.yml`, updates `.github/workflows/ci.yml` to include `ui-screenshots`, and adds `scripts/ui/` (`capture.mjs`, `publish_proof.py`, `validate_artifact.py`).
-- Requirement: PR 74 must merge into `main`. Because GitHub Actions requires `workflow_run` workflows to reside on the default branch, no pull request will trigger `ui-proof.yml` until this merge occurs. Furthermore, `ui-proof.yml` checks out `ref: main` before executing `python -m scripts.ui.publish_proof`, meaning the Python publishing code must also be present on `main`.
+### 4.2 Workflow Permissions and Settings
+`[VERIFIED]` Current repository workflow permissions:
 
-### 2.2 Item 2: pr-screenshots Branch and pr-<n> Directories
-- Status: `[VERIFIED]` NOT A BLOCKER.
-- Verification:
-  1. The branch `pr-screenshots` already exists in `origin`.
-     Command:
-     ```bash
-     git ls-remote --heads origin pr-screenshots
-     ```
-     Output:
-     ```
-     7829285090bc0fc955ceea0a7479fc30c333a463	refs/heads/pr-screenshots
-     ```
-  2. The branch currently contains release screenshots under `releases/v0.1.0/` through `releases/v0.4.0/` and does not yet have `pr-<n>` directories.
-  3. In `scripts/ui/publish_proof.py` (lines 198-204):
-     ```python
-     target_dir = work_dir / f"pr-{pr_number}" / head_sha[:8]
-     target_dir.mkdir(parents=True, exist_ok=True)
-     ```
-     `publish_proof.py` creates `pr-<n>/<head_sha[:8]>/` dynamically using `mkdir(parents=True, exist_ok=True)`. Neither `pr-<n>` nor the commit directory needs to pre-exist. If `pr-screenshots` did not exist on the remote, line 195 has fallback logic: `git checkout --orphan pr-screenshots`.
+Command:
+```bash
+gh api repos/stevengonsalvez/foundry-autonomous-sdlc/actions/permissions
+gh api repos/stevengonsalvez/foundry-autonomous-sdlc/actions/permissions/workflow
+```
+Output:
+```json
+{
+  "enabled": true,
+  "allowed_actions": "all",
+  "sha_pinning_required": false
+}
+{
+  "default_workflow_permissions": "read",
+  "can_approve_pull_request_reviews": false
+}
+```
 
-### 2.3 Item 3: Workflow Permissions and GitHub Settings
-- Status: `[VERIFIED]` READY (WITH 1 RECOMMENDED MANUAL SETTING VERIFICATION).
-- Verification:
-  Command:
-  ```bash
-  gh api repos/stevengonsalvez/foundry-autonomous-sdlc/actions/permissions
-  gh api repos/stevengonsalvez/foundry-autonomous-sdlc/actions/permissions/workflow
-  ```
-  Output:
-  ```json
+Analysis:
+1. `default_workflow_permissions: "read"`: Workflows have read-only permissions by default, but explicitly elevate scopes in their YAML definition. In `ui-proof.yml`:
+   ```yaml
+   permissions:
+     contents: write
+     pull-requests: write
+   ```
+   This grants `GITHUB_TOKEN` write access to push to `pr-screenshots` and write comments to pull requests via `POST /issues/{pr_number}/comments`. (Similarly, `.github/workflows/cd.yml` defines job-level write permissions in `deploy-prod` and `rollback-staging`).
+2. `can_approve_pull_request_reviews: false`: This setting corresponds to the repository checkbox "Allow GitHub Actions to create and approve pull requests".
+   - It restricts creating new pull requests (`POST /pulls`) and approving pull request reviews (`POST /pulls/{id}/reviews` with `APPROVE`).
+   - It does NOT restrict posting comments to pull requests (`POST /issues/{id}/comments`), which is governed by `pull-requests: write`.
+   - Proof: Comments have posted to PR 61, 76, and 77 while this setting remains `false`.
+   - Security consideration: Stevie does NOT need to enable this checkbox. Leaving it disabled adheres to the principle of least privilege, preventing automated jobs from creating or approving PRs without authorization.
+3. Fork protection: In `.github/workflows/ui-proof.yml`, the job `publish` contains an explicit condition:
+   ```yaml
+   if: >-
+     github.event.workflow_run.event == 'pull_request' &&
+     github.event.workflow_run.conclusion != 'cancelled' &&
+     github.event.workflow_run.head_repository.full_name == github.repository
+   ```
+   This prevents pull requests originating from forks from triggering `ui-proof.yml` with write access.
+
+### 4.3 Agent PR Triggers and Authentication
+`[VERIFIED]` `docs/poc-findings.md` historically noted that PRs opened with GitHub Actions `GITHUB_TOKEN` do not trigger workflows.
+In the actual system (`agents/sdlc_agents/runtime.py`):
+```python
+GITHUB_SECRET = "github-pat"
+github = GitHubClient(secrets.get_secret(GITHUB_SECRET))
+```
+The orchestrator retrieves secret `github-pat` from Azure Key Vault. This personal access token belongs to Stevie (`stevengonsalvez`). Because PRs created by the orchestrator are authored by a personal account rather than `github-actions[bot]`, they trigger standard `pull_request` CI runs.
+Evidence: PR 54 (`agent/issue-51-r1`) was authored by `stevengonsalvez` and its CI run (`38186274718`) was triggered by `event: "pull_request"`.
+
+### 4.4 Rulesets and Branch Protection
+`[VERIFIED]` Pushes to `pr-screenshots` are not blocked by branch protection or rulesets.
+
+Command:
+```bash
+gh api repos/stevengonsalvez/foundry-autonomous-sdlc/rulesets
+```
+Output:
+```json
+[
   {
-    "enabled": true,
-    "allowed_actions": "all",
-    "sha_pinning_required": false
-  }
-  {
-    "default_workflow_permissions": "read",
-    "can_approve_pull_request_reviews": false
-  }
-  ```
-- Analysis:
-  1. `default_workflow_permissions` is `"read"`. In GitHub Actions, when default permissions are `"read"`, workflows can request explicit elevated permissions in their YAML definition. In `ui-proof.yml`:
-     ```yaml
-     permissions:
-       contents: write
-       pull-requests: write
-     ```
-     This grants `GITHUB_TOKEN` write permissions to push to `pr-screenshots` and write comments to pull requests via `gh api -X POST repos/{repo}/issues/{pr_number}/comments`. (Verified by `cd.yml` which similarly elevates permissions to `contents: write`, `issues: write`, `pull-requests: write` and executes regularly).
-  2. `can_approve_pull_request_reviews` is `false`. This setting controls "Allow GitHub Actions to create and approve pull requests". It blocks `POST /pulls` (creating a PR) and `POST /pulls/{id}/reviews` with `APPROVE`. It does NOT block `POST /issues/{pr_number}/comments` (adding a comment to an existing PR). However, Stevie should verify that this setting remains enabled if any workflow automation creates PRs.
-  3. Fork approvals: In `ui-proof.yml`, lines 31-35 contain a strict fork guard:
-     ```yaml
-     if: >-
-       github.event.workflow_run.event == 'pull_request' &&
-       github.event.workflow_run.conclusion != 'cancelled' &&
-       github.event.workflow_run.head_repository.full_name == github.repository
-     ```
-     Workflows from outside forks will be skipped, preventing untrusted code from triggering the publisher.
-
-### 2.4 Item 4: Agent PRs Opened by the Orchestrator
-- Status: `[VERIFIED]` NOT A BLOCKER.
-- Context: `docs/poc-findings.md` noted: "Agent PRs opened with GITHUB_TOKEN do not start workflows; the owner closes and reopens to run CI and review."
-- Verification of Real Implementation:
-  In the production system (`agents/sdlc_agents/runtime.py` line 23, 57):
-  ```python
-  GITHUB_SECRET = "github-pat"
-  github = GitHubClient(secrets.get_secret(GITHUB_SECRET))
-  ```
-  The orchestrator does NOT authenticate to GitHub using GitHub Actions `GITHUB_TOKEN`. It retrieves the Personal Access Token `github-pat` from Azure Key Vault.
-  Because the PAT belongs to a real GitHub user (`stevengonsalvez`), pull requests created by the orchestrator are treated as user-created pull requests.
-  Evidence from real agent PR 54 (`agent/issue-51-r1`):
-  Command:
-  ```bash
-  gh pr view 54 --json author,headRefName
-  gh run list --branch agent/issue-51-r1 --json databaseId,name,workflowName,event,conclusion
-  ```
-  Output:
-  ```json
-  {
-    "author": {
-      "is_bot": false,
-      "login": "stevengonsalvez",
-      "name": "Steven Gonsalvez"
+    "id": 24843641,
+    "name": "main-gates",
+    "target": "branch",
+    "source_type": "Repository",
+    "source": "stevengonsalvez/foundry-autonomous-sdlc",
+    "enforcement": "active",
+    "node_id": "RRS_lACqUmVwb3NpdG9yec5UOMtlzgF7FXk",
+    "_links": {
+      "self": {
+        "href": "https://api.github.com/repos/stevengonsalvez/foundry-autonomous-sdlc/rulesets/24843641"
+      },
+      "html": {
+        "href": "https://github.com/stevengonsalvez/foundry-autonomous-sdlc/rules/24843641"
+      }
     },
-    "headRefName": "agent/issue-51-r1"
+    "created_at": "2026-10-10T15:19:41.128Z",
+    "updated_at": "2026-10-10T15:19:41.245Z"
   }
-  [
-    {
-      "conclusion": "success",
-      "databaseId": 38186274718,
-      "event": "pull_request",
-      "name": "CI",
-      "workflowName": "CI"
-    }
-  ]
-  ```
-  `[VERIFIED]` The `CI` workflow was triggered automatically by `event: "pull_request"` on PR 54 without manual close and reopen. Once `ci.yml` on `main` contains `ui-screenshots`, agent PRs will execute `ui-screenshots` and subsequent `ui-proof.yml` workflows automatically.
+]
+```
 
-### 2.5 Item 5: Rulesets and Branch Protection on pr-screenshots
-- Status: `[VERIFIED]` NOT A BLOCKER.
-- Verification:
-  Command:
-  ```bash
-  gh api repos/stevengonsalvez/foundry-autonomous-sdlc/rulesets
-  gh api repos/stevengonsalvez/foundry-autonomous-sdlc/rulesets/24843641
-  gh api repos/stevengonsalvez/foundry-autonomous-sdlc/branches/pr-screenshots/protection
-  ```
-  Output:
-  ```json
-  [
+Command:
+```bash
+gh api repos/stevengonsalvez/foundry-autonomous-sdlc/rulesets/24843641
+```
+Output (condensed):
+```json
+{
+  "id": 24843641,
+  "name": "main-gates",
+  "target": "branch",
+  "enforcement": "active",
+  "conditions": {
+    "ref_name": {
+      "exclude": [],
+      "include": [
+        "~DEFAULT_BRANCH"
+      ]
+    }
+  },
+  "rules": [
     {
-      "id": 24843641,
-      "name": "main-gates",
-      "conditions": {
-        "ref_name": {
-          "include": ["~DEFAULT_BRANCH"]
-        }
+      "type": "deletion"
+    },
+    {
+      "type": "non_fast_forward"
+    },
+    {
+      "type": "pull_request",
+      "parameters": {
+        "allowed_merge_methods": [
+          "merge"
+        ]
+      }
+    },
+    {
+      "type": "required_status_checks",
+      "parameters": {
+        "required_status_checks": [
+          {"context": "test"},
+          {"context": "coverage"},
+          {"context": "e2e"},
+          {"context": "gitleaks"},
+          {"context": "tdd-order"},
+          {"context": "agent-scope"}
+        ]
       }
     }
   ]
-  {
-    "message": "Branch not protected",
-    "status": "404"
-  }
-  ```
-- Finding: Ruleset `main-gates` (ID 24843641) targets only `~DEFAULT_BRANCH` (`main`). The branch `pr-screenshots` has no ruleset conditions and no branch protection rules. The bot (`github-actions[bot]`) pushing commits to `pr-screenshots` will not be rejected.
+}
+```
 
-### 2.6 Item 6: raw.githubusercontent.com Image Serving
-- Status: `[VERIFIED]` NOT A BLOCKER.
-- Verification:
-  The repository is public (`"private": false`).
-  Test request against an existing image on `pr-screenshots`:
-  ```bash
-  curl -I -s https://raw.githubusercontent.com/stevengonsalvez/foundry-autonomous-sdlc/pr-screenshots/releases/v0.1.0/home-desktop.png
-  ```
-  Output:
-  ```
-  HTTP/2 200 
-  content-type: image/png
-  content-length: 112205
-  access-control-allow-origin: *
-  cache-control: max-age=300
-  ```
-- Finding: Images on `pr-screenshots` are served directly with HTTP 200 and `content-type: image/png`. When GitHub renders the markdown comment with `<img>` tags pointing to `https://raw.githubusercontent.com/{repo}/pr-screenshots/pr-{pr_number}/{head_short}/{file}`, the browser renders the images immediately.
+Command:
+```bash
+gh api repos/stevengonsalvez/foundry-autonomous-sdlc/branches/pr-screenshots/protection
+```
+Output:
+```json
+{
+  "message": "Branch not protected",
+  "documentation_url": "https://docs.github.com/rest/branches/branch-protection#get-branch-protection",
+  "status": "404"
+}
+```
+
+Finding: Ruleset `main-gates` (ID 24843641) targets only `~DEFAULT_BRANCH` (`main`) with rules `deletion`, `non_fast_forward`, `pull_request`, and `required_status_checks`. The branch `pr-screenshots` has no ruleset and returns 404 for branch protection. Pushes by `github-actions[bot]` proceed without restriction.
+
+### 4.5 Image Serving
+`[VERIFIED]` The repository is public (`"private": false`). Images committed to `pr-screenshots` are served directly by `raw.githubusercontent.com`.
+
+Command:
+```bash
+curl -I -s https://raw.githubusercontent.com/stevengonsalvez/foundry-autonomous-sdlc/pr-screenshots/pr-77/24eb07d3/home-desktop.png
+```
+Output:
+```
+HTTP/2 200 
+content-type: image/png
+access-control-allow-origin: *
+cache-control: max-age=300
+```
+
+Images load cleanly inside GitHub PR comments.
 
 ---
 
-## 3. End-to-End Rehearsal Plan
+## 5. Rehearsal Plan (Reference)
 
-Once PR 74 merges to `main`, follow this ordered rehearsal plan to prove screenshot generation and comment posting end to end.
+*(Note: The rehearsal plan is moot in practice because the screenshot pipeline executed implicitly and succeeded across PR 61, PR 76, and PR 77 immediately upon merging commit `007d2ea5`. The procedure below is preserved for reference).*
 
-### 3.1 Pre-Flight Check of Manual Settings
+### 5.1 Verification Checklist
+1. **Actions General Permissions**: Ensure `Workflow permissions` is set to `Read repository contents and packages permissions` or `Read and write permissions`. Do not enable `Allow GitHub Actions to create and approve pull requests` unless automated PR creation from workflows is specifically required.
+2. **Branch Protection**: Ensure no ruleset targets `pr-screenshots`.
 
-Stevie must verify the following in GitHub Web Settings before running the rehearsal:
-
-1. **Actions General Permissions** (`Settings > Actions > General`):
-   - Under **Workflow permissions**, verify either:
-     - `Read and write permissions`, OR
-     - `Read repository contents and packages permissions` (acceptable because `ui-proof.yml` explicitly defines `contents: write` and `pull-requests: write`).
-   - Check the box for: `Allow GitHub Actions to create and approve pull requests`.
-2. **Rulesets** (`Settings > Rules > Rulesets`):
-   - Confirm ruleset `main-gates` only includes `~DEFAULT_BRANCH`. Confirm no ruleset matches `pr-screenshots` or `refs/heads/pr-*`.
-
-### 3.2 Ordered Rehearsal Steps and Commands
-
-#### Step 1: Create a Throwaway Harness Branch from Updated Main
+### 5.2 Ordered Rehearsal Procedure
 ```bash
+# 1. Create a test branch from latest main
 git fetch origin main
-git checkout -b test/ui-proof-rehearsal origin/main
+git checkout -b test/ui-proof-reference origin/main
 
-# Make a benign markdown touch that triggers CI
-echo "<!-- proof rehearsal harness $(date -u +%Y%m%d%H%M%S) -->" >> docs/research/proof-rehearsal-note.tmp
-git add docs/research/proof-rehearsal-note.tmp
-git commit -m "test: verify ui proof screenshot pipeline on PR"
-git push -u origin test/ui-proof-rehearsal
-```
+# 2. Make a trivial tracked documentation touch
+echo "" >> docs/README.md
+git add docs/README.md
+git commit -m "docs: test ui proof reference harness"
+git push -u origin test/ui-proof-reference
 
-#### Step 2: Open a Pull Request
-```bash
+# 3. Create a pull request
 gh pr create \
-  --title "test: proof harness verification" \
-  --body "Throwaway pull request to verify automated UI screenshot capture and comment posting end to end. Breaking Change: No, Feature Flagged: No" \
-  --head test/ui-proof-rehearsal \
-  --base main
-```
-Note the returned PR number (for example, `#80`).
+  --title "test: ui proof reference harness" \
+  --body "Reference pull request to verify automated UI screenshots.
 
-#### Step 3: Monitor CI Execution and Artifact Upload
-```bash
-# Watch the CI run triggered by the pull request
-gh run list --branch test/ui-proof-rehearsal --workflow=CI
-# Follow execution
+Breaking Change: No
+Feature Flagged: No" \
+  --head test/ui-proof-reference \
+  --base main
+
+# 4. Monitor CI run
+gh run list --branch test/ui-proof-reference --workflow=CI
 gh run watch <CI_RUN_ID>
 
-# Once CI completes, check the jobs
-gh run view <CI_RUN_ID> --json jobs --jq '.jobs[] | {name: .name, conclusion: .conclusion}'
-# Verify the ui-screenshots artifact was created
-gh api repos/stevengonsalvez/foundry-autonomous-sdlc/actions/runs/<CI_RUN_ID>/artifacts
-```
-
-#### Step 4: Monitor the Trusted UI Proof Workflow
-```bash
-# workflow_run will trigger UI Proof upon CI completion
+# 5. Monitor trusted UI Proof run
 gh run list --workflow="UI Proof" -L 3
-# Follow execution
 gh run watch <UI_PROOF_RUN_ID>
-```
 
-#### Step 5: Verify Storage Branch and Image Availability
-```bash
-# Verify commit landed on pr-screenshots
+# 6. Verify image storage on pr-screenshots
 git fetch origin pr-screenshots
-git log -n 1 origin/pr-screenshots --oneline
+git ls-tree -r --name-only origin/pr-screenshots | grep "^pr-<PR_NUMBER>/"
 
-# Inspect published files for this PR
-git ls-tree -r --name-only origin/pr-screenshots | grep "pr-<PR_NUMBER>"
+# 7. Verify comment on the PR
+gh pr view <PR_NUMBER> --json comments
 
-# Verify raw.githubusercontent.com serves the newly uploaded image
-HEAD_8=$(git rev-parse --short=8 HEAD)
-curl -I https://raw.githubusercontent.com/stevengonsalvez/foundry-autonomous-sdlc/pr-screenshots/pr-<PR_NUMBER>/${HEAD_8}/home-desktop.png
-```
-
-#### Step 6: Verify Comment Appearance on the Pull Request
-```bash
-gh pr view <PR_NUMBER> --json comments --jq '.comments[] | select(.body | startswith("<!-- ui-proof:v1 -->")) | .body'
-```
-
-#### Expected Comment Content Format
-The posted comment must match the following structure:
-```markdown
-<!-- ui-proof:v1 -->
-### UI Screenshots for `<HEAD_8>`
-
-- Head commit: `<FULL_HEAD_SHA>`
-- Manifest SHA-256: `<MANIFEST_SHA256>`
-- Storage: [`pr-screenshots`](https://github.com/stevengonsalvez/foundry-autonomous-sdlc/tree/pr-screenshots/pr-<PR_NUMBER>/<HEAD_8>)
-
-<details open>
-<summary><b>Screenshots (8 captures)</b></summary>
-
-| Route | Desktop (1280x800) | Mobile (390x844) |
-|---|---|---|
-| **Home** | <img src="https://raw.githubusercontent.com/stevengonsalvez/foundry-autonomous-sdlc/pr-screenshots/pr-<PR_NUMBER>/<HEAD_8>/home-desktop.png" alt="home desktop" width="320" /> | <img src="https://raw.githubusercontent.com/stevengonsalvez/foundry-autonomous-sdlc/pr-screenshots/pr-<PR_NUMBER>/<HEAD_8>/home-mobile.png" alt="home mobile" width="160" /> |
-| **Parcel Found** | <img src="https://raw.githubusercontent.com/stevengonsalvez/foundry-autonomous-sdlc/pr-screenshots/pr-<PR_NUMBER>/<HEAD_8>/parcel-found-desktop.png" alt="parcel-found desktop" width="320" /> | <img src="https://raw.githubusercontent.com/stevengonsalvez/foundry-autonomous-sdlc/pr-screenshots/pr-<PR_NUMBER>/<HEAD_8>/parcel-found-mobile.png" alt="parcel-found mobile" width="160" /> |
-| **Not Found** | <img src="https://raw.githubusercontent.com/stevengonsalvez/foundry-autonomous-sdlc/pr-screenshots/pr-<PR_NUMBER>/<HEAD_8>/not-found-desktop.png" alt="not-found desktop" width="320" /> | <img src="https://raw.githubusercontent.com/stevengonsalvez/foundry-autonomous-sdlc/pr-screenshots/pr-<PR_NUMBER>/<HEAD_8>/not-found-mobile.png" alt="not-found mobile" width="160" /> |
-| **Invalid Input** | <img src="https://raw.githubusercontent.com/stevengonsalvez/foundry-autonomous-sdlc/pr-screenshots/pr-<PR_NUMBER>/<HEAD_8>/invalid-input-desktop.png" alt="invalid-input desktop" width="320" /> | <img src="https://raw.githubusercontent.com/stevengonsalvez/foundry-autonomous-sdlc/pr-screenshots/pr-<PR_NUMBER>/<HEAD_8>/invalid-input-mobile.png" alt="invalid-input mobile" width="160" /> |
-
-</details>
-```
-
-#### Step 7: Clean Up Throwaway Rehearsal PR
-```bash
+# 8. Clean up PR and storage branch
 gh pr close <PR_NUMBER> --delete-branch
+
+# Note: gh pr close deletes the PR branch, but pr-screenshots retains the committed captures.
+# To immediately remove test artifacts from pr-screenshots (without waiting for the 14-day pruning policy):
+git checkout pr-screenshots
+git pull origin pr-screenshots
+git rm -r pr-<PR_NUMBER>
+git commit -m "chore: remove rehearsal captures for PR #<PR_NUMBER>"
+git push origin pr-screenshots
 ```
 
 ---
 
-## 4. Control Center Screenshots: Current State and Recommendations
+## 6. Control Center Screenshots: Analysis and Recommendations
 
-### 4.1 What Exists Today
-`[VERIFIED]` `apps/control-center` contains its own snapshot generator at `apps/control-center/test/shots.mjs`.
-- It boots a local server against static fixture data and captures 38 PNG files across 8 views (`board`, `ticket`, `cost`, `environments`, `agents`, `escalations`, `flow`, `trail`) and 4 viewport sizes (`desktop`: 1440x900, `1280`: 1280x800, `mobile`: 390x844, `360`: 360x640).
-- These captures are saved locally to `apps/control-center/docs/proof/`.
-- In PR 61 (`stevengonsalvez/ui-fixes`, commit `8121bbc`), 38 PNG files were committed to git by hand into `apps/control-center/docs/proof/`.
-- In `.github/workflows/ci.yml`, the `control-center` job only runs `npm test` inside `apps/control-center`. It does not execute `npm run shots`.
+### 6.1 What Exists Today
+`[VERIFIED]` `apps/control-center` contains its own capture script at `apps/control-center/test/shots.mjs`.
+- The 38 hand-committed PNGs in `apps/control-center/docs/proof/` were originally introduced in commit `1e443cd` (`docs(control-center): add proof captures for all viewports and lenses`).
+- PR 61 (`stevengonsalvez/ui-fixes`) regenerated and updated these static PNG files.
+- In `shots.mjs`:
+  - Only `board` is captured across all 4 viewport sizes (`desktop`: 1440x900, `1280`: 1280x800, `mobile`: 390x844, `360`: 360x640) across 3 lenses (Delivery, Cost, Gates) and group filters.
+  - The remaining 7 views (`ticket`, `cost`, `environments`, `agents`, `escalations`, `flow`, `trail`) are captured at only 2 viewport sizes (`desktop`: 1440x900 and `360`: 360x640).
+- In `.github/workflows/ci.yml`, the `control-center` job executes only `npm test` inside `apps/control-center`. It does not execute `npm run shots`.
 
-### 4.2 Why PR 74 Does Not Capture Control Center
-`[VERIFIED]` PR 74's screenshot pipeline is dedicated solely to `@parcel/web` (`app/web`):
+### 6.2 Scope of Current PR Screenshot Pipeline
+`[VERIFIED]` The screenshot pipeline established by PR 74 is intentionally scoped exclusively to the end-user parcel tracking web app (`app/web`):
 1. `scripts/ui/capture.mjs`:
-   - Builds `@parcel/web` only (`npm run build --workspace @parcel/web`).
-   - Mocks routes exclusively for `/api/parcels`.
-   - Defines fixed routes `ROUTES = ["home", "parcel-found", "not-found", "invalid-input"]`.
+   - Builds only `@parcel/web` (`npm run build --workspace @parcel/web`).
+   - Mocks routes for `/api/parcels`.
+   - Captures only the 4 parcel tracking routes: `home`, `parcel-found`, `not-found`, `invalid-input`.
 2. `scripts/ui/validate_artifact.py`:
-   - Enforces `MAX_FILE_COUNT = 16` (control center produces 38 files).
-   - Enforces `ROUTE_RE = re.compile(r"^(home|parcel-found|not-found|invalid-input)$")`.
-   - Enforces `VIEWPORT_RE = re.compile(r"^(desktop|mobile)$")` with strict dimension checks: 1280x800 and 390x844 only. Control center uses 1440x900 and 360x640 and scroll clipping up to 3000px height.
+   - Sets `MAX_FILE_COUNT = 16` (control center generates 38 images).
+   - Validates routes with `ROUTE_RE = re.compile(r"^(home|parcel-found|not-found|invalid-input)$")`.
+   - Validates viewports with `VIEWPORT_RE = re.compile(r"^(desktop|mobile)$")` and dimensions 1280x800 and 390x844 only (control center uses 1440x900, 360x640, and variable document scroll heights up to 3000px).
 3. `scripts/ui/publish_proof.py`:
    - Formats a table expecting only `FIXED_ROUTES = ("home", "parcel-found", "not-found", "invalid-input")`.
 
-### 4.3 Recommendations to Attach Control Center Screenshots to PRs
-*(Architectural recommendation only; no code changes included)*
+### 6.3 Recommendations for Control Center PR Screenshots
+*(Recommendation only; no changes made)*
 
-If Stevie wishes to attach control center screenshots to PRs that touch `apps/control-center` (such as PR 61):
+To automatically capture and comment with control center screenshots on PRs modifying `apps/control-center/**`:
 
-1. **Path-Gated CI Job or Conditional Step**:
-   - In `.github/workflows/ci.yml`, add an `ui-screenshots-control-center` job (or conditionally run control center capture within `ui-screenshots` if changes touch `apps/control-center/**`).
-2. **Standardize Artifact Schema**:
-   - Generalize `manifest.json` schema to include an `app` identifier (`"app": "web"` or `"app": "control-center"`).
-   - Alternatively, output a separate artifact `ui-screenshots-control-center`.
-3. **Generalize Validator Limits**:
-   - Update `validate_artifact.py` to allow control center views (`board`, `ticket`, `cost`, `environments`, `agents`, `escalations`, `flow`, `trail`) and viewports (`desktop`, `1280`, `mobile`, `360`).
-   - Increase `MAX_FILE_COUNT` from 16 to 48.
-   - Adjust `MAX_TOTAL_BYTES` from 20 MB to 40 MB.
-4. **Generalize Comment Formatter**:
-   - Update `publish_proof.py` to support multi-app sections or tabbed details collapsible blocks (`<details><summary>Control Center Captures</summary>...`).
-   - Store images in `pr-screenshots` under `pr-<n>/<head_sha>/control-center/`.
+1. **Dedicated or Path-Filtered CI Job**:
+   - Add a `control-center-screenshots` job in `ci.yml` that runs when files in `apps/control-center/**` change.
+   - Run `npm run shots` using Playwright against the local fixture server, writing images to an artifact directory.
+2. **Artifact Schema and Validator Adaptation**:
+   - Support a manifest format identifying the app source (`"app": "control-center"`).
+   - Extend `validate_artifact.py` to recognize control center route names (`board`, `ticket`, `cost`, `environments`, `agents`, `escalations`, `flow`, `trail`) and allowed dimensions (1440x900, 1280x800, 390x844, 360x640, with height bounded by `MAX_HEIGHT = 3000`).
+   - Raise `MAX_FILE_COUNT` to 48 and `MAX_TOTAL_BYTES` to 40 MB.
+3. **Comment Formatter**:
+   - Extend `publish_proof.py` to format collapsible sections per application, storing control center images under `pr-screenshots/pr-<n>/<head_sha>/control-center/`.
