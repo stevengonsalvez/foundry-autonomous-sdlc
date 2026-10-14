@@ -4,7 +4,7 @@
 
 - App: <https://stevengonsalvez.github.io/foundry-autonomous-sdlc/>
 - Control center (every ticket from backlog to prod with cost per ticket, gates, environment hops, agent health, escalations, flow metrics, the questions-back trail, and Azure's billed spend next to the ledger's estimate): <https://stevengonsalvez.github.io/foundry-autonomous-sdlc/control-center/>
-- App evolution showcase (visual timeline of every release and merged feature): <https://stevengonsalvez.github.io/foundry-autonomous-sdlc/history/>
+- App evolution showcase (visual timeline across releases): <https://stevengonsalvez.github.io/foundry-autonomous-sdlc/history/>
 - Staging (the build waiting for smoke and soak): <https://stevengonsalvez.github.io/foundry-autonomous-sdlc/staging/>
 - Metrics dashboard (cycle time per stage, defect owner and resolution time, cost per issue, gate pass rates): <https://stevengonsalvez.github.io/foundry-autonomous-sdlc/dashboard/>
 - Traces of every scenario, from issue to release: [`docs/evidence.md`](docs/evidence.md)
@@ -37,7 +37,7 @@ An issue is filed. Agents on Azure AI Foundry score and refine the requirement, 
 
 ## How the app evolved
 
-See the visual timeline of every release and merged feature on the [**App Evolution Showcase**](https://stevengonsalvez.github.io/foundry-autonomous-sdlc/history/).
+See the visual timeline across releases on the [**App Evolution Showcase**](https://stevengonsalvez.github.io/foundry-autonomous-sdlc/history/).
 
 <p align="center">
   <a href="https://stevengonsalvez.github.io/foundry-autonomous-sdlc/history/">
