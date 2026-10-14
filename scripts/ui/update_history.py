@@ -13,18 +13,18 @@ from __future__ import annotations
 
 import argparse
 import os
-from pathlib import Path
 import shutil
 import subprocess
 import sys
+import time
+from pathlib import Path
 from typing import Any
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-from scripts.ui.validate_artifact import validate_artifact_dir
-from scripts.ui.generate_history import build_history_site
+from scripts.ui.validate_artifact import validate_artifact_dir  # noqa: E402
 
 BRANCH_NAME = "pr-screenshots"
 
@@ -116,8 +116,22 @@ def publish_to_pr_screenshots(
         run_cmd(["git", "commit", "-m", msg], cwd=work_dir)
         print(f"Committed screenshots for {key} to {BRANCH_NAME}")
         if push:
-            run_cmd(["git", "push", "origin", BRANCH_NAME], cwd=work_dir)
-            print(f"Pushed {BRANCH_NAME} to origin")
+            for attempt in range(3):
+                try:
+                    run_cmd(
+                        ["git", "pull", "--rebase", "origin", BRANCH_NAME],
+                        cwd=work_dir,
+                        check=False,
+                    )
+                    run_cmd(["git", "push", "origin", BRANCH_NAME], cwd=work_dir)
+                    print(f"Pushed {BRANCH_NAME} to origin")
+                    break
+                except Exception as exc:
+                    if attempt == 2:
+                        raise RuntimeError(
+                            f"Failed to push to {BRANCH_NAME} after 3 attempts: {exc}"
+                        ) from exc
+                    time.sleep(1)
     else:
         print(f"No changes in screenshots for release {key}")
 
@@ -139,56 +153,38 @@ def update_history(
     rel_key, full_sha = resolve_release_key(repo_root, key)
     print(f"Resolved release key: {rel_key} (commit: {full_sha[:8]})")
 
-    # 1. Publish to pr-screenshots branch
+    # 1. Publish to pr-screenshots branch (fails hard on error)
     if repo:
-        try:
-            publish_to_pr_screenshots(artifacts_path, rel_key, repo, push=push)
-        except Exception as exc:
-            print(f"Warning: Could not publish to pr-screenshots: {exc}", file=sys.stderr)
-
-    # 2. Copy to local history/screenshots/<key>/
-    local_key_dir = repo_root / "history" / "screenshots" / rel_key
-    local_key_dir.mkdir(parents=True, exist_ok=True)
-    for screenshot in res.screenshots:
-        fn = screenshot["filename"]
-        shutil.copy2(artifacts_path / fn, local_key_dir / fn)
-    shutil.copy2(artifacts_path / "manifest.json", local_key_dir / "manifest.json")
-
-    # 3. Regenerate static history site
-    print("Regenerating history site...")
-    data_payload = build_history_site(
-        output_dir=repo_root / "history",
-        screenshots_dir=repo_root / "history" / "screenshots",
-    )
-
-    # 4. If push is requested, commit history files to main
-    if push:
-        run_cmd(["git", "config", "user.name", "github-actions[bot]"], cwd=repo_root)
-        run_cmd(
-            ["git", "config", "user.email", "41898282+github-actions[bot]@users.noreply.github.com"],
-            cwd=repo_root,
-        )
-        run_cmd(["git", "add", "history/"], cwd=repo_root)
-        status = run_cmd(["git", "status", "--porcelain", "history/"], cwd=repo_root)
-        if status:
-            msg = f"docs(history): update app evolution for {rel_key}"
-            run_cmd(["git", "commit", "-m", msg], cwd=repo_root)
-            run_cmd(["git", "push", "origin", "main"], cwd=repo_root)
-            print(f"Pushed updated history to main for {rel_key}")
+        publish_to_pr_screenshots(artifacts_path, rel_key, repo, push=push)
 
     return {
         "key": rel_key,
         "full_sha": full_sha,
-        "payload": data_payload,
+        "screenshots": res.screenshots,
     }
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Update app evolution history for current release/merge.")
-    parser.add_argument("--artifacts-dir", required=True, type=Path, help="Directory containing captured screenshots and manifest")
-    parser.add_argument("--repo", default=os.getenv("GITHUB_REPOSITORY", "stevengonsalvez/foundry-autonomous-sdlc"), help="GitHub repository (owner/repo)")
-    parser.add_argument("--key", default=None, help="Release key override (e.g. v0.4.0 or commit sha8)")
-    parser.add_argument("--push", action="store_true", help="Push changes to pr-screenshots and main")
+    parser = argparse.ArgumentParser(
+        description="Update app evolution history for current release/merge."
+    )
+    parser.add_argument(
+        "--artifacts-dir",
+        required=True,
+        type=Path,
+        help="Directory containing captured screenshots and manifest",
+    )
+    parser.add_argument(
+        "--repo",
+        default=os.getenv("GITHUB_REPOSITORY", "stevengonsalvez/foundry-autonomous-sdlc"),
+        help="GitHub repository (owner/repo)",
+    )
+    parser.add_argument(
+        "--key", default=None, help="Release key override (e.g. v0.4.0 or commit sha8)"
+    )
+    parser.add_argument(
+        "--push", action="store_true", help="Push changes to pr-screenshots and main"
+    )
     args = parser.parse_args()
 
     update_history(

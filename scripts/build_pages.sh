@@ -113,18 +113,27 @@ if [ -n "$cc_src" ] && [ -f "$cc_src/index.html" ]; then
   control_center_note="control center published at /control-center/"
 fi
 
-# 2c. App evolution history: the same kind of allowlist, and only what exists.
+# 2c. App evolution history: build /history/ at Pages build time from origin/pr-screenshots:releases/*
 history_note="no app history source, /history/ is not published"
+pr_screenshots_dir="${PR_SCREENSHOTS_DIR:-}"
 history_src="${HISTORY_SRC:-$repo_root/history}"
-if [ -n "$history_src" ] && [ -f "$history_src/index.html" ]; then
+
+if [ -n "$pr_screenshots_dir" ] && [ -d "$pr_screenshots_dir/releases" ]; then
+  mkdir -p "$out/history"
+  echo "building /history/ from pr-screenshots releases..."
+  python3 "$repo_root/scripts/ui/generate_history.py" \
+    --output-dir "$out/history" \
+    --screenshots-dir "$pr_screenshots_dir/releases"
+  history_note="app history built at /history/ from pr-screenshots releases"
+elif [ -n "$history_src" ] && [ -f "$history_src/index.html" ]; then
   mkdir -p "$out/history"
   cp "$history_src/index.html" "$out/history/index.html"
-  for part in css js screenshots data.json; do
+  for part in css js data.json; do
     if [ -e "$history_src/$part" ]; then
       cp -R "$history_src/$part" "$out/history/$part"
     fi
   done
-  history_note="app history published at /history/"
+  history_note="app history published at /history/ from local source"
 fi
 
 # 3. Metrics, only when present and readable by this dashboard version
@@ -155,6 +164,15 @@ for copied in dashboard control-center history; do
     die "refusing to publish: test, dev files or symlinks found in the $copied output"
   fi
 done
+
+# Extended guard rail for history screenshots: untrusted data must only contain png and manifest.json
+if [ -d "$out/history/screenshots" ]; then
+  bad_files="$(cd "$out/history/screenshots" && find . -type f ! -name '*.png' ! -name 'manifest.json' -print)"
+  if [ -n "$bad_files" ]; then
+    echo "$bad_files" >&2
+    die "refusing to publish: disallowed file types found in history/screenshots: $bad_files"
+  fi
+fi
 
 echo "$staging_note"
 echo "$control_center_note"
