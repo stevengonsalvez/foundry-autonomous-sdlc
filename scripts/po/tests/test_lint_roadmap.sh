@@ -104,7 +104,7 @@ run_mutation_test "Rejects acceptance criteria under 3 words" \
 NO_COLON_CONTENT="${BASE_VALID_ITEM/ITEM-001:/ITEM-001}"
 run_mutation_test "Rejects header without colon" \
   "$NO_COLON_CONTENT" \
-  "Malformed item header"
+  "Invalid ITEM header|Malformed item header"
 
 # 7. Two paths on one Files Touched line
 TWO_PATHS_CONTENT="${BASE_VALID_ITEM/- \`app\/web\/src\/App.tsx\`/- \`app\/web\/src\/App.tsx\` \`app\/web\/src\/Other.tsx\`}"
@@ -130,6 +130,79 @@ EMBEDDED_TBD_CONTENT="${BASE_VALID_ITEM/This is a valid acceptance criterion wit
 run_mutation_test "Rejects TBD anywhere in acceptance criteria" \
   "$EMBEDDED_TBD_CONTENT" \
   "cannot contain TBD"
+
+# B1: Two spaces in header does not bypass validation on Cost Class XXL
+B1_CONTENT="${BASE_VALID_ITEM/### ITEM-001:/###  ITEM-001:}"
+B1_CONTENT="${B1_CONTENT/Cost Class\*\*: S/Cost Class**: XXL}"
+run_mutation_test "B1: Header with two spaces does not bypass validation on Cost Class XXL" \
+  "$B1_CONTENT" \
+  "Invalid Cost Class 'XXL'"
+
+# B2: Inline value on Files Touched
+B2_CONTENT='### ITEM-001: feat(web): test item
+- **Status**: todo
+- **Dependencies**: []
+- **Cost Class**: S
+- **Tags**: test
+- **Gap Anchor**: `app/web/src/App.tsx#L1`.
+- **User Value**: Test value.
+- **Files Touched**: `.github/workflows/ci.yml`
+- **Acceptance Criteria**:
+  1. This is a valid acceptance criterion with more than three words.'
+run_mutation_test "B2: Rejects inline value on Files Touched" \
+  "$B2_CONTENT" \
+  "Inline value forbidden.*Files Touched"
+
+# B3: Inline value on Acceptance Criteria
+B3_CONTENT='### ITEM-001: feat(web): test item
+- **Status**: todo
+- **Dependencies**: []
+- **Cost Class**: S
+- **Tags**: test
+- **Gap Anchor**: `app/web/src/App.tsx#L1`.
+- **User Value**: Test value.
+- **Files Touched**:
+  - `app/web/src/App.tsx`
+- **Acceptance Criteria**: TBD'
+run_mutation_test "B3: Rejects inline value on Acceptance Criteria" \
+  "$B3_CONTENT" \
+  "Inline value forbidden.*Acceptance Criteria"
+
+# B4: Header with #### ITEM- in preamble or block
+B4_CONTENT='# Product Roadmap
+#### ITEM-000: Invalid preamble header
+
+### ITEM-001: feat(web): test item
+- **Status**: todo
+- **Dependencies**: []
+- **Cost Class**: S
+- **Tags**: test
+- **Gap Anchor**: `app/web/src/App.tsx#L1`.
+- **User Value**: Test value.
+- **Files Touched**:
+  - `app/web/src/App.tsx`
+- **Acceptance Criteria**:
+  1. This is a valid acceptance criterion with more than three words.'
+run_mutation_test "B4: Rejects #### ITEM- header in preamble or block" \
+  "$B4_CONTENT" \
+  "Invalid ITEM header"
+
+# B8: Combined mutant with .github/workflows/ci.yml + Cost Class XXL + '1. TBD'
+B8_CONTENT='### ITEM-001: feat(web): test item
+- **Status**: todo
+- **Dependencies**: []
+- **Cost Class**: XXL
+- **Tags**: test
+- **Gap Anchor**: `app/web/src/App.tsx#L1`.
+- **User Value**: Test value.
+- **Files Touched**:
+  - `app/web/src/App.tsx`
+  - `.github/workflows/ci.yml`
+- **Acceptance Criteria**:
+  1. TBD'
+run_mutation_test "B8: Combined mutant (.github/workflows/ci.yml + XXL + 1. TBD) fails" \
+  "$B8_CONTENT" \
+  "Scope violation|Invalid Cost Class|cannot contain TBD"
 
 echo "----------------------------------------"
 if [ "$failures" -gt 0 ]; then

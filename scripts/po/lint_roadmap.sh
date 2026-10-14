@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# Note: This file retains the .sh extension for compatibility with existing workflow callers
+# (.github/workflows/ci.yml), but is executed directly with python3 via the shebang line above.
 """Lint script to verify that po/ROADMAP.md adheres to autonomous SDLC constraints.
 
 Validates:
@@ -74,11 +76,11 @@ def lint_roadmap(roadmap_file: str) -> int:
     else:
         ok("No forbidden mentions")
 
-    # Check 3: Strict header regex on all lines starting with ### ITEM
+    # Check 3: Strict header regex on all lines starting with # and containing ITEM-
     for line_idx, line in enumerate(content.splitlines(), 1):
-        if re.match(r"^\s*###\s+ITEM", line):
-            if not re.match(r"^###\s+(ITEM-\d+):\s+(.+)$", line):
-                fail(f"Line {line_idx}: Malformed item header '{line}'. Header must match '### ITEM-0NN: Title' with a colon")
+        if re.search(r"^\s*#+\s*ITEM-", line):
+            if not re.match(r"^###\s+ITEM-\d+:\s+.+$", line):
+                fail(f"Line {line_idx}: Invalid ITEM header '{line}'. Header must match '### ITEM-0NN: Title' with a colon")
 
     # Split into item blocks
     item_blocks = re.split(r"(?=^###\s+ITEM-\d+:)", content, flags=re.MULTILINE)
@@ -86,7 +88,7 @@ def lint_roadmap(roadmap_file: str) -> int:
 
     for block in item_blocks:
         block = block.strip()
-        if not block.startswith("### ITEM-"):
+        if not re.match(r"^###\s+ITEM-\d+:", block):
             continue
 
         lines = block.splitlines()
@@ -124,6 +126,11 @@ def lint_roadmap(roadmap_file: str) -> int:
                     fail(f"{item_id}: Unknown field '- **{field_name}**:'")
                 fields_present.add(field_name)
                 current_field = field_name
+
+                if field_name in ("Files Touched", "Acceptance Criteria"):
+                    if field_value:
+                        fail(f"{item_id}: Inline value forbidden on '- **{field_name}**: {field_value}'. Items must be listed on indented child lines.")
+                    continue
 
                 if field_name == "Status":
                     status_val = field_value.lower()
