@@ -348,6 +348,13 @@ def test_replay_gate() -> None:
 
         parsed = foundry._parse("sdlc-req-gate", raw_text, _check_req_gate)
 
+        assert parsed["score"] == int(row["score"]), (
+            f"Row {row_id} parsed score {parsed['score']} != golden score {row['score']}"
+        )
+        assert json.loads(raw_text) == rec_data.get("response"), (
+            f"Row {row_id} raw_output does not match response field in recording"
+        )
+
         rounds = int(row.get("rounds", 0))
         outcome = resolve_outcome(parsed["score"], rounds)
 

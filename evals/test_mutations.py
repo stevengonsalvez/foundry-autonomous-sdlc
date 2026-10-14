@@ -8,6 +8,7 @@ evals/test_replay.py test suite as a subprocess.
 
 from __future__ import annotations
 
+import copy
 import json
 import os
 import shutil
@@ -26,7 +27,11 @@ def _setup_tmp_tree(tmp_path: Path) -> tuple[Path, Path]:
     shutil.copytree(Path("evals") / "recordings", evals_dst / "recordings")
 
     agents_dst = tmp_path / "agents"
-    shutil.copytree(Path("agents"), agents_dst)
+    shutil.copytree(
+        Path("agents"),
+        agents_dst,
+        ignore=shutil.ignore_patterns(".venv", "__pycache__", ".ruff_cache"),
+    )
     return evals_dst, agents_dst
 
 
@@ -257,3 +262,21 @@ def test_mutation_remove_check_req_gate_empty_questions_check(tmp_path: Path) ->
         "test_check_req_gate_rejects_sub_80_with_empty_questions" in out
         or "DID NOT RAISE" in out
     )
+
+
+def test_mutation_raw_output_score_mismatch(tmp_path: Path) -> None:
+    """Prove that desyncing raw_output score from golden score fails the gate."""
+    evals_dir, _ = _setup_tmp_tree(tmp_path)
+    rec_path = evals_dir / "recordings" / "req_gate" / "issue_9.json"
+    rec_data = json.loads(rec_path.read_text(encoding="utf-8"))
+    mutated = copy.deepcopy(rec_data["response"])
+    mutated["score"] = 63
+    mutated["criteria"]["clear_goal"] = mutated["criteria"]["clear_goal"] - (95 - 63)
+    rec_data["raw_output"] = json.dumps(mutated)
+    # leave rec_data["response"] intact to test desync detection
+    rec_path.write_text(json.dumps(rec_data, indent=2) + "\n", encoding="utf-8")
+
+    res = _run_replay(tmp_path)
+    assert res.returncode != 0, "Gate unexpectedly passed with mutated raw_output score"
+    out = res.stdout + res.stderr
+    assert "score" in out or "raw_output" in out
