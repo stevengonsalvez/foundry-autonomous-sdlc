@@ -57,6 +57,7 @@ export function makeHostile(sample) {
   const c = by(5);
   c.title = p.long;
   c.escalation.resolved = null;
+  c.escalation.open = true;
   c.escalation.evidence_url = BAD_URLS[6];
   c.escalation.reasons = [p.longWords];
 

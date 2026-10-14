@@ -144,8 +144,14 @@ export function pipelineChain(ticket) {
 
 export const emptyFilters = () => ({ types: new Set(), query: '', hideOld: false });
 
+export function isOpenEscalation(ticket) {
+  if (!ticket || !ticket.escalation) return false;
+  if (ticket.escalation.resolved !== null) return false;
+  return ticket.escalation.open ?? true;
+}
+
 export function isFinished(ticket) {
-  return ticket.stage === 'prod' || (ticket.stage === 'escalated' && (ticket.closed_at !== null || Boolean(ticket.escalation?.resolved)));
+  return ticket.stage === 'prod' || (ticket.stage === 'escalated' && !isOpenEscalation(ticket));
 }
 
 function isOld(ticket, nowMs) {
@@ -176,7 +182,7 @@ export function boardColumns(state, pending, filters, nowMs) {
   const all = withPending(state.tickets, pending);
   const stages = state.board_stages;
   return stages.map((stage) => {
-    const inStage = all.filter((t) => (stage === 'escalated' ? t.stage === stage && !t.escalation?.resolved : t.stage === stage));
+    const inStage = all.filter((t) => (stage === 'escalated' ? t.stage === stage && isOpenEscalation(t) : t.stage === stage));
     const shown = inStage.filter((t) => matchesFilters(t, filters, nowMs)).sort(byRecent);
     return { stage, label: stageLabel(stage), tickets: shown, total: inStage.length };
   });
@@ -195,7 +201,7 @@ export function boardSummary(state, pending) {
     total: all.length,
     inFlight: count((t) => !['prod', 'escalated'].includes(t.stage)),
     prod: count((t) => t.stage === 'prod'),
-    escalated: count((t) => t.stage === 'escalated' && !t.escalation?.resolved),
+    escalated: count((t) => t.stage === 'escalated' && isOpenEscalation(t)),
     waiting: count((t) => t.pending),
   };
 }
@@ -260,11 +266,13 @@ export function escalationList(state) {
 }
 
 export function openEscalations(state) {
-  return escalationList(state).filter((t) => !t.escalation?.resolved);
+  return escalationList(state).filter(isOpenEscalation);
 }
 
 export function resolvedEscalations(state) {
-  return escalationList(state).filter((t) => Boolean(t.escalation?.resolved));
+  return escalationList(state)
+    .filter((t) => !isOpenEscalation(t))
+    .sort((a, b) => (parseTime(b.escalation?.resolved?.at ?? '') ?? 0) - (parseTime(a.escalation?.resolved?.at ?? '') ?? 0) || b.issue - a.issue);
 }
 
 const REFINING = new Set(['refining']);

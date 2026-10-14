@@ -12,6 +12,7 @@ import {
   freshness,
   gateStatus,
   isNewer,
+  isOpenEscalation,
   openEscalations,
   pipelineChain,
   releaseRows,
@@ -177,18 +178,29 @@ test('escalations newest first, with the rollback one included', () => {
   assert.deepEqual(times, [...times].sort((a, b) => b - a));
   assert.equal(openEscalations(state).length, 2);
   assert.equal(resolvedEscalations(state).length, 16);
+  const resTimes = resolvedEscalations(state).map((t) => Date.parse(t.escalation.resolved.at));
+  assert.deepEqual(resTimes, [...resTimes].sort((a, b) => b - a));
+  assert.equal(isOpenEscalation(list.find((t) => t.issue === 25)), true);
+  assert.equal(isOpenEscalation(list.find((t) => t.issue === 2)), false);
 });
 
 test('old state without resolved field normalizes safely and renders', () => {
   const raw = sampleState();
   for (const t of raw.tickets) {
-    if (t.escalation) delete t.escalation.resolved;
+    if (t.escalation) {
+      delete t.escalation.resolved;
+      delete t.escalation.open;
+    }
   }
   const res = parseState(raw);
   assert.equal(res.status, 'ok');
   const parsed = res.state;
   for (const t of parsed.tickets) {
-    if (t.escalation) assert.equal(t.escalation.resolved, null);
+    if (t.escalation) {
+      assert.equal(t.escalation.resolved, null);
+      assert.equal(t.escalation.open, true);
+      assert.equal(isOpenEscalation(t), true);
+    }
   }
   const cols = boardColumns(parsed, [], emptyFilters(), NOW);
   assert.equal(cols.find((c) => c.stage === 'escalated').tickets.length, 18);

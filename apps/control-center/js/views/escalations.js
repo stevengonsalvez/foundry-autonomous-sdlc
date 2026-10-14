@@ -2,7 +2,7 @@
 
 import { badge, emptyState, ghLink, h, timeEl } from '../dom.js';
 import { escalationLabel, formatInteger, plural } from '../format.js';
-import { escalationList } from '../model.js';
+import { openEscalations, resolvedEscalations } from '../model.js';
 import { dataLink } from '../safe.js';
 import { envBadgeFor, externalLabel, flagBadges, pageHead, ticketHref, ticketRef, typeBadge } from './common.js';
 
@@ -39,9 +39,7 @@ export function escalationCard(ticket, nowMs, { header = true } = {}) {
             h(
               'dd',
               null,
-              badge(`Resolved: ${resolved.how}`, 'good'),
-              ' ',
-              h('span', { class: 'muted' }, `by ${resolved.by}`),
+              `${resolved.how} by ${resolved.by}`,
               resolved.at ? [' ', timeEl(resolved.at, nowMs)] : null,
             ),
           )
@@ -71,9 +69,8 @@ export function escalationCard(ticket, nowMs, { header = true } = {}) {
 
 export function renderEscalations(ctx) {
   const { state, now } = ctx;
-  const list = escalationList(state);
-  const open = list.filter((t) => !t.escalation?.resolved);
-  const resolved = list.filter((t) => Boolean(t.escalation?.resolved));
+  const open = openEscalations(state);
+  const resolved = resolvedEscalations(state);
   return h(
     'div',
     { class: 'view' },

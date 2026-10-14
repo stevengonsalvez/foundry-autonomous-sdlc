@@ -41,6 +41,7 @@ export function normalizeResolved(v) {
 
 function normalizeEscalation(v) {
   if (!isRecord(v)) return null;
+  const res = normalizeResolved(v.resolved);
   return {
     label: text(v.label, 'escalated'),
     reasons: texts(v.reasons),
@@ -48,7 +49,8 @@ function normalizeEscalation(v) {
     attempts: num(v.attempts),
     tried: texts(v.tried),
     evidence_url: textOrNull(v.evidence_url),
-    resolved: normalizeResolved(v.resolved),
+    resolved: res,
+    open: typeof v.open === 'boolean' ? v.open : res === null,
   };
 }
 
