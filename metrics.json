@@ -38,7 +38,7 @@
       "pass": 8
     }
   },
-  "generated_at": "2026-10-14T08:25:40Z",
+  "generated_at": "2026-10-14T08:30:39Z",
   "issues": [
     {
       "closed_at": "2026-10-10T12:28:43Z",
@@ -1807,18 +1807,18 @@
       "cost": {
         "calls": 5,
         "coder_model_usd": 0.0,
-        "coder_usd": 0.201505,
+        "coder_usd": 0.302257,
         "model_usd": 0.020379,
-        "usd": 0.221883
+        "usd": 0.322636
       },
       "deferred": null,
-      "escalation": null,
+      "escalation": "escalated:agent-error",
       "gate_attempts": {},
       "gates": {},
       "kind": "issue",
       "number": 72,
       "opened_at": "2026-10-14T07:38:31Z",
-      "outcome": "open",
+      "outcome": "escalated",
       "owner": null,
       "pr": null,
       "quality_score": 100,
@@ -1874,9 +1874,13 @@
         },
         {
           "entered_at": "2026-10-14T08:25:22Z",
-          "in_progress": true,
-          "seconds": 0,
+          "seconds": 297,
           "stage": "stage:building"
+        },
+        {
+          "entered_at": "2026-10-14T08:30:19Z",
+          "seconds": 0,
+          "stage": "escalated:agent-error"
         }
       ],
       "title": "feat(web): show current location in parcel header",
@@ -1884,18 +1888,18 @@
     }
   ],
   "ledger": {
-    "emitted_at": "2026-10-14T08:25:28Z",
+    "emitted_at": "2026-10-14T08:30:22Z",
     "reconciled_at": "2026-10-14T08:15:23Z"
   },
   "repo": "stevengonsalvez/foundry-autonomous-sdlc",
   "totals": {
     "deferred": 0,
-    "escalated": 18,
+    "escalated": 19,
     "issues": 26,
-    "ledger_usd": 0.229553,
-    "orchestrator_usd": 2.309097,
+    "ledger_usd": 0.232786,
+    "orchestrator_usd": 2.321038,
     "released": 6,
-    "usd": 4.140182
+    "usd": 4.256108
   },
   "version": 1
 }
