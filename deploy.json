@@ -1,21 +1,36 @@
 {
   "version": 1,
   "staging": {
-    "sha": "6744b36faa51914c90fbd17a0080204f64da84c4",
-    "short": "6744b36",
-    "version": "main-6744b36",
-    "built_at": "2026-10-13T23:50:51Z",
-    "deployed_at": "2026-10-13T23:51:04Z",
-    "run_id": 38486523753,
-    "run_url": "https://github.com/stevengonsalvez/foundry-autonomous-sdlc/actions/runs/38486523753",
-    "status": "promoted",
-    "pr": 62,
+    "sha": "55ef1b99e6bea7d33a588562b4633380cc68c09a",
+    "short": "55ef1b9",
+    "version": "main-55ef1b9",
+    "built_at": "2026-10-14T00:06:09Z",
+    "deployed_at": "2026-10-14T00:06:21Z",
+    "run_id": 38487325765,
+    "run_url": "https://github.com/stevengonsalvez/foundry-autonomous-sdlc/actions/runs/38487325765",
+    "status": "deployed",
+    "pr": 65,
     "issue": null,
     "includes": [
       {
-        "pr": 62,
+        "pr": 63,
         "issue": null,
-        "sha": "6744b36faa51914c90fbd17a0080204f64da84c4"
+        "sha": "78394191ee7df6fe9177fb2eea3515ac1c07f2a2"
+      },
+      {
+        "pr": 67,
+        "issue": null,
+        "sha": "ddfe9c56edf58b49ef04ef06b8103d967774d333"
+      },
+      {
+        "pr": 66,
+        "issue": null,
+        "sha": "110691a58b44fd113d62da3629187116942cc7ee"
+      },
+      {
+        "pr": 65,
+        "issue": null,
+        "sha": "55ef1b99e6bea7d33a588562b4633380cc68c09a"
       }
     ]
   },
@@ -580,6 +595,39 @@
           "pr": 62,
           "issue": null,
           "sha": "6744b36faa51914c90fbd17a0080204f64da84c4"
+        }
+      ]
+    },
+    {
+      "at": "2026-10-14T00:06:21Z",
+      "action": "stage",
+      "env": "staging",
+      "sha": "55ef1b99e6bea7d33a588562b4633380cc68c09a",
+      "version": "main-55ef1b9",
+      "run_url": "https://github.com/stevengonsalvez/foundry-autonomous-sdlc/actions/runs/38487325765",
+      "reason": "deployed to staging",
+      "issue": null,
+      "pr": 65,
+      "includes": [
+        {
+          "pr": 63,
+          "issue": null,
+          "sha": "78394191ee7df6fe9177fb2eea3515ac1c07f2a2"
+        },
+        {
+          "pr": 67,
+          "issue": null,
+          "sha": "ddfe9c56edf58b49ef04ef06b8103d967774d333"
+        },
+        {
+          "pr": 66,
+          "issue": null,
+          "sha": "110691a58b44fd113d62da3629187116942cc7ee"
+        },
+        {
+          "pr": 65,
+          "issue": null,
+          "sha": "55ef1b99e6bea7d33a588562b4633380cc68c09a"
         }
       ]
     }
