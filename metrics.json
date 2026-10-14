@@ -38,7 +38,7 @@
       "pass": 8
     }
   },
-  "generated_at": "2026-10-14T08:05:54Z",
+  "generated_at": "2026-10-14T08:10:47Z",
   "issues": [
     {
       "closed_at": "2026-10-10T12:28:43Z",
@@ -1854,9 +1854,14 @@
         },
         {
           "entered_at": "2026-10-14T08:05:39Z",
+          "seconds": 288,
+          "stage": "stage:tests-written"
+        },
+        {
+          "entered_at": "2026-10-14T08:10:27Z",
           "in_progress": true,
           "seconds": 0,
-          "stage": "stage:tests-written"
+          "stage": "stage:building"
         }
       ],
       "title": "feat(web): show current location in parcel header",
@@ -1864,7 +1869,7 @@
     }
   ],
   "ledger": {
-    "emitted_at": "2026-10-14T08:05:42Z",
+    "emitted_at": "2026-10-14T08:10:34Z",
     "reconciled_at": "2026-10-14T07:15:18Z"
   },
   "repo": "stevengonsalvez/foundry-autonomous-sdlc",
@@ -1872,10 +1877,10 @@
     "deferred": 0,
     "escalated": 18,
     "issues": 26,
-    "ledger_usd": 0.21949,
-    "orchestrator_usd": 2.258582,
+    "ledger_usd": 0.221922,
+    "orchestrator_usd": 2.271099,
     "released": 6,
-    "usd": 3.973382
+    "usd": 3.988331
   },
   "version": 1
 }
