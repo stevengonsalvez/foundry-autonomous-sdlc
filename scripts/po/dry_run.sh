@@ -68,7 +68,6 @@ if [ -n "$labels_file" ] && [ ! -f "$labels_file" ]; then
 fi
 
 missing_simulated_human=0
-missing_needs_maintainer=0
 
 if [ -n "$labels_file" ] && [ -f "$labels_file" ]; then
   labels_check="$(python3 - "$labels_file" << 'PYEOF'
@@ -84,10 +83,8 @@ try:
         elif isinstance(entry, str):
             existing.add(entry)
     print(f"missing_simulated_human={1 if 'simulated-human' not in existing else 0}")
-    print(f"missing_needs_maintainer={1 if 'needs-maintainer' not in existing else 0}")
 except Exception:
     print("missing_simulated_human=0")
-    print("missing_needs_maintainer=0")
 PYEOF
   )"
   eval "$labels_check"
@@ -120,6 +117,12 @@ for ((i=0; i<num_issues; i++)); do
   title="$(jq -r '.title' <<< "$issue")"
   author="$(jq -r '.author.login // empty' <<< "$issue")"
   body="$(jq -r '.body // ""' <<< "$issue")"
+  state="$(jq -r '.state // "OPEN"' <<< "$issue")"
+
+  # Skip hats unless issue state is OPEN (case-insensitive)
+  if [ "${state^^}" != "OPEN" ]; then
+    continue
+  fi
 
   # Guardrail (a): Untrusted data and author restriction
   if [ "$author" != "stevengonsalvez" ]; then
@@ -127,8 +130,14 @@ for ((i=0; i<num_issues; i++)); do
     continue
   fi
 
-  # Guardrail (a): Prompt injection defense
-  if grep -iP "(ignore all previous instructions|system override|approve pr|merge pr|raise.*spend cap)" <<< "$body" >/dev/null 2>&1; then
+  # Guardrail (a): Prompt injection defense (using Python, no grep -iP)
+  has_injection="$(python3 -c '
+import sys, re
+body = sys.stdin.read()
+pattern = re.compile(r"(ignore all previous instructions|system override|approve pr|merge pr|raise.*spend cap)", re.IGNORECASE)
+print("1" if pattern.search(body) else "0")
+' <<< "$body")"
+  if [ "$has_injection" = "1" ]; then
     echo "[SECURITY] Untrusted input detected in issue #$number body. Prompt injection payload neutralized."
   fi
 
@@ -139,16 +148,29 @@ for ((i=0; i<num_issues; i++)); do
     is_busy=1
   fi
 
+  # Check if issue was already answered by persona with <!-- po-answered:v1 -->
+  already_answered="$(python3 -c '
+import sys, json
+try:
+    issue_data = json.loads(sys.argv[1])
+    comments = issue_data.get("comments", [])
+    answered = any("<!-- po-answered:v1 -->" in (c.get("body") or "") for c in comments)
+    print("1" if answered else "0")
+except Exception:
+    print("0")
+' "$issue")"
+
+  if [ "$already_answered" = "1" ]; then
+    echo "[HAT] Skipping issue #$number: already answered with po-answered marker."
+    continue
+  fi
+
   # Hat 1: Requirements Answerer
   if grep -q "stage:needs-refinement" <<< "$labels"; then
     hat_refinement=$((hat_refinement + 1))
     echo "[HAT] Requirements Answerer: Processing clarification questions for issue #$number"
-    if [ "$missing_simulated_human" -eq 1 ]; then
-      echo "[LABELS] Warning: Label 'simulated-human' missing from repository. Planning label creation."
-      commands+=("gh label create \"simulated-human\" --description \"Actions managed by simulated human persona\" --color \"0E8A16\"")
-      missing_simulated_human=0
-    fi
     comment_body="### Simulated human (antigravity)
+<!-- po-answered:v1 -->
 
 **Clarifications and Refinements:**
 1. Scope is strictly confined to app/web and client-side presentation.
@@ -163,13 +185,9 @@ for ((i=0; i<num_issues; i++)); do
   if grep -q "type:bug" <<< "$labels" && ! grep -q "bug:triaged" <<< "$labels"; then
     hat_triage=$((hat_triage + 1))
     echo "[HAT] Triage Lead: Triaging defect #$number ('$title')"
-    if [ "$missing_simulated_human" -eq 1 ]; then
-      echo "[LABELS] Warning: Label 'simulated-human' missing from repository. Planning label creation."
-      commands+=("gh label create \"simulated-human\" --description \"Actions managed by simulated human persona\" --color \"0E8A16\"")
-      missing_simulated_human=0
-    fi
     commands+=("gh issue edit $number --add-label \"bug:triaged,severity:s2,owner:web,simulated-human\"")
     comment_body="### Simulated human (antigravity)
+<!-- po-answered:v1 -->
 
 Triaged as severity s2 (workaround available) owned by web workspace."
     commands+=("gh issue comment $number --body \"$comment_body\"")
@@ -180,16 +198,26 @@ Triaged as severity s2 (workaround available) owned by web workspace."
   if grep -q "escalated:" <<< "$labels"; then
     hat_escalation=$((hat_escalation + 1))
 
-    # Guardrail (e): Cost-cap escalation
+    # Agent-error escalation (Issue 72 shaped)
+    if grep -q "escalated:agent-error" <<< "$labels"; then
+      echo "[HAT] Escalation Owner: Handling agent-error escalation on issue #$number"
+      comment_body="### Simulated human (antigravity)
+<!-- po-answered:v1 -->
+
+Agent encountered persistent failure streak or invalid test assertions after coder repair iterations.
+Closing ticket to unblock autonomous SDLC pipeline. The roadmap item can be re-filed in a subsequent run with clarified criteria."
+      commands+=("gh issue comment $number --body \"$comment_body\"")
+      commands+=("gh issue edit $number --add-label \"simulated-human\"")
+      commands+=("gh issue close $number")
+      continue
+    fi
+
+    # Cost-cap escalation
     if grep -q "escalated:cost-cap" <<< "$labels"; then
       echo "[HAT] Escalation Owner: Handling cost-cap escalation on issue #$number"
       echo "[GUARDRAIL] NEVER raise spend cap or continue past halt limit. Closing or parking issue."
-      if [ "$missing_simulated_human" -eq 1 ]; then
-        echo "[LABELS] Warning: Label 'simulated-human' missing from repository. Planning label creation."
-        commands+=("gh label create \"simulated-human\" --description \"Actions managed by simulated human persona\" --color \"0E8A16\"")
-        missing_simulated_human=0
-      fi
       comment_body="### Simulated human (antigravity)
+<!-- po-answered:v1 -->
 
 Closing issue due to cost cap limit. Spend reached the allocated cap.
 Under strict spend guardrails, spend caps are never raised and execution does not continue past the 22 USD halt limit.
@@ -200,16 +228,12 @@ Follow-up work should be split into a scoped, smaller increment."
       continue
     fi
 
-    # Guardrail (f): CD rollback escalation
+    # CD rollback escalation
     if grep -q "escalated:deploy-failed" <<< "$labels"; then
       echo "[HAT] Escalation Owner: Handling CD rollback escalation on issue #$number"
       echo "[GUARDRAIL] NEVER instruct re-release of rolled-back build. Filing fix issue."
-      if [ "$missing_simulated_human" -eq 1 ]; then
-        echo "[LABELS] Warning: Label 'simulated-human' missing from repository. Planning label creation."
-        commands+=("gh label create \"simulated-human\" --description \"Actions managed by simulated human persona\" --color \"0E8A16\"")
-        missing_simulated_human=0
-      fi
       comment_body="### Simulated human (antigravity)
+<!-- po-answered:v1 -->
 
 CD deployment failed smoke or soak verification and automatically rolled back to the previous stable release.
 Per deployment guardrails, the rolled-back build will not be re-released.
@@ -239,12 +263,8 @@ app/web or app/api depending on failure logs."
     # Not agent suitable escalation
     if grep -q "escalated:not-agent-suitable" <<< "$labels"; then
       echo "[HAT] Escalation Owner: Handling not-agent-suitable escalation on issue #$number"
-      if [ "$missing_simulated_human" -eq 1 ]; then
-        echo "[LABELS] Warning: Label 'simulated-human' missing from repository. Planning label creation."
-        commands+=("gh label create \"simulated-human\" --description \"Actions managed by simulated human persona\" --color \"0E8A16\"")
-        missing_simulated_human=0
-      fi
       comment_body="### Simulated human (antigravity)
+<!-- po-answered:v1 -->
 
 Issue requires external vendor contracts, live credentials, or manual authorization.
 Reframing: Autonomous SDLC work is restricted to mock environments and local contracts.
@@ -257,12 +277,8 @@ Closing external-scope request; please use carrier-mock integration tests for lo
 
     # Other escalations (e.g. escalated:requirements, escalated:build-failed)
     echo "[HAT] Escalation Owner: Reviewing escalation on issue #$number"
-    if [ "$missing_simulated_human" -eq 1 ]; then
-      echo "[LABELS] Warning: Label 'simulated-human' missing from repository. Planning label creation."
-      commands+=("gh label create \"simulated-human\" --description \"Actions managed by simulated human persona\" --color \"0E8A16\"")
-      missing_simulated_human=0
-    fi
     comment_body="### Simulated human (antigravity)
+<!-- po-answered:v1 -->
 
 Reviewing failed pipeline attempts. Storing findings in run log."
     commands+=("gh issue comment $number --body \"$comment_body\"")
@@ -279,13 +295,12 @@ if [ "$hat_refinement" -eq 0 ] && [ "$hat_escalation" -eq 0 ]; then
     hat_po=1
 
     if [ -n "$roadmap_file" ] && [ -f "$roadmap_file" ]; then
-      roadmap_eval="$(python3 - "$roadmap_file" "$issues_file" "$memory_file" "$labels_file" << 'PYEOF'
+      roadmap_eval="$(python3 - "$roadmap_file" "$issues_file" "$memory_file" << 'PYEOF'
 import sys, os, re, json
 
 roadmap_file = sys.argv[1] if len(sys.argv) > 1 else ""
 issues_file = sys.argv[2] if len(sys.argv) > 2 else ""
 memory_file = sys.argv[3] if len(sys.argv) > 3 else ""
-labels_file = sys.argv[4] if len(sys.argv) > 4 else ""
 
 with open(roadmap_file, "r", encoding="utf-8") as f:
     content = f.read()
@@ -334,22 +349,17 @@ for block in item_blocks:
 items_by_id = {it["id"]: it for it in items}
 done_items = {it["id"] for it in items if it["status"] == "done"}
 filed_items = {it["id"] for it in items if it["status"] == "filed"}
-open_needs_maintainer_issue = None
 
+# Scan issues.json for filed/done items (authoritative source of truth)
 if issues_file and os.path.isfile(issues_file):
     try:
         with open(issues_file, "r", encoding="utf-8") as f:
             issues_data = json.load(f)
         for iss in issues_data:
-            num = iss.get("number")
             title = iss.get("title", "")
             body = iss.get("body", "")
-            state = iss.get("state", "open")
             raw_labels = iss.get("labels", [])
             labels = [l["name"] if isinstance(l, dict) else str(l) for l in raw_labels]
-
-            if state == "open" and "needs-maintainer" in labels:
-                open_needs_maintainer_issue = num or 1
 
             matched_id = None
             m = re.search(r"Roadmap item:\s*(ITEM-\d+)", body, re.IGNORECASE)
@@ -377,78 +387,33 @@ if issues_file and os.path.isfile(issues_file):
     except Exception:
         pass
 
-if memory_file and os.path.isfile(memory_file):
-    try:
-        with open(memory_file, "r", encoding="utf-8") as f:
-            mem_content = f.read()
-        for m in re.finditer(r"\b(ITEM-\d+)\b", mem_content):
-            item_id = m.group(1).upper()
-            if item_id in items_by_id and item_id not in done_items:
-                filed_items.add(item_id)
-    except Exception:
-        pass
-
+# Determine remaining unfiled todo items
 todo_items = [it for it in items if it["status"] == "todo" and it["id"] not in done_items and it["id"] not in filed_items]
 todo_count = len(todo_items)
 
-action = ""
+# Find next unblocked ready item
 ready_item = None
-if todo_count < 5:
-    if open_needs_maintainer_issue:
-        action = "maintainer_already_open"
-    else:
-        action = "request_maintainer_extension"
-else:
-    for it in todo_items:
-        if all(d in done_items for d in it["deps"]):
-            ready_item = it
-            break
-    if ready_item:
-        action = "file_roadmap_item"
-    else:
-        action = "no_unblocked_item"
+for it in todo_items:
+    if all(d in done_items for d in it["deps"]):
+        ready_item = it
+        break
 
 result = {
     "total": len(items),
     "todo_count": todo_count,
-    "action": action,
-    "ready_item": ready_item,
-    "open_needs_maintainer_issue": open_needs_maintainer_issue
+    "ready_item": ready_item
 }
 print(json.dumps(result))
 PYEOF
 )"
-      action="$(jq -r '.action' <<< "$roadmap_eval")"
       todo_count="$(jq -r '.todo_count' <<< "$roadmap_eval")"
 
-      if [ "$action" = "maintainer_already_open" ]; then
-        open_num="$(jq -r '.open_needs_maintainer_issue' <<< "$roadmap_eval")"
-        echo "[HAT] Product Owner: Fewer than 5 todo items remaining in roadmap ($todo_count left), but an open needs-maintainer issue already exists (#$open_num). Pausing intake without duplicate filing."
-      elif [ "$action" = "request_maintainer_extension" ]; then
-        echo "[HAT] Product Owner: Fewer than 5 todo items remaining in roadmap ($todo_count left). Requesting maintainer extension."
-        if [ "$missing_needs_maintainer" -eq 1 ]; then
-          echo "[LABELS] Warning: Label 'needs-maintainer' missing from repository. Planning label creation."
-          commands+=("gh label create \"needs-maintainer\" --description \"Requires repository maintainer attention\" --color \"B60205\"")
-          missing_needs_maintainer=0
-        fi
-        if [ "$missing_simulated_human" -eq 1 ]; then
-          echo "[LABELS] Warning: Label 'simulated-human' missing from repository. Planning label creation."
-          commands+=("gh label create \"simulated-human\" --description \"Actions managed by simulated human persona\" --color \"0E8A16\"")
-          missing_simulated_human=0
-        fi
-        extend_body="### Simulated human (antigravity)
+      if [ "$todo_count" -lt 5 ]; then
+        echo "[LOG] Roadmap extension requested: fewer than 5 todo items remaining ($todo_count left in $roadmap_file). Maintainer extension needed."
+      fi
 
-## Context
-The product roadmap ($roadmap_file) has fewer than 5 todo items remaining. To sustain continuous progressive improvement of the parcel tracker (app/), the backlog needs maintainer extension.
-
-## Request
-Please extend po/ROADMAP.md with the next batch of independently shippable improvements to app/.
-
-## Scope
-po/ROADMAP.md"
-        commands+=("gh issue create --title \"roadmap: extend po/ROADMAP.md\" --body \"$extend_body\" --label \"needs-maintainer,simulated-human\"")
-      elif [ "$action" = "file_roadmap_item" ]; then
-        ready_item="$(jq -c '.ready_item' <<< "$roadmap_eval")"
+      ready_item="$(jq -c '.ready_item' <<< "$roadmap_eval")"
+      if [ "$ready_item" != "null" ]; then
         item_id="$(jq -r '.id' <<< "$ready_item")"
         item_title="$(jq -r '.title' <<< "$ready_item")"
         item_gap="$(jq -r '.gap' <<< "$ready_item")"
@@ -458,15 +423,8 @@ po/ROADMAP.md"
 
         echo "[HAT] Product Owner: Pipeline is idle. Selecting next roadmap item by dependency order: $item_id ('$item_title')"
 
-        if [ "$missing_simulated_human" -eq 1 ]; then
-          echo "[LABELS] Warning: Label 'simulated-human' missing from repository. Planning label creation."
-          commands+=("gh label create \"simulated-human\" --description \"Actions managed by simulated human persona\" --color \"0E8A16\"")
-          missing_simulated_human=0
-        fi
-
         new_issue_body="### Simulated human (antigravity)
 
-## Roadmap Reference
 Roadmap item: $item_id
 
 ## Context
@@ -485,41 +443,19 @@ $item_files
 Work outside app/ or unrelated refactoring."
 
         commands+=("gh issue create --title \"$item_title\" --body \"$new_issue_body\" --label \"type:feature,simulated-human\"")
-      elif [ "$action" = "no_unblocked_item" ]; then
+      else
         echo "[HAT] Product Owner: Pipeline is idle but all remaining roadmap items are blocked by unsatisfied dependencies."
       fi
     else
-      echo "[HAT] Product Owner: Pipeline is idle. Preparing ONE improvement issue tied to a real gap."
-
-      if [ "$missing_simulated_human" -eq 1 ]; then
-        echo "[LABELS] Warning: Label 'simulated-human' missing from repository. Planning label creation."
-        commands+=("gh label create \"simulated-human\" --description \"Actions managed by simulated human persona\" --color \"0E8A16\"")
-        missing_simulated_human=0
-      fi
-
-      new_issue_body="### Simulated human (antigravity)
-
-## Context
-Carrier contract app/contracts/carrier.openapi.yaml includes event location metadata, but app/web parcel timeline currently displays only description and timestamp.
-
-## User story
-As a parcel recipient, I want to see the event location in the timeline so that I know where my parcel was scanned.
-
-## Acceptance criteria
-1. When an event contains a non-empty location string, display it beneath the event description as 'Location: <location>'.
-2. The location text must be a visible text node accessible to screen readers.
-3. When location is null or omitted, no location line or empty node is rendered.
-4. Existing event ordering and styling are preserved.
-
-## Scope
-app/web only.
-
-## Out of scope
-Geocoding or map views."
-
-      commands+=("gh issue create --title \"feat(web): display event location in parcel timeline\" --body \"$new_issue_body\" --label \"type:feature,simulated-human\"")
+      echo "[HAT] Product Owner: No roadmap file available. Intake paused until po/ROADMAP.md is provided."
     fi
   fi
+fi
+
+# Guardrail: Check label availability
+if [ "$missing_simulated_human" -eq 1 ] && [ "${#commands[@]}" -gt 0 ]; then
+  echo "BLOCKED: label simulated-human missing, maintainer must create it"
+  commands=()
 fi
 
 echo "----------------------------------------"
