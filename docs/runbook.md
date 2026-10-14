@@ -195,6 +195,18 @@ uv run --project agents python scripts/deploy_agents.py hosted --only sdlc-coder
 uv run --project agents python scripts/deploy_agents.py roles
 ```
 
+### Advisory UI Vision Tester
+
+The vision prompt agent `sdlc-ui-tester` evaluates screenshots attached to agent pull requests. It is disabled by default and costs nothing in Azure until enabled.
+
+To enable:
+1. Set the feature flag environment variable on the orchestrator runtime:
+   ```bash
+   export UI_TESTER_ENABLED=1
+   ```
+2. When active, ticks that inspect open agent PRs with a `<!-- ui-proof:v1 -->` comment invoke `sdlc-ui-tester` with the image URLs and post an advisory comment (`<!-- ui-tester:v1 <head_sha> -->`).
+3. The verdict is strictly advisory: visual findings are reported for visibility but never block required checks or merge gates.
+
 ### Coder job outcomes
 
 | status / reason | Meaning |
