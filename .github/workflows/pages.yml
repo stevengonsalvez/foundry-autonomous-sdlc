@@ -86,6 +86,26 @@ jobs:
           path: deploy-checkout
           persist-credentials: false
 
+      # The pr-screenshots branch holds UI evolution screenshots under releases/
+      - name: Look for the pr-screenshots branch
+        id: pr_screenshots
+        run: |
+          rc=0
+          git ls-remote --exit-code --heads \
+            "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY" refs/heads/pr-screenshots >/dev/null || rc=$?
+          case "$rc" in
+            0) echo "exists=true" >> "$GITHUB_OUTPUT" ;;
+            2) echo "exists=false" >> "$GITHUB_OUTPUT" ;;
+            *) echo "::error::git ls-remote failed with exit code $rc"; exit "$rc" ;;
+          esac
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        if: steps.pr_screenshots.outputs.exists == 'true'
+        with:
+          ref: pr-screenshots
+          path: pr-screenshots-checkout
+          persist-credentials: false
+
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: ${{ env.NODE_VERSION }}
@@ -96,6 +116,7 @@ jobs:
         env:
           METRICS_EXISTS: ${{ steps.metrics.outputs.exists }}
           DEPLOY_EXISTS: ${{ steps.deploy.outputs.exists }}
+          PR_SCREENSHOTS_EXISTS: ${{ steps.pr_screenshots.outputs.exists }}
         run: |
           metrics_dir=()
           if [[ "$METRICS_EXISTS" == "true" ]]; then
@@ -113,6 +134,9 @@ jobs:
           fi
           if [[ -f apps/control-center/index.html ]]; then
             export CONTROL_CENTER_SRC="$PWD/apps/control-center"
+          fi
+          if [[ "$PR_SCREENSHOTS_EXISTS" == "true" ]]; then
+            export PR_SCREENSHOTS_DIR="$PWD/pr-screenshots-checkout"
           fi
           scripts/build_pages.sh _site "${metrics_dir[@]}"
 
