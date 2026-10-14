@@ -12,11 +12,12 @@ Tests requirements:
 from __future__ import annotations
 
 import json
-from pathlib import Path
 import tempfile
-from typing import Any
+from pathlib import Path
+
 import pytest
 
+from scripts.tests.ui.test_validate_artifact import make_test_png
 from scripts.ui.generate_history import (
     BUDGET_CSS_BYTES,
     BUDGET_HTML_BYTES,
@@ -27,10 +28,8 @@ from scripts.ui.generate_history import (
     collect_evolution_entries,
     generate_css,
     generate_js,
-    parse_semver_key,
     render_html,
 )
-
 
 # Minimal 1x1 valid PNG bytes
 TINY_PNG = bytes.fromhex(
@@ -69,13 +68,15 @@ def create_release_fixture(
         for vp in viewports:
             fn = f"{r}-{vp}.png"
             (tag_dir / fn).write_bytes(TINY_PNG)
-            screenshots_meta.append({
-                "route": r,
-                "viewport": vp,
-                "filename": fn,
-                "sha256": "dummy",
-                "size_bytes": len(TINY_PNG),
-            })
+            screenshots_meta.append(
+                {
+                    "route": r,
+                    "viewport": vp,
+                    "filename": fn,
+                    "sha256": "dummy",
+                    "size_bytes": len(TINY_PNG),
+                }
+            )
 
     manifest = {
         "version": 1,
@@ -173,9 +174,7 @@ def test_missing_screenshots() -> None:
             viewports=["desktop"],
         )
 
-        state_data = {
-            "tickets": [{"release": {"tag": "v0.1.0"}, "title": "Minimal release"}]
-        }
+        state_data = {"tickets": [{"release": {"tag": "v0.1.0"}, "title": "Minimal release"}]}
 
         out_dir = Path(td) / "out"
         payload = build_history_site(
@@ -186,7 +185,10 @@ def test_missing_screenshots() -> None:
         )
 
         assert payload["entries"][0]["screenshots"]["home"]["desktop"] == "home-desktop.png"
-        assert "parcel-found" not in payload["entries"][0]["screenshots"] or not payload["entries"][0]["screenshots"]["parcel-found"]
+        assert (
+            "parcel-found" not in payload["entries"][0]["screenshots"]
+            or not payload["entries"][0]["screenshots"]["parcel-found"]
+        )
         assert (out_dir / "index.html").exists()
         assert (out_dir / "data.json").exists()
 
@@ -202,9 +204,7 @@ def test_not_reproducible_tag() -> None:
             reason="Legacy webpack 4 configuration failed under Node 22",
         )
 
-        state_data = {
-            "tickets": [{"release": {"tag": "v0.1.0"}, "title": "Old build"}]
-        }
+        state_data = {"tickets": [{"release": {"tag": "v0.1.0"}, "title": "Old build"}]}
 
         out_dir = Path(td) / "out"
         payload = build_history_site(
@@ -274,33 +274,36 @@ def test_size_budget() -> None:
     entries = []
     for i in range(10, 0, -1):
         tag = f"v0.{i}.0"
-        entries.append({
-            "tag": tag,
-            "commit_sha": f"sha{i:04d}",
-            "short_sha": f"sha{i:04d}"[:8],
-            "date": "2026-10-14T08:00:00Z",
-            "title": f"Feature release number {i} with a detailed description",
-            "issue_number": 100 + i,
-            "issue_url": f"https://github.com/issues/{100+i}",
-            "pr_number": 200 + i,
-            "pr_url": f"https://github.com/pull/{200+i}",
-            "cost_usd": 0.042 * i,
-            "reproducible": True,
-            "not_reproducible_reason": None,
-            "screenshots": {
-                r: {vp: f"{r}-{vp}.png" for vp in VIEWPORTS}
-                for r in ROUTES
-            },
-            "before": {
-                "tag": f"v0.{i-1}.0",
+        entries.append(
+            {
+                "tag": tag,
+                "commit_sha": f"sha{i:04d}",
+                "short_sha": f"sha{i:04d}"[:8],
+                "date": "2026-10-14T08:00:00Z",
+                "title": f"Feature release number {i} with a detailed description",
+                "issue_number": 100 + i,
+                "issue_url": f"https://github.com/issues/{100 + i}",
+                "pr_number": 200 + i,
+                "pr_url": f"https://github.com/pull/{200 + i}",
+                "cost_usd": 0.042 * i,
                 "reproducible": True,
+                "not_reproducible_reason": None,
                 "screenshots": {r: {vp: f"{r}-{vp}.png" for vp in VIEWPORTS} for r in ROUTES},
-            } if i > 1 else None,
-        })
+                "before": {
+                    "tag": f"v0.{i - 1}.0",
+                    "reproducible": True,
+                    "screenshots": {r: {vp: f"{r}-{vp}.png" for vp in VIEWPORTS} for r in ROUTES},
+                }
+                if i > 1
+                else None,
+            }
+        )
 
     html_str = render_html(entries)
     html_bytes = len(html_str.encode("utf-8"))
-    assert html_bytes < BUDGET_HTML_BYTES, f"HTML ({html_bytes} bytes) exceeds budget of {BUDGET_HTML_BYTES} bytes"
+    assert html_bytes < BUDGET_HTML_BYTES, (
+        f"HTML ({html_bytes} bytes) exceeds budget of {BUDGET_HTML_BYTES} bytes"
+    )
 
 
 def test_update_history_validates_untrusted_artifacts() -> None:
@@ -313,7 +316,9 @@ def test_update_history_validates_untrusted_artifacts() -> None:
         artifacts_dir.mkdir()
 
         import hashlib
-        tiny_sha = hashlib.sha256(TINY_PNG).hexdigest()
+
+        desktop_png = make_test_png(1280, 800)
+        png_sha = hashlib.sha256(desktop_png).hexdigest()
         manifest_data = {
             "version": 1,
             "head_sha": "1234567890abcdef1234567890abcdef12345678",
@@ -322,12 +327,12 @@ def test_update_history_validates_untrusted_artifacts() -> None:
                     "route": "home",
                     "viewport": "desktop",
                     "filename": "home-desktop.png",
-                    "sha256": tiny_sha,
-                    "size": len(TINY_PNG),
+                    "sha256": png_sha,
+                    "size": len(desktop_png),
                 }
             ],
         }
-        (artifacts_dir / "home-desktop.png").write_bytes(TINY_PNG)
+        (artifacts_dir / "home-desktop.png").write_bytes(desktop_png)
         (artifacts_dir / "manifest.json").write_text(json.dumps(manifest_data), encoding="utf-8")
 
         mock_repo = temp_dir / "repo"
@@ -341,8 +346,8 @@ def test_update_history_validates_untrusted_artifacts() -> None:
             repo_root=mock_repo,
         )
         assert res["key"] == "v0.5.0"
-        assert (mock_repo / "history" / "screenshots" / "v0.5.0" / "home-desktop.png").exists()
-        assert (mock_repo / "history" / "index.html").exists()
+        assert len(res["screenshots"]) == 1
+        assert res["screenshots"][0]["route"] == "home"
 
         # Corrupt file: not a PNG
         (artifacts_dir / "home-desktop.png").write_bytes(b"NOT A PNG FILE")
@@ -353,4 +358,73 @@ def test_update_history_validates_untrusted_artifacts() -> None:
                 key="v0.5.0",
                 push=False,
                 repo_root=mock_repo,
+            )
+
+
+def test_tag_regex_filtering() -> None:
+    r"""Only tags matching ^v\d+\.\d+\.\d+$ should be collected."""
+    with tempfile.TemporaryDirectory() as td:
+        screenshots_dir = Path(td)
+        entries = collect_evolution_entries(
+            state_data={},
+            screenshots_dir=screenshots_dir,
+            tags=["v0.1.0", "v0.2.0-rc1", "invalid-tag", "v1.2", "v0.3.0"],
+        )
+        assert [e["tag"] for e in entries] == ["v0.3.0", "v0.1.0"]
+
+
+def test_older_entries_disclosure_collapses_more_than_eight() -> None:
+    """Releases exceeding 8 should be collapsed into <details class="older-entries-disclosure">."""
+    entries = []
+    for i in range(10, 0, -1):
+        entries.append(
+            {
+                "tag": f"v0.{i}.0",
+                "commit_sha": f"sha{i}",
+                "short_sha": f"sha{i}"[:8],
+                "date": "2026-10-10T12:00:00Z",
+                "title": f"Release {i}",
+                "reproducible": True,
+                "screenshots": {},
+            }
+        )
+    html_out = render_html(entries)
+    assert '<details class="older-entries-disclosure">' in html_out
+    assert '<summary class="older-entries-summary">Older releases (2)</summary>' in html_out
+
+
+def test_v031_issue_label_pr_only() -> None:
+    """v0.3.1 must have issue_label = 'PR only' and link PR only."""
+    with tempfile.TemporaryDirectory() as td:
+        screenshots_dir = Path(td)
+        create_release_fixture(screenshots_dir, "v0.3.1")
+        entries = collect_evolution_entries(
+            state_data={},
+            screenshots_dir=screenshots_dir,
+            tags=["v0.3.1"],
+        )
+        assert entries[0]["issue_label"] == "PR only"
+        assert entries[0]["issue_number"] is None
+        html_out = render_html(entries)
+        assert '<span class="badge">PR only</span>' in html_out
+        assert "issue #" not in html_out
+        assert "pr #40" in html_out
+
+
+def test_budget_exceeded_raises_value_error(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Hard budget limits must raise ValueError instead of assert."""
+    with tempfile.TemporaryDirectory() as td:
+        out_dir = Path(td) / "out"
+        screenshots_dir = Path(td) / "screenshots"
+        create_release_fixture(screenshots_dir, "v0.1.0")
+
+        import scripts.ui.generate_history as gh
+
+        monkeypatch.setattr(gh, "BUDGET_CSS_BYTES", 10)
+        with pytest.raises(ValueError, match="CSS exceeds size budget"):
+            build_history_site(
+                output_dir=out_dir,
+                screenshots_dir=screenshots_dir,
+                state_data={},
+                tags=["v0.1.0"],
             )

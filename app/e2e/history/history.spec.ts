@@ -41,6 +41,15 @@ test.beforeAll(async () => {
         const contentType = MIME_TYPES[ext] ?? "application/octet-stream";
         res.writeHead(200, { "Content-Type": contentType });
         fs.createReadStream(filePath).pipe(res);
+      } else if (relPath.startsWith("/screenshots/") && relPath.endsWith(".png")) {
+        // Screenshots are hosted on pr-screenshots and assembled at Pages build time.
+        // Provide a valid PNG stub if screenshots are not present on local disk.
+        const stubPng = Buffer.from(
+          "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=",
+          "base64"
+        );
+        res.writeHead(200, { "Content-Type": "image/png" });
+        res.end(stubPng);
       } else {
         res.writeHead(404);
         res.end("Not Found");
@@ -110,7 +119,7 @@ test.describe("App Evolution Showcase (/history/)", () => {
     }
   });
 
-  test("passes accessibility quality bar (axe-clean, wcag2aa, wcag21aa)", async ({ page }) => {
+  test("passes accessibility quality bar (axe-clean, wcag2a, wcag2aa, wcag21aa)", async ({ page }) => {
     await page.goto(historyUrl);
     await expect(page.getByRole("heading", { level: 1, name: "App Evolution" })).toBeVisible();
 
@@ -162,26 +171,38 @@ test.describe("App Evolution Showcase (/history/)", () => {
     await expect(invalidInputBtn).toHaveAttribute("aria-pressed", "true");
   });
 
-  test("renders then-vs-now strip and side-by-side timeline comparisons", async ({ page }) => {
+  test("renders then-vs-now strip and side-by-side timeline comparisons dynamically from data.json", async ({ page }) => {
+    const dataJson = JSON.parse(
+      fs.readFileSync(path.join(HISTORY_DIR, "data.json"), "utf-8")
+    );
+    const entries = dataJson.entries || [];
+    const latestEntry = entries[0];
+    const oldestEntry = entries[entries.length - 1];
+    const beforeTag = latestEntry?.before?.tag ?? "Initial";
+
     await page.goto(historyUrl);
 
     // Then vs Now section
     const thenVsNowSection = page.locator(".then-vs-now");
     await expect(thenVsNowSection).toBeVisible();
-    await expect(thenVsNowSection.getByText("First Release (v0.1.0)")).toBeVisible();
-    await expect(thenVsNowSection.getByText("Current Release (v0.4.0)")).toBeVisible();
+    if (oldestEntry) {
+      await expect(thenVsNowSection.getByText(`First Release (${oldestEntry.tag})`)).toBeVisible();
+    }
+    if (latestEntry) {
+      await expect(thenVsNowSection.getByText(`Current Release (${latestEntry.tag})`)).toBeVisible();
+    }
 
-    // Timeline items
+    // Timeline items count dynamically asserted
     const timelineItems = page.locator(".timeline-item");
     const count = await timelineItems.count();
-    expect(count).toBeGreaterThanOrEqual(5);
+    expect(count).toBe(entries.length);
 
     // Latest release card header
-    await expect(page.locator(".tag-badge").first()).toContainText("v0.4.0");
-
-    // Side by side comparisons
-    await expect(page.locator(".compare-col-header").first()).toContainText("Before (v0.3.1)");
-    await expect(page.locator(".compare-col-header").nth(1)).toContainText("After (v0.4.0)");
+    if (latestEntry) {
+      await expect(page.locator(".tag-badge").first()).toContainText(latestEntry.tag);
+      await expect(page.locator(".compare-col-header").first()).toContainText(`Before (${beforeTag})`);
+      await expect(page.locator(".compare-col-header").nth(1)).toContainText(`After (${latestEntry.tag})`);
+    }
   });
 
   test("keyboard navigation supports skip-link to main content", async ({ page }) => {

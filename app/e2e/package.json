@@ -6,6 +6,7 @@
   "description": "Playwright golden path tests against the built web app, the API and the carrier mock.",
   "scripts": {
     "e2e": "playwright test",
+    "test:history": "playwright test --config playwright.history.config.ts",
     "typecheck": "tsc --noEmit",
     "smoke": "playwright test --config playwright.smoke.config.ts"
   },
