@@ -199,7 +199,7 @@ function createStaticServer(distDir) {
     const filePath = path.resolve(distDir, "." + relativePath);
     const rel = path.relative(distDir, filePath);
     // Security: avoid path traversal
-    if (rel.startsWith("..") || path.isAbsolute(rel)) {
+    if (rel === ".." || rel.startsWith(".." + path.sep) || path.isAbsolute(rel)) {
       res.writeHead(403);
       res.end("Forbidden");
       return;
