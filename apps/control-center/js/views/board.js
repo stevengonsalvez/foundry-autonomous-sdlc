@@ -215,15 +215,16 @@ function isStageApplicable(stage, laneKey, group) {
   return true;
 }
 
-function matrixCell(stage, lane, tickets, nowMs, lens, group) {
+function matrixCell(stage, colId, lane, tickets, nowMs, lens, group) {
   const laneKey = lane.key;
+  const laneId = lane.id;
   const laneTickets = tickets.filter((t) => ticketMatchesLane(t, laneKey, group));
   const applicable = isStageApplicable(stage, laneKey, group);
   // Never swallow real tickets that exist in an out-of-pipeline stage
   if (!applicable && laneTickets.length === 0) {
     return h(
       'div',
-      { class: 'matrix-cell cell-hatched', 'data-lane': laneKey, role: 'cell', 'aria-labelledby': `lane-${laneKey} col-${stage}` },
+      { class: 'matrix-cell cell-hatched', 'data-lane': laneKey, role: 'cell', 'aria-labelledby': `${laneId} ${colId}` },
       h('span', { class: 'cell-hatched-label' }, 'bypasses stage'),
     );
   }
@@ -236,7 +237,7 @@ function matrixCell(stage, lane, tickets, nowMs, lens, group) {
       class: `matrix-cell${laneTickets.length === 0 ? ' cell-empty' : ''}${!applicable ? ' cell-bypass' : ''}`,
       'data-lane': laneKey,
       role: 'cell',
-      'aria-labelledby': `lane-${laneKey} col-${stage}`,
+      'aria-labelledby': `${laneId} ${colId}`,
     },
     mobileLaneTag,
     ...laneTickets.map((t) => ticketChip(t, nowMs, lens)),
@@ -244,7 +245,8 @@ function matrixCell(stage, lane, tickets, nowMs, lens, group) {
   return cell;
 }
 
-function stageColumn(col, nowMs, filtered, lens, group, lanes) {
+function stageColumn(col, colIdx, nowMs, filtered, lens, group, lanes) {
+  const colId = `col-${colIdx}-${classToken(col.stage)}`;
   const quiet = col.tickets.length === 0;
   const countText = filtered && col.total !== col.tickets.length ? `${col.tickets.length} of ${col.total}` : String(col.tickets.length);
   const mode = STAGE_MODES[col.stage] ?? 'AUTO';
@@ -261,21 +263,21 @@ function stageColumn(col, nowMs, filtered, lens, group, lanes) {
     telemetryText = `${rate}% pass`;
   }
 
-  const cells = lanes.map((lane) => matrixCell(col.stage, lane, col.tickets, nowMs, lens, group));
+  const cells = lanes.map((lane) => matrixCell(col.stage, colId, lane, col.tickets, nowMs, lens, group));
 
   return h(
     'section',
     { class: `col col-${classToken(col.stage)}${quiet ? ' col-quiet' : ''}`, role: 'row', 'data-stage': col.stage },
     h(
       'header',
-      { class: 'col-head', role: 'rowheader', id: `col-${col.stage}` },
+      { class: 'col-head', role: 'rowheader' },
       h(
         'div',
         { class: 'col-head-top' },
         h(
           'div',
           { class: 'col-title-group' },
-          h('h2', { class: 'col-title' }, col.label),
+          h('h2', { class: 'col-title', id: colId }, col.label),
           modeBadge(mode),
         ),
         h('span', { class: 'col-count', title: `${col.tickets.length} shown, ${col.total} in this stage` }, countText),
@@ -309,7 +311,7 @@ function laneSpine(lanes) {
     ...lanes.map((l) =>
       h(
         'div',
-        { class: 'lane-head', id: `lane-${l.key}`, 'data-lane': l.key, role: 'columnheader' },
+        { class: 'lane-head', id: l.id, 'data-lane': l.key, role: 'columnheader' },
         h('span', { class: `lane-dot dot-${l.tone}`, 'aria-hidden': 'true' }),
         h('span', { class: 'lane-name' }, l.label),
         h('span', { class: 'lane-sub' }, l.sub),
@@ -409,9 +411,13 @@ export function renderBoard(ctx) {
 
   const update = () => {
     const columns = boardColumns(state, pending, filters, now);
-    const lanes = getLaneKeys(ui.board.group || 'type', state.tickets);
+    const rawLanes = getLaneKeys(ui.board.group || 'type', state.tickets);
+    const lanes = rawLanes.map((l, laneIdx) => ({
+      ...l,
+      id: `lane-${laneIdx}-${classToken(l.key)}`,
+    }));
 
-    const stageCols = columns.map((c) => stageColumn(c, now, isFiltered(), ui.board.lens || 'delivery', ui.board.group || 'type', lanes));
+    const stageCols = columns.map((c, colIdx) => stageColumn(c, colIdx, now, isFiltered(), ui.board.lens || 'delivery', ui.board.group || 'type', lanes));
 
     boardMatrix.replaceChildren(laneSpine(lanes), ...stageCols);
 

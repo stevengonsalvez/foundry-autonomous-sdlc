@@ -250,6 +250,29 @@ describe('views', { skip }, () => {
     await context.close();
   });
 
+  test('all aria-labelledby tokens across board matrix resolve to existing elements in document, including hostile fixture', async () => {
+    for (const state of ['normal', 'edge', 'hostile']) {
+      const { context, page } = await open(state, { hash: '#/' });
+      await page.waitForSelector('#app[aria-busy="false"] .view');
+      const unresolved = await page.evaluate(() => {
+        const missing = [];
+        for (const el of document.querySelectorAll('[aria-labelledby]')) {
+          const raw = el.getAttribute('aria-labelledby') || '';
+          const tokens = raw.trim().split(/\s+/).filter(Boolean);
+          for (const id of tokens) {
+            const targetEl = document.getElementById(id);
+            if (!targetEl) {
+              missing.push({ id, tag: el.tagName, class: el.className });
+            }
+          }
+        }
+        return missing;
+      });
+      assert.deepEqual(unresolved, [], `all aria-labelledby tokens must resolve to elements on ${state}`);
+      await context.close();
+    }
+  });
+
   test('board column counts equal the ledger counts, and every card links to its ticket', async () => {
     const { context, page } = await open('normal');
     for (const stage of rawSample.board_stages) {
