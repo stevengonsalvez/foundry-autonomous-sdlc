@@ -6,14 +6,14 @@ import { failedGate, flaggedIssue, newestFirst, releaseRows, rollbackRows } from
 import { pullUrl } from '../safe.js';
 import { externalLabel, hopTitle, issueNumberLink, pageHead, runAnchor, shaLink } from './common.js';
 
-const ROW_STATUS = {
+export const ROW_STATUS = Object.freeze({
   live: ['Live', 'good'],
   promoted: ['Promoted to production', 'info'],
   'smoke-passed': ['Smoke passed', 'info'],
   soaking: ['Soaking', 'warn'],
-};
+});
 
-const OUTCOME = { ok: ['OK', 'good'], failed: ['Failed', 'bad'], skipped: ['Skipped', 'neutral'], pending: ['Pending', 'warn'] };
+export const OUTCOME = Object.freeze({ ok: ['OK', 'good'], failed: ['Failed', 'bad'], skipped: ['Skipped', 'neutral'], pending: ['Pending', 'warn'] });
 
 export const outcomeBadge = (outcome) => {
   const [label, tone] = OUTCOME[outcome] ?? [outcome || 'Unknown', 'neutral'];
