@@ -1,0 +1,21 @@
+{
+  "prompt_sha256": "f5c2e19f70f6b7ead22a5f4d756b586b3858f76e8e63d075c00bdd8c8ee6ac5d",
+  "recorded_by": "manual",
+  "synthetic": false,
+  "response": {
+    "criteria": {
+      "clear_goal": 22,
+      "testable_acceptance_criteria": 21,
+      "defined_scope": 20,
+      "edge_cases": 20
+    },
+    "score": 83,
+    "summary": "Make tracking-number lookup case-insensitive: accept lowercase input and normalise to uppercase while still rejecting genuinely malformed numbers.",
+    "acceptance_criteria": [
+      "Accept lowercase tracking numbers",
+      "Normalise to uppercase on lookup"
+    ],
+    "questions": []
+  },
+  "raw_output": "{\"criteria\": {\"clear_goal\": 22, \"testable_acceptance_criteria\": 21, \"defined_scope\": 20, \"edge_cases\": 20}, \"score\": 83, \"summary\": \"Make tracking-number lookup case-insensitive: accept lowercase input and normalise to uppercase while still rejecting genuinely malformed numbers.\", \"acceptance_criteria\": [\"Accept lowercase tracking numbers\", \"Normalise to uppercase on lookup\"], \"questions\": []}"
+}

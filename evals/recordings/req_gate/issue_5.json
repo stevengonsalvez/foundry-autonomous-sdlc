@@ -1,0 +1,21 @@
+{
+  "prompt_sha256": "f5c2e19f70f6b7ead22a5f4d756b586b3858f76e8e63d075c00bdd8c8ee6ac5d",
+  "recorded_by": "manual",
+  "synthetic": false,
+  "response": {
+    "criteria": {
+      "clear_goal": 5,
+      "testable_acceptance_criteria": 0,
+      "defined_scope": 0,
+      "edge_cases": 0
+    },
+    "score": 5,
+    "summary": "Improve the parcel tracker home page experience.",
+    "acceptance_criteria": [],
+    "questions": [
+      "Which user task is hardest today?",
+      "What specific outcome indicates success?"
+    ]
+  },
+  "raw_output": "{\"criteria\": {\"clear_goal\": 5, \"testable_acceptance_criteria\": 0, \"defined_scope\": 0, \"edge_cases\": 0}, \"score\": 5, \"summary\": \"Improve the parcel tracker home page experience.\", \"acceptance_criteria\": [], \"questions\": [\"Which user task is hardest today?\", \"What specific outcome indicates success?\"]}"
+}

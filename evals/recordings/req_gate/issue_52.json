@@ -1,0 +1,21 @@
+{
+  "prompt_sha256": "f5c2e19f70f6b7ead22a5f4d756b586b3858f76e8e63d075c00bdd8c8ee6ac5d",
+  "recorded_by": "manual",
+  "synthetic": false,
+  "response": {
+    "criteria": {
+      "clear_goal": 2,
+      "testable_acceptance_criteria": 1,
+      "defined_scope": 1,
+      "edge_cases": 1
+    },
+    "score": 5,
+    "summary": "Add or clarify a timing intake probe (item #52) currently described only as 'Timing probe, closed unprocessed'.",
+    "acceptance_criteria": [],
+    "questions": [
+      "Please provide testable acceptance criteria for intake probe three.",
+      "What is the exact scope under app/?"
+    ]
+  },
+  "raw_output": "{\"criteria\": {\"clear_goal\": 2, \"testable_acceptance_criteria\": 1, \"defined_scope\": 1, \"edge_cases\": 1}, \"score\": 5, \"summary\": \"Add or clarify a timing intake probe (item #52) currently described only as 'Timing probe, closed unprocessed'.\", \"acceptance_criteria\": [], \"questions\": [\"Please provide testable acceptance criteria for intake probe three.\", \"What is the exact scope under app/?\"]}"
+}
