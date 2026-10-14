@@ -263,8 +263,8 @@ class JobRunner:
         self.state.status = status
         self.state.reason = reason
         self.state.detail = self.store.redact(detail)[-2000:]
-        self._checkpoint()
         self._log(f"finished: {status} {reason or ''} {self.state.detail}")
+        self._checkpoint()
 
     @property
     def git(self) -> CoderGit:
