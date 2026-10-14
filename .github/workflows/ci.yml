@@ -320,10 +320,13 @@ jobs:
           python-version: ${{ env.PYTHON_VERSION }}
 
       - name: Replay evaluation gate
-        run: >-
-          uv run --project agents --locked
-          --with "pytest==$PYTEST_VERSION"
-          python -m pytest -q evals/
+        run: |
+          if [ -d trusted/evals ]; then
+            export EVALS_TRUSTED_DIR="$GITHUB_WORKSPACE/trusted/evals"
+            uv run --project agents --locked --with "pytest==$PYTEST_VERSION" python -m pytest -q trusted/evals/
+          else
+            uv run --project agents --locked --with "pytest==$PYTEST_VERSION" python -m pytest -q evals/
+          fi
 
   # Not a required check: the control center's unit, browser and accessibility tests. The browser
   # tests use the Playwright install of the app workspace.
@@ -383,6 +386,7 @@ jobs:
           scripts/gates scripts/tests/gates scripts/cd scripts/tests/cd
           scripts/setup_repo.py scripts/tests/test_setup_repo.py
           scripts/verify_egress.py scripts/tests/test_verify_egress.py
+          evals
 
   # Not a required check: the Python agents package.
   agents:
