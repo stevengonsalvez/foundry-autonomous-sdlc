@@ -457,7 +457,8 @@ PYEOF
 
         echo "[HAT] Product Owner: Pipeline is idle. Selecting next roadmap item by dependency order: $item_id ('$item_title')"
 
-        body_file="$(mktemp /tmp/po-issue-XXXXXX.md)"
+        body_file="$(mktemp -t po-issue-XXXXXX.md)"
+        trap 'rm -f "$body_file"' EXIT
         cat > "$body_file" << EOF
 ### Simulated human (antigravity)
 

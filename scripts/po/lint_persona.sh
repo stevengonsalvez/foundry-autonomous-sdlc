@@ -83,7 +83,7 @@ else
 fi
 
 # Guardrail (d): Allowed commands only, deny-list on allow-list block, account-wide credentials
-allow_list_check="$(python3 - "$PERSONA_FILE" << 'PYEOF'
+allow_list_check="$(python3 - "$PERSONA_FILE" 2>&1 << 'PYEOF'
 import sys, re
 
 with open(sys.argv[1], "r", encoding="utf-8") as f:
@@ -134,7 +134,7 @@ for pattern, desc in required:
 
 print("OK")
 PYEOF
-)"
+)" || true
 
 if [ "$allow_list_check" = "OK" ] && grep -qi "account-wide" "$PERSONA_FILE"; then
   check_pass "Guardrail (d): Strict command allow-list, deny-list on allow block, and account-wide credential documentation"
