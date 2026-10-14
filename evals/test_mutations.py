@@ -18,8 +18,13 @@ from pathlib import Path
 
 def _setup_tmp_tree(tmp_path: Path) -> tuple[Path, Path]:
     """Copy evals and agents trees to a temporary directory."""
+    trusted_evals = Path(__file__).parent
     evals_dst = tmp_path / "evals"
-    shutil.copytree(Path("evals"), evals_dst)
+    shutil.copytree(trusted_evals, evals_dst)
+    # recordings must come from the PR checkout under test
+    shutil.rmtree(evals_dst / "recordings", ignore_errors=True)
+    shutil.copytree(Path("evals") / "recordings", evals_dst / "recordings")
+
     agents_dst = tmp_path / "agents"
     shutil.copytree(Path("agents"), agents_dst)
     return evals_dst, agents_dst
@@ -32,6 +37,7 @@ def _run_replay(tmp_path: Path) -> subprocess.CompletedProcess[str]:
     env = {
         **os.environ,
         "PYTHONPATH": f"{agents_dir.resolve()}:{os.environ.get('PYTHONPATH', '')}",
+        "EVALS_TRUSTED_DIR": str((tmp_path / "evals").resolve()),
     }
     return subprocess.run(
         [sys.executable, "-m", "pytest", "-q", str(evals_test)],

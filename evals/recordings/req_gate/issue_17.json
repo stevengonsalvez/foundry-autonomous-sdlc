@@ -5,7 +5,8 @@
   "synthetic_fields": [
     "criteria",
     "acceptance_criteria",
-    "questions"
+    "questions",
+    "summary"
   ],
   "response": {
     "criteria": {

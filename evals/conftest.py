@@ -21,8 +21,3 @@ def pytest_configure(config: pytest.Config) -> None:
     _socket.socket = _blocked_socket  # type: ignore[assignment]
 
 
-@pytest.fixture(scope="session", autouse=True)
-def block_network_sockets() -> None:
-    """Ensure zero network socket calls can be made during offline evaluation."""
-    socket.socket = _blocked_socket  # type: ignore[assignment]
-    _socket.socket = _blocked_socket  # type: ignore[assignment]

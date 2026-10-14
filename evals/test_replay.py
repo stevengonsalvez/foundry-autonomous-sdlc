@@ -40,52 +40,35 @@ def resolve_outcome(score: int, rounds: int) -> str:
     raise ValueError(f"Unrecognized machine outcome: {outcome}")
 
 
-def get_golden_path() -> Path:
-    """Resolve golden dataset path with strict trust model."""
+def _trusted_file(name: str) -> Path:
+    """Resolve trusted file path from EVALS_TRUSTED_DIR or default evals/datasets."""
     trusted_env = os.environ.get("EVALS_TRUSTED_DIR")
     if trusted_env is not None:
         trusted_dir = Path(trusted_env)
         if not trusted_dir.exists():
             raise FileNotFoundError(f"EVALS_TRUSTED_DIR {trusted_dir} does not exist")
-        target = trusted_dir / "datasets" / "req_gate_golden.jsonl"
+        target = trusted_dir / "datasets" / name
     else:
-        target = Path("evals/datasets/req_gate_golden.jsonl")
+        target = Path("evals/datasets") / name
 
     if not target.exists():
-        raise FileNotFoundError(f"Golden dataset file not found: {target}")
+        raise FileNotFoundError(f"Dataset file not found: {target}")
     return target
+
+
+def get_golden_path() -> Path:
+    """Resolve golden dataset path with strict trust model."""
+    return _trusted_file("req_gate_golden.jsonl")
 
 
 def get_snapshot_path() -> Path:
     """Resolve state snapshot path with strict trust model."""
-    trusted_env = os.environ.get("EVALS_TRUSTED_DIR")
-    if trusted_env is not None:
-        trusted_dir = Path(trusted_env)
-        if not trusted_dir.exists():
-            raise FileNotFoundError(f"EVALS_TRUSTED_DIR {trusted_dir} does not exist")
-        target = trusted_dir / "datasets" / "state_snapshot.jsonl"
-    else:
-        target = Path("evals/datasets/state_snapshot.jsonl")
-
-    if not target.exists():
-        raise FileNotFoundError(f"State snapshot file not found: {target}")
-    return target
+    return _trusted_file("state_snapshot.jsonl")
 
 
 def get_issues_snapshot_path() -> Path:
     """Resolve issues snapshot path with strict trust model."""
-    trusted_env = os.environ.get("EVALS_TRUSTED_DIR")
-    if trusted_env is not None:
-        trusted_dir = Path(trusted_env)
-        if not trusted_dir.exists():
-            raise FileNotFoundError(f"EVALS_TRUSTED_DIR {trusted_dir} does not exist")
-        target = trusted_dir / "datasets" / "issues_snapshot.jsonl"
-    else:
-        target = Path("evals/datasets/issues_snapshot.jsonl")
-
-    if not target.exists():
-        raise FileNotFoundError(f"Issues snapshot file not found: {target}")
-    return target
+    return _trusted_file("issues_snapshot.jsonl")
 
 
 def get_recordings_dir() -> Path:
@@ -284,6 +267,13 @@ def test_provenance_binding() -> None:
 
         prov = row.get("provenance", {})
         event_id = prov.get("event_id")
+        field = str(prov.get("field", "quality"))
+
+        if field.startswith("qa["):
+            assert "summary" in rec_data.get("synthetic_fields", []), (
+                f"Recording {row_id} with provenance field '{field}' "
+                "must list summary in synthetic_fields"
+            )
 
         if not row.get("synthetic"):
             assert not row.get("synthetic_fields"), (
@@ -300,7 +290,6 @@ def test_provenance_binding() -> None:
                 f"Event {event_id} issue {event.get('issue')} != row issue {row['issue_number']}"
             )
 
-            field = prov.get("field", "quality")
             ticket = event.get("data", {}).get("ticket", {})
             if field == "quality":
                 q = ticket.get("quality", {})
@@ -332,7 +321,6 @@ def test_provenance_binding() -> None:
                 )
                 assert event.get("issue") == row["issue_number"]
                 ticket = event.get("data", {}).get("ticket", {})
-                field = prov.get("field", "quality")
                 if field == "quality":
                     q = ticket.get("quality", {})
                     assert q.get("score") == row["score"]
@@ -356,8 +344,7 @@ def test_replay_gate() -> None:
 
         rec_data = json.loads(rec_path.read_text(encoding="utf-8"))
         raw_text = rec_data.get("raw_output")
-        if not raw_text:
-            raw_text = json.dumps(rec_data.get("response", rec_data))
+        assert raw_text, f"Recording {row_id} missing raw_output"
 
         parsed = foundry._parse("sdlc-req-gate", raw_text, _check_req_gate)
 
