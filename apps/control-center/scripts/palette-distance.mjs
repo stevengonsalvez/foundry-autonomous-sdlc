@@ -60,6 +60,32 @@ export function circularHueDiff(h1, h2) {
   return d > 180 ? 360 - d : d;
 }
 
+export function oklabToLinearSrgb(L, a, b) {
+  const l_ = L + 0.3963377774 * a + 0.2158037573 * b;
+  const m_ = L - 0.1055613458 * a - 0.0638541728 * b;
+  const s_ = L - 0.0894841775 * a - 1.2914855480 * b;
+  const l = l_ * l_ * l_;
+  const m = m_ * m_ * m_;
+  const s = s_ * s_ * s_;
+  const r = +4.0767416621 * l - 3.3077115913 * m + 0.2309699292 * s;
+  const g = -1.2684380046 * l + 2.6097574011 * m - 0.3413193965 * s;
+  const bl = -0.0041960863 * l - 0.7034186147 * m + 1.7076147010 * s;
+  return [Math.max(0, r), Math.max(0, g), Math.max(0, bl)];
+}
+
+export function relLum(lab) {
+  const [r, g, b] = oklabToLinearSrgb(...lab);
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+}
+
+export function contrastRatio(lab1, lab2) {
+  const l1 = relLum(lab1);
+  const l2 = relLum(lab2);
+  const max = Math.max(l1, l2);
+  const min = Math.min(l1, l2);
+  return (max + 0.05) / (min + 0.05);
+}
+
 export const SAME_ROLES = {
   '--tone-run': 'auto',
   '--tone-wait': 'assist',
@@ -266,10 +292,10 @@ export async function run() {
     }
   }
 
-  // Neutrals check across ALL 5 reference dark neutrals
-  console.log('\n### Neutrals Distance Matrix vs All 5 Reference Dark Neutrals (Target: dE_ok >= 0.04)\n');
-  const darkNeutrals = ['ink', 'panel', 'panel-2', 'line-soft', 'line'];
-  const darkNeutralLabs = Object.fromEntries(darkNeutrals.map((n) => [n, hexToOklab(FLOWTRON_NEUTRALS[n])]));
+  // Neutrals check across ALL 8 reference neutrals
+  console.log('\n### Neutrals Distance Matrix vs All 8 Reference Neutrals (Target: dE_ok >= 0.04)\n');
+  const refNeutrals = ['ink', 'panel', 'panel-2', 'line-soft', 'line', 'muted-2', 'muted', 'text'];
+  const refNeutralLabs = Object.fromEntries(refNeutrals.map((n) => [n, hexToOklab(FLOWTRON_NEUTRALS[n])]));
 
   const ourDarkNeutrals = [
     '--canvas',
@@ -282,7 +308,20 @@ export async function run() {
     'favicon-bg',
   ];
 
-  const neutralMatrixCols = ['Token', 'Our OKLCH', 'vs ink', 'vs panel', 'vs panel-2', 'vs line-soft', 'vs line', 'Min dE', 'Status'];
+  const neutralMatrixCols = [
+    'Token',
+    'Our OKLCH',
+    'vs ink',
+    'vs panel',
+    'vs panel-2',
+    'vs line-soft',
+    'vs line',
+    'vs muted-2',
+    'vs muted',
+    'vs text',
+    'Min dE',
+    'Status',
+  ];
   console.log(`| ${neutralMatrixCols.join(' | ')} |`);
   console.log(`| ${neutralMatrixCols.map(() => '---').join(' | ')} |`);
 
@@ -291,7 +330,7 @@ export async function run() {
     const t = cssTokens[tokenName];
     if (!t) throw new Error(`Missing expected neutral token: ${tokenName}`);
 
-    const dists = darkNeutrals.map((n) => dE(t.lab, darkNeutralLabs[n]));
+    const dists = refNeutrals.map((n) => dE(t.lab, refNeutralLabs[n]));
     const minD = Math.min(...dists);
     const pass = minD >= 0.04;
     if (!pass) {
@@ -307,6 +346,32 @@ export async function run() {
       pass ? 'PASS' : '**FAIL**',
     ];
     console.log(`| ${row.join(' | ')} |`);
+  }
+
+  // Adjacent Surface Rungs Contrast
+  console.log('\n### Adjacent Surface Rungs Contrast (Target: ratio >= 1.10:1)\n');
+  const rungPairs = [
+    ['--surface-0', '--canvas'],
+    ['--surface-1', '--surface-0'],
+    ['--surface-2', '--surface-1'],
+    ['--surface-3', '--surface-2'],
+  ];
+  console.log('| Rung Pair | Upper Surface | Lower Surface | Contrast Ratio | Status |');
+  console.log('| --- | --- | --- | --- | --- |');
+
+  let rungsPass = true;
+  for (const [upper, lower] of rungPairs) {
+    const u = cssTokens[upper];
+    const l = cssTokens[lower];
+    if (!u) throw new Error(`Missing upper surface token: ${upper}`);
+    if (!l) throw new Error(`Missing lower surface token: ${lower}`);
+    const cr = contrastRatio(u.lab, l.lab);
+    const pass = cr >= 1.10;
+    if (!pass) {
+      rungsPass = false;
+      allPass = false;
+    }
+    console.log(`| \`${upper}\` vs \`${lower}\` | ${u.L.toFixed(3)} | ${l.L.toFixed(3)} | ${cr.toFixed(3)}:1 | ${pass ? 'PASS' : '**FAIL**'} |`);
   }
 
   // Typography Neutrals
@@ -361,13 +426,14 @@ export async function run() {
 
   console.log(`\nOverall Accent Same-Role Distance: ${allPass ? 'PASS' : 'FAIL'}`);
   console.log(`Overall Neutrals Distance Separation: ${neutralsPass ? 'PASS' : 'FAIL'}`);
+  console.log(`Overall Adjacent Surface Rungs Contrast: ${rungsPass ? 'PASS' : 'FAIL'}`);
   console.log(`Overall Stage Fills Separation: ${fillsPass ? 'PASS' : 'FAIL'}`);
-  return { allPass, neutralsPass, fillsPass };
+  return { allPass, neutralsPass, fillsPass, rungsPass };
 }
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   const result = await run();
-  if (!result.allPass || !result.neutralsPass || !result.fillsPass) {
+  if (!result.allPass || !result.neutralsPass || !result.fillsPass || !result.rungsPass) {
     process.exit(1);
   }
 }
