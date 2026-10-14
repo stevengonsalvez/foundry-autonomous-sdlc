@@ -266,7 +266,15 @@ class TestProtect:
         assert rules["pull_request"]["allowed_merge_methods"] == ["merge"]
         checks = rules["required_status_checks"]
         assert checks["strict_required_status_checks_policy"] is False
-        assert [c["context"] for c in checks["required_status_checks"]] == list(sr.REQUIRED_CHECKS)
+        assert [c["context"] for c in checks["required_status_checks"]] == [
+            "test",
+            "coverage",
+            "e2e",
+            "gitleaks",
+            "tdd-order",
+            "agent-scope",
+            "evals",
+        ]
         assert {c["integration_id"] for c in checks["required_status_checks"]} == {15368}
 
     def test_second_run_is_a_no_op(self) -> None:
@@ -323,12 +331,36 @@ class TestProtect:
         assert set(sr.REQUIRED_CHECKS) <= job_names
 
     def test_required_checks_match_gates(self) -> None:
+        import re
+
         agents_dir = str(ROOT / "agents")
         if agents_dir not in sys.path:
             sys.path.insert(0, agents_dir)
         from sdlc_agents import gates
+        from sdlc_agents.ledger import model
+
+        import scripts.cd.plan as plan
+        import scripts.collect_evidence as ce
+
         assert sr.REQUIRED_CHECKS == gates.REQUIRED_CHECKS
+        assert sr.REQUIRED_CHECKS == plan.REQUIRED_CHECKS
+        assert sr.REQUIRED_CHECKS == ce.GATES
         assert "evals" in sr.REQUIRED_CHECKS
+
+        # Verify JS dashboard GATE_ORDER
+        agg_text = (ROOT / "dashboard" / "js" / "aggregate.js").read_text(encoding="utf-8")
+        m_agg = re.search(r"export const GATE_ORDER = \[(.*?)\];", agg_text)
+        assert m_agg
+        agg_gates = tuple(re.findall(r"['\"]([^'\"]+)['\"]", m_agg.group(1)))
+        assert agg_gates == sr.REQUIRED_CHECKS
+
+        # Verify control center GATES and ledger GATE_NAMES
+        cc_text = (ROOT / "apps" / "control-center" / "js" / "model.js").read_text(encoding="utf-8")
+        m_cc = re.search(r"export const GATES = Object\.freeze\(\[(.*?)\]\);", cc_text)
+        assert m_cc
+        cc_gates = tuple(re.findall(r"['\"]([^'\"]+)['\"]", m_cc.group(1)))
+        assert cc_gates == model.GATE_NAMES
+        assert cc_gates[:7] == sr.REQUIRED_CHECKS
 
 
 class TestAll:

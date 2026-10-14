@@ -17,7 +17,7 @@ export const STAGE_ORDER = [
   'stage:released',
 ];
 
-export const GATE_ORDER = ['test', 'coverage', 'e2e', 'gitleaks', 'tdd-order', 'agent-scope'];
+export const GATE_ORDER = ['test', 'coverage', 'e2e', 'gitleaks', 'tdd-order', 'agent-scope', 'evals'];
 
 const OUTCOMES = new Set(['released', 'escalated', 'open']);
 const FAIL_RESULTS = new Set(['failure', 'failed', 'error', 'timed_out', 'cancelled', 'action_required']);
