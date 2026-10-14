@@ -37,6 +37,21 @@ TINY_PNG = bytes.fromhex(
 )
 
 
+@pytest.fixture(autouse=True)
+def mock_commit_metadata(monkeypatch: pytest.MonkeyPatch, request: pytest.FixtureRequest) -> None:
+    if request.node.name == "test_get_commit_metadata_raises_on_invalid_ref":
+        return
+
+    def fake_meta(ref: str) -> dict[str, str]:
+        return {
+            "sha": f"0123456789abcdef0123456789abcdef{ref[:8]}",
+            "date": "2026-10-10T12:00:00+00:00",
+            "subject": f"Commit for {ref}",
+        }
+
+    monkeypatch.setattr("scripts.ui.generate_history.get_commit_metadata", fake_meta)
+
+
 def create_release_fixture(
     dest_dir: Path,
     tag: str,
