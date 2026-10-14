@@ -521,6 +521,24 @@ main {
   overflow-wrap: anywhere;
 }
 
+.copy-link-btn {
+  height: 2rem;
+  padding-inline: var(--space-3);
+  font-size: var(--text-xs);
+  gap: var(--space-1);
+}
+
+.copy-link-btn.is-copied {
+  color: #166534;
+  background: #dcfce7;
+  border-color: #bbf7d0;
+}
+
+.copy-link-btn.is-copied:hover {
+  color: #166534;
+  background: #dcfce7;
+}
+
 .card {
   padding: var(--space-5);
   background: var(--surface);
