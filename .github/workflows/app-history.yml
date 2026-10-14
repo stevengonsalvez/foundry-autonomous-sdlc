@@ -1,16 +1,13 @@
 name: App Evolution History
 
-# Trusted workflow from main that captures the app UI, appends screenshots to the
-# pr-screenshots branch under releases/<tag-or-sha8>/, and regenerates the static /history/ page.
+# Trusted workflow from main that captures the app UI and appends screenshots
+# to the pr-screenshots branch under releases/<key>/.
 #
-# Runs on push to main affecting app/**, release tag pushes, or after CD workflow run success.
+# Runs on release tag pushes or after CD workflow run success.
 # Never checks out untrusted PR code; treats all captured artifacts as untrusted data.
 
 on:
   push:
-    branches: [main]
-    paths:
-      - "app/**"
     tags:
       - "v*"
   workflow_run:
@@ -43,19 +40,65 @@ jobs:
     timeout-minutes: 15
     permissions:
       contents: read
+    outputs:
+      key: ${{ steps.resolve-key.outputs.key }}
     steps:
+      - name: Resolve target ref
+        id: target
+        run: |
+          if [ -n "${{ github.event.inputs.ref }}" ]; then
+            echo "ref=${{ github.event.inputs.ref }}" >> "$GITHUB_OUTPUT"
+          elif [ "${{ github.event_name }}" = "workflow_run" ]; then
+            echo "ref=${{ github.event.workflow_run.head_sha }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "ref=${{ github.ref }}" >> "$GITHUB_OUTPUT"
+          fi
+
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: ${{ github.event.inputs.ref || '' }}
+          ref: ${{ steps.target.outputs.ref }}
+          fetch-depth: 0
           persist-credentials: false
 
+      - name: Validate ref and resolve release key
+        id: resolve-key
+        run: |
+          tag="$(git describe --tags --exact-match 2>/dev/null || true)"
+          key=""
+
+          if [[ "$tag" =~ ^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]; then
+            key="$tag"
+          elif [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ -n "${{ github.event.inputs.ref }}" ]; then
+            input_ref="${{ github.event.inputs.ref }}"
+            if [[ "$input_ref" =~ ^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]; then
+              key="$input_ref"
+            elif [[ "$input_ref" =~ ^[0-9a-f]{8}$ ]]; then
+              key="$input_ref"
+            else
+              key="$(git rev-parse --short=8 HEAD)"
+            fi
+          else
+            echo "Commit $(git rev-parse --short=8 HEAD) is not an exact v* release tag; skipping."
+            exit 0
+          fi
+
+          if [[ ! "$key" =~ ^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ && ! "$key" =~ ^[0-9a-f]{8}$ ]]; then
+            echo "::error::Invalid key resolved: $key"
+            exit 1
+          fi
+
+          echo "Resolved release key: $key"
+          echo "key=$key" >> "$GITHUB_OUTPUT"
+
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        if: steps.resolve-key.outputs.key != ''
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: npm
           cache-dependency-path: app/package-lock.json
 
       - name: Install dependencies and build app
+        if: steps.resolve-key.outputs.key != ''
         run: |
           cd app
           npm ci
@@ -63,11 +106,13 @@ jobs:
           npx playwright install --with-deps chromium
 
       - name: Capture screenshots
+        if: steps.resolve-key.outputs.key != ''
         run: |
           node scripts/ui/capture.mjs --dist app/web/dist-pages --out-dir ui-screenshots
 
       - name: Upload captured screenshots artifact
-        uses: actions/upload-artifact@4cec3d8aa04e39d1a68397de0c4cd6fb9dce8ec1 # v4.6.1
+        if: steps.resolve-key.outputs.key != ''
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: app-history-screenshots
           path: ui-screenshots
@@ -76,6 +121,7 @@ jobs:
   publish:
     name: publish
     needs: capture
+    if: needs.capture.outputs.key != ''
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
@@ -85,7 +131,7 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: ${{ github.event.inputs.ref || '' }}
+          ref: main
           fetch-depth: 0
           persist-credentials: false
 
@@ -94,7 +140,7 @@ jobs:
           python-version: ${{ env.PYTHON_VERSION }}
 
       - name: Download captured screenshots artifact
-        uses: actions/download-artifact@cc203385981b70ca67e1cc392babf9cc229d5806 # v4.1.9
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: app-history-screenshots
           path: downloaded-screenshots
@@ -105,8 +151,10 @@ jobs:
       - name: Validate and publish screenshots to pr-screenshots
         env:
           GITHUB_REPOSITORY: ${{ github.repository }}
+          GH_TOKEN: ${{ github.token }}
         run: |
           python -m scripts.ui.update_history \
             --artifacts-dir downloaded-screenshots \
             --repo "$GITHUB_REPOSITORY" \
+            --key "${{ needs.capture.outputs.key }}" \
             --push
