@@ -15,6 +15,7 @@ from __future__ import annotations
 import argparse
 import html
 import json
+import os
 import re
 import shutil
 import subprocess
@@ -85,11 +86,22 @@ def load_state_ledger(state_path: Path | None = None) -> dict[str, Any]:
     return {}
 
 
-def get_commit_metadata(ref: str) -> dict[str, str]:
-    """Get commit SHA, ISO date, and commit message for a ref."""
+def get_commit_metadata(ref: str, repo_root: Path = REPO_ROOT) -> dict[str, str]:
+    """Get commit SHA, ISO date, and commit message for a ref in UTC."""
+    env = os.environ.copy()
+    env["TZ"] = "UTC"
     res = subprocess.run(
-        ["git", "log", "-n", "1", "--format=%H%x09%cI%x09%s", ref],
-        cwd=REPO_ROOT,
+        [
+            "git",
+            "log",
+            "-n",
+            "1",
+            "--date=format-local:%Y-%m-%dT%H:%M:%SZ",
+            "--format=%H%x09%cd%x09%s",
+            ref,
+        ],
+        cwd=repo_root,
+        env=env,
         capture_output=True,
         text=True,
     )
@@ -179,15 +191,32 @@ def collect_evolution_entries(
         if ticket:
             title = ticket.get("title") or ""
             raw_issue = ticket.get("issue")
-            issue_num = int(raw_issue) if raw_issue is not None else None
+            issue_num = None
+            if raw_issue is not None:
+                try:
+                    issue_num = int(raw_issue)
+                except (ValueError, TypeError):
+                    issue_num = None
             issue_url = ticket.get("url")
             pr = ticket.get("pr") or {}
             raw_pr = pr.get("number")
-            pr_num = int(raw_pr) if raw_pr is not None else None
+            pr_num = None
+            if raw_pr is not None:
+                try:
+                    pr_num = int(raw_pr)
+                except (ValueError, TypeError):
+                    pr_num = None
             pr_url = pr.get("url")
             cost_info = ticket.get("cost") or {}
-            raw_cost = cost_info.get("total_usd") or cost_info.get("usd")
-            cost_usd = float(raw_cost) if raw_cost is not None else None
+            raw_cost = cost_info.get("total_usd")
+            if raw_cost is None:
+                raw_cost = cost_info.get("usd")
+            cost_usd = None
+            if raw_cost is not None:
+                try:
+                    cost_usd = float(raw_cost)
+                except (ValueError, TypeError):
+                    cost_usd = None
 
             # Derive 'PR only' from state ledger (when ticket is filed as PR or issue == pr)
             if ticket.get("kind") == "pr" or (
@@ -197,7 +226,10 @@ def collect_evolution_entries(
                 issue_num = None
                 issue_url = None
                 if not pr_num and raw_issue:
-                    pr_num = int(raw_issue)
+                    try:
+                        pr_num = int(raw_issue)
+                    except (ValueError, TypeError):
+                        pr_num = None
         else:
             title = meta["subject"]
 
@@ -892,7 +924,7 @@ CSP_CONTENT = (
     "default-src 'none'; "
     "script-src 'self'; "
     "style-src 'self' 'unsafe-inline'; "
-    "img-src 'self' data: https://raw.githubusercontent.com; "
+    "img-src 'self' data:; "
     "font-src 'self'; base-uri 'none'; form-action 'none'"
 )
 
@@ -1225,12 +1257,10 @@ def render_html(
 </html>
 """
     html_bytes = len(html_doc.encode("utf-8"))
-    if html_bytes >= BUDGET_HTML_BYTES and len(entries) > 1:
-        sys.stderr.write(
-            f"WARNING: HTML size ({html_bytes} bytes) exceeds budget ({BUDGET_HTML_BYTES} bytes); "
-            "truncating oldest entry to fit within budget.\n"
+    if html_bytes > BUDGET_HTML_BYTES:
+        raise ValueError(
+            f"HTML size ({html_bytes} bytes) exceeds budget ({BUDGET_HTML_BYTES} bytes)"
         )
-        return render_html(entries[:-1], repo_name=repo_name)
 
     return html_doc
 
@@ -1284,13 +1314,8 @@ def build_history_site(
     js_path = js_dir / "main.js"
     js_path.write_text(js_content, encoding="utf-8")
 
-    # 4. Write HTML (warn on budget limit, do not fail site build)
+    # 4. Write HTML
     html_content = render_html(entries)
-    html_bytes = len(html_content.encode("utf-8"))
-    if html_bytes >= BUDGET_HTML_BYTES:
-        sys.stderr.write(
-            f"WARNING: HTML exceeds size budget: {html_bytes} >= {BUDGET_HTML_BYTES} bytes\n"
-        )
     html_path = output_dir / "index.html"
     html_path.write_text(html_content, encoding="utf-8")
 
