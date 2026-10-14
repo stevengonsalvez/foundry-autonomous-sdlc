@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import copy
 import json
+import os
 import re
 import time
 from collections.abc import Callable
@@ -109,6 +110,18 @@ LEDGER_HEARTBEAT_S = 540          # no activity: still tell the ledger every ~2 
 LEDGER_RECONCILE_S = 3600         # ask the ledger to rebuild from GitHub about hourly (repairs missed events)
 QUIET_ACTIONS = frozenset({"none", "noop", "wait", "halt", "ignore"})
 
+UI_PROOF_MARKER = "<!-- ui-proof:v1 -->"
+UI_TESTER_MARKER_PREFIX = "<!-- ui-tester:v1 "
+UI_TESTER_FEATURE_FLAG = "UI_TESTER_ENABLED"
+
+
+def is_ui_tester_enabled() -> bool:
+    return os.environ.get(UI_TESTER_FEATURE_FLAG, "0").strip().lower() in ("1", "true", "yes", "on")
+
+
+def render_ui_tester_marker(head: str) -> str:
+    return f"<!-- ui-tester:v1 {head} -->"
+
 CODER_LOG_MARKER = "<!-- sdlc-coder-log:v1"
 TESTS_MARKER = "<!-- sdlc-tests:v1\n"
 _TESTS_RE = re.compile(r"\A<!-- sdlc-tests:v1\n(.*?)\n-->", re.DOTALL)
@@ -194,6 +207,7 @@ def run_tick(
     budget: Budget | None = None,
     sleep: Callable[[float], None] = time.sleep,
     emitter: Emitter | None = None,
+    ui_tester_enabled: bool | None = None,
 ) -> TickReport:
     """Run one bounded tick and return its report. Never raises. `sleep` waits out retry backoff.
 
@@ -216,7 +230,17 @@ def run_tick(
         return report
     report.lock = "took-over-stale" if held.took_over_stale else "acquired"
     try:
-        _Tick(github, foundry, clock, report, budget or Budget(), budget_wall_s, sleep, emitter or NullEmitter()).run()
+        _Tick(
+            github,
+            foundry,
+            clock,
+            report,
+            budget or Budget(),
+            budget_wall_s,
+            sleep,
+            emitter or NullEmitter(),
+            ui_tester_enabled=ui_tester_enabled,
+        ).run()
     except Exception as exc:
         report.errors.append(f"tick: {type(exc).__name__}: {exc}")
     finally:
@@ -282,9 +306,13 @@ def _scenario(body: str) -> str | None:
 
 class _Tick:
     def __init__(self, github: GitHubPort, foundry: FoundryPort, clock: ClockPort, report: TickReport,
-                 budget: Budget, budget_wall_s: int, sleep: Callable[[float], None], emitter: Emitter):
+                 budget: Budget, budget_wall_s: int, sleep: Callable[[float], None], emitter: Emitter,
+                 ui_tester_enabled: bool | None = None):
         self.sleep = sleep
         self.emitter = emitter
+        self.ui_tester_enabled = (
+            is_ui_tester_enabled() if ui_tester_enabled is None else ui_tester_enabled
+        )
         self.pending_events: dict[int, dict[str, Any]] = {}     # one ticket.updated per object, the latest
         self.deferred: dict[int, str] = {}
         self.streaks: dict[int, int] = {}       # consecutive ticks each object was deferred
@@ -363,6 +391,7 @@ class _Tick:
                 elif obj.state is not None:
                     self._sync_labels(obj)
                 self._note(obj, action.kind.value, "ok", action.reason)
+                self._maybe_ui_tester(obj, ctx)
                 return
             if action.kind is Kind.IGNORE:
                 self._note(obj, action.kind.value, "ignored", action.reason)
@@ -372,6 +401,7 @@ class _Tick:
             obj.committed = copy.deepcopy(obj.state.data)
             detail = getattr(self, f"_do_{action.kind.value.replace('-', '_')}")(obj, ctx, action)
             self._note(obj, action.kind.value, "ok", detail or action.reason)
+            self._maybe_ui_tester(obj, ctx)
         except Exception as exc:
             message = f"{type(exc).__name__}: {exc}"
             if isinstance(exc, AgentBudgetError):
@@ -1348,6 +1378,85 @@ class _Tick:
         self._escalate(obj, action.label, [action.reason])
         self._save(obj)
         return action.label
+
+    def _maybe_ui_tester(self, obj: _Object, ctx: Context) -> None:
+        """Advisory vision review of UI screenshots for open agent PRs (feature-flagged)."""
+        if not self.ui_tester_enabled:
+            return
+        if ctx.pr is None or ctx.pr.state != "open":
+            return
+        is_agent_pr = ctx.pr.head_ref.startswith(gates.AGENT_BRANCH_PREFIX) or gates.AGENT_PR_LABEL in ctx.pr.labels
+        if not is_agent_pr:
+            return
+
+        try:
+            pr_comments = obj.comments if obj.kind == "pr" else self.github.list_comments(ctx.pr.number)
+            ui_proof = next((c for c in pr_comments if UI_PROOF_MARKER in c.body), None)
+            if ui_proof is None:
+                return
+
+            target_marker = render_ui_tester_marker(ctx.pr.head_sha)
+            if any(target_marker in c.body for c in pr_comments):
+                return
+
+            image_urls = re.findall(r"https://raw\.githubusercontent\.com/[^\s\"\'\)]+\.png", ui_proof.body)
+            if not image_urls:
+                return
+
+            if self._spend_stop(obj):
+                return
+
+            sections = [
+                Section(
+                    "head",
+                    f"head sha: {ctx.pr.head_sha}\npull request: #{ctx.pr.number}",
+                    trusted=True,
+                ),
+                Section("images", "\n".join(image_urls), trusted=True),
+                Section(
+                    "routes",
+                    "Routes tested: home, parcel-found, not-found, invalid-input at "
+                    "desktop (1280) and mobile (390)",
+                    trusted=True,
+                ),
+                Section("pr", f"title: {ctx.pr.title}\n\n{ctx.pr.body}"),
+            ]
+
+            output = self._call(obj, "sdlc-ui-tester", sections)
+            data = output.data or {}
+            verdict = data.get("verdict", "pass")
+            findings = data.get("findings", [])
+            summary = data.get("summary", "")
+
+            lines = [
+                target_marker,
+                f"**UI Vision Tester** (sdlc-ui-tester) for `{ctx.pr.head_sha[:7]}`: **{verdict.upper()}** (advisory).",
+                "",
+                sanitise_markdown(one_line(summary, 400)),
+                "",
+            ]
+            if findings:
+                lines.append("### Findings")
+                for f in findings:
+                    route = f.get("route", "")
+                    vp = f.get("viewport", "")
+                    sev = f.get("severity", "info")
+                    issue = sanitise_markdown(one_line(f.get("issue", ""), 300))
+                    lines.append(f"- [{sev}] {route}/{vp}: {issue}")
+            else:
+                lines.append("No visual UI anomalies detected.")
+
+            self.github.create_comment(ctx.pr.number, "\n".join(lines))
+            if obj.state is not None:
+                obj.state.data["ui_tester"] = {
+                    "verdict": verdict,
+                    "head": ctx.pr.head_sha,
+                    "findings": findings,
+                    "summary": summary,
+                }
+                self._save(obj)
+        except Exception as exc:
+            self.report.errors.append(f"ui-tester on #{ctx.pr.number}: {type(exc).__name__}: {exc}")
 
     def _escalate(self, obj: _Object, label: str, reasons: list[str]) -> None:
         st = obj.st
