@@ -24,6 +24,15 @@ export function formatDuration(seconds) {
   return h === 0 ? `${d}d` : `${d}d ${h}h`;
 }
 
+export function formatDurationCompact(seconds) {
+  if (!finite(seconds) || seconds < 0) return NO_VALUE;
+  const s = Math.round(seconds);
+  if (s < 60) return `${s}s`;
+  if (s < 3600) return `${Math.floor(s / 60)}m`;
+  if (s < 86400) return `${Math.floor(s / 3600)}h`;
+  return `${Math.floor(s / 86400)}d`;
+}
+
 /** Money: 2 decimals, 4 under a cent (so a $0.0015 call is not shown as $0.00). Zero is $0.00. */
 export function formatUsd(value) {
   if (!finite(value)) return NO_VALUE;

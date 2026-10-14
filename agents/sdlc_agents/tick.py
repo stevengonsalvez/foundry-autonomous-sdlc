@@ -1385,6 +1385,8 @@ class _Tick:
         """Advisory vision review of UI screenshots for open agent PRs (feature-flagged)."""
         if not self.ui_tester_enabled:
             return
+        if obj.state is None or obj.st.stage != state.IN_REVIEW:
+            return
         if ctx.pr is None or ctx.pr.state != "open":
             return
         is_agent_pr = ctx.pr.head_ref.startswith(gates.AGENT_BRANCH_PREFIX) or gates.AGENT_PR_LABEL in ctx.pr.labels
@@ -1400,24 +1402,29 @@ class _Tick:
             if ui_proof is None:
                 return
 
+            # Require proof comment to correspond to current PR head sha
+            if f"`{ctx.pr.head_sha}`" not in ui_proof.body:
+                return
+
             # Dedupe only on markers authored by OWNER; upsert one marker comment instead of one per sha
             existing = next(
                 (c for c in pr_comments if c.author == OWNER and c.body.startswith(UI_TESTER_MARKER_PREFIX)),
                 None,
             )
-            if existing is not None and ctx.pr.head_sha in existing.body:
+            if existing is not None and existing.body.startswith(render_ui_tester_marker(ctx.pr.head_sha)):
                 return
 
-            url_re = re.compile(
-                r"^https://raw\.githubusercontent\.com/"
-                + re.escape(REPO)
-                + r"/pr-screenshots/pr-\d+/[0-9a-f]{8}/[a-z-]+\.png$"
-            )
+            base = f"https://raw.githubusercontent.com/{REPO}/pr-screenshots/pr-{ctx.pr.number}/{ctx.pr.head_sha[:8]}/"
+            filename_re = re.compile(r"^[a-z-]+\.png$")
             raw_urls = re.findall(
                 r"https://raw\.githubusercontent\.com/[^\s\"\'\)<>]+",
                 ui_proof.body,
             )
-            image_urls = [u for u in dict.fromkeys(raw_urls) if url_re.match(u)]
+            image_urls = [
+                u
+                for u in dict.fromkeys(raw_urls)
+                if u.startswith(base) and filename_re.match(u[len(base) :])
+            ]
             if not image_urls:
                 return
 

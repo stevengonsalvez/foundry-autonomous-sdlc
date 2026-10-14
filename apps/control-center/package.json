@@ -6,8 +6,8 @@
   "type": "module",
   "engines": { "node": ">=22" },
   "scripts": {
-    "dev": "node test/dev-server.mjs",
-    "test": "node --test \"test/**/*.test.mjs\"",
-    "shots": "node test/shots.mjs"
+    "dev": "node scripts/dev-server.mjs",
+    "test": "CC_REQUIRE_BROWSER=1 node --test \"test/**/*.test.mjs\"",
+    "shots": "node scripts/shots.mjs"
   }
 }

@@ -4,12 +4,16 @@ import assert from 'node:assert/strict';
 import {
   billingSummary,
   boardColumns,
+  COST_BANDS,
+  costBand,
   costRows,
   emptyFilters,
   escalationList,
   failedGate,
   flaggedIssue,
   freshness,
+  GATE_STATUSES,
+  gateOutcome,
   gateStatus,
   isNewer,
   pipelineChain,
@@ -160,7 +164,8 @@ test('cost rows sort and flag over-cap', () => {
   const top = sortRows(rows, 'usd', 'desc')[0];
   assert.equal(top.issue, 27);
   assert.equal(sortRows(rows, 'usd', 'asc')[0].issue, 2);
-  assert.equal(rows.some((r) => r.over), false);
+  assert.equal(rows.find((r) => r.issue === 23).over, true);
+  assert.equal(rows.find((r) => r.issue === 27).over, false);
   state.tickets[0].cost.cap_used_pct = 140;
   assert.equal(costRows(state)[0].over, true);
 });
@@ -214,4 +219,27 @@ test('freshness and which document is newer', () => {
   assert.equal(isNewer({ ...a, seq: 2 }, a), true);
   assert.equal(isNewer(a, null), true);
   assert.equal(isNewer({ generated_at: null, seq: 9 }, a), false);
+});
+
+test('costBand returns valid COST_BANDS member over all ranges', () => {
+  const inputs = [-1, 0, 74.9, 75, 100, 100.1, 1e9];
+  for (const pct of inputs) {
+    const band = costBand(pct);
+    assert.ok(COST_BANDS.includes(band), `costBand(${pct}) returned "${band}" which is not in COST_BANDS`);
+  }
+  assert.equal(costBand(-1), 'ok');
+  assert.equal(costBand(0), 'ok');
+  assert.equal(costBand(74.9), 'ok');
+  assert.equal(costBand(75), 'high');
+  assert.equal(costBand(100), 'high');
+  assert.equal(costBand(100.1), 'over');
+  assert.equal(costBand(1e9), 'over');
+});
+
+test('gateOutcome returns valid GATE_STATUSES member', () => {
+  const cases = ['success', 'passed', 'pass', 'failure', 'failed', 'error', 'timed_out', 'cancelled', 'rolled_back', 'in_progress', 'pending', 'queued', 'running', 'waiting', 'skipped', 'unknown', null, undefined];
+  for (const raw of cases) {
+    const outcome = gateOutcome(raw);
+    assert.ok(GATE_STATUSES.includes(outcome), `gateOutcome(${raw}) returned "${outcome}" not in GATE_STATUSES`);
+  }
 });

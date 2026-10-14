@@ -1,6 +1,6 @@
 // #/  Delivery flow board: lane by stage matrix, macrobands, mode badges, pill chips, lens and group toggles.
 
-import { badge, emptyState, ghLink, h } from '../dom.js';
+import { badge, classToken, emptyState, ghLink, h } from '../dom.js';
 import { formatInteger, formatUsd, plural } from '../format.js';
 import { icon } from '../icons.js';
 import { boardColumns, boardSummary, emptyFilters, typesPresent, timeInStage } from '../model.js';
@@ -20,11 +20,11 @@ import {
 } from './common.js';
 
 // Macrobands grouping stages into lifecycle domains
-const MACROBANDS = Object.freeze([
-  { id: 'shape', label: 'ALIGN . PRODUCT', span: 3, tone: 'wait' },
-  { id: 'build', label: 'IMPLEMENT . CODE', span: 3, tone: 'run' },
-  { id: 'release', label: 'DELIVER . OPERATIONS', span: 2, tone: 'done' },
-  { id: 'escalated', label: 'EXCEPTIONS', span: 1, tone: 'block' },
+export const MACROBANDS = Object.freeze([
+  { id: 'shape', label: 'ALIGN . PRODUCT', span: 3 },
+  { id: 'build', label: 'IMPLEMENT . CODE', span: 3 },
+  { id: 'release', label: 'DELIVER . OPERATIONS', span: 2 },
+  { id: 'escalated', label: 'EXCEPTIONS', span: 1 },
 ]);
 
 /**
@@ -33,7 +33,7 @@ const MACROBANDS = Object.freeze([
  * - SIM: Simulated human interaction gate (requirements refinement with simulated user/PO).
  * - GATE: Quality and safety verification barrier (test designer gate, code review gate, smoke/staging gate, escalation gate).
  */
-const STAGE_MODES = Object.freeze({
+export const STAGE_MODES = Object.freeze({
   backlog: 'AUTO',
   refining: 'SIM',
   feasible: 'AUTO',
@@ -44,6 +44,9 @@ const STAGE_MODES = Object.freeze({
   prod: 'AUTO',
   escalated: 'GATE',
 });
+
+export const CHIP_STATES = Object.freeze(['active', 'pending', 'wait', 'blocked', 'done']);
+export const LANE_TONES = Object.freeze(['info', 'block', 'wait', 'agent', 'run', 'done']);
 
 function getTicketAgent(ticket) {
   if (ticket.coder?.job_id) return 'sdlc-coder';
@@ -65,8 +68,8 @@ function ticketChip(ticket, nowMs, lens) {
   else if (ticket.stage === 'prod') stateTone = 'done';
 
   const link = ticket.pending
-    ? ghLink(ticketGithubUrl(ticket), [ticket.title || 'Untitled', icon('external', { size: 12, className: 'icon-ext' })], { class: 'card-link clamp-1' })
-    : h('a', { class: 'card-link clamp-1', href: ticketHref(ticket.issue), 'data-fkey': `t${ticket.issue}` }, ticket.title || 'Untitled');
+    ? ghLink(ticketGithubUrl(ticket), [ticket.title || 'Untitled', icon('external', { size: 12, className: 'icon-ext' })], { class: 'card-link chip-title clamp-1' })
+    : h('a', { class: 'card-link chip-title clamp-1', href: ticketHref(ticket.issue), 'data-fkey': `t${ticket.issue}` }, ticket.title || 'Untitled');
 
   const stateGlyphs = {
     active: '',
@@ -75,8 +78,18 @@ function ticketChip(ticket, nowMs, lens) {
     blocked: '!',
     done: '✓',
   };
-  const chipNum = h('span', { class: 'chip-num' }, ticket.kind === 'pr' ? `PR #${ticket.issue}` : `#${ticket.issue}`);
-  const chipDot = h('span', { class: `chip-dot dot-${stateTone}`, 'aria-hidden': 'true', title: stateTone }, stateGlyphs[stateTone]);
+  const stateSrText = {
+    active: 'in progress',
+    pending: 'pending',
+    wait: 'waiting',
+    blocked: 'blocked',
+    done: 'done',
+  }[stateTone] ?? stateTone;
+  const isPr = ticket.kind === 'pr';
+  const chipNumText = isPr ? `PR #${ticket.issue}` : `#${ticket.issue}`;
+  const chipNum = h('span', { class: 'chip-num', title: chipNumText }, chipNumText);
+  const srText = isPr ? `PR #${ticket.issue}, ${stateSrText}` : stateSrText;
+  const chipDot = h('span', { class: `chip-dot dot-${stateTone}`, 'aria-hidden': 'true', title: stateSrText }, stateGlyphs[stateTone]);
   const chipAgent = h('span', { class: 'chip-agent', title: agentName || 'unassigned' }, tag);
 
   let lensContent = null;
@@ -99,8 +112,8 @@ function ticketChip(ticket, nowMs, lens) {
       h('span', { class: 'chip-gate-verdict' }, totalGates > 0 ? `${passCount}/${totalGates}` : 'none'),
     );
   } else {
-    // Delivery lens: time in stage
-    lensContent = h('span', { class: 'chip-lens chip-time' }, sinceEl(inStage.since, nowMs));
+    // Delivery lens: compact time in stage for chip
+    lensContent = h('span', { class: 'chip-lens chip-time' }, sinceEl(inStage.since, nowMs, true));
   }
 
   const flags = flagBadges(ticket.flags);
@@ -110,7 +123,7 @@ function ticketChip(ticket, nowMs, lens) {
   const pill = h(
     'div',
     { class: `chip-pill card-${stateTone}${ticket.pending ? ' card-pending' : ''}` },
-    h('div', { class: 'chip-head' }, chipNum, chipDot, chipAgent, lensContent),
+    h('div', { class: 'chip-head' }, chipNum, chipDot, h('span', { class: 'sr-only' }, srText), chipAgent, lensContent),
     h('div', { class: 'chip-body' }, link),
   );
 
@@ -205,15 +218,16 @@ function isStageApplicable(stage, laneKey, group) {
   return true;
 }
 
-function matrixCell(stage, lane, tickets, nowMs, lens, group) {
+function matrixCell(stage, colId, lane, tickets, nowMs, lens, group) {
   const laneKey = lane.key;
+  const laneId = lane.id;
   const laneTickets = tickets.filter((t) => ticketMatchesLane(t, laneKey, group));
   const applicable = isStageApplicable(stage, laneKey, group);
   // Never swallow real tickets that exist in an out-of-pipeline stage
   if (!applicable && laneTickets.length === 0) {
     return h(
       'div',
-      { class: 'matrix-cell cell-hatched', 'data-lane': laneKey, role: 'cell' },
+      { class: 'matrix-cell cell-hatched', 'data-lane': laneKey, role: 'cell', 'aria-labelledby': `${laneId} ${colId}` },
       h('span', { class: 'cell-hatched-label' }, 'bypasses stage'),
     );
   }
@@ -226,6 +240,7 @@ function matrixCell(stage, lane, tickets, nowMs, lens, group) {
       class: `matrix-cell${laneTickets.length === 0 ? ' cell-empty' : ''}${!applicable ? ' cell-bypass' : ''}`,
       'data-lane': laneKey,
       role: 'cell',
+      'aria-labelledby': `${laneId} ${colId}`,
     },
     mobileLaneTag,
     ...laneTickets.map((t) => ticketChip(t, nowMs, lens)),
@@ -233,7 +248,8 @@ function matrixCell(stage, lane, tickets, nowMs, lens, group) {
   return cell;
 }
 
-function stageColumn(col, nowMs, filtered, lens, group, lanes) {
+function stageColumn(col, colIdx, nowMs, filtered, lens, group, lanes) {
+  const colId = `col-${colIdx}-${classToken(col.stage)}`;
   const quiet = col.tickets.length === 0;
   const countText = filtered && col.total !== col.tickets.length ? `${col.tickets.length} of ${col.total}` : String(col.tickets.length);
   const mode = STAGE_MODES[col.stage] ?? 'AUTO';
@@ -250,21 +266,21 @@ function stageColumn(col, nowMs, filtered, lens, group, lanes) {
     telemetryText = `${rate}% pass`;
   }
 
-  const cells = lanes.map((lane) => matrixCell(col.stage, lane, col.tickets, nowMs, lens, group));
+  const cells = lanes.map((lane) => matrixCell(col.stage, colId, lane, col.tickets, nowMs, lens, group));
 
   return h(
     'section',
-    { class: `col col-${col.stage}${quiet ? ' col-quiet' : ''}`, role: 'row', 'data-stage': col.stage },
+    { class: `col col-${classToken(col.stage)}${quiet ? ' col-quiet' : ''}`, role: 'row', 'data-stage': col.stage },
     h(
       'header',
-      { class: 'col-head', role: 'columnheader' },
+      { class: 'col-head', role: 'rowheader' },
       h(
         'div',
         { class: 'col-head-top' },
         h(
           'div',
           { class: 'col-title-group' },
-          h('h2', { id: `col-${col.stage}`, class: 'col-title' }, col.label),
+          h('h2', { class: 'col-title', id: colId }, col.label),
           modeBadge(mode),
         ),
         h('span', { class: 'col-count', title: `${col.tickets.length} shown, ${col.total} in this stage` }, countText),
@@ -294,13 +310,13 @@ function laneSpine(lanes) {
   return h(
     'div',
     { class: 'matrix-spine', role: 'row' },
-    h('div', { class: 'spine-head', role: 'columnheader' }, h('span', { class: 'spine-label' }, 'SWIMLANE')),
+    h('div', { class: 'spine-head', role: 'columnheader' }, h('span', { class: 'spine-label' }, 'Stage')),
     ...lanes.map((l) =>
       h(
         'div',
-        { class: 'lane-head', id: `lane-${l.key}`, 'data-lane': l.key, role: 'rowheader' },
+        { class: 'lane-head', 'data-lane': l.key, role: 'columnheader' },
         h('span', { class: `lane-dot dot-${l.tone}`, 'aria-hidden': 'true' }),
-        h('span', { class: 'lane-name' }, l.label),
+        h('span', { class: 'lane-name', id: l.id }, l.label),
         h('span', { class: 'lane-sub' }, l.sub),
       ),
     ),
@@ -391,17 +407,22 @@ export function renderBoard(ctx) {
   const group = filters.group || 'type';
 
   const boardShell = h('div', { class: 'board-shell' });
-  const boardMatrix = h('div', { class: 'board matrix-grid', role: 'grid', 'aria-label': 'Delivery flow matrix board, scrolls sideways', tabindex: '0' });
+  const boardMatrix = h('div', { class: 'board matrix-grid', role: 'table', 'aria-label': 'Delivery flow matrix board, scrolls sideways', tabindex: '0' });
   const result = h('p', { class: 'sr-only', 'aria-live': 'polite', role: 'status' });
 
   const isFiltered = () => filters.types.size > 0 || filters.query.trim() !== '' || filters.hideOld;
 
   const update = () => {
     const columns = boardColumns(state, pending, filters, now);
-    const lanes = getLaneKeys(ui.board.group || 'type', state.tickets);
+    const rawLanes = getLaneKeys(ui.board.group || 'type', state.tickets);
+    const lanes = rawLanes.map((l, laneIdx) => ({
+      ...l,
+      id: `lane-${laneIdx}-${classToken(l.key)}`,
+    }));
 
-    const stageCols = columns.map((c) => stageColumn(c, now, isFiltered(), ui.board.lens || 'delivery', ui.board.group || 'type', lanes));
+    const stageCols = columns.map((c, colIdx) => stageColumn(c, colIdx, now, isFiltered(), ui.board.lens || 'delivery', ui.board.group || 'type', lanes));
 
+    boardMatrix.style.setProperty('--lane-count', String(lanes.length));
     boardMatrix.replaceChildren(laneSpine(lanes), ...stageCols);
 
     const shown = columns.reduce((n, c) => n + c.tickets.length, 0);
