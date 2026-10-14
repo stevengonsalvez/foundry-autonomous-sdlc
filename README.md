@@ -1,4 +1,13 @@
 <p align="center">
+  <a href="https://stevengonsalvez.github.io/foundry-autonomous-sdlc/"><b>Live app</b></a> &nbsp;|&nbsp;
+  <a href="https://stevengonsalvez.github.io/foundry-autonomous-sdlc/control-center/"><b>Control center</b></a> &nbsp;|&nbsp;
+  <a href="https://stevengonsalvez.github.io/foundry-autonomous-sdlc/staging/">Staging</a> &nbsp;|&nbsp;
+  <a href="https://stevengonsalvez.github.io/foundry-autonomous-sdlc/dashboard/">Metrics dashboard</a> &nbsp;|&nbsp;
+  <a href="docs/evidence.md">Evidence</a> &nbsp;|&nbsp;
+  <a href="#documentation">Docs</a>
+</p>
+
+<p align="center">
   <img src="docs/media/hero.svg" alt="Autonomous SDLC motion header: live topology network and 4 delivery flow lanes for feature, bug, escalation, and rollback" width="100%" />
 </p>
 
