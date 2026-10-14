@@ -1,36 +1,21 @@
 {
   "version": 1,
   "staging": {
-    "sha": "55ef1b99e6bea7d33a588562b4633380cc68c09a",
-    "short": "55ef1b9",
-    "version": "main-55ef1b9",
-    "built_at": "2026-10-14T00:06:09Z",
-    "deployed_at": "2026-10-14T00:06:21Z",
-    "run_id": 38487325765,
-    "run_url": "https://github.com/stevengonsalvez/foundry-autonomous-sdlc/actions/runs/38487325765",
-    "status": "promoted",
-    "pr": 65,
+    "sha": "86236262189834792e4be4594f5724eae7a476e1",
+    "short": "8623626",
+    "version": "main-8623626",
+    "built_at": "2026-10-14T07:57:36Z",
+    "deployed_at": "2026-10-14T07:57:51Z",
+    "run_id": 38531589746,
+    "run_url": "https://github.com/stevengonsalvez/foundry-autonomous-sdlc/actions/runs/38531589746",
+    "status": "deployed",
+    "pr": 70,
     "issue": null,
     "includes": [
       {
-        "pr": 63,
+        "pr": 70,
         "issue": null,
-        "sha": "78394191ee7df6fe9177fb2eea3515ac1c07f2a2"
-      },
-      {
-        "pr": 67,
-        "issue": null,
-        "sha": "ddfe9c56edf58b49ef04ef06b8103d967774d333"
-      },
-      {
-        "pr": 66,
-        "issue": null,
-        "sha": "110691a58b44fd113d62da3629187116942cc7ee"
-      },
-      {
-        "pr": 65,
-        "issue": null,
-        "sha": "55ef1b99e6bea7d33a588562b4633380cc68c09a"
+        "sha": "86236262189834792e4be4594f5724eae7a476e1"
       }
     ]
   },
@@ -671,6 +656,24 @@
           "pr": 65,
           "issue": null,
           "sha": "55ef1b99e6bea7d33a588562b4633380cc68c09a"
+        }
+      ]
+    },
+    {
+      "at": "2026-10-14T07:57:51Z",
+      "action": "stage",
+      "env": "staging",
+      "sha": "86236262189834792e4be4594f5724eae7a476e1",
+      "version": "main-8623626",
+      "run_url": "https://github.com/stevengonsalvez/foundry-autonomous-sdlc/actions/runs/38531589746",
+      "reason": "deployed to staging",
+      "issue": null,
+      "pr": 70,
+      "includes": [
+        {
+          "pr": 70,
+          "issue": null,
+          "sha": "86236262189834792e4be4594f5724eae7a476e1"
         }
       ]
     }
