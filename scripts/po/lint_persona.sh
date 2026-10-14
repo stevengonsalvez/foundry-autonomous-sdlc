@@ -69,18 +69,32 @@ else
   check_fail "Guardrail (b)" "Must require label simulated-human and header 'Simulated human (antigravity)'"
 fi
 
-# Guardrail (c): PR restrictions (never open, approve, merge PR; never edit code/workflows; never push)
-if grep -qi "never open.*pr" "$PERSONA_FILE" && grep -qi "never.*approve.*pr" "$PERSONA_FILE" && grep -qi "never merge" "$PERSONA_FILE" && grep -qi "never.*push" "$PERSONA_FILE"; then
-  check_pass "Guardrail (c): Never open, approve, or merge PR; never edit code/workflows; never push"
+# Guardrail (c): PR and safety restrictions (never open, approve, merge PR; never comment approval; never push; never modify git refs; never run arbitrary commands)
+if grep -qi "never open.*pr" "$PERSONA_FILE" && \
+   grep -qi "never.*approve.*pr" "$PERSONA_FILE" && \
+   grep -qi "never comment approval on a pr" "$PERSONA_FILE" && \
+   grep -qi "never merge" "$PERSONA_FILE" && \
+   grep -qi "never.*push" "$PERSONA_FILE" && \
+   grep -qi "never modify git refs" "$PERSONA_FILE" && \
+   grep -qi "never run arbitrary shell commands" "$PERSONA_FILE"; then
+  check_pass "Guardrail (c): Never open, approve, or merge PR; never comment approval; never modify git refs; never run arbitrary commands"
 else
-  check_fail "Guardrail (c)" "Must forbid opening, approving, merging PRs, editing code, and pushing"
+  check_fail "Guardrail (c)" "Must forbid opening, approving, commenting approval, merging PRs, editing code, pushing, modifying git refs, and arbitrary commands"
 fi
 
 # Guardrail (d): Allowed commands only, gh account-wide login credential risk documented
-if grep -qi "gh issue" "$PERSONA_FILE" && grep -qi "gh pr list" "$PERSONA_FILE" && grep -qi "gh api" "$PERSONA_FILE" && grep -qi "account-wide" "$PERSONA_FILE"; then
+if grep -qi "gh issue" "$PERSONA_FILE" && \
+   grep -qi "gh pr list" "$PERSONA_FILE" && \
+   grep -qi "gh api" "$PERSONA_FILE" && \
+   grep -qi "git fetch origin main state" "$PERSONA_FILE" && \
+   grep -qi "git show origin/main:po/ROADMAP.md" "$PERSONA_FILE" && \
+   grep -qi "git show origin/state:state.json" "$PERSONA_FILE" && \
+   grep -q "\bjq\b" "$PERSONA_FILE" && \
+   grep -q "\bcat\b" "$PERSONA_FILE" && \
+   grep -qi "account-wide" "$PERSONA_FILE"; then
   check_pass "Guardrail (d): Strict command allow-list and account-wide credential documentation"
 else
-  check_fail "Guardrail (d)" "Must define command allow-list and document account-wide gh credential risk"
+  check_fail "Guardrail (d)" "Must define command allow-list (including git fetch/show, jq, cat) and document account-wide gh credential risk"
 fi
 
 # Guardrail (e): Never raise spend cap, never continue past 22 USD halt, close/shrink/park cost-cap escalations

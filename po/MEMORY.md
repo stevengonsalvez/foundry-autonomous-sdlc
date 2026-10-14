@@ -19,7 +19,7 @@ Notice: The persona command allow-list permits GitHub CLI operations (`gh issue 
 | Issue # | Title | Motivation / Gap Linked | Outcome |
 |---------|-------|--------------------------|---------|
 | 51 | feat: Show how many tracking events a parcel has | Missing event count in parcel header (`app/web`) | Merged in PR #54, released in v0.4.0 |
-| 52 | feat: Timing intake probe three | System intake timing validation | Closed |
+| 52 | Intake probe three | System intake timing validation | Closed |
 
 ---
 
@@ -29,7 +29,6 @@ Notice: The persona command allow-list permits GitHub CLI operations (`gh issue 
 |---------|-------|-------------------|------------|
 | 45 | Move the live carrier integration to the new vendor and rotate the production keys | `escalated:not-agent-suitable` | Closed with rationale via Hat 3 (requires live vendor secrets/infrastructure outside `app/`) |
 | 17 | Move the live carrier integration to the new vendor and rotate the production keys | `escalated:not-agent-suitable` | Closed with rationale via Hat 3 (requires live vendor secrets/infrastructure outside `app/`) |
-| 72 | feat(web): show current location in parcel header | `escalated:agent-error` | Closed with findings via Hat 3 (tests invalid after coder repair iterations; unblocks pipeline) |
 
 ---
 

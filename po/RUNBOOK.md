@@ -21,7 +21,7 @@ The Simulated Human loop is an automated counterpart that replaces the human pro
 ```
 
 The persona operates with four primary hats:
-1. **Product Owner**: Selects the NEXT unblocked improvement from `po/ROADMAP.md` by dependency order and files exactly ONE high-value improvement with testable acceptance criteria, strictly when the pipeline is idle. When fewer than 5 `todo` items remain, files an alert for maintainers to extend the roadmap.
+1. **Product Owner**: Selects the NEXT unblocked improvement from `po/ROADMAP.md` by dependency order and files exactly ONE high-value improvement with testable acceptance criteria, strictly when the pipeline is idle. When fewer than 5 `todo` items remain, logs a one-line extension request to the run log; files no issue.
 2. **Requirements Answerer**: Answers clarification questions from `sdlc-req-gate` on issues in `stage:needs-refinement`.
 3. **Triage Lead**: Assigns severity and component ownership (`owner:web`, `owner:api`, `owner:carrier-mock`) to incoming defects.
 4. **Escalation Owner**: Resolves escalations under strict guardrails: reframes or closes `escalated:not-agent-suitable`, closes or parks `escalated:cost-cap` without raising caps, and files targeted fix issues for `escalated:deploy-failed` (CD rollbacks) without re-releasing the failed build.
@@ -47,7 +47,8 @@ The loop participates in the repository state machine using these exact labels:
 | | `escalated:cost-cap` | Issue exceeded 3.00 USD cap. Persona parks or closes. NEVER raises cap. |
 | | `escalated:deploy-failed` | CD smoke or soak failed; build rolled back. Persona comments findings and files fix issue. |
 | | `escalated:requirements` | Two refinement rounds failed to reach 80. Persona reframes or closes. |
-| | `escalated:build-failed` | Coder exhausted attempts or CI check timeout. Persona reviews diagnostics. |
+| | `escalated:build-failed` | Coder exhausted attempts or CI check timeout. Persona posts failure findings with `<!-- po-answered:v1 -->` and closes the issue to unblock pipeline. |
+| | `escalated:review-failed` | PR review failed with unresolved comments. Persona posts findings with `<!-- po-answered:v1 -->` and closes the issue. |
 | | `escalated:agent-error` | Agent output streak failure (e.g. invalid test generation). Persona posts finding with `<!-- po-answered:v1 -->` and closes issue. |
 | **Triage** | `bug:triaged`, `severity:s1`..`s4`, `owner:web`, `owner:api`, `owner:carrier-mock` | Applied by Triage Lead hat on `type:bug` issues. |
 | **Type** | `type:feature`, `type:bug`, `type:maintenance` | Work item type categorization. |
@@ -103,7 +104,7 @@ Every execution cycle enforces the following security boundaries (verified by `s
    - At most ONE new issue filed per scheduled run, and only when the repository is verified idle.
    - Requires conventional title, problem description, testable acceptance criteria, and explicit link to a real gap in `app/`.
    - Check open issues and recent closed issues before creating a new one.
-   - Check existing issues idempotently via `gh issue list --state all --search '"Roadmap item: ITEM-0NN" in:body'`.
+   - Check existing issues idempotently via `gh issue list --author stevengonsalvez --state all --search '"Roadmap item: ITEM-0NN" in:body'`.
    - Every roadmap issue body must contain the exact marker line: `Roadmap item: ITEM-0NN`.
    - *Taxonomy Requirement*: The repository maintainer must ensure label `simulated-human` exists in GitHub taxonomy before execution. If missing, the persona logs `BLOCKED: label simulated-human missing, maintainer must create it` and plans no command.
 
@@ -130,10 +131,10 @@ Each item in `po/ROADMAP.md` is structured with:
 ### Intake and Selection Algorithm:
 1. **Canonical Source from origin/main**: The persona runs `git fetch origin main` and reads the roadmap via `git show origin/main:po/ROADMAP.md`. Because the persona runs in a persistent, resumed session, reading from `origin/main` ensures it immediately picks up newly merged roadmap PRs without relying on stale local worktree state.
 2. **Dependency Resolution**: When the repository is idle and within spend limits, the persona inspects the roadmap and verifies candidate dependencies against GitHub issues. A dependency counts as satisfied ONLY when its corresponding issue carries label `stage:released` or `stage:merged` (or status is `done` in the roadmap), NOT when merely filed.
-3. **Deduplication Check**: The persona searches GitHub via `gh issue list --state all --search '"Roadmap item: ITEM-0NN" in:body'` to verify the candidate item has not already been filed or closed.
+3. **Deduplication Check**: The persona searches GitHub via `gh issue list --author stevengonsalvez --state all --search '"Roadmap item: ITEM-0NN" in:body'` to verify the candidate item has not already been filed or closed.
 4. **Sequential Pick**: The persona takes the first unblocked `todo` item in sequential order that has not been filed.
 5. **Issue Creation**: The persona generates an issue containing the title, marker line `Roadmap item: ITEM-0NN`, user story, acceptance criteria, and explicit `app/` scope, referencing the roadmap ID.
-6. **Memory Tracking**: The persona records the item as `filed` in `po/MEMORY.md` along with the created issue number.
+6. **Authority Notice**: GitHub is the sole authoritative source of truth for filed items (derived from issue markers). `po/MEMORY.md` serves only as local session scratchpad.
 7. **PR-Only Modification**: The persona NEVER edits `po/ROADMAP.md` directly during scheduled runs. Changes to `po/ROADMAP.md` occur strictly through merged pull requests.
 8. **Maintainer Extension Logging**: If fewer than 5 `status: todo` items remain unfiled in `po/ROADMAP.md`:
    - The persona records a one-line request to its run log: `Roadmap extension requested: fewer than 5 todo items remaining (N left in po/ROADMAP.md). Maintainer extension needed.`
@@ -217,6 +218,7 @@ orca automations create \
 - `--reuse-session`: Submits recurring runs to the existing live session to preserve persona memory and context.
 - `--precheck "scripts/po/precheck.sh"`: Runs precheck guardrails before each cycle. If precheck exits non-zero, the run is safely skipped.
 - `--prompt "$(cat po/PERSONA.md)"`: Injects the persona prompt and operating rules.
+  - *Prompt Capture Notice*: Because `--prompt "$(cat po/PERSONA.md)"` captures the prompt text at automation creation time, any future changes to `po/PERSONA.md` require the Orca automation to be re-created (or updated) to take effect.
 
 ---
 
