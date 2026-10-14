@@ -10,20 +10,20 @@ It serves as the backlog for the Simulated Human product owner loop.
 1. **Selection Policy**: When the repository is idle and within spend caps, the persona selects the NEXT `todo` item whose dependencies are all satisfied (`done` in `po/ROADMAP.md` or marked `stage:released` or `stage:merged` in GitHub issues).
 2. **Issue Generation**: The persona copies the item title, user value, testable acceptance criteria, and explicit `app/` scope into the new issue, referencing the roadmap ID with marker `Roadmap item: ITEM-0NN`.
 3. **Memory Tracking**: The persona records the item as `filed` in `po/MEMORY.md` with the filed issue number. The persona NEVER edits `po/ROADMAP.md` directly; updates to this roadmap occur only via merged pull requests.
-4. **Maintainer Escalation**: When fewer than 5 `todo` items remain in this roadmap, the persona checks whether an issue with label `needs-maintainer` is already open. If none is open, it files ONE issue titled `roadmap: extend po/ROADMAP.md` carrying label `needs-maintainer` and pauses new feature intake.
+4. **Roadmap Extension Logging**: When fewer than 5 `todo` items remain in this roadmap, the persona records a one-line maintainer extension request in its run log and continues intake with the remaining `todo` items without opening an issue about the roadmap.
 5. **Scope Boundary**: Every item is strictly confined to `app/` (`app/core`, `app/contracts`, `app/carrier-mock`, `app/api`, `app/web`, `app/e2e`). No item may touch root configuration, workflows, or infrastructure.
 
 ---
 
 ## Roadmap Backlog
 
-### ITEM-001: feat(web): display event location pin and status icons in parcel timeline
+### ITEM-001: feat(web): display event location pin in parcel timeline
 - **Status**: todo
 - **Dependencies**: []
 - **Cost Class**: S
 - **Tags**: ui, timeline, web
-- **Gap Anchor**: `app/web/src/components/Timeline.tsx#L12-L21` and `app/web/src/components/Icons.tsx#L23-L59`. Timeline already renders `event.location` and `:14` has `is-latest`, and carrier contract requires `place` with `minLength: 1`. Note that issue #72 ('current location in header') overlaps and escalated with agent error. Scope here is narrowed strictly to visual timeline iconography.
-- **User Value**: Recipients can visually scan the history timeline and quickly identify event status and scan locations.
+- **Gap Anchor**: `app/web/src/components/Timeline.tsx#L11-L21` and `app/web/src/components/Icons.tsx#L23-L59`. Timeline already renders `event.location`, `:11` has `is-latest`, and line 14 has the Latest tag. Carrier contract requires `place` with `minLength: 1`. Note that issue #72 ('current location in header') overlaps and escalated with agent error. Scope here is narrowed strictly to visual location pin iconography.
+- **User Value**: Recipients can visually scan the history timeline and quickly identify scan locations.
 - **Files Touched**:
   - `app/web/src/components/Timeline.tsx`
   - `app/web/src/components/Icons.tsx`
@@ -31,8 +31,7 @@ It serves as the backlog for the Simulated Human product owner loop.
   - `app/web/tests/parcel-page.test.tsx`
 - **Acceptance Criteria**:
   1. Render a location pin icon indicator next to the location text in each timeline item.
-  2. Render a per-event status icon matching the event status from Icons.tsx in each timeline item.
-  3. Ensure all icons include accessible SVG titles or aria-hidden attributes with visible screen-reader text.
+  2. Ensure the location pin icon includes an accessible SVG title or aria-hidden attribute with visible screen-reader text.
 
 ---
 
@@ -79,7 +78,7 @@ It serves as the backlog for the Simulated Human product owner loop.
 
 ### ITEM-004: feat(web): real-time search input validation with parseTrackingNumber
 - **Status**: todo
-- **Dependencies**: [ITEM-003]
+- **Dependencies**: []
 - **Cost Class**: S
 - **Tags**: ux, validation, web
 - **Gap Anchor**: `app/web/src/components/SearchForm.tsx#L10-L15` and `app/core/src/tracking-number.ts#L3-L7`. Form checks only non-empty string and does not validate against parseTrackingNumber before submission. Core accepts case-insensitive input via regex /^PK\d{10}$/i.
@@ -95,27 +94,9 @@ It serves as the backlog for the Simulated Human product owner loop.
 
 ---
 
-### ITEM-005: feat(web): add return to search action on parcel not found error
-- **Status**: todo
-- **Dependencies**: []
-- **Cost Class**: S
-- **Tags**: ux, feedback, web
-- **Gap Anchor**: `app/web/src/pages/ParcelPage.tsx#L21-L28`. When a parcel is not found, ParcelError displays explanatory text but lacks a primary navigation action to return to search.
-- **User Value**: Users encountering 404s receive an immediate one-click action to return home and search again.
-- **Files Touched**:
-  - `app/web/src/pages/ParcelPage.tsx`
-  - `app/web/src/styles.css`
-  - `app/web/tests/parcel-page.test.tsx`
-- **Acceptance Criteria**:
-  1. Render a visible "Return to search" button or link within the ParcelNotFoundError notice.
-  2. Clicking the action navigates the user back to the home page search view.
-  3. The return to search action receives prominent secondary button styling with visible keyboard focus.
-
----
-
 ### ITEM-006: feat(web): keyboard navigation and focus management improvements
 - **Status**: todo
-- **Dependencies**: [ITEM-005]
+- **Dependencies**: []
 - **Cost Class**: S
 - **Tags**: accessibility, a11y, web
 - **Gap Anchor**: `app/web/src/components/SearchForm.tsx` and `app/e2e/tests/parcel-tracking.spec.ts`. Pressing Escape inside search inputs does not reset focus, and tab order lacks Playwright regression verification.
@@ -125,15 +106,16 @@ It serves as the backlog for the Simulated Human product owner loop.
   - `app/web/src/styles.css`
   - `app/e2e/tests/parcel-tracking.spec.ts`
 - **Acceptance Criteria**:
-  1. Pressing the Escape key while focused inside the search form input clears any active error and resets focus cleanly.
-  2. Playwright test verifies that pressing Tab navigates in logical order from skip link to brand to search input to submit button.
-  3. Ensure all interactive table links and navigation controls remain reachable by keyboard tab navigation alone.
+  1. Focus target on parcel load moves to parcel page main heading `<h1>` (tracking number) rather than remaining on body.
+  2. Pressing the Escape key while focused inside the search form input clears any active error and resets focus cleanly.
+  3. Playwright test verifies that pressing Tab navigates in logical order from skip link to brand to search input to submit button.
+  4. Ensure all interactive table links and navigation controls remain reachable by keyboard tab navigation alone.
 
 ---
 
 ### ITEM-007: feat(web): accessible live region announcement on parcel load
 - **Status**: todo
-- **Dependencies**: [ITEM-006]
+- **Dependencies**: []
 - **Cost Class**: S
 - **Tags**: accessibility, a11y, web
 - **Gap Anchor**: `app/web/src/pages/ParcelPage.tsx#L73-L85`. Dynamic parcel details resolution does not announce status updates to assistive technologies upon completion.
@@ -200,6 +182,7 @@ It serves as the backlog for the Simulated Human product owner loop.
 - **Files Touched**:
   - `app/core/src/domain.ts`
   - `app/core/src/mapping.ts`
+  - `app/core/tests/mapping.test.ts`
   - `app/web/src/components/StatusBadge.tsx`
   - `app/web/src/pages/ParcelPage.tsx`
   - `app/web/tests/status-badge.test.tsx`
@@ -213,7 +196,7 @@ It serves as the backlog for the Simulated Human product owner loop.
 
 ### ITEM-011: feat(web): carrier support details panel on parcel page
 - **Status**: todo
-- **Dependencies**: [ITEM-010]
+- **Dependencies**: []
 - **Cost Class**: S
 - **Tags**: ui, support, web
 - **Gap Anchor**: `app/web/src/pages/ParcelPage.tsx#L104-L109`. Parcel page provides no carrier contact details, FAQ links, or support information for delayed packages.
@@ -285,14 +268,14 @@ It serves as the backlog for the Simulated Human product owner loop.
 - **Acceptance Criteria**:
   1. GET endpoints compute and return an ETag header based on shipment payload content.
   2. If an incoming request includes matching If-None-Match header, return HTTP 304 with empty body.
-  3. Return cache-control public max-age=30 for delivered parcels and no-cache for in-flight parcels.
+  3. For non-terminal parcels (in_transit, out_for_delivery), set Cache-Control to 'private, max-age=30'.
   4. Unit tests in api.test.ts verify 304 responses and header generation.
 
 ---
 
 ### ITEM-016: feat(api): pagination parameters for parcel listings
 - **Status**: todo
-- **Dependencies**: [ITEM-015]
+- **Dependencies**: []
 - **Cost Class**: M
 - **Tags**: api, pagination, backend
 - **Gap Anchor**: `app/api/src/server.ts#L60` and `app/web/src/http-parcel-service.ts#L24-L28`. Endpoint returns all parcels without limit or offset. Default when limit is omitted must remain unbounded so existing clients receive all parcels.
@@ -340,9 +323,9 @@ It serves as the backlog for the Simulated Human product owner loop.
   - `app/web/tests/format.test.ts`
 - **Acceptance Criteria**:
   1. Add formatRelativeTime helper in format.ts returning friendly relative strings such as just now, minutes ago, hours ago, or yesterday.
-  2. Render relative timestamp in parcel table and timeline with full ISO timestamp in title attribute for tooltip inspection.
-  3. Unit tests in format.test.ts verify calculations across all time interval boundaries.
-  4. Handle future timestamps gracefully without returning negative time values.
+  2. Keep absolute timestamp visible in timeline and update text ('10 Oct 2026, 06:42 UTC') and append relative time beside it or in title attribute.
+  3. Use vi.useFakeTimers in unit tests to guarantee deterministic relative time calculations.
+  4. Display relative elapsed time in title tooltip on parcel table last update cells.
 
 ---
 
@@ -391,15 +374,15 @@ It serves as the backlog for the Simulated Human product owner loop.
 - **Dependencies**: []
 - **Cost Class**: S
 - **Tags**: css, print, web
-- **Gap Anchor**: `app/web/src/styles.css`. No `@media print` rules exist in styles.css, resulting in dark backgrounds, search buttons, and back links showing up on printed receipts.
+- **Gap Anchor**: `app/web/src/styles.css#L43`. Theme defines `color-scheme: light;`, but stylesheet lacks `@media print` rules, causing screen layout elements (navigation links, buttons, search input) to print wastefully.
 - **User Value**: Users can print clean physical delivery receipts or save them as tidy PDF summaries.
 - **Files Touched**:
   - `app/web/src/styles.css`
+  - `app/web/tests/parcel-page.test.tsx`
 - **Acceptance Criteria**:
-  1. Media print stylesheet rules hide navigation back links, search controls, and refresh buttons.
-  2. Backgrounds are forced to white and typography to dark ink for crisp printing.
-  3. Shipment history timeline renders in single-column printable receipt layout with visible borders.
-  4. Page breaks inside timeline cards are prevented using break-inside avoid rules.
+  1. Add `@media print` section hiding interactive screen controls like `.back-link` and action buttons.
+  2. Ensure tracking number header, shipment status, and timeline event list print with high-contrast text on white backgrounds.
+  3. Prevent page breaks inside timeline event entries during printing.
 
 ---
 
