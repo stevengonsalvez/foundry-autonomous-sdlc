@@ -169,6 +169,9 @@ function parseArgs() {
       skipBuild = true;
     } else if (arg === "--head-sha" && i + 1 < args.length) {
       headSha = args[++i];
+    } else {
+      console.error(`capture.mjs: unknown or invalid argument: ${arg}`);
+      process.exit(1);
     }
   }
 

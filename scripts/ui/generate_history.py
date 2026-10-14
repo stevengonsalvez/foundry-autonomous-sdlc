@@ -13,13 +13,14 @@ to generate:
 from __future__ import annotations
 
 import argparse
+import contextlib
 import html
 import json
-import os
-from pathlib import Path
 import re
+import shutil
 import subprocess
 import sys
+from pathlib import Path
 from typing import Any
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -42,6 +43,8 @@ VIEWPORTS = ["desktop", "mobile"]
 BUDGET_HTML_BYTES = 50 * 1024
 BUDGET_CSS_BYTES = 20 * 1024
 BUDGET_JS_BYTES = 15 * 1024
+
+TAG_RE = re.compile(r"^v\d+\.\d+\.\d+$")
 
 
 def parse_semver_key(tag: str) -> tuple[int, ...]:
@@ -125,6 +128,9 @@ def collect_evolution_entries(
         except Exception:
             tags = ["v0.1.0"]
 
+    # Validate tags match ^v\d+\.\d+\.\d+$
+    tags = [t for t in tags if TAG_RE.match(t)]
+
     tickets_raw = state_data.get("tickets", [])
     ticket_list = (
         tickets_raw.values()
@@ -150,6 +156,7 @@ def collect_evolution_entries(
         title = ""
         issue_num: int | None = None
         issue_url: str | None = None
+        issue_label: str | None = None
         pr_num: int | None = None
         pr_url: str | None = None
         cost_usd: float | None = None
@@ -165,6 +172,15 @@ def collect_evolution_entries(
             cost_usd = cost_info.get("total_usd") or cost_info.get("usd")
         else:
             title = meta["subject"]
+
+        # v0.3.1 /pull/40 was PR only (not tagged as an issue; issue was 39)
+        if tag == "v0.3.1":
+            issue_label = "PR only"
+            issue_num = None
+            issue_url = None
+            if not pr_num:
+                pr_num = 40
+                pr_url = "https://github.com/stevengonsalvez/foundry-autonomous-sdlc/pull/40"
 
         # Check screenshot directory and manifest
         tag_dir = screenshots_dir / tag
@@ -186,32 +202,35 @@ def collect_evolution_entries(
                         fn = s.get("filename")
                         if route in screenshot_map and vp:
                             screenshot_map[route][vp] = fn
+                    if not any(screenshot_map[r] for r in ROUTES):
+                        reproducible = False
+                        not_reproducible_reason = "not captured"
             except Exception:
-                pass
+                reproducible = False
+                not_reproducible_reason = "Corrupt manifest"
         else:
-            # Fallback scan files
-            if tag_dir.exists():
-                for route in ROUTES:
-                    for vp in VIEWPORTS:
-                        fn = f"{route}-{vp}.png"
-                        if (tag_dir / fn).exists():
-                            screenshot_map[route][vp] = fn
+            # When no manifest exists, default reproducible=False with reason 'not captured'
+            reproducible = False
+            not_reproducible_reason = "not captured"
 
-        raw_entries.append({
-            "tag": tag,
-            "commit_sha": meta["sha"],
-            "short_sha": meta["sha"][:8],
-            "date": meta["date"],
-            "title": title or f"Release {tag}",
-            "issue_number": issue_num,
-            "issue_url": issue_url,
-            "pr_number": pr_num,
-            "pr_url": pr_url,
-            "cost_usd": cost_usd,
-            "reproducible": reproducible,
-            "not_reproducible_reason": not_reproducible_reason,
-            "screenshots": screenshot_map,
-        })
+        raw_entries.append(
+            {
+                "tag": tag,
+                "commit_sha": meta["sha"],
+                "short_sha": meta["sha"][:8],
+                "date": meta["date"],
+                "title": title or f"Release {tag}",
+                "issue_number": issue_num,
+                "issue_url": issue_url,
+                "issue_label": issue_label,
+                "pr_number": pr_num,
+                "pr_url": pr_url,
+                "cost_usd": cost_usd,
+                "reproducible": reproducible,
+                "not_reproducible_reason": not_reproducible_reason,
+                "screenshots": screenshot_map,
+            }
+        )
 
     # Order newest first (highest semver first)
     raw_entries.sort(key=lambda e: parse_semver_key(e["tag"]), reverse=True)
@@ -690,6 +709,35 @@ body {
   font-family: var(--font-mono);
 }
 
+/* Older entries disclosure */
+.older-entries-disclosure {
+  position: relative;
+  margin-top: 1rem;
+}
+.older-entries-summary {
+  cursor: pointer;
+  color: var(--fg);
+  font-weight: 600;
+  padding: 0.5rem 1rem;
+  background: var(--surface-1);
+  border: 1px solid var(--edge);
+  border-radius: var(--radius-sm);
+  margin-left: 50px;
+  margin-bottom: 2rem;
+  display: inline-block;
+  user-select: none;
+}
+.older-entries-summary:hover {
+  background: var(--surface-2);
+  color: var(--tone-info);
+}
+.older-entries-summary:focus-visible {
+  outline: 2px solid var(--edge-focus);
+}
+.older-entries-body {
+  position: relative;
+}
+
 /* Footer */
 .footer {
   margin-top: auto;
@@ -808,7 +856,26 @@ def generate_js() -> str:
 """
 
 
-def render_html(entries: list[dict[str, Any]], repo_name: str = "stevengonsalvez/foundry-autonomous-sdlc") -> str:
+CSP_CONTENT = (
+    "default-src 'none'; "
+    "script-src 'self' 'unsafe-inline'; "
+    "style-src 'self' 'unsafe-inline'; "
+    "img-src 'self' data: https://raw.githubusercontent.com; "
+    "font-src 'self'; base-uri 'none'; form-action 'none'"
+)
+
+FAVICON_URI = (
+    "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E"
+    "%3Crect width='32' height='32' rx='6' fill='%230e1526'/%3E"
+    "%3Cpath d='M7 23l5-6 4 3 9-10' fill='none' stroke='%23818cf8' stroke-width='2.75' "
+    "stroke-linecap='round' stroke-linejoin='round'/%3E"
+    "%3Ccircle cx='25' cy='10' r='2.5' fill='%23818cf8'/%3E%3C/svg%3E"
+)
+
+
+def render_html(
+    entries: list[dict[str, Any]], repo_name: str = "stevengonsalvez/foundry-autonomous-sdlc"
+) -> str:
     """Render semantic HTML for the evolution page."""
     # Find Then vs Now entries
     oldest_entry = entries[-1] if entries else None
@@ -817,19 +884,25 @@ def render_html(entries: list[dict[str, Any]], repo_name: str = "stevengonsalvez
     # Then vs Now images (home route)
     then_img_html = ""
     if oldest_entry:
-        tag = oldest_entry["tag"]
-        fn_desktop = oldest_entry["screenshots"].get("home", {}).get("desktop", f"home-desktop.png")
+        tag_q = html.escape(oldest_entry["tag"], quote=True)
+        fn_desktop = html.escape(
+            oldest_entry["screenshots"].get("home", {}).get("desktop", "home-desktop.png"),
+            quote=True,
+        )
         then_img_html = (
-            f'<img src="./screenshots/{tag}/{fn_desktop}" alt="{html.escape(tag)} home desktop" '
+            f'<img src="./screenshots/{tag_q}/{fn_desktop}" alt="{tag_q} home desktop" '
             f'loading="lazy" width="600" height="375" />'
         )
 
     now_img_html = ""
     if newest_entry:
-        tag = newest_entry["tag"]
-        fn_desktop = newest_entry["screenshots"].get("home", {}).get("desktop", f"home-desktop.png")
+        tag_q = html.escape(newest_entry["tag"], quote=True)
+        fn_desktop = html.escape(
+            newest_entry["screenshots"].get("home", {}).get("desktop", "home-desktop.png"),
+            quote=True,
+        )
         now_img_html = (
-            f'<img src="./screenshots/{tag}/{fn_desktop}" alt="{html.escape(tag)} home desktop" '
+            f'<img src="./screenshots/{tag_q}/{fn_desktop}" alt="{tag_q} home desktop" '
             f'loading="lazy" width="600" height="375" />'
         )
 
@@ -837,7 +910,9 @@ def render_html(entries: list[dict[str, Any]], repo_name: str = "stevengonsalvez
     timeline_items_html: list[str] = []
 
     for entry in entries:
-        tag = html.escape(entry["tag"])
+        raw_tag = entry["tag"]
+        tag_q = html.escape(raw_tag, quote=True)
+        tag = html.escape(raw_tag)
         title = html.escape(entry["title"])
         sha = html.escape(entry["short_sha"])
         date = html.escape(entry["date"].replace("T", " ")[:16] + " UTC")
@@ -845,17 +920,26 @@ def render_html(entries: list[dict[str, Any]], repo_name: str = "stevengonsalvez
 
         # Meta badges
         badges: list[str] = [f'<span class="badge" title="Commit {sha}">sha: {sha}</span>']
-        if entry.get("issue_number") and entry.get("issue_url"):
+        if entry.get("issue_label"):
+            lbl = html.escape(entry["issue_label"])
+            badges.append(f'<span class="badge">{lbl}</span>')
+        elif entry.get("issue_number") and entry.get("issue_url"):
             i_num = entry["issue_number"]
             i_url = html.escape(entry["issue_url"], quote=True)
-            badges.append(f'<a class="badge" href="{i_url}" target="_blank" rel="noopener">issue #{i_num}</a>')
+            badges.append(
+                f'<a class="badge" href="{i_url}" target="_blank" rel="noopener">issue #{i_num}</a>'
+            )
         if entry.get("pr_number") and entry.get("pr_url"):
             p_num = entry["pr_number"]
             p_url = html.escape(entry["pr_url"], quote=True)
-            badges.append(f'<a class="badge" href="{p_url}" target="_blank" rel="noopener">pr #{p_num}</a>')
+            badges.append(
+                f'<a class="badge" href="{p_url}" target="_blank" rel="noopener">pr #{p_num}</a>'
+            )
         if entry.get("cost_usd") is not None:
             cost = entry["cost_usd"]
-            badges.append(f'<span class="badge badge-cost" title="Ledger total cost">${cost:.3f}</span>')
+            badges.append(
+                f'<span class="badge badge-cost" title="Ledger total cost">${cost:.3f}</span>'
+            )
 
         badges_str = " ".join(badges)
 
@@ -872,7 +956,9 @@ def render_html(entries: list[dict[str, Any]], repo_name: str = "stevengonsalvez
         else:
             # Build images for each route and viewport for side-by-side comparison
             before = entry.get("before")
-            before_tag = html.escape(before["tag"]) if before else "Initial"
+            raw_before_tag = before["tag"] if before else "Initial"
+            before_tag_q = html.escape(raw_before_tag, quote=True)
+            before_tag = html.escape(raw_before_tag)
 
             after_imgs: list[str] = []
             before_imgs: list[str] = []
@@ -880,26 +966,30 @@ def render_html(entries: list[dict[str, Any]], repo_name: str = "stevengonsalvez
             for r in ROUTES:
                 for vp in VIEWPORTS:
                     # After
-                    fn_after = entry["screenshots"].get(r, {}).get(vp, f"{r}-{vp}.png")
-                    src_after = f"./screenshots/{entry['tag']}/{fn_after}"
+                    raw_fn_after = entry["screenshots"].get(r, {}).get(vp, f"{r}-{vp}.png")
+                    fn_after = html.escape(raw_fn_after, quote=True)
+                    src_after = f"./screenshots/{tag_q}/{fn_after}"
                     display = "block" if (r == "home" and vp == "desktop") else "none"
                     after_imgs.append(
-                        f'<img src="{src_after}" alt="{tag} {r} {vp}" data-route="{r}" data-viewport="{vp}" '
+                        f'<img src="{src_after}" alt="{tag_q} {r} {vp}" '
+                        f'data-route="{r}" data-viewport="{vp}" '
                         f'style="display:{display};" loading="lazy" width="560" height="350"/>'
                     )
 
                     # Before
                     if before and before.get("reproducible"):
-                        fn_before = before["screenshots"].get(r, {}).get(vp, f"{r}-{vp}.png")
-                        src_before = f"./screenshots/{before['tag']}/{fn_before}"
+                        raw_fn_before = before["screenshots"].get(r, {}).get(vp, f"{r}-{vp}.png")
+                        fn_before = html.escape(raw_fn_before, quote=True)
+                        src_before = f"./screenshots/{before_tag_q}/{fn_before}"
                         before_imgs.append(
-                            f'<img src="{src_before}" alt="{before_tag} {r} {vp}" data-route="{r}" data-viewport="{vp}" '
+                            f'<img src="{src_before}" alt="{before_tag_q} {r} {vp}" '
+                            f'data-route="{r}" data-viewport="{vp}" '
                             f'style="display:{display};" loading="lazy" width="560" height="350"/>'
                         )
                     else:
                         before_imgs.append(
-                            f'<div class="no-prior" data-route="{r}" data-viewport="{vp}" style="display:{display};">'
-                            f'No prior baseline ({before_tag})</div>'
+                            f'<div class="no-prior" data-route="{r}" data-viewport="{vp}" '
+                            f'style="display:{display};">No prior baseline ({before_tag})</div>'
                         )
 
             after_content = "".join(after_imgs)
@@ -907,11 +997,13 @@ def render_html(entries: list[dict[str, Any]], repo_name: str = "stevengonsalvez
 
             body_html = (
                 f'<div class="compare-container"><div class="compare-grid">'
-                f'<div class="compare-col"><div class="compare-col-header">Before ({before_tag})</div>'
+                f'<div class="compare-col">'
+                f'<div class="compare-col-header">Before ({before_tag})</div>'
                 f'<div class="compare-img-wrap">{before_content}</div></div>'
-                f'<div class="compare-col"><div class="compare-col-header">After ({tag})</div>'
+                f'<div class="compare-col">'
+                f'<div class="compare-col-header">After ({tag})</div>'
                 f'<div class="compare-img-wrap">{after_content}</div></div>'
-                f'</div></div>'
+                f"</div></div>"
             )
 
         entry_date = entry["date"]
@@ -921,11 +1013,26 @@ def render_html(entries: list[dict[str, Any]], repo_name: str = "stevengonsalvez
             f'<div class="timeline-meta-left"><span class="tag-badge">{tag}</span>'
             f'<h3 class="item-title">{title}</h3></div>'
             f'<div class="timeline-meta-right"><time datetime="{entry_date}">{date}</time>'
-            f'{badges_str}</div></header>{body_html}</div></article>'
+            f"{badges_str}</div></header>{body_html}</div></article>"
         )
         timeline_items_html.append(item_html)
 
-    timeline_content = "\n".join(timeline_items_html)
+    if len(timeline_items_html) > 8:
+        recent_items = timeline_items_html[:8]
+        older_items = timeline_items_html[8:]
+        older_count = len(older_items)
+        older_content = "\n".join(older_items)
+        older_summary = f"Older releases ({older_count})"
+        timeline_content = (
+            "\n".join(recent_items) + f'\n      <details class="older-entries-disclosure">\n'
+            f'        <summary class="older-entries-summary">{older_summary}</summary>\n'
+            f'        <div class="older-entries-body">\n'
+            f"          {older_content}\n"
+            f"        </div>\n"
+            f"      </details>"
+        )
+    else:
+        timeline_content = "\n".join(timeline_items_html)
 
     then_tag = html.escape(oldest_entry["tag"]) if oldest_entry else "v0.1.0"
     now_tag = html.escape(newest_entry["tag"]) if newest_entry else "v0.4.0"
@@ -934,12 +1041,13 @@ def render_html(entries: list[dict[str, Any]], repo_name: str = "stevengonsalvez
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https://raw.githubusercontent.com; font-src 'self'; base-uri 'none'; form-action 'none'">
+  <meta http-equiv="Content-Security-Policy" content="{CSP_CONTENT}">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="color-scheme" content="dark">
-  <meta name="description" content="Visual evolution of the parcel tracker UI across autonomous SDLC releases.">
+  <meta name="description"
+    content="Visual evolution of the parcel tracker UI across autonomous SDLC releases.">
   <title>App Evolution · Delivery Flow</title>
-  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%230e1526'/%3E%3Cpath d='M7 23l5-6 4 3 9-10' fill='none' stroke='%23818cf8' stroke-width='2.75' stroke-linecap='round' stroke-linejoin='round'/%3E%3Ccircle cx='25' cy='10' r='2.5' fill='%23818cf8'/%3E%3C/svg%3E">
+  <link rel="icon" href="{FAVICON_URI}">
   <link rel="stylesheet" href="./css/styles.css">
   <script src="./js/main.js" defer></script>
 </head>
@@ -949,9 +1057,11 @@ def render_html(entries: list[dict[str, Any]], repo_name: str = "stevengonsalvez
   <header class="topbar">
     <div class="container topbar-inner">
       <a class="brand" href="../" aria-label="Parcel tracker home">
-        <svg class="brand-mark" width="24" height="24" viewBox="0 0 32 32" aria-hidden="true" focusable="false">
+        <svg class="brand-mark" width="24" height="24" viewBox="0 0 32 32"
+          aria-hidden="true" focusable="false">
           <rect width="32" height="32" rx="6" fill="#1e293b" />
-          <path d="M8 21l5-5 4 3 7-8" fill="none" stroke="#818cf8" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" />
+          <path d="M8 21l5-5 4 3 7-8" fill="none" stroke="#818cf8" stroke-width="2.5"
+            stroke-linecap="round" stroke-linejoin="round" />
         </svg>
         <span class="brand-text">Flow</span>
         <span class="brand-sub">· Evolution</span>
@@ -973,8 +1083,12 @@ def render_html(entries: list[dict[str, Any]], repo_name: str = "stevengonsalvez
     <section class="hero">
       <div class="container">
         <h1>App Evolution Showcase</h1>
-        <p>A deterministic visual timeline of parcel tracker UI releases, tracking each change from initial launch to current release with side-by-side screenshot comparisons and ledger costs.</p>
-        <div class="budget-badge" role="note">Size budget: HTML &lt; 50KB · CSS &lt; 20KB · JS &lt; 15KB (zero external requests)</div>
+        <p>A deterministic visual timeline of parcel tracker UI releases, tracking each change
+        from initial launch to current release with side-by-side screenshot comparisons
+        and ledger costs.</p>
+        <div class="budget-badge" role="note">
+          Size budget: HTML &lt; 50KB · CSS &lt; 20KB · JS &lt; 15KB (zero external requests)
+        </div>
       </div>
     </section>
 
@@ -1011,17 +1125,35 @@ def render_html(entries: list[dict[str, Any]], repo_name: str = "stevengonsalvez
           <div class="control-group">
             <span class="control-label" id="vp-label">Viewport:</span>
             <div class="btn-group" role="group" aria-labelledby="vp-label">
-              <button type="button" class="btn-toggle active" data-action="set-viewport" data-viewport="desktop" aria-pressed="true">Desktop (1280px)</button>
-              <button type="button" class="btn-toggle" data-action="set-viewport" data-viewport="mobile" aria-pressed="false">Mobile (390px)</button>
+              <button type="button" class="btn-toggle active"
+                data-action="set-viewport" data-viewport="desktop" aria-pressed="true">
+                Desktop (1280px)
+              </button>
+              <button type="button" class="btn-toggle"
+                data-action="set-viewport" data-viewport="mobile" aria-pressed="false">
+                Mobile (390px)
+              </button>
             </div>
           </div>
           <div class="control-group">
             <span class="control-label" id="route-label">Route:</span>
             <div class="btn-group" role="group" aria-labelledby="route-label">
-              <button type="button" class="btn-toggle active" data-action="set-route" data-route="home" aria-pressed="true">Home</button>
-              <button type="button" class="btn-toggle" data-action="set-route" data-route="parcel-found" aria-pressed="false">Parcel Found</button>
-              <button type="button" class="btn-toggle" data-action="set-route" data-route="not-found" aria-pressed="false">Not Found</button>
-              <button type="button" class="btn-toggle" data-action="set-route" data-route="invalid-input" aria-pressed="false">Invalid Input</button>
+              <button type="button" class="btn-toggle active"
+                data-action="set-route" data-route="home" aria-pressed="true">
+                Home
+              </button>
+              <button type="button" class="btn-toggle"
+                data-action="set-route" data-route="parcel-found" aria-pressed="false">
+                Parcel Found
+              </button>
+              <button type="button" class="btn-toggle"
+                data-action="set-route" data-route="not-found" aria-pressed="false">
+                Not Found
+              </button>
+              <button type="button" class="btn-toggle"
+                data-action="set-route" data-route="invalid-input" aria-pressed="false">
+                Invalid Input
+              </button>
             </div>
           </div>
         </div>
@@ -1078,21 +1210,27 @@ def build_history_site(
 
     # 2. Write CSS
     css_content = generate_css()
+    css_bytes = len(css_content.encode("utf-8"))
+    if css_bytes >= BUDGET_CSS_BYTES:
+        raise ValueError(f"CSS exceeds size budget: {css_bytes} >= {BUDGET_CSS_BYTES} bytes")
     css_path = css_dir / "styles.css"
     css_path.write_text(css_content, encoding="utf-8")
-    assert len(css_content.encode("utf-8")) < BUDGET_CSS_BYTES, "CSS exceeds size budget"
 
     # 3. Write JS
     js_content = generate_js()
+    js_bytes = len(js_content.encode("utf-8"))
+    if js_bytes >= BUDGET_JS_BYTES:
+        raise ValueError(f"JS exceeds size budget: {js_bytes} >= {BUDGET_JS_BYTES} bytes")
     js_path = js_dir / "main.js"
     js_path.write_text(js_content, encoding="utf-8")
-    assert len(js_content.encode("utf-8")) < BUDGET_JS_BYTES, "JS exceeds size budget"
 
     # 4. Write HTML
     html_content = render_html(entries)
+    html_bytes = len(html_content.encode("utf-8"))
+    if html_bytes >= BUDGET_HTML_BYTES:
+        raise ValueError(f"HTML exceeds size budget: {html_bytes} >= {BUDGET_HTML_BYTES} bytes")
     html_path = output_dir / "index.html"
     html_path.write_text(html_content, encoding="utf-8")
-    assert len(html_content.encode("utf-8")) < BUDGET_HTML_BYTES, "HTML exceeds size budget"
 
     # 5. Link or copy screenshots directory if requested
     out_screenshots = output_dir / "screenshots"
@@ -1102,10 +1240,8 @@ def build_history_site(
             if item.is_dir():
                 target = out_screenshots / item.name
                 if not target.exists():
-                    try:
+                    with contextlib.suppress(Exception):
                         shutil.copytree(item, target)
-                    except Exception:
-                        pass
 
     print(f"Generated App Evolution Showcase at {output_dir}")
     print(f"HTML: {len(html_content.encode('utf-8'))} bytes (budget: {BUDGET_HTML_BYTES})")
