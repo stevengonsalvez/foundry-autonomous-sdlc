@@ -38,7 +38,7 @@
       "pass": 8
     }
   },
-  "generated_at": "2026-10-14T05:20:16Z",
+  "generated_at": "2026-10-14T05:25:28Z",
   "issues": [
     {
       "closed_at": "2026-10-10T12:28:43Z",
@@ -1802,7 +1802,7 @@
     }
   ],
   "ledger": {
-    "emitted_at": "2026-10-14T05:15:15Z",
+    "emitted_at": "2026-10-14T05:25:16Z",
     "reconciled_at": "2026-10-14T05:05:17Z"
   },
   "repo": "stevengonsalvez/foundry-autonomous-sdlc",
@@ -1810,10 +1810,10 @@
     "deferred": 0,
     "escalated": 18,
     "issues": 25,
-    "ledger_usd": 0.161432,
-    "orchestrator_usd": 1.807267,
+    "ledger_usd": 0.163855,
+    "orchestrator_usd": 1.818458,
     "released": 6,
-    "usd": 3.348347
+    "usd": 3.361961
   },
   "version": 1
 }
