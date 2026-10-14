@@ -2,18 +2,17 @@
 
 Reads release tags, ledger ticket costs from state.json, and screenshot manifests
 to generate:
-1. history/data.json: Structured evolution timeline data.
-2. history/index.html: Self-contained, accessible, dark-themed HTML page matching
+1. data.json: Structured evolution timeline data with budget metadata.
+2. index.html: Self-contained, accessible, dark-themed HTML page matching
    control center tokens, with 'then vs now' comparison, vertical timeline, and
-   side-by-side before/after screenshots.
-3. history/css/styles.css: Dark navy mission-control CSS stylesheet (< 20KB budget).
-4. history/js/main.js: Vanilla JS for desktop/mobile toggle and route switcher (< 15KB budget).
+   side-by-side before/after screenshots for recent releases and compact rows for older entries.
+3. css/styles.css: Dark navy mission-control CSS stylesheet (< 20KB budget).
+4. js/main.js: Vanilla JS for desktop/mobile toggle and route switcher (< 15KB budget).
 """
 
 from __future__ import annotations
 
 import argparse
-import contextlib
 import html
 import json
 import re
@@ -44,7 +43,7 @@ BUDGET_HTML_BYTES = 50 * 1024
 BUDGET_CSS_BYTES = 20 * 1024
 BUDGET_JS_BYTES = 15 * 1024
 
-TAG_RE = re.compile(r"^v\d+\.\d+\.\d+$")
+TAG_RE = re.compile(r"^v(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$")
 
 
 def parse_semver_key(tag: str) -> tuple[int, ...]:
@@ -87,25 +86,25 @@ def load_state_ledger(state_path: Path | None = None) -> dict[str, Any]:
 
 
 def get_commit_metadata(ref: str) -> dict[str, str]:
-    """Get commit SHA and ISO date for a ref."""
-    try:
-        res = subprocess.run(
-            ["git", "log", "-n", "1", "--format=%H%x09%cI%x09%s", ref],
-            cwd=REPO_ROOT,
-            capture_output=True,
-            text=True,
-            check=True,
+    """Get commit SHA, ISO date, and commit message for a ref."""
+    res = subprocess.run(
+        ["git", "log", "-n", "1", "--format=%H%x09%cI%x09%s", ref],
+        cwd=REPO_ROOT,
+        capture_output=True,
+        text=True,
+    )
+    if res.returncode != 0:
+        raise RuntimeError(
+            f"Cannot resolve commit metadata for {ref}: {res.stderr.strip()}"
         )
-        parts = res.stdout.strip().split("\t")
-        if len(parts) >= 2:
-            return {
-                "sha": parts[0],
-                "date": parts[1],
-                "subject": parts[2] if len(parts) > 2 else "",
-            }
-    except Exception:
-        pass
-    return {"sha": "00000000", "date": "2026-10-10T12:00:00Z", "subject": ""}
+    parts = res.stdout.strip().split("\t")
+    if len(parts) >= 2:
+        return {
+            "sha": parts[0],
+            "date": parts[1],
+            "subject": parts[2] if len(parts) > 2 else "",
+        }
+    raise RuntimeError(f"Unexpected git log output for ref {ref}: {res.stdout.strip()}")
 
 
 def collect_evolution_entries(
@@ -125,11 +124,27 @@ def collect_evolution_entries(
             )
             tags = [t.strip() for t in res.stdout.splitlines() if t.strip()]
             tags.sort(key=parse_semver_key)
-        except Exception:
-            tags = ["v0.1.0"]
+        except Exception as exc:
+            raise RuntimeError(f"Failed to list git tags: {exc}") from exc
 
-    # Validate tags match ^v\d+\.\d+\.\d+$
+    # Validate tags match semver format
     tags = [t for t in tags if TAG_RE.match(t)]
+
+    # Fail loudly if screenshots_dir contains releases on disk but 0 tags were found in git
+    disk_releases: list[str] = []
+    if screenshots_dir.exists():
+        disk_releases = [
+            d.name
+            for d in screenshots_dir.iterdir()
+            if d.is_dir() and not d.is_symlink() and TAG_RE.match(d.name)
+        ]
+
+    if disk_releases and not tags:
+        raise RuntimeError(
+            f"Found {len(disk_releases)} release directories in {screenshots_dir} "
+            f"({', '.join(sorted(disk_releases))}) but git repository has 0 tags. "
+            "Ensure repository was checked out with fetch-depth: 0 / tags."
+        )
 
     tickets_raw = state_data.get("tickets", [])
     ticket_list = (
@@ -163,24 +178,28 @@ def collect_evolution_entries(
 
         if ticket:
             title = ticket.get("title") or ""
-            issue_num = ticket.get("issue")
+            raw_issue = ticket.get("issue")
+            issue_num = int(raw_issue) if raw_issue is not None else None
             issue_url = ticket.get("url")
             pr = ticket.get("pr") or {}
-            pr_num = pr.get("number")
+            raw_pr = pr.get("number")
+            pr_num = int(raw_pr) if raw_pr is not None else None
             pr_url = pr.get("url")
             cost_info = ticket.get("cost") or {}
-            cost_usd = cost_info.get("total_usd") or cost_info.get("usd")
+            raw_cost = cost_info.get("total_usd") or cost_info.get("usd")
+            cost_usd = float(raw_cost) if raw_cost is not None else None
+
+            # Derive 'PR only' from state ledger (when ticket is filed as PR or issue == pr)
+            if ticket.get("kind") == "pr" or (
+                issue_num is not None and pr_num is not None and issue_num == pr_num
+            ):
+                issue_label = "PR only"
+                issue_num = None
+                issue_url = None
+                if not pr_num and raw_issue:
+                    pr_num = int(raw_issue)
         else:
             title = meta["subject"]
-
-        # v0.3.1 /pull/40 was PR only (not tagged as an issue; issue was 39)
-        if tag == "v0.3.1":
-            issue_label = "PR only"
-            issue_num = None
-            issue_url = None
-            if not pr_num:
-                pr_num = 40
-                pr_url = "https://github.com/stevengonsalvez/foundry-autonomous-sdlc/pull/40"
 
         # Check screenshot directory and manifest
         tag_dir = screenshots_dir / tag
@@ -230,6 +249,12 @@ def collect_evolution_entries(
                 "not_reproducible_reason": not_reproducible_reason,
                 "screenshots": screenshot_map,
             }
+        )
+
+    if disk_releases and not raw_entries:
+        raise RuntimeError(
+            f"Found {len(disk_releases)} releases in {screenshots_dir} "
+            "but collected 0 timeline entries"
         )
 
     # Order newest first (highest semver first)
@@ -570,6 +595,13 @@ body {
   padding-left: 50px;
   margin-bottom: 2.5rem;
 }
+.timeline-item-compact {
+  margin-bottom: 0.75rem;
+}
+.timeline-item-compact .timeline-card-header {
+  border-bottom: none;
+  padding: 0.625rem 1rem;
+}
 .timeline-dot {
   position: absolute;
   left: 13px;
@@ -858,7 +890,7 @@ def generate_js() -> str:
 
 CSP_CONTENT = (
     "default-src 'none'; "
-    "script-src 'self' 'unsafe-inline'; "
+    "script-src 'self'; "
     "style-src 'self' 'unsafe-inline'; "
     "img-src 'self' data: https://raw.githubusercontent.com; "
     "font-src 'self'; base-uri 'none'; form-action 'none'"
@@ -909,7 +941,7 @@ def render_html(
     # Build timeline items HTML
     timeline_items_html: list[str] = []
 
-    for entry in entries:
+    for idx, entry in enumerate(entries):
         raw_tag = entry["tag"]
         tag_q = html.escape(raw_tag, quote=True)
         tag = html.escape(raw_tag)
@@ -943,83 +975,102 @@ def render_html(
 
         badges_str = " ".join(badges)
 
-        if not reproducible:
-            reason = html.escape(entry.get("not_reproducible_reason") or "Build failed")
-            body_html = f"""
-              <div class="compare-container">
-                <div class="not-reproducible-box">
-                  <span class="badge-alert">Not Reproducible</span>
-                  <p>Reason: {reason}</p>
-                </div>
-              </div>
-            """
-        else:
-            # Build images for each route and viewport for side-by-side comparison
-            before = entry.get("before")
-            raw_before_tag = before["tag"] if before else "Initial"
-            before_tag_q = html.escape(raw_before_tag, quote=True)
-            before_tag = html.escape(raw_before_tag)
+        if idx < 5:
+            # Full comparison card for top 5 releases
+            if not reproducible:
+                reason = html.escape(entry.get("not_reproducible_reason") or "Build failed")
+                body_html = f"""
+                  <div class="compare-container">
+                    <div class="not-reproducible-box">
+                      <span class="badge-alert">Not Reproducible</span>
+                      <p>Reason: {reason}</p>
+                    </div>
+                  </div>
+                """
+            else:
+                # Build images for each route and viewport for side-by-side comparison
+                before = entry.get("before")
+                raw_before_tag = before["tag"] if before else "Initial"
+                before_tag_q = html.escape(raw_before_tag, quote=True)
+                before_tag = html.escape(raw_before_tag)
 
-            after_imgs: list[str] = []
-            before_imgs: list[str] = []
+                after_imgs: list[str] = []
+                before_imgs: list[str] = []
 
-            for r in ROUTES:
-                for vp in VIEWPORTS:
-                    # After
-                    raw_fn_after = entry["screenshots"].get(r, {}).get(vp, f"{r}-{vp}.png")
-                    fn_after = html.escape(raw_fn_after, quote=True)
-                    src_after = f"./screenshots/{tag_q}/{fn_after}"
-                    display = "block" if (r == "home" and vp == "desktop") else "none"
-                    after_imgs.append(
-                        f'<img src="{src_after}" alt="{tag_q} {r} {vp}" '
-                        f'data-route="{r}" data-viewport="{vp}" '
-                        f'style="display:{display};" loading="lazy" width="560" height="350"/>'
-                    )
-
-                    # Before
-                    if before and before.get("reproducible"):
-                        raw_fn_before = before["screenshots"].get(r, {}).get(vp, f"{r}-{vp}.png")
-                        fn_before = html.escape(raw_fn_before, quote=True)
-                        src_before = f"./screenshots/{before_tag_q}/{fn_before}"
-                        before_imgs.append(
-                            f'<img src="{src_before}" alt="{before_tag_q} {r} {vp}" '
+                for r in ROUTES:
+                    for vp in VIEWPORTS:
+                        # After
+                        raw_fn_after = entry["screenshots"].get(r, {}).get(vp, f"{r}-{vp}.png")
+                        fn_after = html.escape(raw_fn_after, quote=True)
+                        src_after = f"./screenshots/{tag_q}/{fn_after}"
+                        display = "block" if (r == "home" and vp == "desktop") else "none"
+                        after_imgs.append(
+                            f'<img src="{src_after}" alt="{tag_q} {r} {vp}" '
                             f'data-route="{r}" data-viewport="{vp}" '
                             f'style="display:{display};" loading="lazy" width="560" height="350"/>'
                         )
-                    else:
-                        before_imgs.append(
-                            f'<div class="no-prior" data-route="{r}" data-viewport="{vp}" '
-                            f'style="display:{display};">No prior baseline ({before_tag})</div>'
-                        )
 
-            after_content = "".join(after_imgs)
-            before_content = "".join(before_imgs)
+                        # Before
+                        if before and before.get("reproducible"):
+                            raw_fn_before = (
+                                before["screenshots"].get(r, {}).get(vp, f"{r}-{vp}.png")
+                            )
+                            fn_before = html.escape(raw_fn_before, quote=True)
+                            src_before = f"./screenshots/{before_tag_q}/{fn_before}"
+                            before_imgs.append(
+                                f'<img src="{src_before}" alt="{before_tag_q} {r} {vp}" '
+                                f'data-route="{r}" data-viewport="{vp}" '
+                                f'style="display:{display};" loading="lazy" '
+                                f'width="560" height="350"/>'
+                            )
+                        else:
+                            before_imgs.append(
+                                f'<div class="no-prior" data-route="{r}" data-viewport="{vp}" '
+                                f'style="display:{display};">No prior baseline ({before_tag})</div>'
+                            )
 
-            body_html = (
-                f'<div class="compare-container"><div class="compare-grid">'
-                f'<div class="compare-col">'
-                f'<div class="compare-col-header">Before ({before_tag})</div>'
-                f'<div class="compare-img-wrap">{before_content}</div></div>'
-                f'<div class="compare-col">'
-                f'<div class="compare-col-header">After ({tag})</div>'
-                f'<div class="compare-img-wrap">{after_content}</div></div>'
-                f"</div></div>"
+                after_content = "".join(after_imgs)
+                before_content = "".join(before_imgs)
+
+                body_html = (
+                    f'<div class="compare-container"><div class="compare-grid">'
+                    f'<div class="compare-col">'
+                    f'<div class="compare-col-header">Before ({before_tag})</div>'
+                    f'<div class="compare-img-wrap">{before_content}</div></div>'
+                    f'<div class="compare-col">'
+                    f'<div class="compare-col-header">After ({tag})</div>'
+                    f'<div class="compare-img-wrap">{after_content}</div></div>'
+                    f"</div></div>"
+                )
+
+            entry_date = entry["date"]
+            dot_html = '<div class="timeline-dot" aria-hidden="true"></div>'
+            item_html = (
+                f'<article class="timeline-item">{dot_html}'
+                f'<div class="timeline-card"><header class="timeline-card-header">'
+                f'<div class="timeline-meta-left"><span class="tag-badge">{tag}</span>'
+                f'<h3 class="item-title">{title}</h3></div>'
+                f'<div class="timeline-meta-right"><time datetime="{entry_date}">{date}</time>'
+                f"{badges_str}</div></header>{body_html}</div></article>"
             )
-
-        entry_date = entry["date"]
-        item_html = (
-            f'<article class="timeline-item"><div class="timeline-dot" aria-hidden="true"></div>'
-            f'<div class="timeline-card"><header class="timeline-card-header">'
-            f'<div class="timeline-meta-left"><span class="tag-badge">{tag}</span>'
-            f'<h3 class="item-title">{title}</h3></div>'
-            f'<div class="timeline-meta-right"><time datetime="{entry_date}">{date}</time>'
-            f"{badges_str}</div></header>{body_html}</div></article>"
-        )
+        else:
+            # Compact row for older releases (saves ~4KB per entry, no <img> markup)
+            entry_date = entry["date"]
+            dot_html = '<div class="timeline-dot" aria-hidden="true"></div>'
+            item_html = (
+                f'<article class="timeline-item timeline-item-compact">{dot_html}'
+                f'<div class="timeline-card timeline-card-compact">'
+                f'<header class="timeline-card-header">'
+                f'<div class="timeline-meta-left"><span class="tag-badge">{tag}</span>'
+                f'<h3 class="item-title">{title}</h3></div>'
+                f'<div class="timeline-meta-right"><time datetime="{entry_date}">{date}</time>'
+                f"{badges_str}</div></header></div></article>"
+            )
         timeline_items_html.append(item_html)
 
-    if len(timeline_items_html) > 8:
-        recent_items = timeline_items_html[:8]
-        older_items = timeline_items_html[8:]
+    if len(timeline_items_html) > 5:
+        recent_items = timeline_items_html[:5]
+        older_items = timeline_items_html[5:]
         older_count = len(older_items)
         older_content = "\n".join(older_items)
         older_summary = f"Older releases ({older_count})"
@@ -1037,7 +1088,7 @@ def render_html(
     then_tag = html.escape(oldest_entry["tag"]) if oldest_entry else "v0.1.0"
     now_tag = html.escape(newest_entry["tag"]) if newest_entry else "v0.4.0"
 
-    return f"""<!doctype html>
+    html_doc = f"""<!doctype html>
 <html lang="en">
 <head>
   <meta charset="utf-8">
@@ -1173,6 +1224,15 @@ def render_html(
 </body>
 </html>
 """
+    html_bytes = len(html_doc.encode("utf-8"))
+    if html_bytes >= BUDGET_HTML_BYTES and len(entries) > 1:
+        sys.stderr.write(
+            f"WARNING: HTML size ({html_bytes} bytes) exceeds budget ({BUDGET_HTML_BYTES} bytes); "
+            "truncating oldest entry to fit within budget.\n"
+        )
+        return render_html(entries[:-1], repo_name=repo_name)
+
+    return html_doc
 
 
 def build_history_site(
@@ -1224,24 +1284,49 @@ def build_history_site(
     js_path = js_dir / "main.js"
     js_path.write_text(js_content, encoding="utf-8")
 
-    # 4. Write HTML
+    # 4. Write HTML (warn on budget limit, do not fail site build)
     html_content = render_html(entries)
     html_bytes = len(html_content.encode("utf-8"))
     if html_bytes >= BUDGET_HTML_BYTES:
-        raise ValueError(f"HTML exceeds size budget: {html_bytes} >= {BUDGET_HTML_BYTES} bytes")
+        sys.stderr.write(
+            f"WARNING: HTML exceeds size budget: {html_bytes} >= {BUDGET_HTML_BYTES} bytes\n"
+        )
     html_path = output_dir / "index.html"
     html_path.write_text(html_content, encoding="utf-8")
 
-    # 5. Link or copy screenshots directory if requested
+    # 5. Copy screenshot folders only for entries rendered on the timeline with images
     out_screenshots = output_dir / "screenshots"
     if screenshots_dir.exists() and screenshots_dir.resolve() != out_screenshots.resolve():
         out_screenshots.mkdir(parents=True, exist_ok=True)
-        for item in screenshots_dir.iterdir():
-            if item.is_dir():
-                target = out_screenshots / item.name
-                if not target.exists():
-                    with contextlib.suppress(Exception):
-                        shutil.copytree(item, target)
+        rendered_tags: set[str] = set()
+        for entry in entries[:5]:
+            if entry.get("reproducible"):
+                rendered_tags.add(entry["tag"])
+            before = entry.get("before")
+            if before and before.get("reproducible") and before.get("tag"):
+                rendered_tags.add(before["tag"])
+        if entries:
+            oldest = entries[-1]
+            if oldest.get("reproducible"):
+                rendered_tags.add(oldest["tag"])
+
+        for tag_name in sorted(rendered_tags):
+            src_tag_dir = screenshots_dir / tag_name
+            if not src_tag_dir.exists():
+                raise RuntimeError(
+                    f"Required screenshot directory missing for rendered entry: {src_tag_dir}"
+                )
+            if src_tag_dir.is_symlink():
+                continue
+            dst_tag_dir = out_screenshots / tag_name
+            if not dst_tag_dir.exists():
+                dst_tag_dir.mkdir(parents=True, exist_ok=True)
+                for item in src_tag_dir.iterdir():
+                    if item.is_symlink():
+                        continue
+                    valid_ext = item.name.endswith(".png") or item.name == "manifest.json"
+                    if item.is_file() and valid_ext:
+                        shutil.copy2(item, dst_tag_dir / item.name)
 
     print(f"Generated App Evolution Showcase at {output_dir}")
     print(f"HTML: {len(html_content.encode('utf-8'))} bytes (budget: {BUDGET_HTML_BYTES})")

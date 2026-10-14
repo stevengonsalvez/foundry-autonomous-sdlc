@@ -270,9 +270,9 @@ def test_size_budget() -> None:
     assert len(css.encode("utf-8")) < BUDGET_CSS_BYTES
     assert len(js.encode("utf-8")) < BUDGET_JS_BYTES
 
-    # Test with 10 releases
+    # Test with 30 releases
     entries = []
-    for i in range(10, 0, -1):
+    for i in range(30, 0, -1):
         tag = f"v0.{i}.0"
         entries.append(
             {
@@ -362,7 +362,7 @@ def test_update_history_validates_untrusted_artifacts() -> None:
 
 
 def test_tag_regex_filtering() -> None:
-    r"""Only tags matching ^v\d+\.\d+\.\d+$ should be collected."""
+    r"""Only tags matching ^v(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$ should be collected."""
     with tempfile.TemporaryDirectory() as td:
         screenshots_dir = Path(td)
         entries = collect_evolution_entries(
@@ -373,8 +373,8 @@ def test_tag_regex_filtering() -> None:
         assert [e["tag"] for e in entries] == ["v0.3.0", "v0.1.0"]
 
 
-def test_older_entries_disclosure_collapses_more_than_eight() -> None:
-    """Releases exceeding 8 should be collapsed into <details class="older-entries-disclosure">."""
+def test_older_entries_disclosure_collapses_more_than_five() -> None:
+    """Releases exceeding 5 should be collapsed and rendered as compact rows."""
     entries = []
     for i in range(10, 0, -1):
         entries.append(
@@ -390,16 +390,30 @@ def test_older_entries_disclosure_collapses_more_than_eight() -> None:
         )
     html_out = render_html(entries)
     assert '<details class="older-entries-disclosure">' in html_out
-    assert '<summary class="older-entries-summary">Older releases (2)</summary>' in html_out
+    assert '<summary class="older-entries-summary">Older releases (5)</summary>' in html_out
+    assert "timeline-item-compact" in html_out
 
 
 def test_v031_issue_label_pr_only() -> None:
-    """v0.3.1 must have issue_label = 'PR only' and link PR only."""
+    """v0.3.1 must derive issue_label = 'PR only' from state ledger where issue == pr."""
     with tempfile.TemporaryDirectory() as td:
         screenshots_dir = Path(td)
         create_release_fixture(screenshots_dir, "v0.3.1")
+        state_data = {
+            "tickets": [
+                {
+                    "release": {"tag": "v0.3.1"},
+                    "kind": "pr",
+                    "issue": 40,
+                    "pr": {
+                        "number": 40,
+                        "url": "https://github.com/stevengonsalvez/foundry-autonomous-sdlc/pull/40",
+                    },
+                }
+            ]
+        }
         entries = collect_evolution_entries(
-            state_data={},
+            state_data=state_data,
             screenshots_dir=screenshots_dir,
             tags=["v0.3.1"],
         )
@@ -412,7 +426,7 @@ def test_v031_issue_label_pr_only() -> None:
 
 
 def test_budget_exceeded_raises_value_error(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Hard budget limits must raise ValueError instead of assert."""
+    """Hard budget limits for CSS must raise ValueError."""
     with tempfile.TemporaryDirectory() as td:
         out_dir = Path(td) / "out"
         screenshots_dir = Path(td) / "screenshots"
@@ -428,3 +442,44 @@ def test_budget_exceeded_raises_value_error(monkeypatch: pytest.MonkeyPatch) -> 
                 state_data={},
                 tags=["v0.1.0"],
             )
+
+
+def test_shallow_clone_raises_loudly(monkeypatch: pytest.MonkeyPatch) -> None:
+    """When releases/ exist on disk but git has 0 tags (shallow checkout), generator must raise."""
+    import subprocess
+
+    with tempfile.TemporaryDirectory() as td:
+        screenshots_dir = Path(td)
+        create_release_fixture(screenshots_dir, "v0.1.0")
+
+        original_run = subprocess.run
+
+        def mock_run(cmd, *args, **kwargs):
+            if cmd == ["git", "tag", "-l", "v*"]:
+
+                class MockResult:
+                    returncode = 0
+                    stdout = ""
+                    stderr = ""
+
+                return MockResult()
+            return original_run(cmd, *args, **kwargs)
+
+        monkeypatch.setattr(subprocess, "run", mock_run)
+        with pytest.raises(
+            RuntimeError,
+            match=r"Found 1 release directories .* but git repository has 0 tags",
+        ):
+            collect_evolution_entries(
+                state_data={},
+                screenshots_dir=screenshots_dir,
+                tags=None,
+            )
+
+
+def test_get_commit_metadata_raises_on_invalid_ref() -> None:
+    """get_commit_metadata must raise RuntimeError on unknown/invalid refs."""
+    from scripts.ui.generate_history import get_commit_metadata
+
+    with pytest.raises(RuntimeError, match="Cannot resolve commit metadata"):
+        get_commit_metadata("nonexistent-ref-00000000")
