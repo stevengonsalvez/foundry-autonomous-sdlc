@@ -83,12 +83,33 @@ def test_format_pr_comment_ignores_hostile_injections() -> None:
 
 
 def test_resolve_pr_number() -> None:
-    # From pull_requests_json
-    payload = json.dumps([{"number": 99, "head": {"ref": "agent/issue-1"}}])
+    # From pull_requests_json with exact sha match
+    payload = json.dumps([{"number": 99, "head": {"ref": "agent/issue-1", "sha": "abcdef12"}}])
     assert resolve_pr_number("abcdef12", "owner/repo", payload) == 99
+
+    # Mismatched sha in pull_requests_json returns None
+    mismatch_payload = json.dumps(
+        [{"number": 99, "head": {"ref": "agent/issue-1", "sha": "00000000"}}]
+    )
+    assert resolve_pr_number("abcdef12", "owner/repo", mismatch_payload) is None
+
+    # Ambiguous multiple PR matches return None
+    multi_payload = json.dumps([
+        {"number": 99, "head": {"sha": "abcdef12"}},
+        {"number": 100, "head": {"sha": "abcdef12"}},
+    ])
+    assert resolve_pr_number("abcdef12", "owner/repo", multi_payload) is None
 
     # From empty json
     assert resolve_pr_number("abcdef12", "owner/repo", "[]") is None
+
+    # Fallback to gh api with slurped paginated results
+    slurped_pages = [
+        [{"number": 77, "head": {"sha": "fedcba98"}}],
+        [{"number": 88, "head": {"sha": "abcdef12"}}],
+    ]
+    with patch("scripts.ui.publish_proof.run_cmd", return_value=json.dumps(slurped_pages)):
+        assert resolve_pr_number("abcdef12", "owner/repo") == 88
 
 
 def test_prune_old_prs(tmp_path: Path) -> None:

@@ -17,7 +17,9 @@ import json
 import os
 import re
 import stat
+import struct
 import sys
+import zlib
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -34,6 +36,10 @@ SHA256_HEX_RE = re.compile(r"^[0-9a-f]{64}$")
 ROUTE_RE = re.compile(r"^(home|parcel-found|not-found|invalid-input)$")
 VIEWPORT_RE = re.compile(r"^(desktop|mobile)$")
 
+ALLOWED_CHUNK_TYPES: frozenset[bytes] = frozenset(
+    {b"IHDR", b"IDAT", b"IEND", b"sRGB", b"gAMA", b"pHYs"}
+)
+
 ALLOWED_DIMENSIONS = {
     "desktop": (1280, 800),
     "mobile": (390, 844),
@@ -43,12 +49,10 @@ ALLOWED_DIMENSIONS = {
 def validate_png_bytes(
     content: bytes, filename: str, expected_viewport: str | None = None
 ) -> list[str]:
-    """Parse PNG chunks, enforce dimensions and verify no extraneous trailing data."""
+    """Parse PNG chunks, enforce dimensions, allowlist chunk types and verify CRC."""
     errs: list[str] = []
     if len(content) < 33 or not content.startswith(PNG_MAGIC_BYTES):
         return [f"File {filename} does not have valid PNG magic bytes header"]
-
-    import struct
 
     # Chunk 1 must be IHDR
     ihdr_len, ihdr_type = struct.unpack(">I4s", content[8:16])
@@ -74,7 +78,7 @@ def validate_png_bytes(
                 "(must be 1280x800 or 390x844)"
             )
 
-    # Walk chunks to ensure proper framing and that IEND is the final chunk with no trailing data
+    # Walk chunks to ensure proper framing, allowed chunk types, CRC and IEND terminal chunk
     pos = 8
     found_iend = False
     while pos + 12 <= len(content):
@@ -85,6 +89,23 @@ def validate_png_bytes(
             errs.append(
                 f"File {filename} has truncated PNG chunk "
                 f"{chunk_type.decode('latin1', errors='replace')}"
+            )
+            return errs
+
+        if chunk_type not in ALLOWED_CHUNK_TYPES:
+            errs.append(
+                f"File {filename} has disallowed PNG chunk type "
+                f"{chunk_type.decode('latin1', errors='replace')}"
+            )
+            return errs
+
+        chunk_data = content[pos + 8 : chunk_data_end]
+        (expected_crc,) = struct.unpack(">I", content[chunk_data_end:crc_end])
+        computed_crc = zlib.crc32(chunk_type + chunk_data) & 0xFFFFFFFF
+        if computed_crc != expected_crc:
+            errs.append(
+                f"File {filename} chunk {chunk_type.decode('latin1', errors='replace')} "
+                f"has invalid CRC: expected {expected_crc:#010x}, computed {computed_crc:#010x}"
             )
             return errs
 
@@ -256,7 +277,7 @@ def validate_artifact_dir(artifact_dir: str | Path) -> ValidationResult:
         if not isinstance(expected_sha, str) or not SHA256_HEX_RE.fullmatch(expected_sha):
             errors.append(f"screenshots[{i}] has invalid sha256 hash: {expected_sha!r}")
 
-        if not isinstance(expected_size, int) or expected_size < 0:
+        if type(expected_size) is not int or expected_size < 0:
             errors.append(f"screenshots[{i}] has invalid size: {expected_size!r}")
 
         if filename in manifest_entries_by_filename:

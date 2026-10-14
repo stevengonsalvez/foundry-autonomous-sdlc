@@ -6,7 +6,7 @@ import { trailGroups, trailIssues } from '../model.js';
 import { ui } from '../ui.js';
 import { envBadgeFor, pageHead, shaLink, stageBadge, ticketRef, typeBadge } from './common.js';
 
-const SEVERITY_TONE = { critical: 'bad', high: 'bad', medium: 'warn', low: 'info', info: 'neutral' };
+export const SEVERITY_TONE = Object.freeze({ critical: 'bad', high: 'bad', medium: 'warn', low: 'info', info: 'neutral' });
 
 export function verdictBadge(verdict) {
   if (verdict === 'approve') return badge('Approved', 'good');

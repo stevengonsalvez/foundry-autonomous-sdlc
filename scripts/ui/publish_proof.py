@@ -17,6 +17,7 @@ import os
 import shutil
 import subprocess
 import sys
+import tempfile
 import time
 from pathlib import Path
 from typing import Any
@@ -64,6 +65,7 @@ def resolve_pr_number(
         try:
             data = json.loads(pull_requests_json)
             if isinstance(data, list):
+                matches: list[int] = []
                 for pr in data:
                     if not isinstance(pr, dict):
                         continue
@@ -71,39 +73,57 @@ def resolve_pr_number(
                     if not isinstance(num, int):
                         continue
                     pr_head = pr.get("head") or {}
+                    if pr_head.get("sha") != head_sha:
+                        continue
                     pr_head_repo = (pr_head.get("repo") or {}).get("full_name")
                     pr_head_ref = pr_head.get("ref")
                     if head_repo and pr_head_repo and pr_head_repo != head_repo:
                         continue
                     if head_branch and pr_head_ref and pr_head_ref != head_branch:
                         continue
-                    return num
+                    matches.append(num)
+                if len(matches) == 1:
+                    return matches[0]
+                if len(matches) > 1:
+                    return None
         except Exception:
             pass
 
     # Fallback to GitHub API: pick only the PR whose head.repo.full_name and head.ref match the run
     try:
         out = run_cmd(
-            ["gh", "api", "--paginate", f"repos/{repo}/commits/{head_sha}/pulls"],
+            ["gh", "api", "--paginate", "--slurp", f"repos/{repo}/commits/{head_sha}/pulls"],
             check=False,
         )
         if out:
-            pulls = json.loads(out)
-            if isinstance(pulls, list):
-                for pr in pulls:
-                    if not isinstance(pr, dict):
-                        continue
-                    num = pr.get("number")
-                    if not isinstance(num, int):
-                        continue
-                    pr_head = pr.get("head") or {}
-                    pr_head_repo = (pr_head.get("repo") or {}).get("full_name")
-                    pr_head_ref = pr_head.get("ref")
-                    if head_repo and pr_head_repo and pr_head_repo != head_repo:
-                        continue
-                    if head_branch and pr_head_ref and pr_head_ref != head_branch:
-                        continue
-                    return num
+            pages = json.loads(out)
+            pulls: list[Any] = []
+            if isinstance(pages, list):
+                for item in pages:
+                    if isinstance(item, list):
+                        pulls.extend(item)
+                    elif isinstance(item, dict):
+                        pulls.append(item)
+
+            matches = []
+            for pr in pulls:
+                if not isinstance(pr, dict):
+                    continue
+                num = pr.get("number")
+                if not isinstance(num, int):
+                    continue
+                pr_head = pr.get("head") or {}
+                if pr_head.get("sha") != head_sha:
+                    continue
+                pr_head_repo = (pr_head.get("repo") or {}).get("full_name")
+                pr_head_ref = pr_head.get("ref")
+                if head_repo and pr_head_repo and pr_head_repo != head_repo:
+                    continue
+                if head_branch and pr_head_ref and pr_head_ref != head_branch:
+                    continue
+                matches.append(num)
+            if len(matches) == 1:
+                return matches[0]
     except Exception:
         pass
 
@@ -304,81 +324,106 @@ def publish(
 
     print(f"Publishing UI screenshots for PR #{pr_number} (head sha: {head_sha[:8]})...")
 
-    work_dir = Path("/tmp/pr-screenshots-worktree")
-    if work_dir.exists():
-        shutil.rmtree(work_dir)
-    work_dir.mkdir(parents=True)
+    work_dir = Path(tempfile.mkdtemp(dir=os.environ.get("RUNNER_TEMP")))
 
-    # Initialize or clone pr-screenshots branch
-    run_cmd(["git", "init"], cwd=work_dir)
-    remote_url = f"https://github.com/{repo}.git"
-    run_cmd(["git", "remote", "add", "origin", remote_url], cwd=work_dir)
+    try:
+        # Initialize or clone pr-screenshots branch
+        run_cmd(["git", "init"], cwd=work_dir)
+        remote_url = f"https://github.com/{repo}.git"
+        run_cmd(["git", "remote", "add", "origin", remote_url], cwd=work_dir)
 
-    remote_branches = run_cmd(
-        ["git", "ls-remote", "--heads", "origin", BRANCH_NAME],
-        cwd=work_dir,
-        check=False,
-    )
-    if BRANCH_NAME in remote_branches:
-        run_cmd(["git", "fetch", "origin", BRANCH_NAME, "--depth=1"], cwd=work_dir)
-        run_cmd(["git", "checkout", BRANCH_NAME], cwd=work_dir)
-    else:
-        run_cmd(["git", "checkout", "--orphan", BRANCH_NAME], cwd=work_dir)
+        remote_branches = run_cmd(
+            ["git", "ls-remote", "--heads", "origin", BRANCH_NAME],
+            cwd=work_dir,
+            check=False,
+        )
+        if BRANCH_NAME in remote_branches:
+            run_cmd(["git", "fetch", "origin", BRANCH_NAME, "--depth=1"], cwd=work_dir)
+            run_cmd(["git", "checkout", BRANCH_NAME], cwd=work_dir)
+        else:
+            run_cmd(["git", "checkout", "--orphan", BRANCH_NAME], cwd=work_dir)
 
-    target_dir = work_dir / f"pr-{pr_number}" / head_sha[:8]
-    target_dir.mkdir(parents=True, exist_ok=True)
+        target_dir = work_dir / f"pr-{pr_number}" / head_sha[:8]
+        target_dir.mkdir(parents=True, exist_ok=True)
 
-    # Copy verified PNGs and manifest.json
-    artifacts_path = Path(artifacts_dir)
-    for screenshot in res.screenshots:
-        fn = screenshot["filename"]
-        shutil.copy2(artifacts_path / fn, target_dir / fn)
+        # Copy verified PNGs
+        artifacts_path = Path(artifacts_dir)
+        for screenshot in res.screenshots:
+            fn = screenshot["filename"]
+            shutil.copy2(artifacts_path / fn, target_dir / fn)
 
-    shutil.copy2(artifacts_path / "manifest.json", target_dir / "manifest.json")
+        # Write rebuilt manifest containing only allowlisted keys
+        rebuilt_manifest = {
+            "version": 1,
+            "screenshots": [
+                {
+                    "filename": s["filename"],
+                    "route": s["route"],
+                    "sha256": s["sha256"],
+                    "size": s["size"],
+                    "viewport": s["viewport"],
+                }
+                for s in res.screenshots
+            ],
+        }
+        (target_dir / "manifest.json").write_text(
+            json.dumps(rebuilt_manifest, indent=2, sort_keys=True) + "\n",
+            encoding="utf-8",
+        )
 
-    # Prune old PRs closed more than 14 days ago
-    pruned = prune_old_prs(work_dir, repo)
+        # Prune old PRs closed more than 14 days ago
+        pruned = prune_old_prs(work_dir, repo)
 
-    # Configure git committer
-    run_cmd(["git", "config", "user.name", "github-actions[bot]"], cwd=work_dir)
-    run_cmd(
-        [
-            "git",
-            "config",
-            "user.email",
-            "41898282+github-actions[bot]@users.noreply.github.com",
-        ],
-        cwd=work_dir,
-    )
+        # Configure git committer
+        run_cmd(["git", "config", "user.name", "github-actions[bot]"], cwd=work_dir)
+        run_cmd(
+            [
+                "git",
+                "config",
+                "user.email",
+                "41898282+github-actions[bot]@users.noreply.github.com",
+            ],
+            cwd=work_dir,
+        )
 
-    run_cmd(["git", "add", "-A"], cwd=work_dir)
-    status = run_cmd(["git", "status", "--porcelain"], cwd=work_dir)
+        run_cmd(["git", "add", "-A"], cwd=work_dir)
+        status = run_cmd(["git", "status", "--porcelain"], cwd=work_dir)
 
-    if status:
-        msg = f"proof: UI screenshots for PR #{pr_number} at {head_sha[:8]}"
-        if pruned:
-            msg += f" (pruned: {', '.join(f'#{n}' for n in pruned)})"
-        run_cmd(["git", "commit", "-m", msg], cwd=work_dir)
+        if status:
+            msg = f"proof: UI screenshots for PR #{pr_number} at {head_sha[:8]}"
+            if pruned:
+                msg += f" (pruned: {', '.join(f'#{n}' for n in pruned)})"
+            run_cmd(["git", "commit", "-m", msg], cwd=work_dir)
 
-        # Push with a loop of up to 3 attempts with rebase
-        for attempt in range(3):
-            try:
-                run_cmd(
-                    ["git", "pull", "--rebase", "origin", BRANCH_NAME],
-                    cwd=work_dir,
-                    check=False,
-                )
-                run_cmd(["git", "push", "origin", BRANCH_NAME], cwd=work_dir)
-                print(f"Pushed UI screenshots to branch {BRANCH_NAME}")
-                break
-            except Exception as exc:
-                if attempt == 2:
-                    raise RuntimeError(
-                        f"Failed to push to {BRANCH_NAME} after 3 attempts: {exc}"
-                    ) from exc
-                time.sleep(1)
-    else:
-        print("No changes to commit on pr-screenshots branch.")
+            # Push with a loop of up to 3 attempts with rebase
+            for attempt in range(3):
+                try:
+                    pull_res = subprocess.run(
+                        ["git", "pull", "--rebase", "origin", BRANCH_NAME],
+                        cwd=work_dir,
+                        capture_output=True,
+                        text=True,
+                    )
+                    if pull_res.returncode != 0:
+                        run_cmd(["git", "rebase", "--abort"], cwd=work_dir, check=False)
+                        if BRANCH_NAME in remote_branches:
+                            raise RuntimeError(
+                                f"git pull --rebase failed: {pull_res.stderr.strip()}"
+                            )
+                    run_cmd(["git", "push", "origin", BRANCH_NAME], cwd=work_dir)
+                    print(f"Pushed UI screenshots to branch {BRANCH_NAME}")
+                    break
+                except Exception as exc:
+                    run_cmd(["git", "rebase", "--abort"], cwd=work_dir, check=False)
+                    if attempt == 2:
+                        raise RuntimeError(
+                            f"Failed to push to {BRANCH_NAME} after 3 attempts: {exc}"
+                        ) from exc
+                    time.sleep(1)
+        else:
+            print("No changes to commit on pr-screenshots branch.")
+    finally:
+        shutil.rmtree(work_dir, ignore_errors=True)
 
     # Upsert comment on the PR
     comment_body = format_pr_comment(

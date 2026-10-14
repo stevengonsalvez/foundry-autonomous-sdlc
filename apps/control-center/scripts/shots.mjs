@@ -5,7 +5,7 @@ import { mkdir } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { launch, loadPlaywright, openFixed } from './browser.mjs';
+import { launch, loadPlaywright, openFixed } from '../test/browser.mjs';
 import { startServer } from './dev-server.mjs';
 
 const outDir = process.env.SHOTS_OUT_DIR
