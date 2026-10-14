@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Note: Linux-only test suite (relies on GNU mktemp --suffix and coreutils).
+# Note: Portable test suite using standard mktemp.
 #
 # Test suite for scripts/po/lint_roadmap.sh verifying that strict validation
 # catches invalid roadmap mutations:
@@ -31,7 +31,7 @@ run_mutation_test() {
   echo -n "Test $total: $name ... "
 
   local tmpfile
-  tmpfile="$(mktemp --suffix=.md)"
+  tmpfile="$(mktemp "${TMPDIR:-/tmp}/x.XXXXXX")"
   echo "$content" > "$tmpfile"
 
   local output
@@ -234,7 +234,7 @@ M17_CONTENT='### ITEM-001: feat(web): test item
   1. This is a valid acceptance criterion with more than three words.'
 run_mutation_test "Rejects hidden HTML comment raising the cap in User Value" \
   "$M17_CONTENT" \
-  "Forbidden.*raise/increase the cap"
+  "Forbidden.*(raise/increase the cap|cap bypass)"
 
 # 18: Preamble rule with gh pr merge --admin
 M18_CONTENT='# Product Roadmap
@@ -303,6 +303,70 @@ M21_CONTENT='### ITEM-004: feat(web): test item with status in gap anchor
 run_mutation_test "Rejects Status line inside Gap Anchor" \
   "$M21_CONTENT" \
   "Duplicate.*Status|exact fixed order"
+
+# 22: MEMORY.md mention in roadmap
+M22_CONTENT='### ITEM-001: feat(web): test item
+- **Status**: todo
+- **Dependencies**: []
+- **Cost Class**: S
+- **Tags**: test
+- **Gap Anchor**: `app/web/src/App.tsx#L1`.
+- **User Value**: Tracked in po/MEMORY.md for history.
+- **Files Touched**:
+  - `app/web/src/App.tsx`
+- **Acceptance Criteria**:
+  1. This is a valid acceptance criterion with more than three words.'
+run_mutation_test "Rejects MEMORY.md mention in roadmap" \
+  "$M22_CONTENT" \
+  "Forbidden mention 'MEMORY\.md'"
+
+# 23: Rephrased cap bypass (bump the cap)
+M23_CONTENT='### ITEM-001: feat(web): test item
+- **Status**: todo
+- **Dependencies**: []
+- **Cost Class**: S
+- **Tags**: test
+- **Gap Anchor**: `app/web/src/App.tsx#L1`.
+- **User Value**: When spend is tight, bump the cap to allow completion.
+- **Files Touched**:
+  - `app/web/src/App.tsx`
+- **Acceptance Criteria**:
+  1. This is a valid acceptance criterion with more than three words.'
+run_mutation_test "Rejects rephrased cap bypass (bump the cap)" \
+  "$M23_CONTENT" \
+  "Forbidden cap bypass phrasing"
+
+# 24: Rephrased limit bypass (disable the limit)
+M24_CONTENT='### ITEM-001: feat(web): test item
+- **Status**: todo
+- **Dependencies**: []
+- **Cost Class**: S
+- **Tags**: test
+- **Gap Anchor**: `app/web/src/App.tsx#L1`.
+- **User Value**: Temporarily disable the hard budget limit.
+- **Files Touched**:
+  - `app/web/src/App.tsx`
+- **Acceptance Criteria**:
+  1. This is a valid acceptance criterion with more than three words.'
+run_mutation_test "Rejects rephrased limit bypass (disable the limit)" \
+  "$M24_CONTENT" \
+  "Forbidden cap bypass phrasing"
+
+# 25: Rejects git -C ... push
+M25_CONTENT='### ITEM-001: feat(web): test item
+- **Status**: todo
+- **Dependencies**: []
+- **Cost Class**: S
+- **Tags**: test
+- **Gap Anchor**: `app/web/src/App.tsx#L1`.
+- **User Value**: Test value.
+- **Files Touched**:
+  - `app/web/src/App.tsx`
+- **Acceptance Criteria**:
+  1. Run git -C /repo push origin main to sync changes.'
+run_mutation_test "Rejects git -C push command" \
+  "$M25_CONTENT" \
+  "Forbidden command 'git ... push'"
 
 echo "----------------------------------------"
 if [ "$failures" -gt 0 ]; then
