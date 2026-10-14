@@ -1,0 +1,85 @@
+name: App Evolution History
+
+# Trusted workflow from main that captures the app UI, appends screenshots to the
+# pr-screenshots branch under releases/<tag-or-sha8>/, and regenerates the static /history/ page.
+#
+# Runs on push to main affecting app/**, release tag pushes, or after CD promote / Pages workflows.
+# Never checks out untrusted PR code; treats all captured artifacts as untrusted data.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "app/**"
+    tags:
+      - "v*"
+  workflow_run:
+    workflows: [CD, Pages]
+    types: [completed]
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: "Git ref or commit SHA to capture (defaults to main HEAD)"
+        type: string
+        default: ""
+
+concurrency:
+  group: app-history
+  cancel-in-progress: false
+
+defaults:
+  run:
+    shell: bash -euo pipefail {0}
+
+permissions:
+  contents: write
+
+env:
+  NODE_VERSION: "22"
+  PYTHON_VERSION: "3.12"
+
+jobs:
+  update-history:
+    name: update-history
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: main
+          fetch-depth: 0
+          persist-credentials: true
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Configure GitHub CLI for git authentication
+        run: gh auth setup-git
+
+      - name: Install dependencies and build app
+        run: |
+          cd app
+          npm ci
+          npm run build:pages
+          npx playwright install --with-deps chromium
+
+      - name: Capture screenshots
+        run: |
+          node scripts/ui/capture.mjs --dist app/web/dist-pages --output-dir temp-captured-screenshots
+
+      - name: Validate, publish screenshots, and regenerate history
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+        run: |
+          python -m scripts.ui.update_history \
+            --artifacts-dir temp-captured-screenshots \
+            --repo "$GITHUB_REPOSITORY" \
+            --push
