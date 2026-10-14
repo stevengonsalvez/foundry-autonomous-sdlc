@@ -9,7 +9,7 @@ from typing import Any
 import pytest
 
 from sdlc_agents.ledger import events, fold
-from tests.ledger.conftest import NOW, ticket_event
+from tests.ledger.conftest import NOW, ticket_event, ticket_of
 
 
 def deploy_doc(history: list[dict[str, Any]], **extra: Any) -> dict[str, Any]:
@@ -360,42 +360,55 @@ def test_a_release_flagged_by_cd_without_a_state_comment_still_says_why_and_link
     )
 
 
-def test_escalation_resolved_event_and_determinism(real) -> None:
-    # Issue 17 starts as open escalation
-    ev17 = ticket_event(real[17])
-    res_at = "2026-10-10T16:00:00Z"
-    ev_res = events.make(
-        "escalation.resolved",
-        res_at,
-        {"resolved": {"at": res_at, "by": "simulated-human", "how": "closed"}},
-        issue=17,
-        source="reconcile",
-    )
-    all_evs = [ev17, ev_res]
-
-    # Fold from events
-    doc1 = fold.fold(all_evs, NOW)
-    t17 = next(t for t in doc1["tickets"] if t["issue"] == 17)
-    assert t17["escalation"]["resolved"] == {
-        "at": res_at,
-        "by": "simulated-human",
-        "how": "closed",
-    }
-    # Escalated count in flow should now be 0 since ticket 17 was resolved
+def test_escalation_resolution_recomputed_on_fold_and_does_not_stick(real) -> None:
+    # 1. Ticket with resolved escalation
+    t17 = copy.deepcopy(ticket_of(real[17]))
+    t17["escalation"]["resolved"] = {"at": "2026-10-10T16:00:00Z", "by": "simulated-human", "how": "closed"}
+    t17["escalation"]["open"] = False
+    ev_resolved = events.make("ticket.updated", t17["updated_at"], {"ticket": t17}, issue=17, source="reconcile")
+    doc1 = fold.fold([ev_resolved], NOW)
+    folded17 = next(t for t in doc1["tickets"] if t["issue"] == 17)
+    assert folded17["escalation"]["resolved"] is not None
+    assert folded17["escalation"]["open"] is False
     assert doc1["flow"]["counts"]["escalated"] == 0
 
+    # 2. Re-opened / re-escalated ticket arriving later (without resolved) must NOT stick via _keep_richer
+    t17_reopened = copy.deepcopy(t17)
+    t17_reopened["closed_at"] = None
+    t17_reopened["updated_at"] = "2026-10-14T20:00:00Z"
+    t17_reopened["escalation"] = {
+        "label": "escalated:not-agent-suitable",
+        "reasons": ["reopened and escalated again"],
+        "at": "2026-10-14T20:00:00Z",
+        "attempts": 0,
+        "tried": [],
+        "evidence_url": t17["url"],
+        "resolved": None,
+        "open": True,
+    }
+    ev_reopened = events.make(
+        "ticket.updated", "2026-10-14T20:00:00Z", {"ticket": t17_reopened}, issue=17, source="orchestrator"
+    )
+    doc2 = fold.fold([ev_resolved, ev_reopened], NOW)
+    folded17_reopened = next(t for t in doc2["tickets"] if t["issue"] == 17)
+    assert folded17_reopened["escalation"]["resolved"] is None
+    assert folded17_reopened["escalation"]["open"] is True
+    assert doc2["flow"]["counts"]["escalated"] == 1
+
     # Determinism: rebuilding from scratch produces identical state
-    doc2 = fold.fold(all_evs, NOW)
-    assert doc1 == doc2
+    doc3 = fold.fold([ev_resolved, ev_reopened], NOW)
+    assert doc2 == doc3
 
 
 def test_old_state_json_without_resolved_backwards_compatible(real) -> None:
     # Simulate an old state where tickets have escalation without "resolved" key
     ev17 = ticket_event(real[17])
-    # Deliberately remove resolved from event ticket data
+    # Deliberately remove resolved and open from event ticket data
     ev17["data"]["ticket"]["escalation"].pop("resolved", None)
+    ev17["data"]["ticket"]["escalation"].pop("open", None)
 
     doc = fold.fold([ev17], NOW)
     t17 = next(t for t in doc["tickets"] if t["issue"] == 17)
     assert "resolved" in t17["escalation"]
     assert t17["escalation"]["resolved"] is None
+    assert t17["escalation"]["open"] is True

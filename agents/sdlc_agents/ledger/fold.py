@@ -151,11 +151,6 @@ def apply(doc: dict[str, Any], event: dict[str, Any]) -> bool:
             led["by_issue"][str(i)] = round(led["by_issue"].get(str(i), 0.0) + float(data["usd"]) / len(issues), 6)
         doc["ledger"]["last_ingest_at"] = event["at"]
         doc["ledger"]["mode"] = data.get("mode", doc["ledger"]["mode"])
-    elif kind == "escalation.resolved":
-        ticket = _find(doc, event["issue"])
-        if ticket and ticket.get("escalation"):
-            ticket["escalation"]["resolved"] = model.clean_resolved(data["resolved"])
-            ticket["updated_at"] = max(ticket.get("updated_at", ""), event["at"])
     return True
 
 
@@ -175,12 +170,6 @@ def _keep_richer(new: dict[str, Any], old: dict[str, Any]) -> None:
         and new["pr"].get("number") == old["pr"].get("number")
     ):
         new["pr"]["title"] = old["pr"].get("title")
-    if (
-        new.get("escalation")
-        and not (new["escalation"].get("resolved"))
-        and (old.get("escalation") or {}).get("resolved")
-    ):
-        new["escalation"]["resolved"] = old["escalation"]["resolved"]
 
 
 def _find(doc: dict[str, Any], issue: int) -> dict[str, Any] | None:
@@ -365,6 +354,7 @@ def overlay(ticket: dict[str, Any], deploy: dict[str, Any] | None) -> dict[str, 
             "evidence_url": last.get("run_url") or t["url"],
             "synthetic": True,
             "resolved": None,
+            "open": True,
         }
         label = model.DEPLOY_FAILED_LABEL
     sdlc = t["sdlc_stage"]
@@ -583,7 +573,7 @@ def _flow(doc: dict[str, Any], now: str) -> dict[str, Any]:
         s: sum(
             1
             for t in tickets
-            if t["stage"] == s and (s != "escalated" or not (t.get("escalation") or {}).get("resolved"))
+            if t["stage"] == s and (s != "escalated" or (t.get("escalation") or {}).get("open", True))
         )
         for s in model.BOARD_STAGES
     }
@@ -643,8 +633,11 @@ def finalise(doc: dict[str, Any], now: str) -> dict[str, Any]:
     tickets = []
     for t in doc["tickets"]:
         t = overlay(t, doc.get("deploy"))
-        if t.get("escalation") and "resolved" not in t["escalation"]:
-            t["escalation"]["resolved"] = None
+        if t.get("escalation"):
+            if "resolved" not in t["escalation"]:
+                t["escalation"]["resolved"] = None
+            if "open" not in t["escalation"]:
+                t["escalation"]["open"] = t["escalation"]["resolved"] is None
         saved = doc.get("summaries", {}).get(str(t["issue"]))
         if saved and saved.get("digest") == t.get("digest"):
             t["summary"] = saved["text"]

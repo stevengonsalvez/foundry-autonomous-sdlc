@@ -82,7 +82,13 @@ def build_ticket(
         commits=commits,
         pr_info=pr_info,
         comment_ids=ids,
-        comments=comments,
+        comments=[
+            c
+            for c in comments
+            if getattr(c, "author", None) == OWNER or (isinstance(c, dict) and c.get("author") == OWNER)
+        ],
+        updated_at=getattr(item, "updated_at", None),
+        reopened_at=getattr(item, "reopened_at", None),
     ), None
 
 

@@ -24,7 +24,7 @@ from typing import Any
 
 from sdlc_agents import state as sdlc_state
 from sdlc_agents.clock import seconds_between
-from sdlc_agents.ports import REPO
+from sdlc_agents.ports import OWNER, REPO
 from sdlc_agents.sanitise import one_line, redact_secrets
 
 VERSION = 1
@@ -58,7 +58,6 @@ GATE_NAMES = ("test", "coverage", "e2e", "gitleaks", "tdd-order", "agent-scope",
 RESOLVED_BY = ("simulated-human", "human", "system")
 RESOLVED_HOW = ("closed", "answered", "superseded")
 SIMULATED_HUMAN_MARKER = "Simulated human (antigravity)"
-_RESOLUTION_RE = re.compile(r"<!-- sdlc-resolution:v1\s+(\{.*?\})\s*-->")
 
 _CONTROL = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]")
 
@@ -307,49 +306,51 @@ def derive_resolution(
     esc_at: str | None,
     closed_at: str | None,
     comments: list[Any] | None,
+    reopened_at: str | None = None,
+    esc_label: str | None = None,
+    env: str = "none",
 ) -> dict[str, Any] | None:
     """Derive resolution for an escalation from GitHub closed status and comments."""
     if not esc_at:
         return None
 
-    # Check for explicit resolution comment after esc_at
-    for c in comments or []:
-        c_body = getattr(c, "body", None) or (c.get("body") if isinstance(c, dict) else "") or ""
-        c_at = getattr(c, "created_at", None) or (c.get("created_at") if isinstance(c, dict) else "") or ""
-        if c_at and c_at >= esc_at:
-            m = _RESOLUTION_RE.search(c_body)
-            if m:
-                try:
-                    parsed = json.loads(m.group(1))
-                    cleaned = clean_resolved({**parsed, "at": c_at})
-                    if cleaned:
-                        return cleaned
-                except (ValueError, TypeError):
-                    pass
-
-    # Find marker comments at or after esc_at
+    # Check marker comments at or after latest of esc_at and reopened_at
+    cutoff = max(esc_at, reopened_at) if reopened_at else esc_at
     marker_comments = []
     for c in comments or []:
-        c_body = getattr(c, "body", None) or (c.get("body") if isinstance(c, dict) else "") or ""
+        c_author = getattr(c, "author", None) or (c.get("author") if isinstance(c, dict) else "") or ""
+        if c_author != OWNER:
+            continue
         c_at = getattr(c, "created_at", None) or (c.get("created_at") if isinstance(c, dict) else "") or ""
-        if SIMULATED_HUMAN_MARKER in c_body and (not c_at or c_at >= esc_at):
+        if not c_at or c_at < cutoff:
+            continue
+        c_body = getattr(c, "body", None) or (c.get("body") if isinstance(c, dict) else "") or ""
+        if SIMULATED_HUMAN_MARKER in c_body:
             marker_comments.append((c_at, c))
 
-    # Case 1: Issue closed
-    if closed_at:
+    # Case 1: Issue closed (skip for escalated:deploy-failed and rolled-back tickets)
+    if closed_at and esc_label != DEPLOY_FAILED_LABEL and env != "rolled-back":
         return {
             "at": max(closed_at, esc_at),
             "by": "simulated-human" if marker_comments else "human",
             "how": "closed",
         }
 
-    # Case 2: Open issue with simulated human answer comment after escalation
+    # Case 2: Open issue with simulated human answer comment after escalation / reopen
     if marker_comments:
-        first_at = marker_comments[0][0] or esc_at
+        first_at = marker_comments[0][0]
         return {
             "at": first_at,
             "by": "simulated-human",
             "how": "answered",
+        }
+
+    # Case 3: Deploy failed superseded by a successful release
+    if env == "prod" and esc_label == DEPLOY_FAILED_LABEL:
+        return {
+            "at": esc_at,
+            "by": "system",
+            "how": "superseded",
         }
 
     return None
@@ -376,6 +377,7 @@ def escalation_block(
         "tried": tried(data),
         "evidence_url": evidence_url,
         "resolved": res,
+        "open": res is None,
     }
 
 
@@ -441,6 +443,8 @@ def ticket(
     summary: str | None = None,
     comments: list[Any] | None = None,
     resolved: dict[str, Any] | None = None,
+    updated_at: str | None = None,
+    reopened_at: str | None = None,
 ) -> dict[str, Any]:
     """Build one ticket record. `state_data` is the parsed state comment (None before the first tick)."""
     data = state_data or {}
@@ -495,8 +499,15 @@ def ticket(
     if resolved_val is None and (is_escalation(esc_label) or DEPLOY_FAILED_LABEL in labels or env == "rolled-back"):
         if (data.get("escalation") or {}).get("resolved"):
             resolved_val = clean_resolved(data["escalation"]["resolved"])
-        elif comments is not None or closed_at is not None:
-            resolved_val = derive_resolution(esc_at=esc_at, closed_at=closed_at, comments=comments)
+        elif comments is not None or closed_at is not None or env == "prod":
+            resolved_val = derive_resolution(
+                esc_at=esc_at,
+                closed_at=closed_at,
+                comments=comments,
+                reopened_at=reopened_at,
+                esc_label=esc_label,
+                env=env,
+            )
     escalation = escalation_block(
         data,
         label_only=esc_label if is_escalation(esc_label) or DEPLOY_FAILED_LABEL in labels else None,
@@ -513,6 +524,7 @@ def ticket(
             "tried": tried(data),
             "evidence_url": evidence_url,
             "resolved": clean_resolved(resolved_val),
+            "open": clean_resolved(resolved_val) is None,
         }
 
     history = stage_history(opened_at, state_stages)
@@ -525,7 +537,7 @@ def ticket(
         if escalation and escalation.get("resolved")
         else None
     )
-    updated_at = max(
+    updated_at_val = max(
         [
             now_
             for now_ in [
@@ -533,6 +545,7 @@ def ticket(
                 closed_at or opened_at,
                 last_stage_at,
                 esc_resolved_at,
+                updated_at,
                 *[h.get("finished_at") or h.get("at") for h in (hops or [])],
             ]
             if now_
@@ -553,7 +566,7 @@ def ticket(
         "url": url,
         "opened_at": opened_at,
         "closed_at": closed_at,
-        "updated_at": updated_at,
+        "updated_at": updated_at_val,
         "stage": stage,
         "sdlc_stage": sdlc_stage,
         "env": env,
