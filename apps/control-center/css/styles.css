@@ -7,12 +7,11 @@
   color-scheme: dark;
 
   /* Custom graphite-blue palette (hue 215, dark mission control) */
-  --canvas: oklch(0.07 0.012 215);        /* Page canvas background behind all containers */
-  --surface-0: oklch(0.09 0.014 215);     /* Base matrix panel and shell background */
-  --surface-1: oklch(0.11 0.016 215);     /* Elevated table row and card surface */
-  --surface-2: oklch(0.125 0.018 215);    /* Active control surface and track background */
-  --surface-3: oklch(0.138 0.020 215);    /* Raised segmented button and hover surface */
-  --surface-active: oklch(0.140 0.024 215);/* Focused interactive element surface */
+  --canvas: oklch(0.030 0.010 215);        /* Page canvas background behind all containers */
+  --surface-0: oklch(0.045 0.012 215);     /* Base matrix panel and shell background */
+  --surface-1: oklch(0.075 0.014 215);     /* Elevated table row and card surface */
+  --surface-2: oklch(0.105 0.016 215);    /* Active control surface and track background */
+  --surface-3: oklch(0.135 0.018 215);    /* Raised segmented button and hover surface */
 
   /* Hairlines and borders (uniform 1px grid strokes) */
   --edge: oklch(0.380 0.025 215);         /* Container boundary and matrix grid hairlines */
@@ -671,6 +670,8 @@ main {
   background: var(--surface-3);
   color: var(--fg);
   font-weight: 700;
+  outline: 1px solid var(--edge-focus);
+  outline-offset: -1px;
 }
 
 .matrix-controls {
@@ -1062,6 +1063,7 @@ main {
   transition: all var(--dur-fast) var(--ease);
   min-width: 0;
   width: 100%;
+  overflow: hidden;
 }
 
 .chip-pill:hover {
@@ -1156,9 +1158,23 @@ main {
 .chip-lens {
   margin-left: auto;
   flex-shrink: 0;
+  max-width: 44px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   font-size: 9px;
   color: var(--fg-muted);
   line-height: 1;
+}
+
+.chip-lens time,
+.chip-lens span {
+  display: inline-block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  vertical-align: bottom;
 }
 
 .chip-cost {
@@ -1211,6 +1227,7 @@ main {
   .chip-lens {
     order: 3;
     margin-left: auto;
+    max-width: none;
   }
 }
 
@@ -1322,7 +1339,7 @@ table.data {
 }
 
 .data tbody tr:hover {
-  background: var(--surface-1);
+  background: var(--surface-2);
 }
 
 .row-bad {

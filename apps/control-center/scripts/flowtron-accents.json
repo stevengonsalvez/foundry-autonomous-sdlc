@@ -1,14 +1,26 @@
 {
-  "auto": "#2DD4A7",
-  "assist": "#F2B23D",
-  "gate": "#F0644B",
-  "dit": "#6FA8FF",
-  "contract": "#22D3EE",
-  "ephem": "#C084FC",
-  "dark": "#C9A227",
-  "done": "#3A4654",
-  "app-1": "#A78BFA",
-  "app-2": "#38BDF8",
-  "app-3": "#A3E635",
-  "app-4": "#FB7185"
+  "accents": {
+    "auto": "#2DD4A7",
+    "assist": "#F2B23D",
+    "gate": "#F0644B",
+    "dit": "#6FA8FF",
+    "contract": "#22D3EE",
+    "ephem": "#C084FC",
+    "dark": "#C9A227",
+    "done": "#3A4654",
+    "app-1": "#A78BFA",
+    "app-2": "#38BDF8",
+    "app-3": "#A3E635",
+    "app-4": "#FB7185"
+  },
+  "neutrals": {
+    "ink": "#0E1217",
+    "panel": "#161C24",
+    "panel-2": "#1B232D",
+    "line-soft": "#1F2832",
+    "line": "#27313D",
+    "muted-2": "#4D596A",
+    "muted": "#697686",
+    "text": "#CBD6E3"
+  }
 }

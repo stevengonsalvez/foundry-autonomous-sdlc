@@ -7,14 +7,13 @@ This document defines the tokens, component anatomy, layout model, and styling r
 Defined in `:root` in `css/styles.css`, the color system utilizes an independent graphite-blue OKLCH palette calibrated for a dark mission-control environment. Chroma is restrained on neutrals and semantic tones are tuned for high contrast.
 
 ### Base Canvas and Surface Hierarchy
-- `--canvas`: `oklch(0.07 0.012 215)` (Page canvas background behind all containers)
-- `--surface-0`: `oklch(0.09 0.014 215)` (Base matrix panel and shell background)
-- `--surface-1`: `oklch(0.11 0.016 215)` (Elevated table row and card surface)
-- `--surface-2`: `oklch(0.125 0.018 215)` (Active control surface and track background)
-- `--surface-3`: `oklch(0.138 0.020 215)` (Raised segmented button and hover surface)
-- `--surface-active`: `oklch(0.140 0.024 215)` (Focused interactive element surface)
+- `--canvas`: `oklch(0.030 0.010 215)` (Page canvas background behind all containers)
+- `--surface-0`: `oklch(0.045 0.012 215)` (Base matrix panel and shell background)
+- `--surface-1`: `oklch(0.075 0.014 215)` (Elevated table row and card surface)
+- `--surface-2`: `oklch(0.105 0.016 215)` (Active control surface and track background)
+- `--surface-3`: `oklch(0.135 0.018 215)` (Raised segmented button and hover surface)
 
-Neutral surfaces are calibrated so every single neutral differs from all 5 reference dark neutrals (`ink`, `panel`, `panel-2`, `line-soft`, `line`) by dE_ok >= 0.04.
+Four evenly-spaced surface rungs between L 0.03 and 0.14 with a constant step of 0.030. Neutral surfaces are calibrated so every single neutral differs from all 5 reference dark neutrals (`ink`, `panel`, `panel-2`, `line-soft`, `line`) by dE_ok >= 0.04. Active interactive segmented buttons utilize focus and outline styling (`--edge-focus`) rather than relying on a separate surface tone.
 
 ### Hairlines and Dividers
 - `--edge`: `oklch(0.380 0.025 215)` (Container boundary and matrix grid hairlines)

@@ -81,36 +81,21 @@ export const SAME_ROLES = {
   'favicon-bg': 'ink',
 };
 
-export const FLOWTRON_NEUTRALS = {
-  ink: '#0E1217',
-  panel: '#161C24',
-  'panel-2': '#1B232D',
-  'line-soft': '#1F2832',
-  line: '#27313D',
-  'muted-2': '#4D596A',
-  muted: '#697686',
-  text: '#CBD6E3',
-};
-
-export const SAME_ROLE_NEUTRALS = {
-  '--canvas': 'ink',
-  '--surface-0': 'ink',
-  '--surface-1': 'panel',
-  '--surface-2': 'panel-2',
-  '--surface-3': 'line-soft',
-  '--edge': 'line',
-  '--edge-subtle': 'line-soft',
-  '--fg': 'text',
-  '--fg-dim': 'muted',
-  '--fg-muted': 'muted-2',
-};
+const flowtronData = JSON.parse(await readFile(new URL('flowtron-accents.json', import.meta.url), 'utf8'));
+export const FLOWTRON_ACCENTS = flowtronData.accents ?? flowtronData;
+export const FLOWTRON_NEUTRALS = flowtronData.neutrals ?? {};
 
 export async function parseCssTokens(cssPath) {
-  const css = await readFile(cssPath, 'utf8');
+  const rawCss = await readFile(cssPath, 'utf8');
+  const cleanCss = rawCss.replace(/\/\*[\s\S]*?\*\//g, '');
+  const rootMatch = cleanCss.match(/:root\s*\{([^}]*)\}/);
+  if (!rootMatch) throw new Error(':root block not found in stylesheet');
+  const rootContent = rootMatch[1];
+
   const tokens = {};
   const tokenRegex = /(--[\w-]+)\s*:\s*oklch\(\s*([\d.]+)\s+([\d.]+)\s+([\d.]+)\s*\)/g;
   let match;
-  while ((match = tokenRegex.exec(css)) !== null) {
+  while ((match = tokenRegex.exec(rootContent)) !== null) {
     const [, name, L, C, h] = match;
     tokens[name] = {
       name,
@@ -126,11 +111,10 @@ export async function parseCssTokens(cssPath) {
 export async function run() {
   const root = new URL('../', import.meta.url);
   const cssPath = fileURLToPath(new URL('css/styles.css', root));
-  const accentsPath = fileURLToPath(new URL('scripts/flowtron-accents.json', root));
   const indexHtmlPath = fileURLToPath(new URL('index.html', root));
 
   const cssTokens = await parseCssTokens(cssPath);
-  const flowtronAccents = JSON.parse(await readFile(accentsPath, 'utf8'));
+  const flowtronAccents = FLOWTRON_ACCENTS;
 
   // Extract favicon colors from index.html with URI decoding (throw if missing, no fallback)
   const html = await readFile(indexHtmlPath, 'utf8');
@@ -293,7 +277,6 @@ export async function run() {
     '--surface-1',
     '--surface-2',
     '--surface-3',
-    '--surface-active',
     '--edge-subtle',
     '--edge',
     'favicon-bg',

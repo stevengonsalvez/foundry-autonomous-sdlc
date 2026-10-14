@@ -7,11 +7,11 @@ An empirical study of the reference UI layout model, visual density, component a
 Flowtron has no open-source license. Consequently, strict implementation independence was maintained:
 - **What was taken and adopted**: Structural design principles, layout model, and measured dimensional ratios (lane-by-stage matrix representation, macroband grouping strip, pill chips, dual segmented toggles, tracked uppercase monospace typography, and 1px hairlines).
 - **What was changed and independently redesigned**:
-  - **Component Names and Tokens**: Common architectural and layout class names are retained (`.board-shell`, `.kpis`, `.seg`, `.table-wrap`, etc.), while flowtron token names and component identifiers are replaced with an independent scheme (`--canvas`, `--surface-0..3`, `--edge`, `--edge-subtle`, `--edge-focus`, `--fg`, `--fg-dim`, `--fg-muted`, `--tone-run`, `--tone-wait`, `--tone-block`, `--tone-info`, `--tone-agent`, `--tone-done`, `.band-strip`, `.band-cell`, `.matrix-grid`, `.matrix-spine`, `.lane-head`, `.matrix-cell`, `.chip-*`, etc.).
+  - **Component Names and Tokens**: Common architectural and layout class names are retained (`badge`, `board-shell`, `card`, `chip`, `dot`, `gate`, `kpi`, `kpis`, `legend`, `note`, `num`, `seg`, `sub`, `toolbar`, `wrap`), while flowtron token names and component identifiers are replaced with an independent scheme (`--canvas`, `--surface-0..3`, `--edge`, `--edge-subtle`, `--edge-focus`, `--fg`, `--fg-dim`, `--fg-muted`, `--tone-run`, `--tone-wait`, `--tone-block`, `--tone-info`, `--tone-agent`, `--tone-done`, `.band-strip`, `.band-cell`, `.matrix-grid`, `.matrix-spine`, `.lane-head`, `.matrix-cell`, `.chip-*`, etc.).
   - **Palette**: The color palette was redesigned to maintain strict chromatic separation from flowtron under the same-role distance standard:
     - **Governing Rule**: Each token must differ from its same-role flowtron accent (`auto`, `dit`, `gate`, `assist`, `done`, `app-1`, `contract`, etc.) by dE_ok >= 0.06 and at least 12 degrees circular hue when chroma >= 0.03. Proximity to another-role accent within 20 degrees is permitted but explicitly inventoried in the cross-role table.
-    - **Neutral Ladder**: Early drafts placed surfaces within dE 0.013 to 0.024 of reference neutrals when compared across all rungs. The neutral ladder was recalibrated so that every single neutral sits dE_ok >= 0.04 from every reference dark neutral (`ink`, `panel`, `panel-2`, `line-soft`, `line`), using lower surface lightness (`--canvas` 0.07, `--surface-0` 0.09, `--surface-1` 0.11, `--surface-2` 0.125, `--surface-3` 0.138, `--surface-active` 0.140) and elevated hairline edges (`--edge-subtle` 0.35, `--edge` 0.38).
-    - **Reference Values**: Flowtron reference tokens from `src/style.css` include neutrals (`ink` #0E1217, `panel` #161C24, `panel-2` #1B232D, `line` #27313D, `line-soft` #1F2832, `text` #CBD6E3, `muted` #697686, `muted-2` #4D596A) and accents (`auto` #2DD4A7, `assist` #F2B23D, `gate` #F0644B, `dit` #6FA8FF, `contract` #22D3EE, `ephem` #C084FC, `dark` #C9A227, `done` #3A4654, `app-1` #A78BFA, `--app-2` #38BDF8, `app-3` #A3E635, `app-4` #FB7185). Note: #38BDF8 is `--app-2` in flowtron (not named info).
+    - **Neutral Ladder**: Early drafts placed surfaces within dE 0.013 to 0.024 of reference neutrals when compared across all rungs. The neutral ladder was recalibrated to 4 evenly-spaced surface rungs between L 0.03 and 0.14 (`--canvas` 0.030, `--surface-0` 0.045, `--surface-1` 0.075, `--surface-2` 0.105, `--surface-3` 0.135, constant step of 0.030) and elevated hairline edges (`--edge-subtle` 0.350, `--edge` 0.380). Every neutral sits dE_ok >= 0.04 from every reference dark neutral (`ink`, `panel`, `panel-2`, `line-soft`, `line`). `--surface-active` was deleted as obsolete since active segmented buttons use outline and focus borders rather than a dedicated surface tone.
+    - **Reference Values and Exclusions**: Flowtron reference tokens from `src/style.css` include neutrals (`ink` #0E1217, `panel` #161C24, `panel-2` #1B232D, `line` #27313D, `line-soft` #1F2832, `text` #CBD6E3, `muted` #697686, `muted-2` #4D596A) and accents (`auto` #2DD4A7, `assist` #F2B23D, `gate` #F0644B, `dit` #6FA8FF, `contract` #22D3EE, `ephem` #C084FC, `dark` #C9A227, `done` #3A4654, `app-1` #A78BFA, `--app-2` #38BDF8, `app-3` #A3E635, `app-4` #FB7185). Note: #38BDF8 is `--app-2` in flowtron (not named info). Flowtron contains a screenshot-mode override `body.shot-demo` that changes `ink` to `#0A0E14`; this is an internal demo screenshot test fixture override and not part of Flowtron's shipped design palette, so per orchestrator decision it is excluded from shipped reference neutral comparisons.
     - **Generated Palette Distance Matrix** (via `scripts/palette-distance.mjs`):
 
 | Our Token | OKLCH | Role | Same-Role Accent | Same-Role dE | Same-Role dh | Min dE Accent | Min dE | Status |
@@ -59,12 +59,11 @@ Flowtron has no open-source license. Consequently, strict implementation indepen
 
 | Token | Our OKLCH | vs ink | vs panel | vs panel-2 | vs line-soft | vs line | Min dE | Status |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| `--canvas` | 0.07 0.012 215° | 0.1106 | 0.1546 | 0.1836 | 0.2033 | 0.2398 | 0.1106 | PASS |
-| `--surface-0` | 0.09 0.014 215° | 0.0907 | 0.1346 | 0.1636 | 0.1833 | 0.2198 | 0.0907 | PASS |
-| `--surface-1` | 0.11 0.016 215° | 0.0710 | 0.1148 | 0.1437 | 0.1633 | 0.1998 | 0.0710 | PASS |
-| `--surface-2` | 0.13 0.018 215° | 0.0565 | 0.0999 | 0.1288 | 0.1484 | 0.1848 | 0.0565 | PASS |
-| `--surface-3` | 0.14 0.020 215° | 0.0443 | 0.0872 | 0.1159 | 0.1354 | 0.1719 | 0.0443 | PASS |
-| `--surface-active` | 0.14 0.024 215° | 0.0435 | 0.0856 | 0.1141 | 0.1336 | 0.1699 | 0.0435 | PASS |
+| `--canvas` | 0.03 0.010 215° | 0.1505 | 0.1945 | 0.2236 | 0.2433 | 0.2798 | 0.1505 | PASS |
+| `--surface-0` | 0.04 0.012 215° | 0.1355 | 0.1795 | 0.2085 | 0.2282 | 0.2647 | 0.1355 | PASS |
+| `--surface-1` | 0.07 0.014 215° | 0.1057 | 0.1496 | 0.1786 | 0.1983 | 0.2347 | 0.1057 | PASS |
+| `--surface-2` | 0.10 0.016 215° | 0.0760 | 0.1197 | 0.1487 | 0.1683 | 0.2048 | 0.0760 | PASS |
+| `--surface-3` | 0.14 0.018 215° | 0.0467 | 0.0900 | 0.1188 | 0.1384 | 0.1749 | 0.0467 | PASS |
 | `--edge-subtle` | 0.35 0.020 215° | 0.1702 | 0.1266 | 0.0981 | 0.0784 | 0.0439 | 0.0439 | PASS |
 | `--edge` | 0.38 0.025 215° | 0.2005 | 0.1567 | 0.1280 | 0.1083 | 0.0728 | 0.0728 | PASS |
 | `favicon-bg` | 0.13 0.016 258° | 0.0530 | 0.0967 | 0.1257 | 0.1455 | 0.1820 | 0.0530 | PASS |
