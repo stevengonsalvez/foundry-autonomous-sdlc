@@ -263,11 +263,11 @@
   },
   "totals": {
    "billed_usd": 13.0194,
-   "halted": true,
+   "halted": false,
    "issues_usd": 1.09928,
    "ledger_usd": 0.006,
    "orchestrator_usd": 0.761619,
-   "over_cap": true,
+   "over_cap": false,
    "usd": 1.866899
   }
  },
@@ -909,28 +909,28 @@
   },
   "mode": "hosted",
   "recent_ids": [
-   "9d320691a7b56ecb",
-   "4effb29edb398811",
-   "b281779a39fe75dc",
-   "b882be62031bd69c",
-   "5cf21f208f9e0a76",
-   "09291c3754fd8370",
-   "4a61b4591b551074",
-   "fa43d61beec7f097",
-   "7c136b7ae26c35a4",
-   "d7f635dca9bf5ea9",
-   "3e9445f1f887699c",
-   "bb4ab73596946efb",
-   "46beb985083678f2",
-   "35bc929d982cfd03",
-   "5b71e866797baf6d",
-   "1722affc72d1fc5f",
-   "1ef3f76cca3da359",
-   "c5223cc440dddf87",
-   "f6f8a0ee666b9e36",
-   "fa071c9121f6baab",
-   "2ef07d316883cd35",
-   "67571ed0933e970f",
+   "1bf92dd0d4cfdc31",
+   "b4765efa89569deb",
+   "88124266fa03dc98",
+   "6d7fabde8c9d67f3",
+   "2d7443cf71f625d9",
+   "36256458d476523e",
+   "08b436a6342bfa5f",
+   "d43ec08b11298973",
+   "49ed43a369063c6d",
+   "e063fab05253a9c7",
+   "38ea85514cdb287d",
+   "a267d2de329b6093",
+   "ea8af0f91b3c4299",
+   "a4c85b75a38beaef",
+   "f5242379b960d63d",
+   "f2ef6e0678a50b3f",
+   "75a68909e7723fa0",
+   "f9ab0a2cdb504d38",
+   "80b060a2760f6f5d",
+   "7963c76bca123669",
+   "1cb11209cb389b23",
+   "c20164347c496dbf",
    "3ce8bbe0b06b03d7",
    "354bec80b474ed08",
    "109a09fc55afe7c8",
@@ -969,7 +969,7 @@
     ],
     "calls": 1,
     "cap_usd": 3.0,
-    "cap_used_pct": 0.12,
+    "cap_used_pct": 0.04,
     "coder_model_usd": 0.0,
     "coder_seconds": 0,
     "coder_usd": 0.0,
@@ -980,7 +980,7 @@
     "total_usd": 0.001248,
     "usd": 0.001248
    },
-   "digest": "e8fee67f1d1e",
+   "digest": "6f56f6694468",
    "env": "none",
    "escalation": {
     "at": "2026-10-10T12:27:47Z",
@@ -1102,7 +1102,7 @@
     ],
     "calls": 3,
     "cap_usd": 3.0,
-    "cap_used_pct": 1.73,
+    "cap_used_pct": 0.58,
     "coder_model_usd": 0.0,
     "coder_seconds": 130,
     "coder_usd": 0.009772,
@@ -1113,7 +1113,7 @@
     "total_usd": 0.017287,
     "usd": 0.017287
    },
-   "digest": "078a87a086ed",
+   "digest": "b69119eb155d",
    "env": "none",
    "escalation": {
     "at": "2026-10-10T12:59:33Z",
@@ -1284,7 +1284,7 @@
     ],
     "calls": 5,
     "cap_usd": 3.0,
-    "cap_used_pct": 2.65,
+    "cap_used_pct": 0.88,
     "coder_model_usd": 0.0,
     "coder_seconds": 164,
     "coder_usd": 0.012327,
@@ -1295,7 +1295,7 @@
     "total_usd": 0.02651,
     "usd": 0.02651
    },
-   "digest": "cb9a6cad044c",
+   "digest": "19f1c0e7e8a2",
    "env": "none",
    "escalation": {
     "at": "2026-10-10T13:16:01Z",
@@ -1486,7 +1486,7 @@
     ],
     "calls": 4,
     "cap_usd": 3.0,
-    "cap_used_pct": 0.77,
+    "cap_used_pct": 0.26,
     "coder_model_usd": 0.0,
     "coder_seconds": 0,
     "coder_usd": 0.0,
@@ -1497,7 +1497,7 @@
     "total_usd": 0.007688,
     "usd": 0.007688
    },
-   "digest": "df72613ec3e7",
+   "digest": "4b0b2f4ac3fe",
    "env": "none",
    "escalation": {
     "at": "2026-10-10T12:54:01Z",
@@ -1687,7 +1687,7 @@
     ],
     "calls": 4,
     "cap_usd": 3.0,
-    "cap_used_pct": 1.71,
+    "cap_used_pct": 0.57,
     "coder_model_usd": 0.0,
     "coder_seconds": 123,
     "coder_usd": 0.009246,
@@ -1698,7 +1698,7 @@
     "total_usd": 0.017121,
     "usd": 0.017121
    },
-   "digest": "db5c62957282",
+   "digest": "af65807efb15",
    "env": "none",
    "escalation": {
     "at": "2026-10-10T12:59:36Z",
@@ -1853,7 +1853,7 @@
     ],
     "calls": 3,
     "cap_usd": 3.0,
-    "cap_used_pct": 3.64,
+    "cap_used_pct": 1.21,
     "coder_model_usd": 0.005099,
     "coder_seconds": 312,
     "coder_usd": 0.023452,
@@ -1864,7 +1864,7 @@
     "total_usd": 0.036404,
     "usd": 0.036404
    },
-   "digest": "f03e0ce833c9",
+   "digest": "02cbe561f3cd",
    "env": "none",
    "escalation": {
     "at": "2026-10-10T13:23:29Z",
@@ -2047,7 +2047,7 @@
     ],
     "calls": 6,
     "cap_usd": 3.0,
-    "cap_used_pct": 3.23,
+    "cap_used_pct": 1.08,
     "coder_model_usd": 0.012925,
     "coder_seconds": 101,
     "coder_usd": 0.007592,
@@ -2058,7 +2058,7 @@
     "total_usd": 0.032339,
     "usd": 0.032339
    },
-   "digest": "35107b8c2c4d",
+   "digest": "d0928fe9da22",
    "env": "none",
    "escalation": {
     "at": "2026-10-10T13:24:32Z",
@@ -2250,7 +2250,7 @@
     ],
     "calls": 3,
     "cap_usd": 3.0,
-    "cap_used_pct": 8.31,
+    "cap_used_pct": 2.77,
     "coder_model_usd": 0.01046,
     "coder_seconds": 868,
     "coder_usd": 0.065245,
@@ -2261,7 +2261,7 @@
     "total_usd": 0.083069,
     "usd": 0.083069
    },
-   "digest": "2eeda5761dc3",
+   "digest": "458482445bdd",
    "env": "none",
    "escalation": {
     "at": "2026-10-10T14:12:50Z",
@@ -2413,7 +2413,7 @@
     ],
     "calls": 3,
     "cap_usd": 3.0,
-    "cap_used_pct": 0.86,
+    "cap_used_pct": 0.29,
     "coder_model_usd": 0.0,
     "coder_seconds": 18,
     "coder_usd": 0.001353,
@@ -2424,7 +2424,7 @@
     "total_usd": 0.00857,
     "usd": 0.00857
    },
-   "digest": "5d5593f85da2",
+   "digest": "1691b91fda6b",
    "env": "none",
    "escalation": {
     "at": "2026-10-10T14:42:42Z",
@@ -2602,7 +2602,7 @@
     ],
     "calls": 5,
     "cap_usd": 3.0,
-    "cap_used_pct": 7.46,
+    "cap_used_pct": 2.49,
     "coder_model_usd": 0.0,
     "coder_seconds": 799,
     "coder_usd": 0.060058,
@@ -2613,7 +2613,7 @@
     "total_usd": 0.074565,
     "usd": 0.073015
    },
-   "digest": "f428433d93aa",
+   "digest": "d74eddb5b5b9",
    "env": "prod",
    "escalation": null,
    "feasibility": {
@@ -2792,7 +2792,7 @@
      "stage": "staging"
     }
    ],
-   "summary": "Feature \"Show the estimated delivery date on the parcel page\" is merged and waiting for staging checks. Released as v0.1.0. Cost so far 0.07 USD.",
+   "summary": "Feature \"Show the estimated delivery date on the parcel page\" is running in production. Released as v0.1.0. Cost so far 0.07 USD.",
    "title": "Show the estimated delivery date on the parcel page",
    "triage": null,
    "type": "feature",
@@ -2860,7 +2860,7 @@
     ],
     "calls": 3,
     "cap_usd": 3.0,
-    "cap_used_pct": 4.6,
+    "cap_used_pct": 1.53,
     "coder_model_usd": 0.0,
     "coder_seconds": 498,
     "coder_usd": 0.037433,
@@ -2871,7 +2871,7 @@
     "total_usd": 0.045963,
     "usd": 0.045963
    },
-   "digest": "bb1471689cc1",
+   "digest": "480680cfbed3",
    "env": "none",
    "escalation": {
     "at": "2026-10-10T15:55:16Z",
@@ -3073,7 +3073,7 @@
     ],
     "calls": 5,
     "cap_usd": 3.0,
-    "cap_used_pct": 9.19,
+    "cap_used_pct": 3.06,
     "coder_model_usd": 0.013035,
     "coder_seconds": 858,
     "coder_usd": 0.064493,
@@ -3084,7 +3084,7 @@
     "total_usd": 0.091895,
     "usd": 0.091895
    },
-   "digest": "638bac210513",
+   "digest": "512f5fe62867",
    "env": "none",
    "escalation": {
     "at": "2026-10-10T16:05:14Z",
@@ -3281,7 +3281,7 @@
     ],
     "calls": 5,
     "cap_usd": 3.0,
-    "cap_used_pct": 1.53,
+    "cap_used_pct": 0.51,
     "coder_model_usd": 0.0,
     "coder_seconds": 0,
     "coder_usd": 0.0,
@@ -3292,7 +3292,7 @@
     "total_usd": 0.015305,
     "usd": 0.015305
    },
-   "digest": "a99626b60858",
+   "digest": "998cf4a1faea",
    "env": "none",
    "escalation": {
     "at": "2026-10-10T15:45:50Z",
@@ -3500,7 +3500,7 @@
     ],
     "calls": 7,
     "cap_usd": 3.0,
-    "cap_used_pct": 12.32,
+    "cap_used_pct": 4.11,
     "coder_model_usd": 0.011596,
     "coder_seconds": 1261,
     "coder_usd": 0.094785,
@@ -3511,7 +3511,7 @@
     "total_usd": 0.123206,
     "usd": 0.123206
    },
-   "digest": "64fcaeb1f9c3",
+   "digest": "f24289b66e03",
    "env": "none",
    "escalation": {
     "at": "2026-10-10T16:20:14Z",
@@ -3756,7 +3756,7 @@
     "total_usd": 0.066426,
     "usd": 0.066426
    },
-   "digest": "172823f7c1e9",
+   "digest": "8d07092ee70d",
    "env": "none",
    "escalation": null,
    "feasibility": {
@@ -4021,7 +4021,7 @@
     ],
     "calls": 8,
     "cap_usd": 3.0,
-    "cap_used_pct": 8.32,
+    "cap_used_pct": 2.77,
     "coder_model_usd": 0.0,
     "coder_seconds": 805,
     "coder_usd": 0.060509,
@@ -4032,7 +4032,7 @@
     "total_usd": 0.083172,
     "usd": 0.081622
    },
-   "digest": "4162081520f8",
+   "digest": "c6126292cc5d",
    "env": "prod",
    "escalation": null,
    "feasibility": {
@@ -4250,7 +4250,7 @@
      "stage": "staging"
     }
    ],
-   "summary": "Feature \"Make the parcel tracker better\" is merged and waiting for staging checks. Released as v0.3.0. Cost so far 0.08 USD.",
+   "summary": "Feature \"Make the parcel tracker better\" is running in production. Released as v0.3.0. Cost so far 0.08 USD.",
    "title": "Make the parcel tracker better",
    "triage": null,
    "type": "feature",
@@ -4357,7 +4357,7 @@
     ],
     "calls": 6,
     "cap_usd": 3.0,
-    "cap_used_pct": 3.68,
+    "cap_used_pct": 1.23,
     "coder_model_usd": 0.0,
     "coder_seconds": 351,
     "coder_usd": 0.026384,
@@ -4368,7 +4368,7 @@
     "total_usd": 0.036788,
     "usd": 0.036788
    },
-   "digest": "2c76f243405f",
+   "digest": "bbad1a1820f9",
    "env": "rolled-back",
    "escalation": {
     "at": "2026-10-10T17:15:00Z",
@@ -4547,7 +4547,7 @@
      "stage": "staging"
     }
    ],
-   "summary": "Bug \"Lowercase tracking numbers are rejected as invalid\" is merged and waiting for staging checks. Released as v0.1.1. Cost so far 0.04 USD.",
+   "summary": "Bug \"Lowercase tracking numbers are rejected as invalid\" is stopped for a human. Escalated: escalated:deploy-failed. Cost so far 0.04 USD.",
    "title": "Lowercase tracking numbers are rejected as invalid",
    "triage": {
     "owner": "api",
@@ -4610,7 +4610,7 @@
     "total_usd": 0.137488,
     "usd": 0.137488
    },
-   "digest": "c64704065672",
+   "digest": "f49c77b5a8fd",
    "env": "none",
    "escalation": {
     "at": "2026-10-10T18:10:17Z",
@@ -4736,7 +4736,7 @@
     ],
     "calls": 1,
     "cap_usd": 3.0,
-    "cap_used_pct": 2.31,
+    "cap_used_pct": 0.77,
     "coder_model_usd": 0.007476,
     "coder_seconds": 105,
     "coder_usd": 0.007893,
@@ -4747,7 +4747,7 @@
     "total_usd": 0.023086,
     "usd": 0.023086
    },
-   "digest": "edf662b0c5fd",
+   "digest": "d270332226dc",
    "env": "none",
    "escalation": {
     "at": "2026-10-10T18:35:16Z",
@@ -4873,7 +4873,7 @@
     ],
     "calls": 1,
     "cap_usd": 3.0,
-    "cap_used_pct": 6.73,
+    "cap_used_pct": 2.24,
     "coder_model_usd": 0.0,
     "coder_seconds": 793,
     "coder_usd": 0.059607,
@@ -4884,7 +4884,7 @@
     "total_usd": 0.06731,
     "usd": 0.06731
    },
-   "digest": "c6f723ba1654",
+   "digest": "37518011a242",
    "env": "none",
    "escalation": {
     "at": "2026-10-10T19:55:16Z",
@@ -5040,7 +5040,7 @@
     ],
     "calls": 2,
     "cap_usd": 3.0,
-    "cap_used_pct": 6.35,
+    "cap_used_pct": 2.12,
     "coder_model_usd": 0.0,
     "coder_seconds": 722,
     "coder_usd": 0.05427,
@@ -5051,7 +5051,7 @@
     "total_usd": 0.06352,
     "usd": 0.06352
    },
-   "digest": "6841197b4fe7",
+   "digest": "1605daac3eff",
    "env": "none",
    "escalation": {
     "at": "2026-10-10T21:20:18Z",
@@ -5314,7 +5314,7 @@
     ],
     "calls": 3,
     "cap_usd": 3.0,
-    "cap_used_pct": 4.63,
+    "cap_used_pct": 1.54,
     "coder_model_usd": 0.0,
     "coder_seconds": 431,
     "coder_usd": 0.032397,
@@ -5325,7 +5325,7 @@
     "total_usd": 0.04632,
     "usd": 0.04342
    },
-   "digest": "47f3bd1c9a2e",
+   "digest": "fb22c913447b",
    "env": "prod",
    "escalation": null,
    "feasibility": null,
@@ -5469,7 +5469,7 @@
      "stage": "staging"
     }
    ],
-   "summary": "Maintenance \"Update the home page heading copy\" is merged and waiting for staging checks. Released as v0.3.1. Cost so far 0.04 USD.",
+   "summary": "Maintenance \"Update the home page heading copy\" is running in production. Released as v0.3.1. Cost so far 0.04 USD.",
    "title": "Update the home page heading copy",
    "triage": null,
    "type": "maintenance",

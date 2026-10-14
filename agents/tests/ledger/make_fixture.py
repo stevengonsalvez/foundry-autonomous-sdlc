@@ -186,6 +186,11 @@ def build() -> dict[str, Any]:
             )
         )
     doc = fold.fold(evs, NOW)
+    for t in doc.get("tickets", []):
+        if t.get("issue") == 23:
+            t["cost"]["cap_used_pct"] = 120.0
+        elif t.get("issue") == 27:
+            t["cost"]["cap_used_pct"] = 80.0
     doc["ledger"]["errors"] = [
         {
             "at": NOW,
