@@ -49,6 +49,8 @@ export function makeHostile(sample) {
 
   const b = by(25);
   b.title = p.script;
+  b.coder = null;
+  b.agent_runs = [{ agent: 'x lane-feature' }];
   b.escalation.label = p.img;
   b.escalation.reasons = [p.img, p.long, p.js];
   b.escalation.tried = [p.svg, p.quote];
@@ -73,6 +75,7 @@ export function makeHostile(sample) {
   doc.agents[0].name = p.img;
   doc.agents[0].role = p.script;
   doc.agents[0].last_error = { at: doc.generated_at, detail: p.quote, object: 24, result: p.img };
+  doc.agents[1].name = 'x lane-feature';
   doc.agents[2].lock_holder = p.long;
   doc.ledger.errors = [{ at: doc.generated_at, message: p.img }];
   doc.environments.history[0].reason = p.script;

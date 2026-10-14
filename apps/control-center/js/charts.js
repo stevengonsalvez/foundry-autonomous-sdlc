@@ -218,7 +218,8 @@ export function dotStrip(width, points, { median, label }) {
   return svg;
 }
 
-const OUTCOME_GLYPH = { ok: 'M-4 0.5l3 3 5.5-6.5', failed: 'M-4-4l8 8M4-4l-8 8', skipped: 'M-4 0h8', pending: 'M0 0.01v-.02' };
+export const OUTCOME_GLYPH = { ok: 'M-4 0.5l3 3 5.5-6.5', failed: 'M-4-4l8 8M4-4l-8 8', skipped: 'M-4 0h8', pending: 'M0 0.01v-.02' };
+export const NODE_STATES = Object.freeze(['todo', 'done', 'current', 'bad']);
 
 /** One cell per release, newest last, coloured and marked by outcome. releases: [{ version, outcome, at }] */
 export function releaseStrip(width, releases, { label }) {

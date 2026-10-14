@@ -1,11 +1,11 @@
 // #/ticket/<n>  One ticket end to end: where it is, what it cost, which gates it cleared, where it
 // ran, what the agents asked and decided, and why it stopped if it did.
 
-import { stepper } from '../charts.js';
-import { badge, chartHost, dataTable, emptyState, ghLink, h, panel, table, timeEl } from '../dom.js';
+import { stepper, NODE_STATES } from '../charts.js';
+import { badge, chartHost, classToken, dataTable, emptyState, ghLink, h, panel, table, timeEl } from '../dom.js';
 import { formatDuration, formatInteger, formatShortTime, formatUsd, titleCase } from '../format.js';
 import { icon } from '../icons.js';
-import { GATES, gateStatus, pipelineChain, stageDurations, stageLabel, tddOrder } from '../model.js';
+import { GATES, GATE_STATUSES, gateStatus, pipelineChain, stageDurations, stageLabel, tddOrder } from '../model.js';
 import { dataLink } from '../safe.js';
 import { escalationCard } from './escalations.js';
 import {
@@ -38,6 +38,8 @@ export const GATE_LABELS = Object.freeze({
   soak: 'Soak',
 });
 
+export { GATE_STATUSES };
+export const CHAIN_STATUSES = Object.freeze(['pass', 'fail', 'running', 'skipped', 'none']);
 const GATE_TEXT = { pass: 'Passed', fail: 'Failed', running: 'In progress', skipped: 'Skipped', none: 'Not run' };
 const GATE_ICON = { pass: 'check', fail: 'cross', running: 'clock', skipped: 'dash', none: 'dash' };
 
@@ -103,9 +105,9 @@ function stepperSteps(ticket, stages, now) {
   return stages.map((stage) => {
     const d = found.get(stage);
     const terminal = stage === 'prod' || stage === 'escalated';
-    let state = d ? 'done' : 'todo';
-    if (stage === ticket.stage) state = stage === 'escalated' ? 'bad' : stage === 'prod' ? 'done' : 'current';
-    else if (stage === 'escalated' && d) state = 'bad';
+    let state = d ? NODE_STATES[1] : NODE_STATES[0];
+    if (stage === ticket.stage) state = stage === 'escalated' ? NODE_STATES[3] : stage === 'prod' ? NODE_STATES[1] : NODE_STATES[2];
+    else if (stage === 'escalated' && d) state = NODE_STATES[3];
     return { stage, label: stageLabel(stage), state, terminal, at: d?.at ?? null, seconds: d?.seconds ?? null, visits: d?.visits ?? 0, open: d?.open ?? false };
   });
 }
@@ -155,12 +157,12 @@ function gatesPanel(ticket) {
   );
 }
 
-const SPLIT = [
+export const SPLIT = Object.freeze([
   ['model_usd', 'Model calls', 'split-model'],
   ['coder_usd', 'Coder runtime', 'split-coder'],
   ['coder_model_usd', 'Coder model', 'split-coder-model'],
   ['ledger_usd', 'Ledger compute', 'split-ledger'],
-];
+]);
 
 function costPanel(ticket) {
   const c = ticket.cost;
@@ -202,7 +204,7 @@ function costPanel(ticket) {
   );
 }
 
-const HOP_STATUS = { success: ['Succeeded', 'good'], skipped: ['Skipped', 'neutral'], rolled_back: ['Rolled back', 'bad'], failed: ['Failed', 'bad'], in_progress: ['In progress', 'warn'] };
+export const HOP_STATUS = Object.freeze({ success: ['Succeeded', 'good'], skipped: ['Skipped', 'neutral'], rolled_back: ['Rolled back', 'bad'], failed: ['Failed', 'bad'], in_progress: ['In progress', 'warn'] });
 function hopsPanel(ticket, now) {
   const chain = pipelineChain(ticket);
   const legacy = ticket.hops.some((x) => x.action === 'legacy-publish');
@@ -230,7 +232,7 @@ function hopsPanel(ticket, now) {
             const status = HOP_STATUS[hop.status] ?? [titleCase(hop.status || 'Unknown'), 'neutral'];
             return h(
               'li',
-              { class: `hop hop-${hop.status}` },
+              { class: `hop hop-${classToken(hop.status)}` },
               h('span', { class: 'hop-dot', 'aria-hidden': 'true' }),
               h(
                 'div',

@@ -1,104 +1,152 @@
 # Control Center Design System and Architecture
 
-This document defines the real tokens, component anatomy, layout model, and styling rules implemented in `apps/control-center`.
+This document defines the tokens, component anatomy, layout model, and styling rules implemented in `apps/control-center`.
 
 ## 1. OKLCH Design Tokens
 
-Defined in `:root` in `css/styles.css`, the color system utilizes an independent graphite-blue OKLCH palette calibrated for a dark mission-control environment. Chroma is restrained on neutrals and semantic tones are tuned for high contrast.
+Defined in `:root` in `css/styles.css`, the color system utilizes an independent midnight-navy OKLCH palette calibrated for a dark mission-control environment. Chroma is restrained on neutrals and semantic tones are tuned for high contrast.
 
 ### Base Canvas and Surface Hierarchy
-- `--canvas`: `oklch(0.13 0.022 240)` (Graphite-blue canvas background)
-- `--surface-0`: `oklch(0.16 0.025 240)` (Base container and matrix panel background)
-- `--surface-1`: `oklch(0.19 0.028 240)` (Subtle elevated panel and table row surface)
-- `--surface-2`: `oklch(0.23 0.030 240)` (Active controls, hover states, and card surfaces)
-- `--surface-3`: `oklch(0.27 0.035 240)` (Selected segmented buttons and pressed states)
-- `--surface-active`: `oklch(0.30 0.038 240)` (Focused interactive items)
+- `--canvas`: `oklch(0.160 0.055 264)` (Page canvas background behind all containers)
+- `--surface-0`: `oklch(0.215 0.058 264)` (Base matrix panel and shell background)
+- `--surface-1`: `oklch(0.256 0.062 264)` (Elevated table row and card surface)
+- `--surface-2`: `oklch(0.292 0.063 264)` (Active control surface and track background)
+- `--surface-3`: `oklch(0.328 0.065 264)` (Raised segmented button and hover surface)
+
+Four evenly-spaced surface rungs between L 0.215 and 0.328 with a step of ~0.038 / 0.041 (`surface-0` 0.215, `surface-1` 0.256, `surface-2` 0.292, `surface-3` 0.328), with `--canvas` sitting 0.055 below `surface-0` at L 0.160. Adjacent surface contrast ratios provide distinct visual layering: surface-0 vs canvas is 1.11:1, surface-1 vs surface-0 is 1.11:1, surface-2 vs surface-1 is 1.12:1, and surface-3 vs surface-2 is 1.14:1. Neutral surfaces are calibrated so every single neutral differs from all 8 reference neutrals (`ink`, `panel`, `panel-2`, `line-soft`, `line`, `muted-2`, `muted`, `text`) by dE_ok >= 0.04 (minimum distance 0.0404). Active interactive segmented buttons utilize focus and outline styling (`--edge-focus`) rather than relying on a separate surface tone.
 
 ### Hairlines and Dividers
-- `--edge`: `oklch(0.29 0.025 240)` (Crisp 1px grid hairline border)
-- `--edge-subtle`: `oklch(0.21 0.020 240)` (Subdued interior row divider and table stroke)
-- `--edge-focus`: `oklch(0.72 0.16 220)` (High-visibility keyboard focus outline)
+- `--edge`: `oklch(0.510 0.042 264)` (Container boundary and matrix grid hairlines; 2.45:1 contrast on surface-2)
+- `--edge-subtle`: `oklch(0.420 0.040 264)` (Interior table row and cell divider hairlines; 1.66:1 contrast on surface-2)
+- `--edge-focus`: `oklch(0.72 0.16 190)` (High-visibility keyboard focus outline)
 
 ### Typography Contrast (WCAG AA Compliant >= 4.5:1)
-- `--fg`: `oklch(0.93 0.015 240)` (High-legibility primary foreground text)
-- `--fg-dim`: `oklch(0.79 0.020 240)` (Secondary text for headers, units, and metrics)
-- `--fg-muted`: `oklch(0.66 0.022 240)` (Tertiary metadata, labels, and timestamps)
+- `--fg`: `oklch(0.985 0.005 264)` (Primary high-contrast tabular text; 11.86:1 on surface-3)
+- `--fg-dim`: `oklch(0.810 0.018 264)` (Secondary headers, units, and metrics; 6.86:1 on surface-3)
+- `--fg-muted`: `oklch(0.720 0.020 264)` (Tertiary metadata, labels, and timestamps; 4.99:1 on surface-3)
 
 ### Semantic Lifecycle Roles
-- `--tone-run`: `oklch(0.78 0.16 150)` (Emerald mint: autonomous execution, active in-flight, healthy state)
-- `--tone-wait`: `oklch(0.78 0.15 65)` (Golden amber: queued items, pending simulation, waiting for ledger)
-- `--tone-block`: `oklch(0.68 0.20 25)` (Crimson: gate checks, blocked items, escalations, rollbacks)
-- `--tone-info`: `oklch(0.75 0.14 220)` (Sky azure: links, shape domain, requirements contracts)
-- `--tone-agent`: `oklch(0.76 0.15 295)` (Electric violet: agent roles and release domain)
-- `--tone-done`: `oklch(0.78 0.13 175)` (Teal: completed stages, production deployments)
+- `--tone-run`: `oklch(0.78 0.16 142)` (Active execution, healthy state, and pass indicators)
+- `--tone-wait`: `oklch(0.78 0.15 52)` (Waiting items, pending ledger, and sim stage)
+- `--tone-block`: `oklch(0.74 0.20 345)` (Blocked items, failed gates, escalations, rollbacks)
+- `--tone-info`: `oklch(0.76 0.14 190)` (Informational badges, links, and contracts)
+- `--tone-agent`: `oklch(0.76 0.15 325)` (Agent identity tags and role labels)
+- `--tone-done`: `oklch(0.76 0.16 120)` (Completed stages, production deploys, and shipped items)
+
+### Pipeline Stage Markers
+- `--st-backlog`: `var(--fg-muted)`
+- `--st-refining`: `var(--tone-wait)`
+- `--st-feasible`: `var(--tone-info)`
+- `--st-tests`: `var(--tone-block)`
+- `--st-building`: `var(--tone-run)`
+- `--st-review`: `var(--tone-agent)`
+- `--st-staging`: `var(--tone-info)`
+- `--st-prod`: `var(--tone-done)`
+- `--st-escalated`: `var(--tone-block)`
+
+### Flow Segment Fills (Distinct Hue Per Stage)
+Per-stage flow segment fills maintain circular hue separation of >= 30 degrees (exceeding the >= 25 degree requirement) and inter-token distance of dE_ok >= 0.0842 (exceeding the >= 0.06 requirement):
+- `--st-fill-backlog`: `oklch(0.60 0.04 250)` (Slate indigo hue 250 deg)
+- `--st-fill-refining`: `oklch(0.68 0.14 65)` (Amber gold hue 65 deg)
+- `--st-fill-feasible`: `oklch(0.68 0.14 185)` (Cyan teal hue 185 deg)
+- `--st-fill-tests`: `oklch(0.68 0.14 285)` (Violet purple hue 285 deg)
+- `--st-fill-building`: `oklch(0.68 0.13 145)` (Emerald green hue 145 deg)
+- `--st-fill-review`: `oklch(0.68 0.14 320)` (Magenta berry hue 320 deg)
+- `--st-fill-staging`: `oklch(0.68 0.14 220)` (Azure blue hue 220 deg)
+- `--st-fill-prod`: `oklch(0.70 0.15 110)` (Lime olive hue 110 deg)
+- `--st-fill-escalated`: `oklch(0.74 0.20 355)` (Crimson ruby hue 355 deg)
 
 ### Typography Stacks
-- Monospace Stack: `ui-monospace, "SF Mono", Menlo, "JetBrains Mono", Consolas, monospace`
+- `--font-mono`: `ui-monospace, "SF Mono", Menlo, "JetBrains Mono", Consolas, monospace`
   Used for all IDs, numbers, labels, headers, chips, and telemetry tables.
-- Prose Stack: `system-ui, -apple-system, sans-serif`
+- `--font-sans`: `system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif`
   Used strictly for narrative sentences and descriptions.
 - Zero Web Fonts: System fonts only, no external font requests or remote CDNs.
 
-### Hairlines, Radii, and Transitions
+### Geometry, Radii, and Transitions
 - Hairlines: Uniform 1px solid borders. No drop shadows, no glassmorphism, no gradient text.
-- Radii: 4px for rectangular panels, inputs, and controls; 9999px (full pill) for chips and badges.
-- Transitions: 120ms to 180ms ease-out on interactive chips and controls. Disabled under `prefers-reduced-motion`.
+- `--radius`: `4px` (Panels, containers, segmented controls, inputs)
+- `--radius-sm`: `2px` (Micro-tags, state dot indicators, agent inner tags)
+- `--radius-pill`: `9999px` (Status badges and ticket pill chips)
+- `--dur-fast`: `120ms` (Interactive hover and focus transition timing)
+- `--ease`: `cubic-bezier(0.16, 1, 0.3, 1)` (Snappy decel easing curve)
+- Reduced Motion: Transitions disabled when `prefers-reduced-motion: reduce` is detected.
 
 ## 2. Component Anatomy
 
+### Board Matrix Semantics
+The delivery board is built with strict accessible grid/table semantics:
+- Table Container: Renders as `role="table"` with `aria-label="Delivery flow matrix board, scrolls sideways"`.
+- Sticky Swimlane Spine (`.matrix-spine`): Renders as `role="row"` containing:
+  - Corner Spine Header (`.spine-head`): `role="columnheader"` with visible label `Stage`.
+  - Swimlane Headers (`.lane-head`): `role="columnheader"` for each swimlane (ID `lane-<key>`), displaying the lane dot indicator, lane title, and subtitle.
+- Stage Columns (`.col`): Each stage column renders as `role="row"`.
+  - Stage Header Cell (`.col-head`): Renders as `role="rowheader"` (ID `col-<stage>`), containing stage title, execution mode badge, count telemetry, and status summary.
+  - Coordinate Cells (`.matrix-cell`): Each intersection renders as `role="cell"` with `aria-labelledby="lane-<key> col-<stage>"`.
+
 ### Macroband Strip
-Located at the top of the Delivery flow matrix, macrobands group stages into logical lifecycle domains:
-- `SHAPE . BUSINESS`: Backlog, Refining, Feasible
-- `BUILD . ENGINEERING`: Tests, Building, Review
-- `RELEASE . OPS`: Staging, Production
-- `ESCALATED`: Escalated
-Each macroband features a 2px top accent line in its domain hue and tracked uppercase monospace typography (9.5px, letter-spacing 0.08em).
+Located above the matrix grid, macrobands group stages into lifecycle domains with a 2px top hairline accent in domain hue:
+- `ALIGN . PRODUCT` (`.band-shape`, span 3 columns): Backlog, Refining, Feasible
+- `IMPLEMENT . CODE` (`.band-build`, span 3 columns): Tests, Building, Review
+- `DELIVER . OPERATIONS` (`.band-release`, span 2 columns): Staging, Production
+- `EXCEPTIONS` (`.band-escalated`, span 1 column): Escalated
 
 ### Stage Headers and Mode Badges
-Stage headers occupy the column header row:
+Stage headers occupy each stage rowheader:
 - Stage Title: 11px uppercase monospace.
-- Mode Badge: 8px uppercase badge positioned adjacent to the stage name:
-  - `AUTO`: Emerald mint (autonomous agent execution)
-  - `GATE`: Crimson (hard verification gate)
-  - `SIM`: Golden amber (simulated product owner interaction)
-  - `MANUAL`: Grey outline (operator checkpoint)
-- Telemetry Count Line: Quiet 8.5px monospace status line beneath the header:
+- Mode Badge (`.mode-badge`): 8px uppercase badge indicating architectural execution model:
+  - `AUTO` (`.mode-auto`): Autonomous engine loop execution (`var(--tone-run)`)
+  - `GATE` (`.mode-gate`): Quality verification barrier (`var(--tone-block)`)
+  - `SIM` (`.mode-sim`): Simulated interaction checkpoint (`var(--tone-wait)`)
+  - `MANUAL` (`.mode-manual`): Operator checkpoint (`var(--fg-muted)`)
+- Telemetry Count Line: Monospace telemetry beneath the header:
   - Delivery lens: `X in . Y wait . Z blk`
   - Cost lens: stage USD spend
   - Gates lens: percentage pass rate
 
 ### Swimlanes and Coordinates
-The vertical axis organizes work items into swimlanes:
+The vertical spine organizes work items into swimlanes:
 - Group Modes:
-  - `Type`: Feature, Bug, Maintenance, Other (unclassified tickets retained)
-  - `Agent`: Assigned fleet agent or unassigned (triage tickets retained)
+  - `Type`: Feature, Bug, Maintenance, Other (retaining unclassified items)
+  - `Agent`: Assigned fleet agent or unassigned (retaining triage items)
   - `Outcome`: In-flight, Shipped, Escalated
 - Lane Spine (Sticky Left Column):
-  - Fixed 134px width aligned with macroband spacer.
-  - Colored indicator dot (6px).
+  - Width: 134px minimum.
+  - Colored indicator dot: 6px (`.dot-run`, `.dot-wait`, `.dot-block`, `.dot-info`, `.dot-agent`, `.dot-done`).
   - Identifier / name in bold monospace.
   - Subtitle role/description.
 
 ### Ticket Pill Chips
 Work items appear as dense two-line pill tokens in the matrix grid:
 - Internal Composition:
-  - Line 1 (Header row): Ticket ID (`#24`), state indicator dot (5px), 2-letter agent tag (`CO`), and lens metric (`1d 2h`, `$0.07`, or `6/6`).
-  - Line 2 (Body row): Ticket title with text-overflow ellipsis using the full cell width for high legibility.
-- Wide Cell Adaptivity: Container query (`@container (min-width: 260px)`) smoothly shifts chip to single-line layout when cell width permits (e.g. mobile stacked stage list).
+  - Line 1 (Header row): Ticket ID (`#24`), state indicator dot (11px dot with 9px glyph), 2-letter agent tag (`CO`), and contextual lens metric (`1d 2h`, `$0.07`, or `6/6`).
+  - Line 2 (Body row): Ticket title with text-overflow ellipsis using the full cell width.
+- State Indicator Dot (`.chip-dot`):
+  - Size: 11px circular container with 9px glyph (`.dot-active`, `.dot-pending`, `.dot-wait`, `.dot-blocked`, `.dot-done`).
+  - Blocked State: Features a lighter 1px outline ring (`box-shadow: 0 0 0 1px var(--tone-block)`) for dual-channel recognition without relying on color alone.
+  - Screen Reader and Tooltip Text: Both `title` attribute and `.sr-only` text use identical human-readable state names: `in progress`, `pending`, `waiting`, `blocked`, `done`.
+- Wide Cell Adaptivity: Container query (`@container (min-width: 260px)`) switches chip to single-line layout when cell width permits.
 - Flags: Secondary tags (such as `Waiting for ledger` or `Rolled back`) render below the chip as quiet dashed badges, never rotated.
+
+### Stepper Connectors and Node Styles
+In the ticket detail progression strip:
+- `.node-done`: Uses `var(--tone-done)` stroke for clear completion semantics.
+- `.node-current`: Uses `var(--tone-info)` stroke with pulsing indicator.
+- `.link`: Unfinished connector uses `var(--fg-muted)` at stroke-opacity 0.65 with dashed stroke (`stroke-dasharray: 4 3`), achieving 3.69:1 contrast against `--surface-0` (measured in Chromium by reading pixels, exceeding WCAG AA non-text 3:1).
+- `.link-done`: Completed connector uses solid stroke in `var(--tone-done)`.
 
 ### Spend Banner
 - Height: 28px slim one-line status strip.
-- Geometry: 6px coral dot, monospace text, subtle coral tinted background, hairline border.
+- Geometry: 6px coral dot, monospace text, subtle coral tinted background (`oklch(0.20 0.04 345 / 0.5)`), hairline border.
 - Behavior: Visible across pages when spend exceeds halt line or cap, linking directly to Cost view.
 
 ### Fleet Agents
-- Presentation: Dense 9-column data table replacing generic cards.
+- Presentation: Dense data table replacing generic cards.
 - Columns: State (dot and text), Agent name, Last active, Calls, Tokens in, Tokens out, Spend, Errors, Working on.
 - Error Telemetry: Error rows highlighted with coral text and dot, avoiding large red card boxes.
 
 ### Flow Metrics
-- Palette: Unified muted tone (`oklch(0.50 0.04 240)`) for standard stage bars and per-ticket stacked segments.
+- Palette: Unified muted tone (`oklch(0.50 0.04 215)`) for standard stage bars and per-ticket stacked segments.
 - Semantic Accents: Golden amber strictly for waiting/backlog, coral strictly for failed or escalated.
 - Legend: Pure text labels without colored swatches.
 
@@ -106,10 +154,10 @@ Work items appear as dense two-line pill tokens in the matrix grid:
 - Empty Cells: 1px hairline dark panel with clear coordinates.
 - Hatched Cells (`cell-hatched`): 135-degree repeating diagonal stripe pattern with a quiet `bypasses stage` label. Tickets in bypassed stages are never swallowed.
 
-### Segmented Controls
-- Dual segmented selectors (`lens` and `group`) with 1px hairline frames.
-- Accessible `role="group"` with descriptive `aria-label` ('Lens' and 'Swimlane group').
-- Lifted active segment with crisp monospace labels and instant state updates.
+### Segmented Controls and Toolbar
+- Dual segmented selectors (`lens` and `group`) with 1px hairline frames and `role="group"`.
+- Toolbar Type Filter: Renders as `role="group"` with `aria-label="Filter by type"`.
+- Instant state updates and full keyboard focus ring (`--edge-focus`).
 
 ## 3. View Restyling and Layout Consistency
 
