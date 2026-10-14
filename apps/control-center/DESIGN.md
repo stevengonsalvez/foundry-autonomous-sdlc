@@ -4,26 +4,26 @@ This document defines the tokens, component anatomy, layout model, and styling r
 
 ## 1. OKLCH Design Tokens
 
-Defined in `:root` in `css/styles.css`, the color system utilizes an independent graphite-blue OKLCH palette calibrated for a dark mission-control environment. Chroma is restrained on neutrals and semantic tones are tuned for high contrast.
+Defined in `:root` in `css/styles.css`, the color system utilizes an independent midnight-navy OKLCH palette calibrated for a dark mission-control environment. Chroma is restrained on neutrals and semantic tones are tuned for high contrast.
 
 ### Base Canvas and Surface Hierarchy
-- `--canvas`: `oklch(0.030 0.010 215)` (Page canvas background behind all containers)
-- `--surface-0`: `oklch(0.045 0.012 215)` (Base matrix panel and shell background)
-- `--surface-1`: `oklch(0.075 0.014 215)` (Elevated table row and card surface)
-- `--surface-2`: `oklch(0.105 0.016 215)` (Active control surface and track background)
-- `--surface-3`: `oklch(0.135 0.018 215)` (Raised segmented button and hover surface)
+- `--canvas`: `oklch(0.160 0.055 265)` (Page canvas background behind all containers)
+- `--surface-0`: `oklch(0.185 0.060 265)` (Base matrix panel and shell background)
+- `--surface-1`: `oklch(0.230 0.062 265)` (Elevated table row and card surface)
+- `--surface-2`: `oklch(0.275 0.064 265)` (Active control surface and track background)
+- `--surface-3`: `oklch(0.320 0.066 265)` (Raised segmented button and hover surface)
 
-Four evenly-spaced surface rungs between L 0.03 and 0.14 with a constant step of 0.030. Neutral surfaces are calibrated so every single neutral differs from all 5 reference dark neutrals (`ink`, `panel`, `panel-2`, `line-soft`, `line`) by dE_ok >= 0.04. Active interactive segmented buttons utilize focus and outline styling (`--edge-focus`) rather than relying on a separate surface tone.
+Four evenly-spaced surface rungs between L 0.185 and 0.320 with a constant step of 0.045 (`surface-0` 0.185, `surface-1` 0.230, `surface-2` 0.275, `surface-3` 0.320). Adjacent surface contrast ratios provide distinct visual layering: surface-1 vs surface-0 is 1.10:1, surface-2 vs surface-1 is 1.14:1, and surface-3 vs surface-2 is 1.17:1. Neutral surfaces are calibrated so every single neutral differs from all 5 reference dark neutrals (`ink`, `panel`, `panel-2`, `line-soft`, `line`) by dE_ok >= 0.04 (minimum distance 0.0425). Active interactive segmented buttons utilize focus and outline styling (`--edge-focus`) rather than relying on a separate surface tone.
 
 ### Hairlines and Dividers
-- `--edge`: `oklch(0.380 0.025 215)` (Container boundary and matrix grid hairlines)
-- `--edge-subtle`: `oklch(0.350 0.020 215)` (Interior table row and cell divider hairlines)
+- `--edge`: `oklch(0.480 0.045 265)` (Container boundary and matrix grid hairlines; 2.28:1 contrast on surface-2)
+- `--edge-subtle`: `oklch(0.420 0.040 265)` (Interior table row and cell divider hairlines; 1.76:1 contrast on surface-2)
 - `--edge-focus`: `oklch(0.72 0.16 190)` (High-visibility keyboard focus outline)
 
 ### Typography Contrast (WCAG AA Compliant >= 4.5:1)
-- `--fg`: `oklch(0.985 0.005 215)` (Primary high-contrast tabular text)
-- `--fg-dim`: `oklch(0.81 0.018 215)` (Secondary headers, units, and metrics)
-- `--fg-muted`: `oklch(0.72 0.020 215)` (Tertiary metadata, labels, and timestamps)
+- `--fg`: `oklch(0.985 0.005 265)` (Primary high-contrast tabular text; 12.23:1 on surface-3)
+- `--fg-dim`: `oklch(0.810 0.018 265)` (Secondary headers, units, and metrics; 7.07:1 on surface-3)
+- `--fg-muted`: `oklch(0.720 0.020 265)` (Tertiary metadata, labels, and timestamps; 5.15:1 on surface-3)
 
 ### Semantic Lifecycle Roles
 - `--tone-run`: `oklch(0.78 0.16 142)` (Active execution, healthy state, and pass indicators)
@@ -132,7 +132,7 @@ Work items appear as dense two-line pill tokens in the matrix grid:
 In the ticket detail progression strip:
 - `.node-done`: Uses `var(--tone-done)` stroke for clear completion semantics.
 - `.node-current`: Uses `var(--tone-info)` stroke with pulsing indicator.
-- `.link`: Unfinished connector uses `var(--fg-muted)` at stroke-opacity 0.65 with dashed stroke (`stroke-dasharray: 4 3`), achieving 3.95:1 contrast against `--surface-0` (measured in Chromium by reading pixels, exceeding WCAG AA non-text 3:1).
+- `.link`: Unfinished connector uses `var(--fg-muted)` at stroke-opacity 0.65 with dashed stroke (`stroke-dasharray: 4 3`), achieving 3.94:1 contrast against `--surface-0` (measured in Chromium by reading pixels, exceeding WCAG AA non-text 3:1).
 - `.link-done`: Completed connector uses solid stroke in `var(--tone-done)`.
 
 ### Spend Banner

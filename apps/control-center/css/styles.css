@@ -6,22 +6,22 @@
 :root {
   color-scheme: dark;
 
-  /* Custom graphite-blue palette (hue 215, dark mission control) */
-  --canvas: oklch(0.030 0.010 215);        /* Page canvas background behind all containers */
-  --surface-0: oklch(0.045 0.012 215);     /* Base matrix panel and shell background */
-  --surface-1: oklch(0.075 0.014 215);     /* Elevated table row and card surface */
-  --surface-2: oklch(0.105 0.016 215);    /* Active control surface and track background */
-  --surface-3: oklch(0.135 0.018 215);    /* Raised segmented button and hover surface */
+  /* Custom midnight-navy palette (hue 265, dark control room) */
+  --canvas: oklch(0.160 0.055 265);        /* Page canvas background behind all containers */
+  --surface-0: oklch(0.185 0.060 265);     /* Base matrix panel and shell background */
+  --surface-1: oklch(0.230 0.062 265);     /* Elevated table row and card surface */
+  --surface-2: oklch(0.275 0.064 265);     /* Active control surface and track background */
+  --surface-3: oklch(0.320 0.066 265);     /* Raised segmented button and hover surface */
 
   /* Hairlines and borders (uniform 1px grid strokes) */
-  --edge: oklch(0.380 0.025 215);         /* Container boundary and matrix grid hairlines */
-  --edge-subtle: oklch(0.350 0.020 215);   /* Interior table row and cell divider hairlines */
+  --edge: oklch(0.480 0.045 265);         /* Container boundary and matrix grid hairlines */
+  --edge-subtle: oklch(0.420 0.040 265);   /* Interior table row and cell divider hairlines */
   --edge-focus: oklch(0.72 0.16 190);     /* High-visibility keyboard focus outline */
 
   /* High-contrast system typography (WCAG AA compliant >= 4.5:1) */
-  --fg: oklch(0.985 0.005 215);           /* Primary high-contrast tabular text */
-  --fg-dim: oklch(0.81 0.018 215);        /* Secondary headers, units, and metrics */
-  --fg-muted: oklch(0.72 0.020 215);      /* Tertiary metadata, labels, and timestamps */
+  --fg: oklch(0.985 0.005 265);           /* Primary high-contrast tabular text */
+  --fg-dim: oklch(0.810 0.018 265);        /* Secondary headers, units, and metrics */
+  --fg-muted: oklch(0.720 0.020 265);      /* Tertiary metadata, labels, and timestamps */
 
   /* Custom lifecycle accent tones (independent from flowtron) */
   --tone-run: oklch(0.78 0.16 142);       /* Active execution, healthy state, and pass indicators */

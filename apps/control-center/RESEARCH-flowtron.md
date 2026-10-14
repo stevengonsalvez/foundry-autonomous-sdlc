@@ -10,8 +10,8 @@ Flowtron has no open-source license. Consequently, strict implementation indepen
   - **Component Names and Tokens**: Common architectural and layout class names are retained (`badge`, `board-shell`, `card`, `chip`, `dot`, `gate`, `kpi`, `kpis`, `legend`, `note`, `num`, `seg`, `sub`, `toolbar`, `wrap`), while flowtron token names and component identifiers are replaced with an independent scheme (`--canvas`, `--surface-0..3`, `--edge`, `--edge-subtle`, `--edge-focus`, `--fg`, `--fg-dim`, `--fg-muted`, `--tone-run`, `--tone-wait`, `--tone-block`, `--tone-info`, `--tone-agent`, `--tone-done`, `.band-strip`, `.band-cell`, `.matrix-grid`, `.matrix-spine`, `.lane-head`, `.matrix-cell`, `.chip-*`, etc.).
   - **Palette**: The color palette was redesigned to maintain strict chromatic separation from flowtron under the same-role distance standard:
     - **Governing Rule**: Each token must differ from its same-role flowtron accent (`auto`, `dit`, `gate`, `assist`, `done`, `app-1`, `contract`, etc.) by dE_ok >= 0.06 and at least 12 degrees circular hue when chroma >= 0.03. Proximity to another-role accent within 20 degrees is permitted but explicitly inventoried in the cross-role table.
-    - **Neutral Ladder**: Early drafts placed surfaces within dE 0.013 to 0.024 of reference neutrals when compared across all rungs. The neutral ladder was recalibrated to 4 evenly-spaced surface rungs between L 0.03 and 0.14 (`--canvas` 0.030, `--surface-0` 0.045, `--surface-1` 0.075, `--surface-2` 0.105, `--surface-3` 0.135, constant step of 0.030) and elevated hairline edges (`--edge-subtle` 0.350, `--edge` 0.380). Every neutral sits dE_ok >= 0.04 from every reference dark neutral (`ink`, `panel`, `panel-2`, `line-soft`, `line`). `--surface-active` was deleted as obsolete since active segmented buttons use outline and focus borders rather than a dedicated surface tone.
-    - **Reference Values and Exclusions**: Flowtron reference tokens from `src/style.css` include neutrals (`ink` #0E1217, `panel` #161C24, `panel-2` #1B232D, `line` #27313D, `line-soft` #1F2832, `text` #CBD6E3, `muted` #697686, `muted-2` #4D596A) and accents (`auto` #2DD4A7, `assist` #F2B23D, `gate` #F0644B, `dit` #6FA8FF, `contract` #22D3EE, `ephem` #C084FC, `dark` #C9A227, `done` #3A4654, `app-1` #A78BFA, `--app-2` #38BDF8, `app-3` #A3E635, `app-4` #FB7185). Note: #38BDF8 is `--app-2` in flowtron (not named info). Flowtron contains a screenshot-mode override `body.shot-demo` that changes `ink` to `#0A0E14`; this is an internal demo screenshot test fixture override and not part of Flowtron's shipped design palette, so per orchestrator decision it is excluded from shipped reference neutral comparisons.
+    - **Neutral Ladder**: Early drafts placed surfaces within dE 0.013 to 0.024 of reference neutrals when compared across all rungs, or collapsed into near-black when trying to avoid collisions at low lightness. The neutral ladder was recalibrated to a true midnight-navy palette across 4 evenly-spaced surface rungs between L 0.185 and 0.320 (`--canvas` 0.160, `--surface-0` 0.185, `--surface-1` 0.230, `--surface-2` 0.275, `--surface-3` 0.320, constant step of 0.045, hue 265°) and elevated hairline edges (`--edge-subtle` 0.420, `--edge` 0.480). Every neutral sits dE_ok >= 0.04 from every reference dark neutral (`ink`, `panel`, `panel-2`, `line-soft`, `line`). `--surface-active` was deleted as obsolete since active segmented buttons use outline and focus borders rather than a dedicated surface tone.
+    - **Reference Values and Exclusions**: Flowtron reference tokens from `src/style.css` include neutrals (`ink` #0E1217, `panel` #161C24, `panel-2` #1B232D, `line` #27313D, `line-soft` #1F2832, `text` #CBD6E3, `muted` #697686, `muted-2` #4D596A) and accents (`auto` #2DD4A7, `assist` #F2B23D, `gate` #F0644B, `dit` #6FA8FF, `contract` #22D3EE, `ephem` #C084FC, `dark` #C9A227, `done` #3A4654, `app-1` #A78BFA, `--app-2` #38BDF8, `app-3` #A3E635, `app-4` #FB7185). Note: #38BDF8 is `--app-2` in flowtron (not named info). Flowtron contains a presentation mode `body.shot-demo` opened with `?org=shot-demo`, setting 8 neutrals: `ink` #090C11, `panel` #151B23, `panel-2` #1C242E, `line-soft` #2B3644, `line` #3D4A5A, `text` #EDF3FA, `muted` #94A2B4, `muted-2` #6A7788. This is a dedicated presentation mode rather than the default shipping palette, so per orchestrator decision it is excluded from primary reference neutral comparisons, but an explicit distance analysis table against `shot-demo` neutrals is included below.
     - **Generated Palette Distance Matrix** (via `scripts/palette-distance.mjs`):
 
 | Our Token | OKLCH | Role | Same-Role Accent | Same-Role dE | Same-Role dh | Min dE Accent | Min dE | Status |
@@ -59,24 +59,43 @@ Flowtron has no open-source license. Consequently, strict implementation indepen
 
 | Token | Our OKLCH | vs ink | vs panel | vs panel-2 | vs line-soft | vs line | Min dE | Status |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| `--canvas` | 0.03 0.010 215° | 0.1505 | 0.1945 | 0.2236 | 0.2433 | 0.2798 | 0.1505 | PASS |
-| `--surface-0` | 0.04 0.012 215° | 0.1355 | 0.1795 | 0.2085 | 0.2282 | 0.2647 | 0.1355 | PASS |
-| `--surface-1` | 0.07 0.014 215° | 0.1057 | 0.1496 | 0.1786 | 0.1983 | 0.2347 | 0.1057 | PASS |
-| `--surface-2` | 0.10 0.016 215° | 0.0760 | 0.1197 | 0.1487 | 0.1683 | 0.2048 | 0.0760 | PASS |
-| `--surface-3` | 0.14 0.018 215° | 0.0467 | 0.0900 | 0.1188 | 0.1384 | 0.1749 | 0.0467 | PASS |
-| `--edge-subtle` | 0.35 0.020 215° | 0.1702 | 0.1266 | 0.0981 | 0.0784 | 0.0439 | 0.0439 | PASS |
-| `--edge` | 0.38 0.025 215° | 0.2005 | 0.1567 | 0.1280 | 0.1083 | 0.0728 | 0.0728 | PASS |
-| `favicon-bg` | 0.13 0.016 258° | 0.0530 | 0.0967 | 0.1257 | 0.1455 | 0.1820 | 0.0530 | PASS |
+| `--canvas` | 0.160 0.055 265° | 0.0477 | 0.0742 | 0.0988 | 0.1176 | 0.1522 | 0.0477 | PASS |
+| `--surface-0` | 0.185 0.060 265° | 0.0484 | 0.0576 | 0.0781 | 0.0958 | 0.1290 | 0.0484 | PASS |
+| `--surface-1` | 0.230 0.062 265° | 0.0706 | 0.0447 | 0.0464 | 0.0588 | 0.0874 | 0.0447 | PASS |
+| `--surface-2` | 0.275 0.064 265° | 0.1081 | 0.0688 | 0.0477 | 0.0425 | 0.0520 | 0.0425 | PASS |
+| `--surface-3` | 0.320 0.066 265° | 0.1498 | 0.1073 | 0.0803 | 0.0648 | 0.0426 | 0.0426 | PASS |
+| `--edge-subtle` | 0.420 0.040 265° | 0.2414 | 0.1971 | 0.1680 | 0.1484 | 0.1120 | 0.1120 | PASS |
+| `--edge` | 0.480 0.045 265° | 0.3015 | 0.2573 | 0.2282 | 0.2086 | 0.1721 | 0.1721 | PASS |
+| `favicon-bg` | 0.143 0.062 265° | 0.0625 | 0.0924 | 0.1172 | 0.1359 | 0.1702 | 0.0625 | PASS |
 
 #### Typography Neutrals vs Flowtron Reference Values
 
 | Token | Our OKLCH | Flowtron Token | Flowtron Hex | dE_ok | Status |
 | --- | --- | --- | --- | --- | --- |
-| `--fg` | 0.98 0.005 215° | `text` | `#CBD6E3` | 0.1148 | PASS |
-| `--fg-dim` | 0.81 0.018 215° | `muted` | `#697686` | 0.2500 | PASS |
-| `--fg-muted` | 0.72 0.020 215° | `muted-2` | `#4D596A` | 0.2607 | PASS |
+| `--fg` | 0.985 0.005 265° | `text` | `#CBD6E3` | 0.1146 | PASS |
+| `--fg-dim` | 0.810 0.018 265° | `muted` | `#697686` | 0.2495 | PASS |
+| `--fg-muted` | 0.720 0.020 265° | `muted-2` | `#4D596A` | 0.2601 | PASS |
 
-  - **Copy and Visual Assets**: All domain copy was rewritten. Macroband copy uses independent operational categories (ALIGN . PRODUCT, IMPLEMENT . CODE, DELIVER . OPERATIONS, EXCEPTIONS) rather than flowtron phase descriptions. Hatched cell copy is "bypasses stage". Favicon is an independent pulse mark in deep slate and cyan (#04070d and #06b6d4).
+#### Reference Comparison vs `body.shot-demo` Presentation Mode Neutrals
+
+| Token | Our OKLCH | vs ink (#090C11) | vs panel (#151B23) | vs panel-2 (#1C242E) | vs line-soft (#2B3644) | vs line (#3D4A5A) | Min dE |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| `--canvas` | 0.160 0.055 265° | 0.0437 | 0.0704 | 0.1028 | 0.1711 | 0.2455 | 0.0437 |
+| `--surface-0` | 0.185 0.060 265° | 0.0576 | 0.0547 | 0.0818 | 0.1474 | 0.2212 | 0.0547 |
+| `--surface-1` | 0.230 0.062 265° | 0.0915 | 0.0453 | 0.0487 | 0.1046 | 0.1770 | 0.0453 |
+| `--surface-2` | 0.275 0.064 265° | 0.1322 | 0.0720 | 0.0460 | 0.0647 | 0.1335 | 0.0460 |
+| `--surface-3` | 0.320 0.066 265° | 0.1751 | 0.1112 | 0.0770 | 0.0388 | 0.0913 | 0.0388 |
+| `--edge-subtle` | 0.420 0.040 265° | 0.2680 | 0.2014 | 0.1639 | 0.0919 | 0.0191 | 0.0191 |
+| `--edge` | 0.480 0.045 265° | 0.3282 | 0.2616 | 0.2241 | 0.1521 | 0.0773 | 0.0773 |
+| `favicon-bg` | 0.143 0.062 265° | 0.0513 | 0.0886 | 0.1211 | 0.1890 | 0.2631 | 0.0513 |
+
+| Typography Token | Our OKLCH | Flowtron `shot-demo` Token | Hex | dE_ok |
+| --- | --- | --- | --- | --- |
+| `--fg` | 0.985 0.005 265° | `text` | `#EDF3FA` | 0.0243 |
+| `--fg-dim` | 0.810 0.018 265° | `muted` | `#94A2B4` | 0.1038 |
+| `--fg-muted` | 0.720 0.020 265° | `muted-2` | `#6A7788` | 0.1559 |
+
+  - **Copy and Visual Assets**: All domain copy was rewritten. Macroband copy uses independent operational categories (ALIGN . PRODUCT, IMPLEMENT . CODE, DELIVER . OPERATIONS, EXCEPTIONS) rather than flowtron phase descriptions. Hatched cell copy is "bypasses stage". Favicon is an independent pulse mark in deep navy and cyan (#0a132e and #06b6d4).
   - **Data Fidelity and Complete Accounting**: Unlike reference designs that collapse tickets into an overflow badge ("+N more"), our system maintains complete data fidelity: every active ticket is rendered as an interactive pill chip, ensuring column card counts strictly equal stage counts without swallowed or dropped items.
   - **Implementation**: Written from scratch in vanilla ES modules and standard CSS with pure dark theme, zero remote requests, and complete data fidelity.
 
