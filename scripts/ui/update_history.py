@@ -1,18 +1,18 @@
-"""Automate updating the app evolution timeline for releases and merges.
+r"""Automate publishing release screenshots to the pr-screenshots branch.
 
 Used by the trusted app-history.yml workflow:
 - Validates the captured artifact directory as untrusted data using validate_artifact.py
-- Commits the validated PNGs to branch pr-screenshots under releases/<tag-or-sha8>/
-- Copies validated PNGs into history/screenshots/<tag-or-sha8>/
-- Regenerates history/data.json, history/index.html, history/css/styles.css, history/js/main.js
-- Verifies size budgets (HTML < 50KB, CSS < 20KB, JS < 15KB)
-- Optionally commits and pushes to main and pr-screenshots
+- Commits the validated PNGs to branch pr-screenshots under releases/<key>/
+- Verifies key against allowlist (^v(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$|^[0-9a-f]{8}$)
+- Pushes to pr-screenshots with jittered retry backoff
 """
 
 from __future__ import annotations
 
 import argparse
 import os
+import random
+import re
 import shutil
 import subprocess
 import sys
@@ -28,6 +28,8 @@ if str(REPO_ROOT) not in sys.path:
 from scripts.ui.validate_artifact import validate_artifact_dir  # noqa: E402
 
 BRANCH_NAME = "pr-screenshots"
+TAG_RE = re.compile(r"^v(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$")
+RELEASE_KEY_RE = re.compile(r"^v(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$|^[0-9a-f]{8}$")
 
 
 def run_cmd(cmd: list[str], *, cwd: Path | str | None = None, check: bool = True) -> str:
@@ -52,6 +54,11 @@ def resolve_release_key(repo_root: Path, override_key: str | None = None) -> tup
     Returns (key, full_sha).
     """
     if override_key:
+        if not RELEASE_KEY_RE.match(override_key):
+            raise ValueError(
+                f"Invalid release key override '{override_key}': "
+                "must match semver tag or 8-char SHA"
+            )
         sha = run_cmd(["git", "rev-parse", "HEAD"], cwd=repo_root, check=False) or "00000000"
         return override_key, sha
 
@@ -65,10 +72,15 @@ def resolve_release_key(repo_root: Path, override_key: str | None = None) -> tup
         text=True,
         check=False,
     )
-    if tag_res.returncode == 0 and tag_res.stdout.strip().startswith("v"):
-        return tag_res.stdout.strip(), full_sha
+    if tag_res.returncode == 0:
+        tag_cand = tag_res.stdout.strip()
+        if TAG_RE.match(tag_cand):
+            return tag_cand, full_sha
 
-    return full_sha[:8], full_sha
+    short_sha = full_sha[:8]
+    if not re.match(r"^[0-9a-f]{8}$", short_sha):
+        raise ValueError(f"Invalid commit SHA resolved: '{short_sha}'")
+    return short_sha, full_sha
 
 
 def publish_to_pr_screenshots(
@@ -143,7 +155,8 @@ def publish_to_pr_screenshots(
                             raise RuntimeError(
                                 f"Failed to push to {BRANCH_NAME} after 3 attempts: {exc}"
                             ) from exc
-                        time.sleep(1)
+                        backoff = (2**attempt) + random.uniform(0.1, 0.5)
+                        time.sleep(backoff)
         else:
             print(f"No changes in screenshots for release {key}")
     finally:
@@ -197,7 +210,7 @@ def main() -> None:
         "--key", default=None, help="Release key override (e.g. v0.4.0 or commit sha8)"
     )
     parser.add_argument(
-        "--push", action="store_true", help="Push changes to pr-screenshots and main"
+        "--push", action="store_true", help="Push changes to pr-screenshots"
     )
     args = parser.parse_args()
 

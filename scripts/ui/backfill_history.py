@@ -7,8 +7,7 @@ For each tag:
 4. If building succeeds, captures standard routes (home, parcel-found, not-found,
    invalid-input) at desktop (1280) and mobile (390) using capture.mjs.
 5. Validates artifacts as untrusted data using validate_artifact.py.
-6. Stores artifacts on the pr-screenshots branch under releases/<tag>/ and in
-   history/screenshots/<tag>/ for the static Pages showcase.
+6. Stores artifacts on the pr-screenshots branch under releases/<tag>/.
 """
 
 from __future__ import annotations
@@ -33,11 +32,12 @@ from scripts.ui.validate_artifact import validate_artifact_dir  # noqa: E402
 SCRIPTS_DIR = Path(__file__).resolve().parent
 CAPTURE_SCRIPT = SCRIPTS_DIR / "capture.mjs"
 BRANCH_NAME = "pr-screenshots"
+TAG_RE = re.compile(r"^v(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$")
 
 
 def parse_semver_tag(tag: str) -> tuple[int, ...]:
     """Parse vMAJOR.MINOR.PATCH into a tuple for sorting."""
-    m = re.match(r"^v?(\d+)\.(\d+)\.(\d+)", tag)
+    m = TAG_RE.match(tag)
     if m:
         return tuple(int(x) for x in m.groups())
     return (999, 999, 999)
@@ -52,7 +52,7 @@ def list_version_tags(max_tag: str | None = None) -> list[str]:
         text=True,
         check=True,
     )
-    tags = [t.strip() for t in res.stdout.splitlines() if t.strip()]
+    tags = [t.strip() for t in res.stdout.splitlines() if t.strip() and TAG_RE.match(t.strip())]
     tags.sort(key=parse_semver_tag)
     if max_tag:
         max_tuple = parse_semver_tag(max_tag)
@@ -222,6 +222,21 @@ def capture_tag(tag: str, dest_dir: Path) -> dict[str, Any]:
         return manifest_data
 
 
+def get_remote_url() -> str:
+    """Get the real origin remote URL."""
+    res = subprocess.run(
+        ["git", "config", "--get", "remote.origin.url"],
+        cwd=REPO_ROOT,
+        capture_output=True,
+        text=True,
+    )
+    url = res.stdout.strip()
+    if not url:
+        repo = os.getenv("GITHUB_REPOSITORY", "stevengonsalvez/foundry-autonomous-sdlc")
+        url = f"https://github.com/{repo}.git"
+    return url
+
+
 def commit_to_pr_screenshots_branch(
     releases_dir: Path,
     tags: list[str],
@@ -253,9 +268,11 @@ def commit_to_pr_screenshots_branch(
                 check=True,
             )
         else:
-            # Create orphan branch in temporary worktree
+            # Create orphan branch in temporary directory pointing to real remote
+            subprocess.run(["git", "init"], cwd=wt_path, check=True)
             subprocess.run(
-                ["git", "clone", "--no-checkout", str(REPO_ROOT), str(wt_path)],
+                ["git", "remote", "add", "origin", get_remote_url()],
+                cwd=wt_path,
                 check=True,
             )
             subprocess.run(
@@ -263,7 +280,6 @@ def commit_to_pr_screenshots_branch(
                 cwd=wt_path,
                 check=True,
             )
-            subprocess.run(["git", "reset", "--hard"], cwd=wt_path, check=True)
 
         try:
             wt_releases = wt_path / "releases"
