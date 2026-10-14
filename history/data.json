@@ -1,0 +1,315 @@
+{
+  "version": 1,
+  "repo": "stevengonsalvez/foundry-autonomous-sdlc",
+  "budget": {
+    "html_max_bytes": 51200,
+    "css_max_bytes": 20480,
+    "js_max_bytes": 15360,
+    "external_requests": false
+  },
+  "entries": [
+    {
+      "tag": "v0.4.0",
+      "commit_sha": "110ea1651afb5f387dc26b00358321b25fe73dd9",
+      "short_sha": "110ea165",
+      "date": "2026-10-12T01:02:01+01:00",
+      "title": "Show how many tracking events a parcel has",
+      "issue_number": 51,
+      "issue_url": "https://github.com/stevengonsalvez/foundry-autonomous-sdlc/issues/51",
+      "pr_number": 54,
+      "pr_url": "https://github.com/stevengonsalvez/foundry-autonomous-sdlc/pull/54",
+      "cost_usd": 0.304283,
+      "reproducible": true,
+      "not_reproducible_reason": null,
+      "screenshots": {
+        "home": {
+          "desktop": "home-desktop.png",
+          "mobile": "home-mobile.png"
+        },
+        "parcel-found": {
+          "desktop": "parcel-found-desktop.png",
+          "mobile": "parcel-found-mobile.png"
+        },
+        "not-found": {
+          "desktop": "not-found-desktop.png",
+          "mobile": "not-found-mobile.png"
+        },
+        "invalid-input": {
+          "desktop": "invalid-input-desktop.png",
+          "mobile": "invalid-input-mobile.png"
+        }
+      },
+      "before": {
+        "tag": "v0.3.1",
+        "reproducible": true,
+        "screenshots": {
+          "home": {
+            "desktop": "home-desktop.png",
+            "mobile": "home-mobile.png"
+          },
+          "parcel-found": {
+            "desktop": "parcel-found-desktop.png",
+            "mobile": "parcel-found-mobile.png"
+          },
+          "not-found": {
+            "desktop": "not-found-desktop.png",
+            "mobile": "not-found-mobile.png"
+          },
+          "invalid-input": {
+            "desktop": "invalid-input-desktop.png",
+            "mobile": "invalid-input-mobile.png"
+          }
+        }
+      }
+    },
+    {
+      "tag": "v0.3.1",
+      "commit_sha": "f677ba5a3f621dda89a35333e38249622bd7f8bd",
+      "short_sha": "f677ba5a",
+      "date": "2026-10-10T22:40:19+01:00",
+      "title": "Update the home page heading copy",
+      "issue_number": 40,
+      "issue_url": "https://github.com/stevengonsalvez/foundry-autonomous-sdlc/pull/40",
+      "pr_number": 40,
+      "pr_url": "https://github.com/stevengonsalvez/foundry-autonomous-sdlc/pull/40",
+      "cost_usd": 0.046857,
+      "reproducible": true,
+      "not_reproducible_reason": null,
+      "screenshots": {
+        "home": {
+          "desktop": "home-desktop.png",
+          "mobile": "home-mobile.png"
+        },
+        "parcel-found": {
+          "desktop": "parcel-found-desktop.png",
+          "mobile": "parcel-found-mobile.png"
+        },
+        "not-found": {
+          "desktop": "not-found-desktop.png",
+          "mobile": "not-found-mobile.png"
+        },
+        "invalid-input": {
+          "desktop": "invalid-input-desktop.png",
+          "mobile": "invalid-input-mobile.png"
+        }
+      },
+      "before": {
+        "tag": "v0.3.0",
+        "reproducible": true,
+        "screenshots": {
+          "home": {
+            "desktop": "home-desktop.png",
+            "mobile": "home-mobile.png"
+          },
+          "parcel-found": {
+            "desktop": "parcel-found-desktop.png",
+            "mobile": "parcel-found-mobile.png"
+          },
+          "not-found": {
+            "desktop": "not-found-desktop.png",
+            "mobile": "not-found-mobile.png"
+          },
+          "invalid-input": {
+            "desktop": "invalid-input-desktop.png",
+            "mobile": "invalid-input-mobile.png"
+          }
+        }
+      }
+    },
+    {
+      "tag": "v0.3.0",
+      "commit_sha": "1897ea106ba36ac8d8873fc2a29701b6314c298d",
+      "short_sha": "1897ea10",
+      "date": "2026-10-10T18:25:27+01:00",
+      "title": "Make the parcel tracker better",
+      "issue_number": 24,
+      "issue_url": "https://github.com/stevengonsalvez/foundry-autonomous-sdlc/issues/24",
+      "pr_number": 29,
+      "pr_url": "https://github.com/stevengonsalvez/foundry-autonomous-sdlc/pull/29",
+      "cost_usd": 0.086689,
+      "reproducible": true,
+      "not_reproducible_reason": null,
+      "screenshots": {
+        "home": {
+          "desktop": "home-desktop.png",
+          "mobile": "home-mobile.png"
+        },
+        "parcel-found": {
+          "desktop": "parcel-found-desktop.png",
+          "mobile": "parcel-found-mobile.png"
+        },
+        "not-found": {
+          "desktop": "not-found-desktop.png",
+          "mobile": "not-found-mobile.png"
+        },
+        "invalid-input": {
+          "desktop": "invalid-input-desktop.png",
+          "mobile": "invalid-input-mobile.png"
+        }
+      },
+      "before": {
+        "tag": "v0.2.0",
+        "reproducible": true,
+        "screenshots": {
+          "home": {
+            "desktop": "home-desktop.png",
+            "mobile": "home-mobile.png"
+          },
+          "parcel-found": {
+            "desktop": "parcel-found-desktop.png",
+            "mobile": "parcel-found-mobile.png"
+          },
+          "not-found": {
+            "desktop": "not-found-desktop.png",
+            "mobile": "not-found-mobile.png"
+          },
+          "invalid-input": {
+            "desktop": "invalid-input-desktop.png",
+            "mobile": "invalid-input-mobile.png"
+          }
+        }
+      }
+    },
+    {
+      "tag": "v0.2.0",
+      "commit_sha": "7f7ba0ca14b3c637c9fc73935df46f95a2888b70",
+      "short_sha": "7f7ba0ca",
+      "date": "2026-10-10T18:25:19+01:00",
+      "title": "Show when the parcel was last updated on the parcel page",
+      "issue_number": 23,
+      "issue_url": "https://github.com/stevengonsalvez/foundry-autonomous-sdlc/issues/23",
+      "pr_number": 28,
+      "pr_url": "https://github.com/stevengonsalvez/foundry-autonomous-sdlc/pull/28",
+      "cost_usd": 0.071115,
+      "reproducible": true,
+      "not_reproducible_reason": null,
+      "screenshots": {
+        "home": {
+          "desktop": "home-desktop.png",
+          "mobile": "home-mobile.png"
+        },
+        "parcel-found": {
+          "desktop": "parcel-found-desktop.png",
+          "mobile": "parcel-found-mobile.png"
+        },
+        "not-found": {
+          "desktop": "not-found-desktop.png",
+          "mobile": "not-found-mobile.png"
+        },
+        "invalid-input": {
+          "desktop": "invalid-input-desktop.png",
+          "mobile": "invalid-input-mobile.png"
+        }
+      },
+      "before": {
+        "tag": "v0.1.1",
+        "reproducible": true,
+        "screenshots": {
+          "home": {
+            "desktop": "home-desktop.png",
+            "mobile": "home-mobile.png"
+          },
+          "parcel-found": {
+            "desktop": "parcel-found-desktop.png",
+            "mobile": "parcel-found-mobile.png"
+          },
+          "not-found": {
+            "desktop": "not-found-desktop.png",
+            "mobile": "not-found-mobile.png"
+          },
+          "invalid-input": {
+            "desktop": "invalid-input-desktop.png",
+            "mobile": "invalid-input-mobile.png"
+          }
+        }
+      }
+    },
+    {
+      "tag": "v0.1.1",
+      "commit_sha": "af1a742446d6db445ee3245165930cc2f2cdd051",
+      "short_sha": "af1a7424",
+      "date": "2026-10-10T18:10:26+01:00",
+      "title": "Lowercase tracking numbers are rejected as invalid",
+      "issue_number": 25,
+      "issue_url": "https://github.com/stevengonsalvez/foundry-autonomous-sdlc/issues/25",
+      "pr_number": 26,
+      "pr_url": "https://github.com/stevengonsalvez/foundry-autonomous-sdlc/pull/26",
+      "cost_usd": 0.041855,
+      "reproducible": true,
+      "not_reproducible_reason": null,
+      "screenshots": {
+        "home": {
+          "desktop": "home-desktop.png",
+          "mobile": "home-mobile.png"
+        },
+        "parcel-found": {
+          "desktop": "parcel-found-desktop.png",
+          "mobile": "parcel-found-mobile.png"
+        },
+        "not-found": {
+          "desktop": "not-found-desktop.png",
+          "mobile": "not-found-mobile.png"
+        },
+        "invalid-input": {
+          "desktop": "invalid-input-desktop.png",
+          "mobile": "invalid-input-mobile.png"
+        }
+      },
+      "before": {
+        "tag": "v0.1.0",
+        "reproducible": true,
+        "screenshots": {
+          "home": {
+            "desktop": "home-desktop.png",
+            "mobile": "home-mobile.png"
+          },
+          "parcel-found": {
+            "desktop": "parcel-found-desktop.png",
+            "mobile": "parcel-found-mobile.png"
+          },
+          "not-found": {
+            "desktop": "not-found-desktop.png",
+            "mobile": "not-found-mobile.png"
+          },
+          "invalid-input": {
+            "desktop": "invalid-input-desktop.png",
+            "mobile": "invalid-input-mobile.png"
+          }
+        }
+      }
+    },
+    {
+      "tag": "v0.1.0",
+      "commit_sha": "00ad430d7025c88396cc5012e8d38de4e232bc8b",
+      "short_sha": "00ad430d",
+      "date": "2026-10-10T16:14:02+01:00",
+      "title": "Show the estimated delivery date on the parcel page",
+      "issue_number": 12,
+      "issue_url": "https://github.com/stevengonsalvez/foundry-autonomous-sdlc/issues/12",
+      "pr_number": 13,
+      "pr_url": "https://github.com/stevengonsalvez/foundry-autonomous-sdlc/pull/13",
+      "cost_usd": 0.077727,
+      "reproducible": true,
+      "not_reproducible_reason": null,
+      "screenshots": {
+        "home": {
+          "desktop": "home-desktop.png",
+          "mobile": "home-mobile.png"
+        },
+        "parcel-found": {
+          "desktop": "parcel-found-desktop.png",
+          "mobile": "parcel-found-mobile.png"
+        },
+        "not-found": {
+          "desktop": "not-found-desktop.png",
+          "mobile": "not-found-mobile.png"
+        },
+        "invalid-input": {
+          "desktop": "invalid-input-desktop.png",
+          "mobile": "invalid-input-mobile.png"
+        }
+      },
+      "before": null
+    }
+  ]
+}

@@ -1,0 +1,403 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https://raw.githubusercontent.com; font-src 'self'; base-uri 'none'; form-action 'none'">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <meta name="description" content="Visual evolution of the parcel tracker UI across autonomous SDLC releases.">
+  <title>App Evolution · Delivery Flow</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%230e1526'/%3E%3Cpath d='M7 23l5-6 4 3 9-10' fill='none' stroke='%23818cf8' stroke-width='2.75' stroke-linecap='round' stroke-linejoin='round'/%3E%3Ccircle cx='25' cy='10' r='2.5' fill='%23818cf8'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="./css/styles.css">
+  <script src="./js/main.js" defer></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+
+  <header class="topbar">
+    <div class="container topbar-inner">
+      <a class="brand" href="../" aria-label="Parcel tracker home">
+        <svg class="brand-mark" width="24" height="24" viewBox="0 0 32 32" aria-hidden="true" focusable="false">
+          <rect width="32" height="32" rx="6" fill="#1e293b" />
+          <path d="M8 21l5-5 4 3 7-8" fill="none" stroke="#818cf8" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" />
+        </svg>
+        <span class="brand-text">Flow</span>
+        <span class="brand-sub">· Evolution</span>
+      </a>
+      <nav aria-label="Pages navigation">
+        <ul class="nav-links">
+          <li><a href="../">Live app</a></li>
+          <li><a href="../control-center/">Control center</a></li>
+          <li><a href="./" class="active" aria-current="page">Evolution</a></li>
+          <li><a href="../staging/">Staging</a></li>
+          <li><a href="../dashboard/">Dashboard</a></li>
+          <li><a href="https://github.com/stevengonsalvez/foundry-autonomous-sdlc#documentation">Docs</a></li>
+        </ul>
+      </nav>
+    </div>
+  </header>
+
+  <main id="main" tabindex="-1">
+    <section class="hero">
+      <div class="container">
+        <h1>App Evolution Showcase</h1>
+        <p>A deterministic visual timeline of parcel tracker UI releases, tracking each change from initial launch to current release with side-by-side screenshot comparisons and ledger costs.</p>
+        <div class="budget-badge" role="note">Size budget: HTML &lt; 50KB · CSS &lt; 20KB · JS &lt; 15KB (zero external requests)</div>
+      </div>
+    </section>
+
+    <div class="container">
+      <section class="then-vs-now" aria-labelledby="then-vs-now-heading">
+        <div class="then-vs-now-header">
+          <h2 id="then-vs-now-heading">Then vs Now</h2>
+          <span class="badge" style="color: var(--tone-info);">v0.1.0 &rarr; v0.4.0</span>
+        </div>
+        <div class="then-vs-now-grid">
+          <div class="card-preview">
+            <div class="card-preview-header">
+              <span class="card-preview-title">First Release (v0.1.0)</span>
+              <span>Home Route</span>
+            </div>
+            <div class="card-preview-body">
+              <img src="./screenshots/v0.1.0/home-desktop.png" alt="v0.1.0 home desktop" loading="lazy" width="600" height="375" />
+            </div>
+          </div>
+          <div class="card-preview">
+            <div class="card-preview-header">
+              <span class="card-preview-title">Current Release (v0.4.0)</span>
+              <span>Home Route</span>
+            </div>
+            <div class="card-preview-body">
+              <img src="./screenshots/v0.4.0/home-desktop.png" alt="v0.4.0 home desktop" loading="lazy" width="600" height="375" />
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <div class="toolbar" role="toolbar" aria-label="Timeline view controls">
+        <div class="toolbar-inner">
+          <div class="control-group">
+            <span class="control-label" id="vp-label">Viewport:</span>
+            <div class="btn-group" role="group" aria-labelledby="vp-label">
+              <button type="button" class="btn-toggle active" data-action="set-viewport" data-viewport="desktop" aria-pressed="true">Desktop (1280px)</button>
+              <button type="button" class="btn-toggle" data-action="set-viewport" data-viewport="mobile" aria-pressed="false">Mobile (390px)</button>
+            </div>
+          </div>
+          <div class="control-group">
+            <span class="control-label" id="route-label">Route:</span>
+            <div class="btn-group" role="group" aria-labelledby="route-label">
+              <button type="button" class="btn-toggle active" data-action="set-route" data-route="home" aria-pressed="true">Home</button>
+              <button type="button" class="btn-toggle" data-action="set-route" data-route="parcel-found" aria-pressed="false">Parcel Found</button>
+              <button type="button" class="btn-toggle" data-action="set-route" data-route="not-found" aria-pressed="false">Not Found</button>
+              <button type="button" class="btn-toggle" data-action="set-route" data-route="invalid-input" aria-pressed="false">Invalid Input</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <section class="timeline" aria-label="Version history timeline">
+        
+          <article class="timeline-item">
+            <div class="timeline-dot" aria-hidden="true"></div>
+            <div class="timeline-card">
+              <header class="timeline-card-header">
+                <div class="timeline-meta-left">
+                  <span class="tag-badge">v0.4.0</span>
+                  <h3 class="item-title">Show how many tracking events a parcel has</h3>
+                </div>
+                <div class="timeline-meta-right">
+                  <time datetime="2026-10-12T01:02:01+01:00">2026-10-12 01:02 UTC</time>
+                  <span class="badge" title="Commit 110ea165">sha: 110ea165</span> <a class="badge" href="https://github.com/stevengonsalvez/foundry-autonomous-sdlc/issues/51" target="_blank" rel="noopener">issue #51</a> <a class="badge" href="https://github.com/stevengonsalvez/foundry-autonomous-sdlc/pull/54" target="_blank" rel="noopener">pr #54</a> <span class="badge badge-cost" title="Ledger total cost">$0.304</span>
+                </div>
+              </header>
+              
+              <div class="compare-container">
+                <div class="compare-grid">
+                  <div class="compare-col">
+                    <div class="compare-col-header">Before (v0.3.1)</div>
+                    <div class="compare-img-wrap">
+                      <img src="./screenshots/v0.3.1/home-desktop.png" alt="v0.3.1 home desktop" data-route="home" data-viewport="desktop" style="display: block;" loading="lazy" width="560" height="350" />
+<img src="./screenshots/v0.3.1/home-mobile.png" alt="v0.3.1 home mobile" data-route="home" data-viewport="mobile" style="display: none;" loading="lazy" width="560" height="350" />
+<img src="./screenshots/v0.3.1/parcel-found-desktop.png" alt="v0.3.1 parcel-found desktop" data-route="parcel-found" data-viewport="desktop" style="display: none;" loading="lazy" width="560" height="350" />
+<img src="./screenshots/v0.3.1/parcel-found-mobile.png" alt="v0.3.1 parcel-found mobile" data-route="parcel-found" data-viewport="mobile" style="display: none;" loading="lazy" width="560" height="350" />
+<img src="./screenshots/v0.3.1/not-found-desktop.png" alt="v0.3.1 not-found desktop" data-route="not-found" data-viewport="desktop" style="display: none;" loading="lazy" width="560" height="350" />
+<img src="./screenshots/v0.3.1/not-found-mobile.png" alt="v0.3.1 not-found mobile" data-route="not-found" data-viewport="mobile" style="display: none;" loading="lazy" width="560" height="350" />
+<img src="./screenshots/v0.3.1/invalid-input-desktop.png" alt="v0.3.1 invalid-input desktop" data-route="invalid-input" data-viewport="desktop" style="display: none;" loading="lazy" width="560" height="350" />
+<img src="./screenshots/v0.3.1/invalid-input-mobile.png" alt="v0.3.1 invalid-input mobile" data-route="invalid-input" data-viewport="mobile" style="display: none;" loading="lazy" width="560" height="350" />
+                    </div>
+                  </div>
+                  <div class="compare-col">
+                    <div class="compare-col-header">After (v0.4.0)</div>
+                    <div class="compare-img-wrap">
+                      <img src="./screenshots/v0.4.0/home-desktop.png" alt="v0.4.0 home desktop" data-route="home" data-viewport="desktop" style="display: block;" loading="lazy" width="560" height="350" />
+<img src="./screenshots/v0.4.0/home-mobile.png" alt="v0.4.0 home mobile" data-route="home" data-viewport="mobile" style="display: none;" loading="lazy" width="560" height="350" />
+<img src="./screenshots/v0.4.0/parcel-found-desktop.png" alt="v0.4.0 parcel-found desktop" data-route="parcel-found" data-viewport="desktop" style="display: none;" loading="lazy" width="560" height="350" />
+<img src="./screenshots/v0.4.0/parcel-found-mobile.png" alt="v0.4.0 parcel-found mobile" data-route="parcel-found" data-viewport="mobile" style="display: none;" loading="lazy" width="560" height="350" />
+<img src="./screenshots/v0.4.0/not-found-desktop.png" alt="v0.4.0 not-found desktop" data-route="not-found" data-viewport="desktop" style="display: none;" loading="lazy" width="560" height="350" />
+<img src="./screenshots/v0.4.0/not-found-mobile.png" alt="v0.4.0 not-found mobile" data-route="not-found" data-viewport="mobile" style="display: none;" loading="lazy" width="560" height="350" />
+<img src="./screenshots/v0.4.0/invalid-input-desktop.png" alt="v0.4.0 invalid-input desktop" data-route="invalid-input" data-viewport="desktop" style="display: none;" loading="lazy" width="560" height="350" />
+<img src="./screenshots/v0.4.0/invalid-input-mobile.png" alt="v0.4.0 invalid-input mobile" data-route="invalid-input" data-viewport="mobile" style="display: none;" loading="lazy" width="560" height="350" />
+                    </div>
+                  </div>
+                </div>
+              </div>
+            
+            </div>
+          </article>
+        
+
+          <article class="timeline-item">
+            <div class="timeline-dot" aria-hidden="true"></div>
+            <div class="timeline-card">
+              <header class="timeline-card-header">
+                <div class="timeline-meta-left">
+                  <span class="tag-badge">v0.3.1</span>
+                  <h3 class="item-title">Update the home page heading copy</h3>
+                </div>
+                <div class="timeline-meta-right">
+                  <time datetime="2026-10-10T22:40:19+01:00">2026-10-10 22:40 UTC</time>
+                  <span class="badge" title="Commit f677ba5a">sha: f677ba5a</span> <a class="badge" href="https://github.com/stevengonsalvez/foundry-autonomous-sdlc/pull/40" target="_blank" rel="noopener">issue #40</a> <a class="badge" href="https://github.com/stevengonsalvez/foundry-autonomous-sdlc/pull/40" target="_blank" rel="noopener">pr #40</a> <span class="badge badge-cost" title="Ledger total cost">$0.047</span>
+                </div>
+              </header>
+              
+              <div class="compare-container">
+                <div class="compare-grid">
+                  <div class="compare-col">
+                    <div class="compare-col-header">Before (v0.3.0)</div>
+                    <div class="compare-img-wrap">
+                      <img src="./screenshots/v0.3.0/home-desktop.png" alt="v0.3.0 home desktop" data-route="home" data-viewport="desktop" style="display: block;" loading="lazy" width="560" height="350" />
+<img src="./screenshots/v0.3.0/home-mobile.png" alt="v0.3.0 home mobile" data-route="home" data-viewport="mobile" style="display: none;" loading="lazy" width="560" height="350" />
+<img src="./screenshots/v0.3.0/parcel-found-desktop.png" alt="v0.3.0 parcel-found desktop" data-route="parcel-found" data-viewport="desktop" style="display: none;" loading="lazy" width="560" height="350" />
+<img src="./screenshots/v0.3.0/parcel-found-mobile.png" alt="v0.3.0 parcel-found mobile" data-route="parcel-found" data-viewport="mobile" style="display: none;" loading="lazy" width="560" height="350" />
+<img src="./screenshots/v0.3.0/not-found-desktop.png" alt="v0.3.0 not-found desktop" data-route="not-found" data-viewport="desktop" style="display: none;" loading="lazy" width="560" height="350" />
+<img src="./screenshots/v0.3.0/not-found-mobile.png" alt="v0.3.0 not-found mobile" data-route="not-found" data-viewport="mobile" style="display: none;" loading="lazy" width="560" height="350" />
+<img src="./screenshots/v0.3.0/invalid-input-desktop.png" alt="v0.3.0 invalid-input desktop" data-route="invalid-input" data-viewport="desktop" style="display: none;" loading="lazy" width="560" height="350" />
+<img src="./screenshots/v0.3.0/invalid-input-mobile.png" alt="v0.3.0 invalid-input mobile" data-route="invalid-input" data-viewport="mobile" style="display: none;" loading="lazy" width="560" height="350" />
+                    </div>
+                  </div>
+                  <div class="compare-col">
+                    <div class="compare-col-header">After (v0.3.1)</div>
+                    <div class="compare-img-wrap">
+                      <img src="./screenshots/v0.3.1/home-desktop.png" alt="v0.3.1 home desktop" data-route="home" data-viewport="desktop" style="display: block;" loading="lazy" width="560" height="350" />
+<img src="./screenshots/v0.3.1/home-mobile.png" alt="v0.3.1 home mobile" data-route="home" data-viewport="mobile" style="display: none;" loading="lazy" width="560" height="350" />
+<img src="./screenshots/v0.3.1/parcel-found-desktop.png" alt="v0.3.1 parcel-found desktop" data-route="parcel-found" data-viewport="desktop" style="display: none;" loading="lazy" width="560" height="350" />
+<img src="./screenshots/v0.3.1/parcel-found-mobile.png" alt="v0.3.1 parcel-found mobile" data-route="parcel-found" data-viewport="mobile" style="display: none;" loading="lazy" width="560" height="350" />
+<img src="./screenshots/v0.3.1/not-found-desktop.png" alt="v0.3.1 not-found desktop" data-route="not-found" data-viewport="desktop" style="display: none;" loading="lazy" width="560" height="350" />
+<img src="./screenshots/v0.3.1/not-found-mobile.png" alt="v0.3.1 not-found mobile" data-route="not-found" data-viewport="mobile" style="display: none;" loading="lazy" width="560" height="350" />
+<img src="./screenshots/v0.3.1/invalid-input-desktop.png" alt="v0.3.1 invalid-input desktop" data-route="invalid-input" data-viewport="desktop" style="display: none;" loading="lazy" width="560" height="350" />
+<img src="./screenshots/v0.3.1/invalid-input-mobile.png" alt="v0.3.1 invalid-input mobile" data-route="invalid-input" data-viewport="mobile" style="display: none;" loading="lazy" width="560" height="350" />
+                    </div>
+                  </div>
+                </div>
+              </div>
+            
+            </div>
+          </article>
+        
+
+          <article class="timeline-item">
+            <div class="timeline-dot" aria-hidden="true"></div>
+            <div class="timeline-card">
+              <header class="timeline-card-header">
+                <div class="timeline-meta-left">
+                  <span class="tag-badge">v0.3.0</span>
+                  <h3 class="item-title">Make the parcel tracker better</h3>
+                </div>
+                <div class="timeline-meta-right">
+                  <time datetime="2026-10-10T18:25:27+01:00">2026-10-10 18:25 UTC</time>
+                  <span class="badge" title="Commit 1897ea10">sha: 1897ea10</span> <a class="badge" href="https://github.com/stevengonsalvez/foundry-autonomous-sdlc/issues/24" target="_blank" rel="noopener">issue #24</a> <a class="badge" href="https://github.com/stevengonsalvez/foundry-autonomous-sdlc/pull/29" target="_blank" rel="noopener">pr #29</a> <span class="badge badge-cost" title="Ledger total cost">$0.087</span>
+                </div>
+              </header>
+              
+              <div class="compare-container">
+                <div class="compare-grid">
+                  <div class="compare-col">
+                    <div class="compare-col-header">Before (v0.2.0)</div>
+                    <div class="compare-img-wrap">
+                      <img src="./screenshots/v0.2.0/home-desktop.png" alt="v0.2.0 home desktop" data-route="home" data-viewport="desktop" style="display: block;" loading="lazy" width="560" height="350" />
+<img src="./screenshots/v0.2.0/home-mobile.png" alt="v0.2.0 home mobile" data-route="home" data-viewport="mobile" style="display: none;" loading="lazy" width="560" height="350" />
+<img src="./screenshots/v0.2.0/parcel-found-desktop.png" alt="v0.2.0 parcel-found desktop" data-route="parcel-found" data-viewport="desktop" style="display: none;" loading="lazy" width="560" height="350" />
+<img src="./screenshots/v0.2.0/parcel-found-mobile.png" alt="v0.2.0 parcel-found mobile" data-route="parcel-found" data-viewport="mobile" style="display: none;" loading="lazy" width="560" height="350" />
+<img src="./screenshots/v0.2.0/not-found-desktop.png" alt="v0.2.0 not-found desktop" data-route="not-found" data-viewport="desktop" style="display: none;" loading="lazy" width="560" height="350" />
+<img src="./screenshots/v0.2.0/not-found-mobile.png" alt="v0.2.0 not-found mobile" data-route="not-found" data-viewport="mobile" style="display: none;" loading="lazy" width="560" height="350" />
+<img src="./screenshots/v0.2.0/invalid-input-desktop.png" alt="v0.2.0 invalid-input desktop" data-route="invalid-input" data-viewport="desktop" style="display: none;" loading="lazy" width="560" height="350" />
+<img src="./screenshots/v0.2.0/invalid-input-mobile.png" alt="v0.2.0 invalid-input mobile" data-route="invalid-input" data-viewport="mobile" style="display: none;" loading="lazy" width="560" height="350" />
+                    </div>
+                  </div>
+                  <div class="compare-col">
+                    <div class="compare-col-header">After (v0.3.0)</div>
+                    <div class="compare-img-wrap">
+                      <img src="./screenshots/v0.3.0/home-desktop.png" alt="v0.3.0 home desktop" data-route="home" data-viewport="desktop" style="display: block;" loading="lazy" width="560" height="350" />
+<img src="./screenshots/v0.3.0/home-mobile.png" alt="v0.3.0 home mobile" data-route="home" data-viewport="mobile" style="display: none;" loading="lazy" width="560" height="350" />
+<img src="./screenshots/v0.3.0/parcel-found-desktop.png" alt="v0.3.0 parcel-found desktop" data-route="parcel-found" data-viewport="desktop" style="display: none;" loading="lazy" width="560" height="350" />
+<img src="./screenshots/v0.3.0/parcel-found-mobile.png" alt="v0.3.0 parcel-found mobile" data-route="parcel-found" data-viewport="mobile" style="display: none;" loading="lazy" width="560" height="350" />
+<img src="./screenshots/v0.3.0/not-found-desktop.png" alt="v0.3.0 not-found desktop" data-route="not-found" data-viewport="desktop" style="display: none;" loading="lazy" width="560" height="350" />
+<img src="./screenshots/v0.3.0/not-found-mobile.png" alt="v0.3.0 not-found mobile" data-route="not-found" data-viewport="mobile" style="display: none;" loading="lazy" width="560" height="350" />
+<img src="./screenshots/v0.3.0/invalid-input-desktop.png" alt="v0.3.0 invalid-input desktop" data-route="invalid-input" data-viewport="desktop" style="display: none;" loading="lazy" width="560" height="350" />
+<img src="./screenshots/v0.3.0/invalid-input-mobile.png" alt="v0.3.0 invalid-input mobile" data-route="invalid-input" data-viewport="mobile" style="display: none;" loading="lazy" width="560" height="350" />
+                    </div>
+                  </div>
+                </div>
+              </div>
+            
+            </div>
+          </article>
+        
+
+          <article class="timeline-item">
+            <div class="timeline-dot" aria-hidden="true"></div>
+            <div class="timeline-card">
+              <header class="timeline-card-header">
+                <div class="timeline-meta-left">
+                  <span class="tag-badge">v0.2.0</span>
+                  <h3 class="item-title">Show when the parcel was last updated on the parcel page</h3>
+                </div>
+                <div class="timeline-meta-right">
+                  <time datetime="2026-10-10T18:25:19+01:00">2026-10-10 18:25 UTC</time>
+                  <span class="badge" title="Commit 7f7ba0ca">sha: 7f7ba0ca</span> <a class="badge" href="https://github.com/stevengonsalvez/foundry-autonomous-sdlc/issues/23" target="_blank" rel="noopener">issue #23</a> <a class="badge" href="https://github.com/stevengonsalvez/foundry-autonomous-sdlc/pull/28" target="_blank" rel="noopener">pr #28</a> <span class="badge badge-cost" title="Ledger total cost">$0.071</span>
+                </div>
+              </header>
+              
+              <div class="compare-container">
+                <div class="compare-grid">
+                  <div class="compare-col">
+                    <div class="compare-col-header">Before (v0.1.1)</div>
+                    <div class="compare-img-wrap">
+                      <img src="./screenshots/v0.1.1/home-desktop.png" alt="v0.1.1 home desktop" data-route="home" data-viewport="desktop" style="display: block;" loading="lazy" width="560" height="350" />
+<img src="./screenshots/v0.1.1/home-mobile.png" alt="v0.1.1 home mobile" data-route="home" data-viewport="mobile" style="display: none;" loading="lazy" width="560" height="350" />
+<img src="./screenshots/v0.1.1/parcel-found-desktop.png" alt="v0.1.1 parcel-found desktop" data-route="parcel-found" data-viewport="desktop" style="display: none;" loading="lazy" width="560" height="350" />
+<img src="./screenshots/v0.1.1/parcel-found-mobile.png" alt="v0.1.1 parcel-found mobile" data-route="parcel-found" data-viewport="mobile" style="display: none;" loading="lazy" width="560" height="350" />
+<img src="./screenshots/v0.1.1/not-found-desktop.png" alt="v0.1.1 not-found desktop" data-route="not-found" data-viewport="desktop" style="display: none;" loading="lazy" width="560" height="350" />
+<img src="./screenshots/v0.1.1/not-found-mobile.png" alt="v0.1.1 not-found mobile" data-route="not-found" data-viewport="mobile" style="display: none;" loading="lazy" width="560" height="350" />
+<img src="./screenshots/v0.1.1/invalid-input-desktop.png" alt="v0.1.1 invalid-input desktop" data-route="invalid-input" data-viewport="desktop" style="display: none;" loading="lazy" width="560" height="350" />
+<img src="./screenshots/v0.1.1/invalid-input-mobile.png" alt="v0.1.1 invalid-input mobile" data-route="invalid-input" data-viewport="mobile" style="display: none;" loading="lazy" width="560" height="350" />
+                    </div>
+                  </div>
+                  <div class="compare-col">
+                    <div class="compare-col-header">After (v0.2.0)</div>
+                    <div class="compare-img-wrap">
+                      <img src="./screenshots/v0.2.0/home-desktop.png" alt="v0.2.0 home desktop" data-route="home" data-viewport="desktop" style="display: block;" loading="lazy" width="560" height="350" />
+<img src="./screenshots/v0.2.0/home-mobile.png" alt="v0.2.0 home mobile" data-route="home" data-viewport="mobile" style="display: none;" loading="lazy" width="560" height="350" />
+<img src="./screenshots/v0.2.0/parcel-found-desktop.png" alt="v0.2.0 parcel-found desktop" data-route="parcel-found" data-viewport="desktop" style="display: none;" loading="lazy" width="560" height="350" />
+<img src="./screenshots/v0.2.0/parcel-found-mobile.png" alt="v0.2.0 parcel-found mobile" data-route="parcel-found" data-viewport="mobile" style="display: none;" loading="lazy" width="560" height="350" />
+<img src="./screenshots/v0.2.0/not-found-desktop.png" alt="v0.2.0 not-found desktop" data-route="not-found" data-viewport="desktop" style="display: none;" loading="lazy" width="560" height="350" />
+<img src="./screenshots/v0.2.0/not-found-mobile.png" alt="v0.2.0 not-found mobile" data-route="not-found" data-viewport="mobile" style="display: none;" loading="lazy" width="560" height="350" />
+<img src="./screenshots/v0.2.0/invalid-input-desktop.png" alt="v0.2.0 invalid-input desktop" data-route="invalid-input" data-viewport="desktop" style="display: none;" loading="lazy" width="560" height="350" />
+<img src="./screenshots/v0.2.0/invalid-input-mobile.png" alt="v0.2.0 invalid-input mobile" data-route="invalid-input" data-viewport="mobile" style="display: none;" loading="lazy" width="560" height="350" />
+                    </div>
+                  </div>
+                </div>
+              </div>
+            
+            </div>
+          </article>
+        
+
+          <article class="timeline-item">
+            <div class="timeline-dot" aria-hidden="true"></div>
+            <div class="timeline-card">
+              <header class="timeline-card-header">
+                <div class="timeline-meta-left">
+                  <span class="tag-badge">v0.1.1</span>
+                  <h3 class="item-title">Lowercase tracking numbers are rejected as invalid</h3>
+                </div>
+                <div class="timeline-meta-right">
+                  <time datetime="2026-10-10T18:10:26+01:00">2026-10-10 18:10 UTC</time>
+                  <span class="badge" title="Commit af1a7424">sha: af1a7424</span> <a class="badge" href="https://github.com/stevengonsalvez/foundry-autonomous-sdlc/issues/25" target="_blank" rel="noopener">issue #25</a> <a class="badge" href="https://github.com/stevengonsalvez/foundry-autonomous-sdlc/pull/26" target="_blank" rel="noopener">pr #26</a> <span class="badge badge-cost" title="Ledger total cost">$0.042</span>
+                </div>
+              </header>
+              
+              <div class="compare-container">
+                <div class="compare-grid">
+                  <div class="compare-col">
+                    <div class="compare-col-header">Before (v0.1.0)</div>
+                    <div class="compare-img-wrap">
+                      <img src="./screenshots/v0.1.0/home-desktop.png" alt="v0.1.0 home desktop" data-route="home" data-viewport="desktop" style="display: block;" loading="lazy" width="560" height="350" />
+<img src="./screenshots/v0.1.0/home-mobile.png" alt="v0.1.0 home mobile" data-route="home" data-viewport="mobile" style="display: none;" loading="lazy" width="560" height="350" />
+<img src="./screenshots/v0.1.0/parcel-found-desktop.png" alt="v0.1.0 parcel-found desktop" data-route="parcel-found" data-viewport="desktop" style="display: none;" loading="lazy" width="560" height="350" />
+<img src="./screenshots/v0.1.0/parcel-found-mobile.png" alt="v0.1.0 parcel-found mobile" data-route="parcel-found" data-viewport="mobile" style="display: none;" loading="lazy" width="560" height="350" />
+<img src="./screenshots/v0.1.0/not-found-desktop.png" alt="v0.1.0 not-found desktop" data-route="not-found" data-viewport="desktop" style="display: none;" loading="lazy" width="560" height="350" />
+<img src="./screenshots/v0.1.0/not-found-mobile.png" alt="v0.1.0 not-found mobile" data-route="not-found" data-viewport="mobile" style="display: none;" loading="lazy" width="560" height="350" />
+<img src="./screenshots/v0.1.0/invalid-input-desktop.png" alt="v0.1.0 invalid-input desktop" data-route="invalid-input" data-viewport="desktop" style="display: none;" loading="lazy" width="560" height="350" />
+<img src="./screenshots/v0.1.0/invalid-input-mobile.png" alt="v0.1.0 invalid-input mobile" data-route="invalid-input" data-viewport="mobile" style="display: none;" loading="lazy" width="560" height="350" />
+                    </div>
+                  </div>
+                  <div class="compare-col">
+                    <div class="compare-col-header">After (v0.1.1)</div>
+                    <div class="compare-img-wrap">
+                      <img src="./screenshots/v0.1.1/home-desktop.png" alt="v0.1.1 home desktop" data-route="home" data-viewport="desktop" style="display: block;" loading="lazy" width="560" height="350" />
+<img src="./screenshots/v0.1.1/home-mobile.png" alt="v0.1.1 home mobile" data-route="home" data-viewport="mobile" style="display: none;" loading="lazy" width="560" height="350" />
+<img src="./screenshots/v0.1.1/parcel-found-desktop.png" alt="v0.1.1 parcel-found desktop" data-route="parcel-found" data-viewport="desktop" style="display: none;" loading="lazy" width="560" height="350" />
+<img src="./screenshots/v0.1.1/parcel-found-mobile.png" alt="v0.1.1 parcel-found mobile" data-route="parcel-found" data-viewport="mobile" style="display: none;" loading="lazy" width="560" height="350" />
+<img src="./screenshots/v0.1.1/not-found-desktop.png" alt="v0.1.1 not-found desktop" data-route="not-found" data-viewport="desktop" style="display: none;" loading="lazy" width="560" height="350" />
+<img src="./screenshots/v0.1.1/not-found-mobile.png" alt="v0.1.1 not-found mobile" data-route="not-found" data-viewport="mobile" style="display: none;" loading="lazy" width="560" height="350" />
+<img src="./screenshots/v0.1.1/invalid-input-desktop.png" alt="v0.1.1 invalid-input desktop" data-route="invalid-input" data-viewport="desktop" style="display: none;" loading="lazy" width="560" height="350" />
+<img src="./screenshots/v0.1.1/invalid-input-mobile.png" alt="v0.1.1 invalid-input mobile" data-route="invalid-input" data-viewport="mobile" style="display: none;" loading="lazy" width="560" height="350" />
+                    </div>
+                  </div>
+                </div>
+              </div>
+            
+            </div>
+          </article>
+        
+
+          <article class="timeline-item">
+            <div class="timeline-dot" aria-hidden="true"></div>
+            <div class="timeline-card">
+              <header class="timeline-card-header">
+                <div class="timeline-meta-left">
+                  <span class="tag-badge">v0.1.0</span>
+                  <h3 class="item-title">Show the estimated delivery date on the parcel page</h3>
+                </div>
+                <div class="timeline-meta-right">
+                  <time datetime="2026-10-10T16:14:02+01:00">2026-10-10 16:14 UTC</time>
+                  <span class="badge" title="Commit 00ad430d">sha: 00ad430d</span> <a class="badge" href="https://github.com/stevengonsalvez/foundry-autonomous-sdlc/issues/12" target="_blank" rel="noopener">issue #12</a> <a class="badge" href="https://github.com/stevengonsalvez/foundry-autonomous-sdlc/pull/13" target="_blank" rel="noopener">pr #13</a> <span class="badge badge-cost" title="Ledger total cost">$0.078</span>
+                </div>
+              </header>
+              
+              <div class="compare-container">
+                <div class="compare-grid">
+                  <div class="compare-col">
+                    <div class="compare-col-header">Before (Initial)</div>
+                    <div class="compare-img-wrap">
+                      <div data-route="home" data-viewport="desktop" style="display: block; padding: 3rem 1rem; color: var(--fg-muted); font-size: 0.85rem; text-align: center;">No prior baseline (Initial)</div>
+<div data-route="home" data-viewport="mobile" style="display: none; padding: 3rem 1rem; color: var(--fg-muted); font-size: 0.85rem; text-align: center;">No prior baseline (Initial)</div>
+<div data-route="parcel-found" data-viewport="desktop" style="display: none; padding: 3rem 1rem; color: var(--fg-muted); font-size: 0.85rem; text-align: center;">No prior baseline (Initial)</div>
+<div data-route="parcel-found" data-viewport="mobile" style="display: none; padding: 3rem 1rem; color: var(--fg-muted); font-size: 0.85rem; text-align: center;">No prior baseline (Initial)</div>
+<div data-route="not-found" data-viewport="desktop" style="display: none; padding: 3rem 1rem; color: var(--fg-muted); font-size: 0.85rem; text-align: center;">No prior baseline (Initial)</div>
+<div data-route="not-found" data-viewport="mobile" style="display: none; padding: 3rem 1rem; color: var(--fg-muted); font-size: 0.85rem; text-align: center;">No prior baseline (Initial)</div>
+<div data-route="invalid-input" data-viewport="desktop" style="display: none; padding: 3rem 1rem; color: var(--fg-muted); font-size: 0.85rem; text-align: center;">No prior baseline (Initial)</div>
+<div data-route="invalid-input" data-viewport="mobile" style="display: none; padding: 3rem 1rem; color: var(--fg-muted); font-size: 0.85rem; text-align: center;">No prior baseline (Initial)</div>
+                    </div>
+                  </div>
+                  <div class="compare-col">
+                    <div class="compare-col-header">After (v0.1.0)</div>
+                    <div class="compare-img-wrap">
+                      <img src="./screenshots/v0.1.0/home-desktop.png" alt="v0.1.0 home desktop" data-route="home" data-viewport="desktop" style="display: block;" loading="lazy" width="560" height="350" />
+<img src="./screenshots/v0.1.0/home-mobile.png" alt="v0.1.0 home mobile" data-route="home" data-viewport="mobile" style="display: none;" loading="lazy" width="560" height="350" />
+<img src="./screenshots/v0.1.0/parcel-found-desktop.png" alt="v0.1.0 parcel-found desktop" data-route="parcel-found" data-viewport="desktop" style="display: none;" loading="lazy" width="560" height="350" />
+<img src="./screenshots/v0.1.0/parcel-found-mobile.png" alt="v0.1.0 parcel-found mobile" data-route="parcel-found" data-viewport="mobile" style="display: none;" loading="lazy" width="560" height="350" />
+<img src="./screenshots/v0.1.0/not-found-desktop.png" alt="v0.1.0 not-found desktop" data-route="not-found" data-viewport="desktop" style="display: none;" loading="lazy" width="560" height="350" />
+<img src="./screenshots/v0.1.0/not-found-mobile.png" alt="v0.1.0 not-found mobile" data-route="not-found" data-viewport="mobile" style="display: none;" loading="lazy" width="560" height="350" />
+<img src="./screenshots/v0.1.0/invalid-input-desktop.png" alt="v0.1.0 invalid-input desktop" data-route="invalid-input" data-viewport="desktop" style="display: none;" loading="lazy" width="560" height="350" />
+<img src="./screenshots/v0.1.0/invalid-input-mobile.png" alt="v0.1.0 invalid-input mobile" data-route="invalid-input" data-viewport="mobile" style="display: none;" loading="lazy" width="560" height="350" />
+                    </div>
+                  </div>
+                </div>
+              </div>
+            
+            </div>
+          </article>
+        
+      </section>
+    </div>
+  </main>
+
+  <footer class="footer">
+    <div class="container">
+      App Evolution Showcase · Deterministic UI captures · Zero external requests · Times are UTC.
+    </div>
+  </footer>
+</body>
+</html>

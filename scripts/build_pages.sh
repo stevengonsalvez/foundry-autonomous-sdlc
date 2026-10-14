@@ -60,7 +60,7 @@ schema_version="$(sed -n 's/^export const SCHEMA_VERSION = \([0-9][0-9]*\);.*/\1
 check_dist() {
   local dist="$1" label="$2" reserved
   [ -f "$dist/index.html" ] || die "$label build has no index.html: $dist"
-  for reserved in dashboard staging control-center; do
+  for reserved in dashboard staging control-center history; do
     [ ! -e "$dist/$reserved" ] || die "$label build already contains a $reserved path: $dist/$reserved"
   done
   if [ -e "$dist/build.json" ]; then
@@ -113,6 +113,20 @@ if [ -n "$cc_src" ] && [ -f "$cc_src/index.html" ]; then
   control_center_note="control center published at /control-center/"
 fi
 
+# 2c. App evolution history: the same kind of allowlist, and only what exists.
+history_note="no app history source, /history/ is not published"
+history_src="${HISTORY_SRC:-$repo_root/history}"
+if [ -n "$history_src" ] && [ -f "$history_src/index.html" ]; then
+  mkdir -p "$out/history"
+  cp "$history_src/index.html" "$out/history/index.html"
+  for part in css js screenshots data.json; do
+    if [ -e "$history_src/$part" ]; then
+      cp -R "$history_src/$part" "$out/history/$part"
+    fi
+  done
+  history_note="app history published at /history/"
+fi
+
 # 3. Metrics, only when present and readable by this dashboard version
 metrics_note="no metrics checkout given, dashboard will show its no-data state"
 if [ -n "$metrics_dir" ]; then
@@ -133,7 +147,7 @@ touch "$out/.nojekyll"
 
 # Guard rail: nothing test-shaped, and no symlink, may reach the published site from the two
 # source-copied apps (built apps are checked by check_dist).
-for copied in dashboard control-center; do
+for copied in dashboard control-center history; do
   [ -d "$out/$copied" ] || continue
   leaks="$(cd "$out/$copied" && find . \( -iname '*fixture*' -o -iname '*.sample.json' -o -iname '*.test.*' -o -name test -o -name node_modules -o -name package.json -o -name README.md -o -type l \) -print)"
   if [ -n "$leaks" ]; then
@@ -144,6 +158,7 @@ done
 
 echo "$staging_note"
 echo "$control_center_note"
+echo "$history_note"
 echo "$metrics_note"
 echo "published tree ($out):"
 (cd "$out" && find . -type f | sort | sed 's|^\./|  |')
