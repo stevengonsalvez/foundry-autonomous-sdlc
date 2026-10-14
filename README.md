@@ -1,8 +1,36 @@
+# foundry-autonomous-sdlc
+
+## Live demo
+
+- App: <https://stevengonsalvez.github.io/foundry-autonomous-sdlc/>
+- Control center (every ticket from backlog to prod with cost per ticket, gates, environment hops, agent health, escalations, flow metrics, the questions-back trail, and Azure's billed spend next to the ledger's estimate): <https://stevengonsalvez.github.io/foundry-autonomous-sdlc/control-center/>
+- Staging (the build waiting for smoke and soak): <https://stevengonsalvez.github.io/foundry-autonomous-sdlc/staging/>
+- Metrics dashboard (cycle time per stage, defect owner and resolution time, cost per issue, gate pass rates): <https://stevengonsalvez.github.io/foundry-autonomous-sdlc/dashboard/>
+- Traces of every scenario, from issue to release: [`docs/evidence.md`](docs/evidence.md)
+- Final report with the success criteria and their evidence: [`docs/final-report.md`](docs/final-report.md)
+
+### Control center
+
+<p align="center">
+  <a href="https://stevengonsalvez.github.io/foundry-autonomous-sdlc/control-center/">
+    <img src="docs/proof/control-center-board-desktop.png" alt="Control center board: every ticket by stage from backlog to production, with lens and group controls, mode badges and cost" width="100%" />
+  </a>
+</p>
+
+<details>
+<summary>More views: ticket, cost, environments, agents, escalations, flow</summary>
+
+| | |
+|---|---|
+| <img src="docs/proof/control-center-ticket-desktop.png" alt="Ticket view with stage strip, gates and timeline" width="100%" /> | <img src="docs/proof/control-center-cost-desktop.png" alt="Cost view: per ticket cost, caps, billed versus ledger" width="100%" /> |
+| <img src="docs/proof/control-center-environments-desktop.png" alt="Environments: staging and production hops, promotions and rollbacks" width="100%" /> | <img src="docs/proof/control-center-agents-desktop.png" alt="Agent activity and health" width="100%" /> |
+| <img src="docs/proof/control-center-escalations-desktop.png" alt="Escalation queue with reasons" width="100%" /> | <img src="docs/proof/control-center-flow-desktop.png" alt="Flow metrics: cycle time, gate pass rates, defects" width="100%" /> |
+
+</details>
+
 <p align="center">
   <img src="docs/media/hero.svg" alt="Autonomous SDLC motion header: live topology network and 4 delivery flow lanes for feature, bug, escalation, and rollback" width="100%" />
 </p>
-
-# foundry-autonomous-sdlc
 
 An issue is filed. Agents on Azure AI Foundry score and refine the requirement, judge whether an agent can do the work, write failing tests first, build until the tests pass, review independently, merge and release. No human step. This repository is the demonstration, and every claim below links to a command you can run or a trace you can click.
 
@@ -72,15 +100,6 @@ Merged commit `8137c60` deployed to `/staging/`. Playwright smoke test fails on 
 | Test automation rots | A maintenance flow repairs a deliberately stale test |
 | No golden path for Foundry agents | Terraform modules, a bootstrap, a deploy script and a runbook |
 
-## Live demo
-
-- App: <https://stevengonsalvez.github.io/foundry-autonomous-sdlc/>
-- Control center (every ticket from backlog to prod with cost per ticket, gates, environment hops, agent health, escalations, flow metrics, the questions-back trail, and Azure's billed spend next to the ledger's estimate): <https://stevengonsalvez.github.io/foundry-autonomous-sdlc/control-center/>
-- Staging (the build waiting for smoke and soak): <https://stevengonsalvez.github.io/foundry-autonomous-sdlc/staging/>
-- Metrics dashboard (cycle time per stage, defect owner and resolution time, cost per issue, gate pass rates): <https://stevengonsalvez.github.io/foundry-autonomous-sdlc/dashboard/>
-- Traces of every scenario, from issue to release: [`docs/evidence.md`](docs/evidence.md)
-- Final report with the success criteria and their evidence: [`docs/final-report.md`](docs/final-report.md)
-
 ## Documentation
 
 | Doc | What |
@@ -94,6 +113,7 @@ Merged commit `8137c60` deployed to `/staging/`. Playwright smoke test fails on 
 | [`docs/cd.md`](docs/cd.md) | Staging, smoke, soak, promote and rollback |
 | [`docs/runbook.md`](docs/runbook.md) | Bootstrap, deploy, operate, tear down |
 | [`docs/research/sandboxing-security-options.md`](docs/research/sandboxing-security-options.md) | Security review, threat model and sandboxing options for the coder, with a phased plan |
+| [`docs/research/foundry-evaluations.md`](docs/research/foundry-evaluations.md), [`docs/research/foundry-evaluations-demo.md`](docs/research/foundry-evaluations-demo.md) | Agent evaluations research, options matrix, proof run against demo project, and options demo walkthrough |
 | [`docs/app-spec.md`](docs/app-spec.md) | Spec of the parcel tracker demo app |
 | [`docs/poc-spec.md`](docs/poc-spec.md), [`docs/poc-findings.md`](docs/poc-findings.md) | The earlier Actions-driven proof of concept: spec and findings |
 | [`docs/explainer/`](docs/explainer/README.md) | Visual explainer of the whole system |

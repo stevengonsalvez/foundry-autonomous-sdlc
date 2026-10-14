@@ -2,7 +2,7 @@
 // /state.json and /issues.json from the test fixtures, and serves the fixtures under /fixtures/.
 // Not part of the published site.
 //
-//   node test/dev-server.mjs [--port 8090] [--state normal|empty|missing|bad-version|invalid-json|http-500|hostile|stale] [--fixed]
+//   node scripts/dev-server.mjs [--port 8090] [--state normal|empty|missing|bad-version|invalid-json|http-500|hostile|stale] [--fixed]
 //
 // Open http://127.0.0.1:8090/?data=state.json (add &issues=issues.json for pending intake).
 // Unless --fixed, every timestamp in the fixture is shifted so the document looks two minutes old
@@ -13,12 +13,12 @@ import { readFile } from 'node:fs/promises';
 import { extname, join, normalize, resolve, sep } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
-import { makeHostile } from './hostile.mjs';
+import { makeHostile } from '../test/hostile.mjs';
 
 const root = resolve(fileURLToPath(new URL('..', import.meta.url)));
 const fixtures = join(root, 'test', 'fixtures');
 const PUBLISHED = ['index.html', 'css', 'js'];
-const STATES = ['normal', 'empty', 'missing', 'bad-version', 'invalid-json', 'http-500', 'hostile', 'stale'];
+const STATES = ['normal', 'empty', 'missing', 'bad-version', 'invalid-json', 'http-500', 'hostile', 'stale', 'edge'];
 const TYPES = { '.html': 'text/html; charset=utf-8', '.css': 'text/css; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.json': 'application/json; charset=utf-8', '.svg': 'image/svg+xml' };
 const ISO = /\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z/g;
 
@@ -49,12 +49,42 @@ function emptyDoc(sample, now) {
   };
 }
 
+function makeEdge(sample) {
+  const doc = structuredClone(sample);
+  if (doc.tickets.length >= 3) {
+    doc.tickets[0].cost.cap_used_pct = 50.0;
+    doc.tickets[1].cost.cap_used_pct = 80.0;
+    doc.tickets[2].cost.cap_used_pct = 120.0;
+  }
+  const t24 = doc.tickets.find((t) => t.issue === 24);
+  if (t24) {
+    t24.hops = [
+      { action: 'promote', status: 'in_progress', env: 'staging', at: '2026-10-11T20:05:00Z', sha: 'f677ba5a3f621dda89a35333e38249622bd7f8bd', version: 'v1.0.0' },
+      ...t24.hops,
+    ];
+  }
+  const actions = ['promote', 'fail', 'rollback', 'skip', 'legacy-publish'];
+  const statuses = ['success', 'failed', 'rolled_back', 'in_progress', 'skipped'];
+  doc.environments.history = statuses.map((st, i) => ({
+    action: actions[i % actions.length],
+    status: st,
+    env: i % 2 === 0 ? 'staging' : 'prod',
+    sha: 'f677ba5a3f621dda89a35333e38249622bd7f8bd',
+    at: '2026-10-10T17:46:00Z',
+    issue: 24,
+    run_url: null,
+    version: `v1.${i}.0`,
+  }));
+  return doc;
+}
+
 async function stateBody(state, { fixed, now }) {
   if (state === 'empty') return { status: 200, body: JSON.stringify(emptyDoc(await readJson('state.sample.json'), now)) };
   if (state === 'missing') return { status: 404, body: 'not found' };
   if (state === 'http-500') return { status: 500, body: 'boom' };
   if (state === 'invalid-json') return { status: 200, body: '{"version": 1,' };
   if (state === 'bad-version') return { status: 200, body: JSON.stringify({ version: 2, tickets: [] }) };
+  if (state === 'edge') return { status: 200, body: JSON.stringify(makeEdge(await readJson('state.sample.json'))) };
   const sample = await readJson('state.sample.json');
   const doc = state === 'hostile' ? makeHostile(sample) : sample;
   const text = JSON.stringify(doc);
