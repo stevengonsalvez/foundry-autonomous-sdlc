@@ -90,13 +90,13 @@ export function segmentedControl(items, current, onChange, ariaLabel = '') {
 
 // ------------------------------------------------------------------ badges
 
-const TYPE_TONE = { feature: 'info', bug: 'bad', maintenance: 'neutral', unclassified: 'neutral' };
+export const TYPE_TONE = Object.freeze({ feature: 'info', bug: 'bad', maintenance: 'neutral', unclassified: 'neutral' });
 
 export function typeBadge(type) {
   return badge(type === 'unclassified' ? 'New' : type, TYPE_TONE[type] ?? 'neutral', 'badge-type');
 }
 
-const ENV_BADGE = { staging: ['Staging', 'info'], prod: ['In production', 'good'], 'rolled-back': ['Rolled back', 'bad'] };
+export const ENV_BADGE = Object.freeze({ staging: ['Staging', 'info'], prod: ['In production', 'good'], 'rolled-back': ['Rolled back', 'bad'] });
 
 export function envBadge(env) {
   const entry = ENV_BADGE[env];

@@ -8,7 +8,9 @@ import { BOARD_STAGES, AGENT_STATES } from '../js/schema.js';
 import { OUTCOME_GLYPH, NODE_STATES } from '../js/charts.js';
 import { MACROBANDS, CHIP_STATES, LANE_TONES } from '../js/views/board.js';
 import { GATE_STATUSES, CHAIN_STATUSES, SPLIT, HOP_STATUS } from '../js/views/ticket.js';
-import { HOP_ACTIONS, MODE_TONES } from '../js/views/common.js';
+import { HOP_ACTIONS, MODE_TONES, TYPE_TONE, ENV_BADGE } from '../js/views/common.js';
+import { SEVERITY_TONE } from '../js/views/trail.js';
+import { RESULT_TONE } from '../js/views/agents.js';
 import { BADGE_TONES, classToken } from '../js/dom.js';
 import { COST_BANDS } from '../js/model.js';
 
@@ -342,4 +344,22 @@ test('every class name in JS has a corresponding rule in CSS stylesheets', async
   }
 
   assert.deepEqual(missing, []);
+});
+
+test('all exported tone maps produce values that belong to BADGE_TONES', () => {
+  for (const [key, tone] of Object.entries(SEVERITY_TONE)) {
+    assert.ok(BADGE_TONES.includes(tone), `SEVERITY_TONE["${key}"] = "${tone}" is not in BADGE_TONES: ${BADGE_TONES.join(', ')}`);
+  }
+  for (const [key, tone] of Object.entries(RESULT_TONE)) {
+    assert.ok(BADGE_TONES.includes(tone), `RESULT_TONE["${key}"] = "${tone}" is not in BADGE_TONES: ${BADGE_TONES.join(', ')}`);
+  }
+  for (const [key, tone] of Object.entries(TYPE_TONE)) {
+    assert.ok(BADGE_TONES.includes(tone), `TYPE_TONE["${key}"] = "${tone}" is not in BADGE_TONES: ${BADGE_TONES.join(', ')}`);
+  }
+  for (const [key, [, tone]] of Object.entries(ENV_BADGE)) {
+    assert.ok(BADGE_TONES.includes(tone), `ENV_BADGE["${key}"][1] = "${tone}" is not in BADGE_TONES: ${BADGE_TONES.join(', ')}`);
+  }
+  for (const [key, [, tone]] of Object.entries(HOP_STATUS)) {
+    assert.ok(BADGE_TONES.includes(tone), `HOP_STATUS["${key}"][1] = "${tone}" is not in BADGE_TONES: ${BADGE_TONES.join(', ')}`);
+  }
 });
