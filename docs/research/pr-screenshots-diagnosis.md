@@ -4,9 +4,9 @@ Post-mortem investigation into why pull request screenshots were absent prior to
 
 Research and documentation only: no code changes, no workflow modifications, no settings changes, and no branch merges were performed.
 
-Date: 2026-10-14 (as of 18:15 UTC)  
+Date: 2026-10-14  
 Repository: `stevengonsalvez/foundry-autonomous-sdlc`  
-Base commit: `007d2ea5d647a660cc991f0d7dd21741168dfcec` (origin/main, updated with sync to `a3d59db`)  
+Base commit: `a4d52467d58fa6c5e2194680878e47f2a41dca0b` (origin/main)  
 Diagnosis starting commit: `ac680df75a0040d4b7c15010ce6d27c7260f8160` (origin/main before PR 74 merged)  
 Tags:
 - `[VERIFIED]`: Confirmed directly with exact command and output against the repository, GitHub API, or local execution.
@@ -32,7 +32,7 @@ Following the merge of PR 74 as commit `007d2ea5`, the screenshot pipeline fired
 ### 1.1 Live UI Proof Workflow Runs
 `[VERIFIED]` The `UI Proof` workflow is active and runs from `main` upon completion of `CI`.
 
-Command:
+Command (run list snapshot captured at approximately 16:47 UTC):
 ```bash
 gh run list --workflow="UI Proof" -L 5
 ```
@@ -51,7 +51,7 @@ Run details verified against run execution logs and proof commit timestamps:
 - Run `38599734193`: Published PR 76 (head commit `1db251f6`), committing `6d7c025` at 16:38:32Z.
 - Run `38599858786`: Logged `Artifact ui-screenshots not found; skipping.` and published nothing.
 - Run `38599684414`: Skipped (run condition not met).
-- Run `38600334489`: Published PR 77 (head commit `24eb07d3`), committing `c45f6c7` at 16:42:35Z.
+- Run `38600334489`: Published PR 77 (head commit `24eb07d3`), committing `c45f6c7` at 16:42:32Z (comment posted at 16:42:35Z).
 
 ### 1.2 Storage on pr-screenshots Branch
 `[VERIFIED]` The publishing job commits and pushes validated PNG artifacts to `origin/pr-screenshots` under per-PR directories.
@@ -68,11 +68,11 @@ c45f6c7 proof: UI screenshots for PR #77 at 24eb07d3
 aedd0f0 chore(history): backfill release screenshots (v0.1.0 to v0.4.0)
 ```
 
-Command:
+Command (storage tree snapshot captured at approximately 18:15 UTC, including subsequent PRs):
 ```bash
 git ls-tree origin/pr-screenshots
 ```
-Output (as of 18:15 UTC, with subsequent PRs):
+Output:
 ```
 040000 tree 991b1b72929f0ffbab99cb24817b363a19a1a3f3	pr-61
 040000 tree 45697d02f0610b55978ccca02f3d341b4b22a649	pr-69
@@ -216,19 +216,42 @@ npm --prefix /tmp/scratch/throwaway-clone/app ci
 node /tmp/scratch/throwaway-clone/scripts/ui/capture.mjs --out-dir /tmp/scratch/local-capture
 file /tmp/scratch/local-capture/*.png
 ```
-Output:
+Output (verbatim):
 ```
 Building app/web for screenshot capture...
-vite built in 1.05s
+
+> @parcel/web@0.1.0 build
+> tsc --noEmit && vite build
+
+vite v7.3.7 building client environment for production...
+transforming (1) src/main.tsx...
+✓ 50 modules transformed.
+rendering chunks (1)...
+dist/index.html                   0.83 kB │ gzip:  0.51 kB
+dist/assets/index-CSttkLXx.css   11.01 kB │ gzip:  2.99 kB
+dist/assets/index-qwhroTlM.js   156.00 kB │ gzip: 50.45 kB
+✓ built in 1.05s
 Local web preview running at http://127.0.0.1:40925
-Capturing route: home (desktop) -> Saved home-desktop.png (114305 bytes)
-Capturing route: parcel-found (desktop) -> Saved parcel-found-desktop.png (105981 bytes)
-Capturing route: not-found (desktop) -> Saved not-found-desktop.png (69424 bytes)
-Capturing route: invalid-input (desktop) -> Saved invalid-input-desktop.png (69832 bytes)
-Capturing route: home (mobile) -> Saved home-mobile.png (71585 bytes)
-Capturing route: parcel-found (mobile) -> Saved parcel-found-mobile.png (78951 bytes)
-Capturing route: not-found (mobile) -> Saved not-found-mobile.png (42502 bytes)
-Capturing route: invalid-input (mobile) -> Saved invalid-input-mobile.png (43716 bytes)
+Setting up context for viewport desktop (1280x800)...
+Capturing route: home (desktop) -> http://127.0.0.1:40925/#/
+Saved home-desktop.png (114305 bytes, sha256: 5a0318dda600...)
+Capturing route: parcel-found (desktop) -> http://127.0.0.1:40925/#/parcel/PK1000000001
+Saved parcel-found-desktop.png (105981 bytes, sha256: 2d4a7ac32720...)
+Capturing route: not-found (desktop) -> http://127.0.0.1:40925/#/parcel/PK9999999999
+Saved not-found-desktop.png (69424 bytes, sha256: 85a1bc4ceded...)
+Capturing route: invalid-input (desktop) -> http://127.0.0.1:40925/#/parcel/12345
+Saved invalid-input-desktop.png (69832 bytes, sha256: dea585c18d72...)
+Setting up context for viewport mobile (390x844)...
+Capturing route: home (mobile) -> http://127.0.0.1:40925/#/
+Saved home-mobile.png (71585 bytes, sha256: 365b91c3eda7...)
+Capturing route: parcel-found (mobile) -> http://127.0.0.1:40925/#/parcel/PK1000000001
+Saved parcel-found-mobile.png (78951 bytes, sha256: 9eb037bea438...)
+Capturing route: not-found (mobile) -> http://127.0.0.1:40925/#/parcel/PK9999999999
+Saved not-found-mobile.png (42502 bytes, sha256: 893678496e3a...)
+Capturing route: invalid-input (mobile) -> http://127.0.0.1:40925/#/parcel/12345
+Saved invalid-input-mobile.png (43716 bytes, sha256: 2c9322d3ddeb...)
+Wrote manifest to /tmp/scratch/local-capture/manifest.json with 8 screenshots.
+Cleaned up browser and static server.
 ```
 
 Dimensions verified:
@@ -240,9 +263,9 @@ Comparison across runs:
    - `home-desktop.png`: 114,305 bytes local vs 114,321 bytes in PR 74 CI (16-byte difference).
    - `home-mobile.png`: 71,585 bytes local vs 71,580 bytes in PR 74 CI (5-byte difference).
 2. Local capture vs PR 77 CI artifact (`origin/pr-screenshots:pr-77/24eb07d3`):
-   - `home-desktop.png`: 114,305 bytes in PR 77 CI (identical to local capture).
-   - `home-mobile.png`: 71,585 bytes in PR 77 CI (identical to local capture).
-   - All 8 screenshots match local capture byte for byte.
+   - `home-desktop.png`: 114,305 bytes in PR 77 CI (matches local capture size exactly; SHA-256 `5a0318dda600...` matches identically).
+   - `home-mobile.png`: 71,585 bytes in PR 77 CI (matches local capture size exactly; SHA-256 `365b91c3eda7...` matches identically).
+   - All 8 screenshot file sizes match local capture exactly, and all 8 SHA-256 hashes match identically.
 Conclusion: CI capture output itself varies slightly across runner runs (e.g. PR 74 CI vs PR 77 CI); cause unknown `[INFERRED]`, likely minor rendering differences in Chromium font rasterization or image compression timing.
 
 ---
@@ -301,13 +324,13 @@ Analysis:
    This prevents pull requests originating from forks from triggering `ui-proof.yml` with write access.
 
 ### 4.3 Agent PR Triggers and Authentication
-`[VERIFIED]` `docs/poc-findings.md` historically noted that PRs opened with GitHub Actions `GITHUB_TOKEN` do not trigger workflows.
+`[VERIFIED]` `docs/poc-findings.md:77` still states the `GITHUB_TOKEN` limitation as current; that documentation is stale from early PoC testing before the production orchestrator was configured with Key Vault secret `github-pat`.
 In the actual system (`agents/sdlc_agents/runtime.py`):
 ```python
 GITHUB_SECRET = "github-pat"
 github = GitHubClient(secrets.get_secret(GITHUB_SECRET))
 ```
-The orchestrator retrieves secret `github-pat` from Azure Key Vault. This personal access token belongs to a personal account (`stevengonsalvez`). Because PRs created by the orchestrator are authored by a personal account rather than `github-actions[bot]`, they trigger standard `pull_request` CI runs.
+The orchestrator retrieves secret `github-pat` from Azure Key Vault. That this personal access token belongs to stevengonsalvez is `[INFERRED]` from the PR author field on agent PRs (such as PR 54 authored by stevengonsalvez). Because PRs created by the orchestrator are authored by a personal user account rather than `github-actions[bot]`, they trigger standard `pull_request` CI runs.
 Evidence: PR 54 (`agent/issue-51-r1`) was authored by `stevengonsalvez` and its CI run (`38186274718`) was triggered by `event: "pull_request"`.
 
 ### 4.4 Rulesets and Branch Protection
@@ -536,7 +559,7 @@ git push origin pr-screenshots
 
 ### 6.1 What Exists Today
 `[VERIFIED]` `apps/control-center` contains its own capture script at `apps/control-center/scripts/shots.mjs` (`package.json`: `"shots": "node scripts/shots.mjs"`).
-- In commit `1e443cd` (`docs(control-center): add proof captures for all viewports and lenses`), 35 PNGs were committed to git by hand into `apps/control-center/docs/proof/` (commits `fa26cf2` and `d8f7c8b` added 6 each, bringing the total in `docs/proof` to 38 today including `before/`).
+- In commit `1e443cd` (`docs(control-center): add proof captures for all viewports and lenses`), 35 PNGs were committed to git by hand into `apps/control-center/docs/proof/` (commits `fa26cf2` and `d8f7c8b` added 6 each, bringing the total in git to 47 PNGs today: 9 in `before/` and 38 at the top level). Additionally, `scripts/shots.mjs` writes up to 42 PNG files per execution.
 - PR 61 (`stevengonsalvez/ui-fixes`, merged as commit `4868ea8c`) regenerated and updated these static PNG files.
 - In `shots.mjs`:
   - Only `board` is captured across all 4 viewport sizes (`desktop`: 1440x900, `1280`: 1280x800, `mobile`: 390x844, `360`: 360x640) across 3 lenses (Delivery, Cost, Gates) and group filters.
@@ -550,7 +573,7 @@ git push origin pr-screenshots
    - Mocks routes for `/api/parcels`.
    - Captures only the 4 parcel tracking routes: `home`, `parcel-found`, `not-found`, `invalid-input`.
 2. `scripts/ui/validate_artifact.py`:
-   - Sets `MAX_FILE_COUNT = 16` (control center generates 38 images).
+   - Sets `MAX_FILE_COUNT = 16` (control center generates up to 42 images per run, with 47 PNGs currently tracked in `docs/proof/`).
    - Validates routes with `ROUTE_RE = re.compile(r"^(home|parcel-found|not-found|invalid-input)$")`.
    - Validates viewports with `VIEWPORT_RE = re.compile(r"^(desktop|mobile)$")` and dimensions 1280x800 and 390x844 only (control center uses 1440x900, 360x640, and variable document scroll heights up to 3000px).
 3. `scripts/ui/publish_proof.py`:
