@@ -38,7 +38,7 @@
       "pass": 8
     }
   },
-  "generated_at": "2026-10-14T07:35:43Z",
+  "generated_at": "2026-10-14T07:40:37Z",
   "issues": [
     {
       "closed_at": "2026-10-10T12:28:43Z",
@@ -1799,21 +1799,58 @@
       ],
       "title": "Intake probe three",
       "type": "feature"
+    },
+    {
+      "closed_at": null,
+      "coder_engine": null,
+      "coder_sessions_lost": 0,
+      "cost": {
+        "calls": 1,
+        "coder_model_usd": 0.0,
+        "coder_usd": 0.0,
+        "model_usd": 0.001373,
+        "usd": 0.001373
+      },
+      "deferred": null,
+      "escalation": null,
+      "gate_attempts": {},
+      "gates": {},
+      "kind": "issue",
+      "number": 72,
+      "opened_at": "2026-10-14T07:38:31Z",
+      "outcome": "open",
+      "owner": null,
+      "pr": null,
+      "quality_score": 100,
+      "release": null,
+      "resolution_seconds": null,
+      "scenario": "a",
+      "severity": null,
+      "stages": [
+        {
+          "entered_at": "2026-10-14T07:40:24Z",
+          "in_progress": true,
+          "seconds": 0,
+          "stage": "stage:ready"
+        }
+      ],
+      "title": "feat(web): show current location in parcel header",
+      "type": "feature"
     }
   ],
   "ledger": {
-    "emitted_at": "2026-10-14T07:35:18Z",
+    "emitted_at": "2026-10-14T07:40:26Z",
     "reconciled_at": "2026-10-14T07:15:18Z"
   },
   "repo": "stevengonsalvez/foundry-autonomous-sdlc",
   "totals": {
     "deferred": 0,
     "escalated": 18,
-    "issues": 25,
-    "ledger_usd": 0.207376,
-    "orchestrator_usd": 2.195733,
+    "issues": 26,
+    "ledger_usd": 0.209792,
+    "orchestrator_usd": 2.207493,
     "released": 6,
-    "usd": 3.782757
+    "usd": 3.798306
   },
   "version": 1
 }
