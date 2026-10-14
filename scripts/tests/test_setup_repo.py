@@ -266,14 +266,7 @@ class TestProtect:
         assert rules["pull_request"]["allowed_merge_methods"] == ["merge"]
         checks = rules["required_status_checks"]
         assert checks["strict_required_status_checks_policy"] is False
-        assert [c["context"] for c in checks["required_status_checks"]] == [
-            "test",
-            "coverage",
-            "e2e",
-            "gitleaks",
-            "tdd-order",
-            "agent-scope",
-        ]
+        assert [c["context"] for c in checks["required_status_checks"]] == list(sr.REQUIRED_CHECKS)
         assert {c["integration_id"] for c in checks["required_status_checks"]} == {15368}
 
     def test_second_run_is_a_no_op(self) -> None:
@@ -304,7 +297,7 @@ class TestProtect:
                 rule["parameters"]["required_status_checks"].pop()
         run_phase(fake, "protect")
         rule = next(r for r in fake.rulesets[1]["rules"] if r["type"] == "required_status_checks")
-        assert len(rule["parameters"]["required_status_checks"]) == 6
+        assert len(rule["parameters"]["required_status_checks"]) == len(sr.REQUIRED_CHECKS)
 
     def test_extra_fields_from_github_do_not_cause_churn(self) -> None:
         fake = FakeGitHub()
@@ -328,6 +321,14 @@ class TestProtect:
         workflow = yaml.safe_load((ROOT / ".github/workflows/ci.yml").read_text())
         job_names = {job.get("name", job_id) for job_id, job in workflow["jobs"].items()}
         assert set(sr.REQUIRED_CHECKS) <= job_names
+
+    def test_required_checks_match_gates(self) -> None:
+        agents_dir = str(ROOT / "agents")
+        if agents_dir not in sys.path:
+            sys.path.insert(0, agents_dir)
+        from sdlc_agents import gates
+        assert sr.REQUIRED_CHECKS == gates.REQUIRED_CHECKS
+        assert "evals" in sr.REQUIRED_CHECKS
 
 
 class TestAll:

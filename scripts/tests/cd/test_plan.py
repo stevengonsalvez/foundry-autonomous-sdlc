@@ -452,7 +452,7 @@ class TestRequiredChecks:
         gh.checks[gh.head] = [check("test"), check("gitleaks", "failure")]
         assert build(gh).reason == (
             "required checks are not green: coverage=missing, e2e=missing, "
-            "gitleaks=failure, tdd-order=missing, agent-scope=missing"
+            "gitleaks=failure, tdd-order=missing, agent-scope=missing, evals=missing"
         )
 
     def test_the_newest_attempt_of_a_check_decides(self) -> None:
