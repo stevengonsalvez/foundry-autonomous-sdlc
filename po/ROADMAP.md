@@ -30,8 +30,8 @@ It serves as the backlog for the Simulated Human product owner loop.
   - `app/web/src/styles.css`
   - `app/web/tests/parcel-page.test.tsx`
 - **Acceptance Criteria**:
-  1. Render a location pin icon indicator next to the location text in each timeline item.
-  2. Ensure the location pin icon includes an accessible SVG title or aria-hidden attribute with visible screen-reader text.
+  1. Each li.timeline__item .timeline__where starts with an svg[aria-hidden="true"] with location text unchanged.
+  2. parcel-page.test.tsx asserts 5 pin icons and items[0] still has text Rotterdam, NL.
 
 ---
 
@@ -102,11 +102,12 @@ It serves as the backlog for the Simulated Human product owner loop.
 - **Gap Anchor**: `app/web/src/components/SearchForm.tsx` and `app/e2e/tests/parcel-tracking.spec.ts`. Pressing Escape inside search inputs does not reset focus, and tab order lacks Playwright regression verification.
 - **User Value**: Keyboard-only users and screen-reader users can smoothly navigate through parcel details and tables without losing focus.
 - **Files Touched**:
+  - `app/web/src/App.tsx`
   - `app/web/src/components/SearchForm.tsx`
   - `app/web/src/styles.css`
   - `app/e2e/tests/parcel-tracking.spec.ts`
 - **Acceptance Criteria**:
-  1. Focus target on parcel load moves to parcel page main heading `<h1>` (tracking number) rather than remaining on body.
+  1. On initial deep-link load to #/parcel/PK..., document.activeElement is h1#page-title.
   2. Pressing the Escape key while focused inside the search form input clears any active error and resets focus cleanly.
   3. Playwright test verifies that pressing Tab navigates in logical order from skip link to brand to search input to submit button.
   4. Ensure all interactive table links and navigation controls remain reachable by keyboard tab navigation alone.
@@ -124,7 +125,7 @@ It serves as the backlog for the Simulated Human product owner loop.
   - `app/web/src/pages/ParcelPage.tsx`
   - `app/web/tests/parcel-page.test.tsx`
 - **Acceptance Criteria**:
-  1. Render an aria-live polite region on ParcelPage that announces status upon successful parcel data load.
+  1. Render a shared aria-live polite region on ParcelPage that announces status upon successful parcel data load.
   2. Announcement text includes the tracking number and the current human-readable status label.
   3. Live announcement container is visually hidden from DOM presentation while accessible to screen readers.
 
@@ -153,7 +154,7 @@ It serves as the backlog for the Simulated Human product owner loop.
 
 ### ITEM-009: feat(web): multi-parcel watchlist table in local storage
 - **Status**: todo
-- **Dependencies**: [ITEM-003]
+- **Dependencies**: []
 - **Cost Class**: M
 - **Tags**: ui, storage, web
 - **Gap Anchor**: `app/web/src/pages/HomePage.tsx#L37-L75` and `app/web/src/pages/ParcelPage.tsx`. Home page only lists server-wide parcels and cannot maintain a personalized watchlist of tracked parcels.
@@ -187,7 +188,7 @@ It serves as the backlog for the Simulated Human product owner loop.
   - `app/web/src/pages/ParcelPage.tsx`
   - `app/web/tests/status-badge.test.tsx`
 - **Acceptance Criteria**:
-  1. Export a helper function in core mapping guidance for delivery exception notes.
+  1. Export a helper function getExceptionGuidance in @parcel/core mapping for delivery exception notes.
   2. Provide specific explanation text for customs document holds and failed delivery attempts based on fixture notes.
   3. When parcel status is exception, ParcelPage displays the mapped guidance box below the status badge.
   4. Unit tests verify exception guidance mapping for both fixture exception scenarios.
@@ -209,7 +210,6 @@ It serves as the backlog for the Simulated Human product owner loop.
   1. A collapsible support card is rendered beneath the shipment history timeline.
   2. The card lists carrier support contact details and operating hours.
   3. The card toggles open and closed with accessible button controls and aria-expanded state.
-  4. Print styles hide the support panel to conserve paper.
 
 ---
 
@@ -314,7 +314,7 @@ It serves as the backlog for the Simulated Human product owner loop.
 - **Dependencies**: []
 - **Cost Class**: S
 - **Tags**: format, ux, web
-- **Gap Anchor**: `app/web/src/format.ts#L1-L15`. Format utility only outputs absolute date-times like "Oct 14, 2026, 12:00 UTC" without human-friendly relative offsets.
+- **Gap Anchor**: `app/web/src/format.ts#L1-L15`. Format utility formatDateTime outputs absolute timestamps like '10 Oct 2026, 06:42 UTC' without human-friendly relative offsets.
 - **User Value**: Users can immediately see how recently a scan occurred such as "15 minutes ago" or "Yesterday".
 - **Files Touched**:
   - `app/web/src/format.ts`
@@ -365,7 +365,7 @@ It serves as the backlog for the Simulated Human product owner loop.
   1. Render a refresh button with reload icon in the parcel page header.
   2. Clicking refresh re-executes service getParcel without resetting page scroll position.
   3. During refresh, the icon animates with CSS spin class and the button disables to prevent duplicate submissions.
-  4. Live region announces refresh in progress and refresh complete to screen readers.
+  4. Announce refresh in progress and refresh complete to screen readers using the shared ParcelPage aria-live status container.
 
 ---
 
@@ -399,7 +399,7 @@ It serves as the backlog for the Simulated Human product owner loop.
 - **Acceptance Criteria**:
   1. Configure manual chunk splitting in vite.config.ts to isolate React and React DOM vendor dependencies into a dedicated vendor chunk.
   2. Configure build warning threshold and add an automated test in vite-config.test.ts asserting vendor chunking and size rules.
-  3. Running web package build produces clean chunk output within budgeted size targets.
+  3. Web bundle index chunk must stay under 50 kB gzip and vendor chunk under 150 kB gzip.
 
 ---
 
