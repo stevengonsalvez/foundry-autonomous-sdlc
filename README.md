@@ -22,17 +22,17 @@ See the visual timeline of every release and merged feature on the [**App Evolut
 
 <p align="center">
   <a href="https://stevengonsalvez.github.io/foundry-autonomous-sdlc/history/">
-    <img src="history/screenshots/v0.1.0/home-desktop.png" alt="v0.1.0 initial release home view" width="31%" />
+    <img src="https://raw.githubusercontent.com/stevengonsalvez/foundry-autonomous-sdlc/pr-screenshots/releases/v0.1.0/home-desktop.png" alt="v0.1.0: Show the estimated delivery date on the parcel page" width="31%" />
   </a>
   <a href="https://stevengonsalvez.github.io/foundry-autonomous-sdlc/history/">
-    <img src="history/screenshots/v0.2.0/home-desktop.png" alt="v0.2.0 carrier integrations home view" width="31%" />
+    <img src="https://raw.githubusercontent.com/stevengonsalvez/foundry-autonomous-sdlc/pr-screenshots/releases/v0.3.1/home-desktop.png" alt="v0.3.1: Update the home page heading copy" width="31%" />
   </a>
   <a href="https://stevengonsalvez.github.io/foundry-autonomous-sdlc/history/">
-    <img src="history/screenshots/v0.4.0/home-desktop.png" alt="v0.4.0 current release home view" width="31%" />
+    <img src="https://raw.githubusercontent.com/stevengonsalvez/foundry-autonomous-sdlc/pr-screenshots/releases/v0.4.0/parcel-found-desktop.png" alt="v0.4.0: Show how many tracking events a parcel has" width="31%" />
   </a>
 </p>
 <p align="center">
-  <sub><b>Left:</b> v0.1.0 (initial release) &nbsp;|&nbsp; <b>Center:</b> v0.2.0 (carrier badges) &nbsp;|&nbsp; <b>Right:</b> v0.4.0 (current delivery view) | <a href="https://stevengonsalvez.github.io/foundry-autonomous-sdlc/history/">Explore interactive history &rarr;</a></sub>
+  <sub><b>Left:</b> v0.1.0 (estimated delivery date) &nbsp;|&nbsp; <b>Center:</b> v0.3.1 (heading copy) &nbsp;|&nbsp; <b>Right:</b> v0.4.0 (tracking events) | <a href="https://stevengonsalvez.github.io/foundry-autonomous-sdlc/history/">Explore interactive history &rarr;</a></sub>
 </p>
 
 ## System topology
