@@ -38,7 +38,7 @@
       "pass": 9
     }
   },
-  "generated_at": "2026-10-14T21:55:39Z",
+  "generated_at": "2026-10-14T22:00:52Z",
   "issues": [
     {
       "closed_at": "2026-10-10T12:28:43Z",
@@ -1985,9 +1985,9 @@
       "cost": {
         "calls": 3,
         "coder_model_usd": 0.0,
-        "coder_usd": 0.0,
+        "coder_usd": 0.100752,
         "model_usd": 0.007167,
-        "usd": 0.007167
+        "usd": 0.107919
       },
       "deferred": null,
       "escalation": null,
@@ -2022,9 +2022,14 @@
         },
         {
           "entered_at": "2026-10-14T21:55:18Z",
+          "seconds": 302,
+          "stage": "stage:building"
+        },
+        {
+          "entered_at": "2026-10-14T22:00:20Z",
           "in_progress": true,
           "seconds": 0,
-          "stage": "stage:building"
+          "stage": "stage:feasible"
         }
       ],
       "title": "feat(web): add copy shareable parcel link button",
@@ -2032,18 +2037,18 @@
     }
   ],
   "ledger": {
-    "emitted_at": "2026-10-14T21:55:27Z",
-    "reconciled_at": "2026-10-14T21:00:20Z"
+    "emitted_at": "2026-10-14T22:00:22Z",
+    "reconciled_at": "2026-10-14T22:00:22Z"
   },
   "repo": "stevengonsalvez/foundry-autonomous-sdlc",
   "totals": {
     "deferred": 0,
     "escalated": 19,
     "issues": 28,
-    "ledger_usd": 0.498575,
-    "orchestrator_usd": 4.575413,
+    "ledger_usd": 0.501326,
+    "orchestrator_usd": 4.588388,
     "released": 7,
-    "usd": 6.970258
+    "usd": 7.086735
   },
   "version": 1
 }
