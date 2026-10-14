@@ -4,6 +4,7 @@
 
 - App: <https://stevengonsalvez.github.io/foundry-autonomous-sdlc/>
 - Control center (every ticket from backlog to prod with cost per ticket, gates, environment hops, agent health, escalations, flow metrics, the questions-back trail, and Azure's billed spend next to the ledger's estimate): <https://stevengonsalvez.github.io/foundry-autonomous-sdlc/control-center/>
+- App evolution showcase (visual timeline of every release and merged feature): <https://stevengonsalvez.github.io/foundry-autonomous-sdlc/history/>
 - Staging (the build waiting for smoke and soak): <https://stevengonsalvez.github.io/foundry-autonomous-sdlc/staging/>
 - Metrics dashboard (cycle time per stage, defect owner and resolution time, cost per issue, gate pass rates): <https://stevengonsalvez.github.io/foundry-autonomous-sdlc/dashboard/>
 - Traces of every scenario, from issue to release: [`docs/evidence.md`](docs/evidence.md)
@@ -29,16 +30,6 @@
 </details>
 
 <p align="center">
-  <a href="https://stevengonsalvez.github.io/foundry-autonomous-sdlc/"><b>Live app</b></a> &nbsp;|&nbsp;
-  <a href="https://stevengonsalvez.github.io/foundry-autonomous-sdlc/control-center/"><b>Control center</b></a> &nbsp;|&nbsp;
-  <a href="https://stevengonsalvez.github.io/foundry-autonomous-sdlc/history/"><b>Evolution</b></a> &nbsp;|&nbsp;
-  <a href="https://stevengonsalvez.github.io/foundry-autonomous-sdlc/staging/">Staging</a> &nbsp;|&nbsp;
-  <a href="https://stevengonsalvez.github.io/foundry-autonomous-sdlc/dashboard/">Metrics dashboard</a> &nbsp;|&nbsp;
-  <a href="docs/evidence.md">Evidence</a> &nbsp;|&nbsp;
-  <a href="#documentation">Docs</a>
-</p>
-
-<p align="center">
   <img src="docs/media/hero.svg" alt="Autonomous SDLC motion header: live topology network and 4 delivery flow lanes for feature, bug, escalation, and rollback" width="100%" />
 </p>
 
@@ -50,7 +41,7 @@ See the visual timeline of every release and merged feature on the [**App Evolut
 
 <p align="center">
   <a href="https://stevengonsalvez.github.io/foundry-autonomous-sdlc/history/">
-    <img src="https://raw.githubusercontent.com/stevengonsalvez/foundry-autonomous-sdlc/pr-screenshots/releases/v0.1.0/home-desktop.png" alt="v0.1.0: Show the estimated delivery date on the parcel page" width="31%" />
+    <img src="https://raw.githubusercontent.com/stevengonsalvez/foundry-autonomous-sdlc/pr-screenshots/releases/v0.1.0/home-desktop.png" alt="v0.1.0: Home page at launch" width="31%" />
   </a>
   <a href="https://stevengonsalvez.github.io/foundry-autonomous-sdlc/history/">
     <img src="https://raw.githubusercontent.com/stevengonsalvez/foundry-autonomous-sdlc/pr-screenshots/releases/v0.3.1/home-desktop.png" alt="v0.3.1: Update the home page heading copy" width="31%" />
@@ -60,7 +51,7 @@ See the visual timeline of every release and merged feature on the [**App Evolut
   </a>
 </p>
 <p align="center">
-  <sub><b>Left:</b> v0.1.0 (estimated delivery date) &nbsp;|&nbsp; <b>Center:</b> v0.3.1 (heading copy) &nbsp;|&nbsp; <b>Right:</b> v0.4.0 (tracking events) | <a href="https://stevengonsalvez.github.io/foundry-autonomous-sdlc/history/">Explore interactive history &rarr;</a></sub>
+  <sub><b>Left:</b> v0.1.0 (home page) &nbsp;|&nbsp; <b>Center:</b> v0.3.1 (heading copy) &nbsp;|&nbsp; <b>Right:</b> v0.4.0 (tracking events) | <a href="https://stevengonsalvez.github.io/foundry-autonomous-sdlc/history/">Explore interactive history &rarr;</a></sub>
 </p>
 
 ## System topology
