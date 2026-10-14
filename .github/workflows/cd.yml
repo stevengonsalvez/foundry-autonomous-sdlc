@@ -62,7 +62,7 @@ env:
 jobs:
   plan:
     name: plan
-    # Whatever CI concluded: plan reads the six required checks of the sha itself, so a red
+    # Whatever CI concluded: plan reads the seven required checks of the sha itself, so a red
     # optional job (gates-tests, agents) cannot block a release and a red required one cannot slip by.
     if: >-
       github.ref == 'refs/heads/main' &&

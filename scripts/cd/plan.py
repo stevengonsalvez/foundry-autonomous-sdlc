@@ -32,7 +32,7 @@ from .soak import minutes_arg
 JOB_ORDER = ("build", "stage", "smoke", "soak", "promote")
 # The checks the branch ruleset requires on main (scripts/setup_repo.py REQUIRED_CHECKS). CD waits
 # for exactly these, not for the CI workflow as a whole, so a red optional job cannot block it.
-REQUIRED_CHECKS = ("test", "coverage", "e2e", "gitleaks", "tdd-order", "agent-scope")
+REQUIRED_CHECKS = ("test", "coverage", "e2e", "gitleaks", "tdd-order", "agent-scope", "evals")
 CHECKS_APP_SLUG = "github-actions"  # a commit status or another app cannot stand in for a check
 MAX_INCLUDES = 50
 TAG_RETRIES = 5

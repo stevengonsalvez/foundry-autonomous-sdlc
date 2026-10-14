@@ -1,0 +1,26 @@
+{
+  "prompt_sha256": "f5c2e19f70f6b7ead22a5f4d756b586b3858f76e8e63d075c00bdd8c8ee6ac5d",
+  "recorded_by": "manual",
+  "synthetic": true,
+  "synthetic_fields": [
+    "criteria",
+    "acceptance_criteria",
+    "questions"
+  ],
+  "response": {
+    "criteria": {
+      "clear_goal": 25,
+      "testable_acceptance_criteria": 25,
+      "defined_scope": 25,
+      "edge_cases": 25
+    },
+    "score": 100,
+    "summary": "Add a visible, screen-reader-accessible count of tracking events to the parcel page header on web, shown below the Last updated line.",
+    "acceptance_criteria": [
+      "Add tracking events counter badge in header",
+      "Ensure counter is screen-reader accessible with aria-label"
+    ],
+    "questions": []
+  },
+  "raw_output": "{\"criteria\": {\"clear_goal\": 25, \"testable_acceptance_criteria\": 25, \"defined_scope\": 25, \"edge_cases\": 25}, \"score\": 100, \"summary\": \"Add a visible, screen-reader-accessible count of tracking events to the parcel page header on web, shown below the Last updated line.\", \"acceptance_criteria\": [\"Add tracking events counter badge in header\", \"Ensure counter is screen-reader accessible with aria-label\"], \"questions\": []}"
+}

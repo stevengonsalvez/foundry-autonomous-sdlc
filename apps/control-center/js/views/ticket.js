@@ -32,6 +32,7 @@ export const GATE_LABELS = Object.freeze({
   gitleaks: 'Secret scan',
   'tdd-order': 'Tests first',
   'agent-scope': 'Agent scope',
+  evals: 'Evaluations',
   review: 'Review',
   smoke: 'Smoke',
   soak: 'Soak',

@@ -1,7 +1,7 @@
 """
 Pre-merge verification (docs/architecture.md, "Gates"; decision D4: the third enforcement layer).
 
-The orchestrator merges only when, on the PR head sha: all six required checks are `success`, an
+The orchestrator merges only when, on the PR head sha: all seven required checks are `success`, an
 owner-authored review marker approves exactly that sha, the PR and its issue are owner-authored,
 the object's cost is under the cap, the branch is agent/* or the PR is labelled for test repair, and
 every file the PR changes is under app/. The last rule covers every PR, not only agent/* branches:
@@ -19,7 +19,7 @@ from pathlib import PurePosixPath
 from sdlc_agents.ports import OWNER, REPO, CheckRun, Comment, Issue, PullRequest
 from sdlc_agents.sanitise import parse_json_strict
 
-REQUIRED_CHECKS = ("test", "coverage", "e2e", "gitleaks", "tdd-order", "agent-scope")
+REQUIRED_CHECKS = ("test", "coverage", "e2e", "gitleaks", "tdd-order", "agent-scope", "evals")
 MAINTENANCE_LABEL = "maintenance:test-repair"
 AGENT_PR_LABEL = "agent:pr"
 AGENT_BRANCH_PREFIX = "agent/"

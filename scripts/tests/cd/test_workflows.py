@@ -99,7 +99,7 @@ def test_triggers_run_after_a_green_push_ci_on_main_or_on_demand() -> None:
     assert inputs["inject_fault"]["default"] == "none"
     assert inputs["soak_minutes"]["default"] == "10"
     condition = " ".join(CD["jobs"]["plan"]["if"].split())
-    # CI's own conclusion is not consulted: plan checks the six required checks of the sha instead
+    # CI's own conclusion is not consulted: plan checks the seven required checks of the sha instead
     assert "conclusion" not in condition
     assert "github.event.workflow_run.event == 'push'" in condition
     assert "github.ref == 'refs/heads/main'" in condition
