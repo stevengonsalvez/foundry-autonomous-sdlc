@@ -46,7 +46,7 @@ def _issue(item: dict[str, Any]) -> Issue:
         number=item["number"], title=item.get("title") or "", body=item.get("body") or "",
         author=(item.get("user") or {}).get("login", ""), labels=_labels(item), state=item["state"],
         created_at=item["created_at"], closed_at=item.get("closed_at"),
-        is_pull_request="pull_request" in item,
+        is_pull_request="pull_request" in item, updated_at=item.get("updated_at"),
     )
 
 

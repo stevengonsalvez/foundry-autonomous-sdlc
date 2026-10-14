@@ -8,7 +8,7 @@ from typing import Any
 
 import pytest
 
-from sdlc_agents.github import API, GitHubClient
+from sdlc_agents.github import API, GitHubClient, _issue
 from sdlc_agents.ports import GitHubError
 from sdlc_agents.transport import HttpRequest, HttpResponse
 
@@ -305,3 +305,9 @@ def test_rate_limit_with_unparseable_retry_after_uses_the_cap() -> None:
     gh, _, sleeps = client({"GET /issues/3": [HttpResponse(429, {"retry-after": "soon"}, b"{}"), ok(issue_json(3))]})
     gh.get_issue(3)
     assert sleeps == [30.0]
+
+
+def test_issue_maps_updated_at() -> None:
+    item = issue_json(3, updated_at="2026-10-10T12:05:00Z")
+    issue = _issue(item)
+    assert issue.updated_at == "2026-10-10T12:05:00Z"

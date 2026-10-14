@@ -24,7 +24,7 @@ from typing import Any
 
 from sdlc_agents import state as sdlc_state
 from sdlc_agents.clock import seconds_between
-from sdlc_agents.ports import REPO
+from sdlc_agents.ports import OWNER, REPO
 from sdlc_agents.sanitise import one_line, redact_secrets
 
 VERSION = 1
@@ -54,6 +54,10 @@ DEPLOY_FAILED_LABEL = "escalated:deploy-failed"
 
 # Which gate names the cost-free CI checks and CD steps report.
 GATE_NAMES = ("test", "coverage", "e2e", "gitleaks", "tdd-order", "agent-scope", "review", "smoke", "soak")
+
+RESOLVED_BY = ("simulated-human", "human", "system")
+RESOLVED_HOW = ("closed", "answered", "superseded")
+SIMULATED_HUMAN_MARKER = "Simulated human (antigravity)"
 
 _CONTROL = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]")
 
@@ -286,8 +290,78 @@ def tried(data: dict[str, Any]) -> list[str]:
     return steps
 
 
+def clean_resolved(val: Any) -> dict[str, Any] | None:
+    if not isinstance(val, dict):
+        return None
+    at = clean(val.get("at"), 40)
+    by = clean(val.get("by"), 30)
+    how = clean(val.get("how"), 30)
+    if not at or by not in RESOLVED_BY or how not in RESOLVED_HOW:
+        return None
+    return {"at": at, "by": by, "how": how}
+
+
+def derive_resolution(
+    *,
+    esc_at: str | None,
+    closed_at: str | None,
+    comments: list[Any] | None,
+    labels: tuple[str, ...] | list[str] = (),
+    updated_at: str | None = None,
+) -> dict[str, Any] | None:
+    """Derive resolution for an escalation from GitHub closed status and comments."""
+    if not esc_at:
+        return None
+
+    has_esc_label = any(lbl.startswith("escalated:") for lbl in labels) or DEPLOY_FAILED_LABEL in labels
+
+    # A ticket is resolved ONLY when closed or when it no longer has an escalated:* label
+    if not closed_at and has_esc_label:
+        return None
+
+    # Check marker comments at or after esc_at
+    marker_comments = []
+    for c in comments or []:
+        if getattr(c, "author", None) != OWNER:
+            continue
+        c_at = getattr(c, "created_at", None)
+        if not c_at or c_at < esc_at:
+            continue
+        c_body = getattr(c, "body", "") or ""
+        if c_body.lstrip().startswith("### " + SIMULATED_HUMAN_MARKER):
+            marker_comments.append((c_at, c))
+
+    # A closed ticket with escalated:deploy-failed is deliberately never resolved.
+    if closed_at and DEPLOY_FAILED_LABEL not in labels:
+        return {
+            "at": max(closed_at, esc_at),
+            "by": "simulated-human" if marker_comments else "human",
+            "how": "closed",
+        }
+
+    # Case 2: Open issue whose escalated:* label was removed
+    if not closed_at and not has_esc_label:
+        if marker_comments:
+            return {
+                "at": marker_comments[0][0],
+                "by": "simulated-human",
+                "how": "answered",
+            }
+        return {
+            "at": updated_at or esc_at,
+            "by": "human",
+            "how": "answered",
+        }
+
+    return None
+
+
 def escalation_block(
-    data: dict[str, Any], *, label_only: str | None, evidence_url: str, at: str | None
+    data: dict[str, Any],
+    *,
+    label_only: str | None,
+    evidence_url: str,
+    at: str | None,
 ) -> dict[str, Any] | None:
     esc = data.get("escalation") if isinstance(data.get("escalation"), dict) else None
     if esc is None and label_only is None:
@@ -300,6 +374,8 @@ def escalation_block(
         "attempts": int(coder.get("attempts", 0) or 0),
         "tried": tried(data),
         "evidence_url": evidence_url,
+        "resolved": None,
+        "open": True,
     }
 
 
@@ -363,6 +439,8 @@ def ticket(
     ledger_usd: float = 0.0,
     gates_extra: dict[str, str] | None = None,
     summary: str | None = None,
+    comments: list[Any] | None = None,
+    updated_at: str | None = None,
 ) -> dict[str, Any]:
     """Build one ticket record. `state_data` is the parsed state comment (None before the first tick)."""
     data = state_data or {}
@@ -412,13 +490,27 @@ def ticket(
     evidence_id = comment_ids.get("coder_log") or comment_ids.get("state")
     evidence_url = url + (f"#issuecomment-{evidence_id}" if evidence_id else "")
     last_stage_at = state_stages[-1]["at"] if state_stages else opened_at
+    esc_at = (data.get("escalation") or {}).get("at") or last_stage_at
     escalation = escalation_block(
         data,
         label_only=esc_label if is_escalation(esc_label) or DEPLOY_FAILED_LABEL in labels else None,
         evidence_url=evidence_url,
         at=last_stage_at,
     )
-    if env == "rolled-back" and escalation is None:
+    if escalation is not None:
+        resolved_val = clean_resolved(
+            derive_resolution(
+                esc_at=esc_at,
+                closed_at=closed_at,
+                comments=comments,
+                labels=labels,
+                updated_at=updated_at,
+            )
+        )
+        escalation["resolved"] = resolved_val
+        escalation["open"] = resolved_val is None
+
+    if env == "rolled-back" and (escalation is None or escalation.get("resolved") is not None):
         escalation = {
             "label": DEPLOY_FAILED_LABEL,
             "reasons": ["Release rolled back after a failed check"],
@@ -426,6 +518,8 @@ def ticket(
             "attempts": 0,
             "tried": tried(data),
             "evidence_url": evidence_url,
+            "resolved": None,
+            "open": True,
         }
 
     history = stage_history(opened_at, state_stages)
@@ -433,13 +527,20 @@ def ticket(
     quality = data.get("quality") if isinstance(data.get("quality"), dict) else None
     triage = data.get("triage") if isinstance(data.get("triage"), dict) else None
     feas = data.get("feasibility") if isinstance(data.get("feasibility"), dict) else None
-    updated_at = max(
+    esc_resolved_at = (
+        (escalation or {}).get("resolved", {}).get("at")
+        if escalation and escalation.get("resolved")
+        else None
+    )
+    updated_at_val = max(
         [
             now_
             for now_ in [
                 opened_at,
                 closed_at or opened_at,
                 last_stage_at,
+                esc_resolved_at,
+                updated_at,
                 *[h.get("finished_at") or h.get("at") for h in (hops or [])],
             ]
             if now_
@@ -460,7 +561,7 @@ def ticket(
         "url": url,
         "opened_at": opened_at,
         "closed_at": closed_at,
-        "updated_at": updated_at,
+        "updated_at": updated_at_val,
         "stage": stage,
         "sdlc_stage": sdlc_stage,
         "env": env,
@@ -539,5 +640,5 @@ def ticket(
 def digest(ticket_record: dict[str, Any]) -> str:
     """Fingerprint of what the ticket says, ignoring the summary and the digest itself, so a model summary
     is kept only while the facts it describes are unchanged."""
-    body = {k: v for k, v in ticket_record.items() if k not in ("summary", "digest")}
+    body = {k: v for k, v in ticket_record.items() if k not in ("summary", "digest", "updated_at")}
     return hashlib.sha256(json.dumps(body, sort_keys=True, separators=(",", ":")).encode()).hexdigest()[:12]

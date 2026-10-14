@@ -7,6 +7,7 @@ import json
 import pytest
 
 from sdlc_agents.ledger import events, model
+from sdlc_agents.ports import OWNER, Comment
 from tests.ledger.conftest import ticket_of
 
 
@@ -118,3 +119,177 @@ def test_a_tickets_cost_is_the_orchestrators_figure_and_the_ledger_share_sits_be
     for t in doc["tickets"]:
         assert t["cost"]["usd"] == pytest.approx(real[t["issue"]]["state_data"]["cost"]["usd"], rel=0.05)
         assert t["cost"]["total_usd"] == pytest.approx(t["cost"]["usd"] + t["cost"]["ledger_usd"], abs=1e-6)
+
+
+def test_clean_resolved() -> None:
+    assert model.clean_resolved(None) is None
+    assert model.clean_resolved("not a dict") is None
+    assert model.clean_resolved({"at": "2026-10-10T12:00:00Z", "by": "invalid", "how": "closed"}) is None
+    assert model.clean_resolved({"at": "2026-10-10T12:00:00Z", "by": "human", "how": "invalid"}) is None
+    assert model.clean_resolved({"at": "", "by": "human", "how": "closed"}) is None
+    valid = {"at": "2026-10-10T12:00:00Z", "by": "simulated-human", "how": "answered"}
+    assert model.clean_resolved(valid) == valid
+
+
+def test_derive_resolution_cases() -> None:
+    esc_at = "2026-10-10T15:00:00Z"
+
+    # None if no esc_at
+    assert model.derive_resolution(esc_at=None, closed_at="2026-10-10T16:00:00Z", comments=None) is None
+
+    # Open issue with escalated:* label and no marker stays unresolved (None)
+    assert (
+        model.derive_resolution(
+            esc_at=esc_at,
+            closed_at=None,
+            comments=[],
+            labels=("escalated:cost-cap",),
+        )
+        is None
+    )
+
+    # Closed issue, no marker -> human, closed
+    res = model.derive_resolution(esc_at=esc_at, closed_at="2026-10-10T16:00:00Z", comments=[])
+    assert res == {"at": "2026-10-10T16:00:00Z", "by": "human", "how": "closed"}
+
+    # Closed issue, with simulated human marker from OWNER -> simulated-human, closed
+    comments = [Comment(1, OWNER, "### Simulated human (antigravity)\nAnswer", "2026-10-10T15:30:00Z")]
+    res = model.derive_resolution(esc_at=esc_at, closed_at="2026-10-10T16:00:00Z", comments=comments)
+    assert res == {"at": "2026-10-10T16:00:00Z", "by": "simulated-human", "how": "closed"}
+
+    # Open issue with escalated:* label and marker comment stays unresolved (None)
+    res = model.derive_resolution(
+        esc_at=esc_at,
+        closed_at=None,
+        comments=comments,
+        labels=("escalated:cost-cap",),
+    )
+    assert res is None
+
+    # Open issue with de-escalated label (no escalated:* label) and marker -> simulated-human, answered
+    res = model.derive_resolution(esc_at=esc_at, closed_at=None, comments=comments, labels=())
+    assert res == {"at": "2026-10-10T15:30:00Z", "by": "simulated-human", "how": "answered"}
+
+    # Open issue whose escalated:* label was removed with no marker comment -> human, answered at updated_at
+    res = model.derive_resolution(
+        esc_at=esc_at,
+        closed_at=None,
+        comments=[],
+        labels=(),
+        updated_at="2026-10-10T17:00:00Z",
+    )
+    assert res == {"at": "2026-10-10T17:00:00Z", "by": "human", "how": "answered"}
+
+    # Non-owner marker comment -> resolved None
+    non_owner_comments = [
+        Comment(2, "other_user", "### Simulated human (antigravity)\nAnswer", "2026-10-10T15:30:00Z")
+    ]
+    assert (
+        model.derive_resolution(
+            esc_at=esc_at,
+            closed_at=None,
+            comments=non_owner_comments,
+            labels=("escalated:cost-cap",),
+        )
+        is None
+    )
+
+    # Comment with no timestamp is ignored
+    no_time_comments = [Comment(3, OWNER, "### Simulated human (antigravity)\nAnswer", "")]
+    assert (
+        model.derive_resolution(
+            esc_at=esc_at,
+            closed_at=None,
+            comments=no_time_comments,
+            labels=("escalated:cost-cap",),
+        )
+        is None
+    )
+
+    # Closed-then-reopened with escalated label stays open
+    res = model.derive_resolution(
+        esc_at=esc_at,
+        closed_at=None,
+        comments=comments,
+        labels=("escalated:agent-error",),
+    )
+    assert res is None
+
+    # Re-escalated after answered: old marker before new esc_at does not resolve it
+    res = model.derive_resolution(
+        esc_at="2026-10-10T18:00:00Z",
+        closed_at=None,
+        comments=comments,
+        labels=("escalated:cost-cap",),
+    )
+    assert res is None
+
+    # Closed issue with escalated:deploy-failed stays open
+    res = model.derive_resolution(
+        esc_at=esc_at,
+        closed_at="2026-10-10T16:00:00Z",
+        comments=[],
+        labels=(model.DEPLOY_FAILED_LABEL,),
+    )
+    assert res is None
+
+    # Closed before escalation -> bounded by esc_at
+    res = model.derive_resolution(esc_at="2026-10-10T21:20:00Z", closed_at="2026-10-10T21:14:00Z", comments=[])
+    assert res == {"at": "2026-10-10T21:20:00Z", "by": "human", "how": "closed"}
+
+
+def test_ticket_with_escalation_derives_resolution(real) -> None:
+    # Item 18 is closed
+    item = real[18]
+    comments = [Comment(1, OWNER, "### Simulated human (antigravity)\nDone", "2026-10-10T16:30:00Z")]
+    t = model.ticket(
+        number=item["number"],
+        kind="issue",
+        title=item["title"],
+        author=item["author"],
+        opened_at=item["created_at"],
+        closed_at=item["closed_at"],
+        labels=tuple(item["labels"]),
+        state_data=item["state_data"],
+        comments=comments,
+    )
+    assert t["escalation"]["resolved"] == {
+        "at": item["closed_at"],
+        "by": "simulated-human",
+        "how": "closed",
+    }
+    assert t["escalation"]["open"] is False
+    assert t["updated_at"] >= t["escalation"]["resolved"]["at"]
+
+
+def test_digest_ignores_updated_at() -> None:
+    t1 = {"issue": 1, "stage": "prod", "updated_at": "2026-10-10T12:00:00Z"}
+    t2 = {"issue": 1, "stage": "prod", "updated_at": "2026-10-10T12:05:00Z"}
+    assert model.digest(t1) == model.digest(t2)
+
+
+def test_merged_pr_with_deploy_failed_stays_open() -> None:
+    t = model.ticket(
+        number=50,
+        kind="pr",
+        title="Fix tracking",
+        author=OWNER,
+        opened_at="2026-10-10T14:00:00Z",
+        closed_at="2026-10-10T15:00:00Z",
+        labels=(model.DEPLOY_FAILED_LABEL,),
+        state_data={
+            "stages": [
+                {"stage": "stage:building", "at": "2026-10-10T14:10:00Z"},
+                {"stage": "stage:merged", "at": "2026-10-10T15:00:00Z"},
+            ],
+            "escalation": {
+                "label": model.DEPLOY_FAILED_LABEL,
+                "reasons": ["smoke failed on staging"],
+                "at": "2026-10-10T15:05:00Z",
+            },
+        },
+        env="rolled-back",
+    )
+    assert t["stage"] == "escalated"
+    assert t["escalation"]["resolved"] is None
+    assert t["escalation"]["open"] is True

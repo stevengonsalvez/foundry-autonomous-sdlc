@@ -231,7 +231,8 @@ describe('views', { skip }, () => {
       for (const lensName of ['Delivery', 'Cost', 'Gates']) {
         await page.getByRole('button', { name: lensName }).click();
         const chips = await page.locator('article.card').count();
-        assert.equal(chips, rawSample.tickets.length, `group=${groupName} lens=${lensName} total chips`);
+        const openTotal = Object.values(rawSample.flow.counts).reduce((a, b) => a + b, 0);
+        assert.equal(chips, openTotal, `group=${groupName} lens=${lensName} total chips`);
         for (const stage of rawSample.board_stages) {
           const colCount = Number(await page.locator(`.col-${stage} .col-count`).innerText());
           const stageCards = await page.locator(`.col-${stage} article.card`).count();
@@ -446,7 +447,7 @@ describe('views', { skip }, () => {
       assert.equal(Number(count), rawSample.flow.counts[stage], stage);
       assert.equal(await page.locator(`.col-${stage} article.card`).count(), rawSample.flow.counts[stage]);
     }
-    assert.equal(await page.locator('article.card').count(), 22);
+    assert.equal(await page.locator('article.card').count(), 6);
     assert.equal(await page.locator('.col-escalated').getAttribute('class'), 'col col-escalated');
     const href = await page.locator('article.card .card-link').first().getAttribute('href');
     assert.match(href, /^#\/ticket\/\d+$/);
@@ -456,15 +457,15 @@ describe('views', { skip }, () => {
   test('board: type chips, search, and the new-ticket buttons', async () => {
     const { context, page } = await open('normal');
     await page.getByRole('button', { name: 'bug', exact: true }).click();
-    assert.equal(await page.locator('article.card').count(), 4);
+    assert.equal(await page.locator('article.card').count(), 1);
     await page.getByRole('button', { name: 'bug', exact: true }).click();
     await page.getByLabel('Search by ticket number or title').fill('24');
     assert.equal(await page.locator('article.card').count(), 1);
     assert.match(await text(page, 'article.card'), /Make the parcel tracker better/);
     await page.getByLabel('Search by ticket number or title').fill('lowercase');
-    assert.equal(await page.locator('article.card').count(), 4);
+    assert.equal(await page.locator('article.card').count(), 1);
     await page.getByRole('button', { name: 'Clear filters' }).click();
-    assert.equal(await page.locator('article.card').count(), 22);
+    assert.equal(await page.locator('article.card').count(), 6);
 
     const create = page.getByRole('link', { name: 'New ticket' });
     assert.equal(await create.getAttribute('href'), `${REPO}/issues/new?template=feature_request.yml`);
@@ -515,6 +516,30 @@ describe('views', { skip }, () => {
     assert.equal(await esc.count(), 1);
     assert.match(await esc.innerText(), /smoke failed on staging/);
     assert.equal(await page.locator('.esc-card').count(), 18);
+
+    const openCards = page.locator('.view > .esc-list .esc-card');
+    assert.equal(await openCards.count(), 2);
+    const details = page.locator('details.esc-resolved-disclosure');
+    assert.equal(await details.count(), 1);
+    assert.equal(await details.evaluate((el) => el.open), false);
+    const summary = await page.locator('details.esc-resolved-disclosure summary').innerText();
+    assert.equal(summary.trim(), 'Resolved (16)');
+    const resolvedCards = page.locator('details.esc-resolved-disclosure .esc-card');
+    assert.equal(await resolvedCards.count(), 16);
+
+    const domOrder = await page.evaluate(() => {
+      const openList = document.querySelector('.view > .esc-list');
+      const disclosure = document.querySelector('details.esc-resolved-disclosure');
+      if (!openList || !disclosure) return false;
+      return Boolean(openList.compareDocumentPosition(disclosure) & Node.DOCUMENT_POSITION_FOLLOWING);
+    });
+    assert.equal(domOrder, true, 'open .esc-list must appear before details.esc-resolved-disclosure in DOM');
+
+    await page.goto(`${servers.normal.url}?data=state.json#/ticket/2`);
+    await page.waitForSelector('.ticket-head');
+    const ticketResolved = page.locator('.esc-meta');
+    assert.match(await ticketResolved.innerText(), /Resolved[\s\S]*by human/i);
+
     await context.close();
   });
 
@@ -955,8 +980,8 @@ describe('fetch strategy in the browser (scripted GitHub, no ?data=)', { skip },
     // 4. PR marker text and screen-reader accessibility check
     const { context: boardCtx, page: boardPage } = await open('normal', { hash: '#/', width: 1280, height: 900 });
     await boardPage.waitForSelector('#app[aria-busy="false"] .view-board');
-    const prChip = boardPage.locator('.card:has(a[href="#/ticket/27"]) .chip-pill').first();
-    assert.ok((await prChip.count()) > 0, 'must have ticket 27 (PR) chip on board');
+    const prChip = boardPage.locator('.card:has(a[href="#/ticket/40"], a[href="#/ticket/27"]) .chip-pill').first();
+    assert.ok((await prChip.count()) > 0, 'must have a PR chip on board');
 
     const prAudit = await prChip.evaluate((el) => {
       const numEl = el.querySelector('.chip-num');

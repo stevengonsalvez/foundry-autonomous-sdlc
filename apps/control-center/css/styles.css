@@ -1842,6 +1842,27 @@ table.data {
   gap: 0.6rem;
 }
 
+.esc-card-resolved {
+  border-left-color: var(--tone-done);
+}
+
+.esc-resolved-disclosure {
+  margin-top: 1.5rem;
+}
+
+.esc-resolved-disclosure summary {
+  cursor: pointer;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--muted);
+  padding: 0.5rem 0;
+}
+
+.esc-resolved-list {
+  margin-top: 0.75rem;
+}
+
 .esc-head {
   display: flex;
   align-items: center;

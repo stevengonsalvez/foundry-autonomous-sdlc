@@ -70,6 +70,7 @@ def build_ticket(
                 ]
         except GitHubError:
             pr_info = None
+
     return model.ticket(
         number=item.number,
         kind="pr" if item.is_pull_request else "issue",
@@ -82,6 +83,8 @@ def build_ticket(
         commits=commits,
         pr_info=pr_info,
         comment_ids=ids,
+        comments=comments,
+        updated_at=getattr(item, "updated_at", None),
     ), None
 
 
