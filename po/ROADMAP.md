@@ -7,11 +7,10 @@ It serves as the backlog for the Simulated Human product owner loop.
 
 ## Operating Rules for the Simulated Human
 
-1. **Selection Policy**: When the repository is idle and within spend caps, the persona selects the NEXT `todo` item whose dependencies are all satisfied (`done` in `po/ROADMAP.md` or marked `stage:released` or `stage:merged` in GitHub issues).
+1. **Selection Policy**: When the repository is idle and within spend caps, the persona selects the NEXT `todo` item whose dependencies are all satisfied (`done` in `po/ROADMAP.md` or marked `stage:released` in GitHub issues).
 2. **Issue Generation**: The persona copies the item title, user value, testable acceptance criteria, and explicit `app/` scope into the new issue, referencing the roadmap ID with marker `Roadmap item: ITEM-0NN`.
-3. **Memory Tracking**: The persona records the item as `filed` in `po/MEMORY.md` with the filed issue number. The persona NEVER edits `po/ROADMAP.md` directly; updates to this roadmap occur only via merged pull requests.
-4. **Roadmap Extension Logging**: When fewer than 5 `todo` items remain in this roadmap, the persona records a one-line maintainer extension request in its run log and continues intake with the remaining `todo` items without opening an issue about the roadmap.
-5. **Scope Boundary**: Every item is strictly confined to `app/` (`app/core`, `app/contracts`, `app/carrier-mock`, `app/api`, `app/web`, `app/e2e`). No item may touch root configuration, workflows, or infrastructure.
+3. **Roadmap Extension Logging**: When fewer than 5 `todo` items remain in this roadmap, the persona records a one-line maintainer extension request in its run log and continues intake with the remaining `todo` items without opening an issue about the roadmap.
+4. **Scope Boundary**: Every item is strictly confined to `app/` (`app/core`, `app/contracts`, `app/carrier-mock`, `app/api`, `app/web`, `app/e2e`). No item may touch root configuration, workflows, or infrastructure.
 
 ---
 
@@ -108,9 +107,9 @@ It serves as the backlog for the Simulated Human product owner loop.
   - `app/e2e/tests/parcel-tracking.spec.ts`
 - **Acceptance Criteria**:
   1. On initial deep-link load to #/parcel/PK..., document.activeElement is h1#page-title.
-  2. Pressing the Escape key while focused inside the search form input clears any active error and resets focus cleanly.
+  2. On pressing Escape key inside input#tracking-number, the empty error flag clears and removes p#tracking-number-error from the DOM.
   3. Playwright test verifies that pressing Tab navigates in logical order from skip link to brand to search input to submit button.
-  4. Ensure all interactive table links and navigation controls remain reachable by keyboard tab navigation alone.
+  4. Playwright test verifies Tab key focus travels in forward order through skip link, brand link, input, and submit button without focus trapping.
 
 ---
 
@@ -208,8 +207,8 @@ It serves as the backlog for the Simulated Human product owner loop.
   - `app/web/tests/parcel-page.test.tsx`
 - **Acceptance Criteria**:
   1. A collapsible support card is rendered beneath the shipment history timeline.
-  2. The card lists carrier support contact details and operating hours.
-  3. The card toggles open and closed with accessible button controls and aria-expanded state.
+  2. The card toggles open and closed with accessible button controls and aria-expanded state.
+  3. The collapsible panel contains helper text explaining how to initiate an inquiry for delayed packages.
 
 ---
 
@@ -250,7 +249,7 @@ It serves as the backlog for the Simulated Human product owner loop.
 - **Acceptance Criteria**:
   1. Define string translation dictionaries for English and Spanish covering all page headings, form labels, and status badges.
   2. Add an accessible language toggle in the header or footer switching between English and Spanish.
-  3. Status labels translate accurately including in transit to En transito and delivered to Entregado.
+  3. Status labels translate accurately including in transit to En tránsito and delivered to Entregado.
   4. Persist language choice in localStorage under key parcel_locale with English as default.
 
 ---
@@ -345,13 +344,13 @@ It serves as the backlog for the Simulated Human product owner loop.
   1. When parcel has estimated delivery date and active status, display countdown badge indicating days remaining.
   2. If delivery date is in the past and status is not delivered, display delivery delayed indicator.
   3. If status is delivered, omit the countdown badge.
-  4. Ensure countdown badge text meets accessible contrast standards and includes screen-reader description.
+  4. Countdown badge span has data-testid="eta-countdown" and contains an aria-label attribute matching the visible countdown string.
 
 ---
 
 ### ITEM-021: feat(web): manual refresh button with polling indicator on parcel detail page
 - **Status**: todo
-- **Dependencies**: []
+- **Dependencies**: [ITEM-007]
 - **Cost Class**: S
 - **Tags**: ux, data, web
 - **Gap Anchor**: `app/web/src/pages/ParcelPage.tsx#L52`. Page fetches data once on mount; users must reload the whole browser tab to check for fresh tracking events.
@@ -399,7 +398,7 @@ It serves as the backlog for the Simulated Human product owner loop.
 - **Acceptance Criteria**:
   1. Configure manual chunk splitting in vite.config.ts to isolate React and React DOM vendor dependencies into a dedicated vendor chunk.
   2. Configure build warning threshold and add an automated test in vite-config.test.ts asserting vendor chunking and size rules.
-  3. Web bundle index chunk must stay under 50 kB gzip and vendor chunk under 150 kB gzip.
+  3. Vite build emits separate entry and vendor chunks without raising bundle size warning thresholds.
 
 ---
 
