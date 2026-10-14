@@ -5,16 +5,24 @@ Blocks network socket creation to guarantee completely offline and deterministic
 
 from __future__ import annotations
 
+import _socket
 import socket
 
 import pytest
 
 
-@pytest.fixture(autouse=True)
-def block_network_sockets(monkeypatch: pytest.MonkeyPatch) -> None:
+def _blocked_socket(*args: object, **kwargs: object) -> None:
+    raise RuntimeError("Network socket call blocked in hermetic offline evaluation")
+
+
+def pytest_configure(config: pytest.Config) -> None:
+    """Block socket creation before test collection begins."""
+    socket.socket = _blocked_socket  # type: ignore[assignment]
+    _socket.socket = _blocked_socket  # type: ignore[assignment]
+
+
+@pytest.fixture(scope="session", autouse=True)
+def block_network_sockets() -> None:
     """Ensure zero network socket calls can be made during offline evaluation."""
-
-    def guarded_socket(*args: object, **kwargs: object) -> socket.socket:
-        raise RuntimeError("Network socket call blocked in hermetic offline evaluation")
-
-    monkeypatch.setattr(socket, "socket", guarded_socket)
+    socket.socket = _blocked_socket  # type: ignore[assignment]
+    _socket.socket = _blocked_socket  # type: ignore[assignment]

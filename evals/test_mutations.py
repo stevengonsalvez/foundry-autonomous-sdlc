@@ -1,167 +1,253 @@
-"""Prove that each required mutation in the acceptance criteria fails the evaluation gate.
+"""Mutation testing suite for offline requirement-gate evaluation gate.
 
-Mutations tested in an isolated temporary copy:
-1. QUALITY_THRESHOLD = 90
-2. A one-character edit to _REQ_GATE
-3. An empty golden file
-4. A row missing expected_outcome
-5. Issue 9 relabelled READY
+Proves that modifying gate code, prompt instructions, thresholds, or dataset
+expectations causes the gate to fail loudly and deterministically.
+Each test operates in an isolated temporary tree and executes the actual
+evals/test_replay.py test suite as a subprocess.
 """
 
 from __future__ import annotations
 
-import hashlib
 import json
+import os
 import shutil
-from dataclasses import replace
+import subprocess
+import sys
 from pathlib import Path
 
-import pytest
-from sdlc_agents import definitions, foundry, machine
-from sdlc_agents.definitions import AGENT_BY_NAME
 
-from evals.test_replay import (
-    GateOutcome,
-    get_golden_path,
-    get_recordings_dir,
-    get_snapshot_path,
-    load_golden_rows,
-    resolve_outcome,
-)
+def _setup_tmp_tree(tmp_path: Path) -> tuple[Path, Path]:
+    """Copy evals and agents trees to a temporary directory."""
+    evals_dst = tmp_path / "evals"
+    shutil.copytree(Path("evals"), evals_dst)
+    agents_dst = tmp_path / "agents"
+    shutil.copytree(Path("agents"), agents_dst)
+    return evals_dst, agents_dst
 
 
-def _copy_evals_to_tmp(tmp_path: Path) -> tuple[Path, Path, Path]:
-    """Create an isolated temporary copy of the dataset and recordings."""
-    evals_tmp = tmp_path / "evals"
-    datasets_tmp = evals_tmp / "datasets"
-    recordings_tmp = evals_tmp / "recordings" / "req_gate"
-    datasets_tmp.mkdir(parents=True, exist_ok=True)
-    recordings_tmp.mkdir(parents=True, exist_ok=True)
-
-    golden_src = get_golden_path()
-    snapshot_src = get_snapshot_path()
-    golden_dst = datasets_tmp / "req_gate_golden.jsonl"
-    snapshot_dst = datasets_tmp / "state_snapshot.jsonl"
-
-    shutil.copyfile(golden_src, golden_dst)
-    shutil.copyfile(snapshot_src, snapshot_dst)
-
-    for rec in get_recordings_dir().glob("*.json"):
-        shutil.copyfile(rec, recordings_tmp / rec.name)
-
-    return golden_dst, recordings_tmp, snapshot_dst
-
-
-def _run_gate_on_copy(golden_path: Path, recordings_dir: Path, snapshot_path: Path) -> None:
-    """Run all evaluation gate checks against a specific copy of data."""
-    # 1. Prompt fingerprint
-    prompt_instructions = AGENT_BY_NAME["sdlc-req-gate"].instructions
-    actual_sha = hashlib.sha256(prompt_instructions.encode("utf-8")).hexdigest()
-    rec_files = list(recordings_dir.glob("*.json"))
-    assert len(rec_files) > 0, "No recordings found"
-    for rf in rec_files:
-        rec_data = json.loads(rf.read_text(encoding="utf-8"))
-        if rec_data.get("prompt_sha256") != actual_sha:
-            pytest.fail("prompt changed: run T2 and re-record")
-
-    # 2. Dataset integrity
-    rows = [json.loads(line) for line in golden_path.read_text(encoding="utf-8").splitlines() if line.strip()]
-    assert len(rows) >= 1, "Golden set must contain at least 1 row"
-    assert len(rows) >= 16, f"Golden set must have at least 16 rows, got {len(rows)}"
-
-    allowed_labels = {e.value for e in GateOutcome}
-    for row in rows:
-        assert "expected_outcome" in row, f"Row {row.get('id')} missing expected_outcome"
-        assert row["expected_outcome"] in allowed_labels
-
-    snapshot_events = {
-        json.loads(line)["id"]
-        for line in snapshot_path.read_text(encoding="utf-8").splitlines()
-        if line.strip()
+def _run_replay(tmp_path: Path) -> subprocess.CompletedProcess[str]:
+    """Run pytest on the temporary evals/test_replay.py as a subprocess."""
+    agents_dir = tmp_path / "agents"
+    evals_test = tmp_path / "evals" / "test_replay.py"
+    env = {
+        **os.environ,
+        "PYTHONPATH": f"{agents_dir.resolve()}:{os.environ.get('PYTHONPATH', '')}",
     }
-    for row in rows:
-        prov = row["provenance"]
-        if row["synthetic"]:
-            assert prov["event_id"].startswith("synthetic") or prov["event_id"] in snapshot_events
-        else:
-            assert prov["event_id"] in snapshot_events
-
-    rows_by_issue = {r["issue_number"]: r for r in rows if r.get("issue_number") is not None}
-    if 9 in rows_by_issue:
-        assert rows_by_issue[9]["expected_outcome"] == GateOutcome.NEEDS_REFINEMENT
-
-    # 3. Replay
-    for row in rows:
-        rec_file = recordings_dir / f"{row['id']}.json"
-        assert rec_file.exists(), f"Recording missing: {rec_file}"
-        rec_data = json.loads(rec_file.read_text(encoding="utf-8"))
-        raw_text = rec_data.get("raw_output") or json.dumps(rec_data.get("response", rec_data))
-        parsed = foundry._parse("sdlc-req-gate", raw_text, definitions._check_req_gate)
-        rounds = int(row.get("rounds", 0))
-        outcome = resolve_outcome(parsed["score"], rounds)
-        assert outcome == row["expected_outcome"]
+    return subprocess.run(
+        [sys.executable, "-m", "pytest", "-q", str(evals_test)],
+        cwd=str(tmp_path),
+        capture_output=True,
+        text=True,
+        env=env,
+        check=False,
+    )
 
 
-def test_mutation_quality_threshold_90(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_mutation_quality_threshold_90(tmp_path: Path) -> None:
     """Prove that setting QUALITY_THRESHOLD = 90 causes the gate to fail."""
-    golden_dst, rec_dir, snap_dst = _copy_evals_to_tmp(tmp_path)
+    _, agents_dir = _setup_tmp_tree(tmp_path)
+    definitions_py = agents_dir / "sdlc_agents" / "definitions.py"
+    content = definitions_py.read_text(encoding="utf-8")
+    assert "QUALITY_THRESHOLD = 80" in content
+    definitions_py.write_text(
+        content.replace("QUALITY_THRESHOLD = 80", "QUALITY_THRESHOLD = 90"),
+        encoding="utf-8",
+    )
 
-    # Mutate QUALITY_THRESHOLD to 90
-    monkeypatch.setattr(definitions, "QUALITY_THRESHOLD", 90)
-    monkeypatch.setattr(machine, "QUALITY_THRESHOLD", 90)
-
-    with pytest.raises((ValueError, AssertionError)) as exc_info:
-        _run_gate_on_copy(golden_dst, rec_dir, snap_dst)
-
-    # Issue 7 (score 80) fails because score < 90 without questions, and after_score returns NEEDS_REFINEMENT
-    assert "sdlc-req-gate" in str(exc_info.value) or "outcome mismatch" in str(exc_info.value) or "below 90" in str(exc_info.value)
+    res = _run_replay(tmp_path)
+    assert res.returncode != 0, "Gate unexpectedly passed when QUALITY_THRESHOLD was 90"
+    out = res.stdout + res.stderr
+    assert "outcome mismatch" in out or "NEEDS_REFINEMENT" in out or "below 90" in out
 
 
-def test_mutation_req_gate_prompt_edit(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    """Prove that a one-character edit to _REQ_GATE causes the gate to fail."""
-    golden_dst, rec_dir, snap_dst = _copy_evals_to_tmp(tmp_path)
+def test_mutation_req_gate_prompt_edit(tmp_path: Path) -> None:
+    """Prove that editing the req-gate prompt instructions causes the gate to fail."""
+    _, agents_dir = _setup_tmp_tree(tmp_path)
+    definitions_py = agents_dir / "sdlc_agents" / "definitions.py"
+    content = definitions_py.read_text(encoding="utf-8")
+    assert '_REQ_GATE = f"""' in content
+    definitions_py.write_text(
+        content.replace('_REQ_GATE = f"""', '_REQ_GATE = f"""!'),
+        encoding="utf-8",
+    )
 
-    orig_agent = AGENT_BY_NAME["sdlc-req-gate"]
-    mutated_agent = replace(orig_agent, instructions=orig_agent.instructions + " ")
-    monkeypatch.setitem(AGENT_BY_NAME, "sdlc-req-gate", mutated_agent)
-
-    with pytest.raises(pytest.fail.Exception, match="prompt changed: run T2 and re-record"):
-        _run_gate_on_copy(golden_dst, rec_dir, snap_dst)
+    res = _run_replay(tmp_path)
+    assert res.returncode != 0, "Gate unexpectedly passed after prompt instruction edit"
+    assert "prompt changed: run T2 and re-record" in (res.stdout + res.stderr)
 
 
 def test_mutation_empty_golden_file(tmp_path: Path) -> None:
-    """Prove that an empty golden file causes the gate to fail."""
-    golden_dst, rec_dir, snap_dst = _copy_evals_to_tmp(tmp_path)
+    """Prove that an empty golden dataset causes the gate to fail."""
+    evals_dir, _ = _setup_tmp_tree(tmp_path)
+    golden_path = evals_dir / "datasets" / "req_gate_golden.jsonl"
+    golden_path.write_text("", encoding="utf-8")
 
-    # Empty the golden file
-    golden_dst.write_text("", encoding="utf-8")
+    res = _run_replay(tmp_path)
+    assert res.returncode != 0, "Gate unexpectedly passed with an empty golden file"
+    out = res.stdout + res.stderr
+    assert "empty" in out or "at least 16 rows" in out
 
-    with pytest.raises(AssertionError, match="at least 1 row"):
-        _run_gate_on_copy(golden_dst, rec_dir, snap_dst)
 
-
-def test_mutation_row_missing_expected_outcome(tmp_path: Path) -> None:
-    """Prove that a row missing expected_outcome causes the gate to fail."""
-    golden_dst, rec_dir, snap_dst = _copy_evals_to_tmp(tmp_path)
-
-    rows = load_golden_rows(golden_dst)
-    # Delete expected_outcome from the first row
+def test_mutation_missing_expected_outcome(tmp_path: Path) -> None:
+    """Prove that a golden row missing expected_outcome causes the gate to fail."""
+    evals_dir, _ = _setup_tmp_tree(tmp_path)
+    golden_path = evals_dir / "datasets" / "req_gate_golden.jsonl"
+    rows = [
+        json.loads(line)
+        for line in golden_path.read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    ]
     del rows[0]["expected_outcome"]
-    golden_dst.write_text("\n".join(json.dumps(r) for r in rows) + "\n", encoding="utf-8")
+    golden_path.write_text(
+        "\n".join(json.dumps(r) for r in rows) + "\n",
+        encoding="utf-8",
+    )
 
-    with pytest.raises((AssertionError, KeyError)):
-        _run_gate_on_copy(golden_dst, rec_dir, snap_dst)
+    res = _run_replay(tmp_path)
+    assert res.returncode != 0, "Gate unexpectedly passed with missing expected_outcome"
+    assert "expected_outcome" in (res.stdout + res.stderr)
 
 
-def test_mutation_issue_9_relabelled_ready(tmp_path: Path) -> None:
+def test_mutation_relabel_issue_9_ready(tmp_path: Path) -> None:
     """Prove that relabelling issue 9 to READY causes the gate to fail."""
-    golden_dst, rec_dir, snap_dst = _copy_evals_to_tmp(tmp_path)
-
-    rows = load_golden_rows(golden_dst)
+    evals_dir, _ = _setup_tmp_tree(tmp_path)
+    golden_path = evals_dir / "datasets" / "req_gate_golden.jsonl"
+    rows = [
+        json.loads(line)
+        for line in golden_path.read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    ]
     for r in rows:
         if r.get("issue_number") == 9:
             r["expected_outcome"] = "READY"
-    golden_dst.write_text("\n".join(json.dumps(r) for r in rows) + "\n", encoding="utf-8")
+    golden_path.write_text(
+        "\n".join(json.dumps(r) for r in rows) + "\n",
+        encoding="utf-8",
+    )
 
-    with pytest.raises(AssertionError):
-        _run_gate_on_copy(golden_dst, rec_dir, snap_dst)
+    res = _run_replay(tmp_path)
+    assert res.returncode != 0, "Gate unexpectedly passed when issue 9 was relabelled READY"
+    out = res.stdout + res.stderr
+    assert "READY" in out or "outcome mismatch" in out or "NEEDS_REFINEMENT" in out
+
+
+def test_mutation_golden_score_set_to_42(tmp_path: Path) -> None:
+    """Prove that changing golden score to 42 causes the gate to fail."""
+    evals_dir, _ = _setup_tmp_tree(tmp_path)
+    golden_path = evals_dir / "datasets" / "req_gate_golden.jsonl"
+    rows = [
+        json.loads(line)
+        for line in golden_path.read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    ]
+    for r in rows:
+        if r["id"] == "issue_7":
+            r["score"] = 42
+    golden_path.write_text(
+        "\n".join(json.dumps(r) for r in rows) + "\n",
+        encoding="utf-8",
+    )
+
+    res = _run_replay(tmp_path)
+    assert res.returncode != 0, "Gate unexpectedly passed with score set to 42"
+    out = res.stdout + res.stderr
+    assert "criteria sum" in out or "score" in out or "42" in out
+
+
+def test_mutation_recording_issue_15_criteria_sum_85(tmp_path: Path) -> None:
+    """Prove that mutating recording issue_15 criteria sum to 85 fails the gate."""
+    evals_dir, _ = _setup_tmp_tree(tmp_path)
+    rec_path = evals_dir / "recordings" / "req_gate" / "issue_15.json"
+    rec_data = json.loads(rec_path.read_text(encoding="utf-8"))
+    rec_data["response"]["criteria"]["clear_goal"] = 16  # Sum becomes 85 instead of 93
+    rec_data["response"]["score"] = 85
+    rec_data["raw_output"] = json.dumps(rec_data["response"])
+    rec_path.write_text(json.dumps(rec_data, indent=2) + "\n", encoding="utf-8")
+
+    res = _run_replay(tmp_path)
+    assert res.returncode != 0, "Gate unexpectedly passed when issue_15 criteria sum was 85"
+    out = res.stdout + res.stderr
+    assert "criteria sum" in out or "85" in out or "93" in out
+
+
+def test_mutation_provenance_pointed_to_billing_event(tmp_path: Path) -> None:
+    """Prove that pointing provenance to a billing event causes the gate to fail."""
+    evals_dir, _ = _setup_tmp_tree(tmp_path)
+    golden_path = evals_dir / "datasets" / "req_gate_golden.jsonl"
+    rows = [
+        json.loads(line)
+        for line in golden_path.read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    ]
+    for r in rows:
+        if r["id"] == "issue_7":
+            r["provenance"]["event_id"] = "28731d003a0fe448"  # billing.observed event
+    golden_path.write_text(
+        "\n".join(json.dumps(r) for r in rows) + "\n",
+        encoding="utf-8",
+    )
+
+    res = _run_replay(tmp_path)
+    assert res.returncode != 0, "Gate unexpectedly passed when provenance was billing event"
+    out = res.stdout + res.stderr
+    assert "ticket.updated" in out or "billing" in out
+
+
+def test_mutation_synthetic_flipped_on_real_row(tmp_path: Path) -> None:
+    """Prove that setting synthetic: true on a real issue row causes the gate to fail."""
+    evals_dir, _ = _setup_tmp_tree(tmp_path)
+    golden_path = evals_dir / "datasets" / "req_gate_golden.jsonl"
+    rows = [
+        json.loads(line)
+        for line in golden_path.read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    ]
+    for r in rows:
+        if r["id"] == "issue_7":
+            r["synthetic"] = True
+    golden_path.write_text(
+        "\n".join(json.dumps(r) for r in rows) + "\n",
+        encoding="utf-8",
+    )
+
+    res = _run_replay(tmp_path)
+    assert res.returncode != 0, "Gate unexpectedly passed with synthetic flipped on real row"
+    out = res.stdout + res.stderr
+    assert "synthetic: false" in out or "Real ticket row" in out
+
+
+def test_mutation_remove_check_req_gate_score_correction(tmp_path: Path) -> None:
+    """Prove that removing score correction from _check_req_gate causes gate failure."""
+    _, agents_dir = _setup_tmp_tree(tmp_path)
+    definitions_py = agents_dir / "sdlc_agents" / "definitions.py"
+    content = definitions_py.read_text(encoding="utf-8")
+    target_line = '    data["score"] = sum(data["criteria"][name] for name in CRITERIA)\n'
+    assert target_line in content
+    definitions_py.write_text(content.replace(target_line, "    pass\n"), encoding="utf-8")
+
+    res = _run_replay(tmp_path)
+    assert res.returncode != 0, "Gate unexpectedly passed without score correction"
+    out = res.stdout + res.stderr
+    assert "test_check_req_gate_score_correction" in out or "score" in out
+
+
+def test_mutation_remove_check_req_gate_empty_questions_check(tmp_path: Path) -> None:
+    """Prove that removing the sub-80 empty questions check causes gate failure."""
+    _, agents_dir = _setup_tmp_tree(tmp_path)
+    definitions_py = agents_dir / "sdlc_agents" / "definitions.py"
+    content = definitions_py.read_text(encoding="utf-8")
+    target_block = (
+        '    elif not data["questions"]:\n'
+        '        raise ValueError(f"sdlc-req-gate: score {data[\'score\']} is below '
+        '{QUALITY_THRESHOLD} but no questions")\n'
+    )
+    assert target_block in content
+    definitions_py.write_text(content.replace(target_block, ""), encoding="utf-8")
+
+    res = _run_replay(tmp_path)
+    assert res.returncode != 0, "Gate unexpectedly passed without empty questions check"
+    out = res.stdout + res.stderr
+    assert (
+        "test_check_req_gate_rejects_sub_80_with_empty_questions" in out
+        or "DID NOT RAISE" in out
+    )
