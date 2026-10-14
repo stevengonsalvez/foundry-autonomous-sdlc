@@ -678,7 +678,7 @@ def test_uncaptured_release_does_not_produce_404_images() -> None:
 
         # Every image tag in the generated HTML MUST exist on disk in out_dir (no 404s)
         for src in img_srcs:
-            clean_src = src.lstrip("./")
+            clean_src = src.removeprefix("./")
             file_on_disk = out_dir / clean_src
             msg = f"Image referenced in HTML does not exist (would 404): {src}"
             assert file_on_disk.exists(), msg
