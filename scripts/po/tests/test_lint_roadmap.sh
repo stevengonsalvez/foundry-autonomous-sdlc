@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# Note: Linux-only test suite (relies on GNU mktemp --suffix and coreutils).
+#
 # Test suite for scripts/po/lint_roadmap.sh verifying that strict validation
 # catches invalid roadmap mutations:
 # 1. Path traversal: app/../.github/workflows/ci.yml
@@ -6,6 +8,11 @@
 # 3. Invalid cost class: XXL
 # 4. Incomplete acceptance criteria: '1. TBD'
 # 5. Short acceptance criteria under 3 words: '1. Fix bug'
+# 6. Malformed header without colon: '### ITEM-001 feat(web): test item'
+# 7. Two paths on one Files Touched line: '  - `app/web/a.ts` `app/web/b.ts`'
+# 8. Unindented non-app sibling line under Files Touched: '- non/app/file'
+# 9. Invalid non-field line inside item block
+# 10. TBD anywhere inside acceptance criteria text
 
 set -euo pipefail
 
@@ -73,7 +80,7 @@ run_mutation_test "Rejects path traversal with '..'" \
 NO_BACKTICKS_CONTENT="${BASE_VALID_ITEM/- \`app\/web\/src\/App.tsx\`/- app\/web\/src\/App.tsx}"
 run_mutation_test "Rejects path without backticks" \
   "$NO_BACKTICKS_CONTENT" \
-  "must be enclosed in backticks"
+  "must match.*with exactly one backtick pair"
 
 # 3. Invalid cost class: XXL
 XXL_CONTENT="${BASE_VALID_ITEM/Cost Class\*\*: S/Cost Class\*\*: XXL}"
@@ -85,13 +92,44 @@ run_mutation_test "Rejects Cost Class XXL" \
 TBD_CONTENT="${BASE_VALID_ITEM/This is a valid acceptance criterion with more than three words./TBD}"
 run_mutation_test "Rejects acceptance criteria equal to TBD" \
   "$TBD_CONTENT" \
-  "cannot be TBD"
+  "cannot contain TBD"
 
 # 5. Acceptance criterion under 3 words
 SHORT_CONTENT="${BASE_VALID_ITEM/This is a valid acceptance criterion with more than three words./Fix bug}"
 run_mutation_test "Rejects acceptance criteria under 3 words" \
   "$SHORT_CONTENT" \
   "too short \(under 3 words\)"
+
+# 6. Malformed header without colon
+NO_COLON_CONTENT="${BASE_VALID_ITEM/ITEM-001:/ITEM-001}"
+run_mutation_test "Rejects header without colon" \
+  "$NO_COLON_CONTENT" \
+  "Malformed item header"
+
+# 7. Two paths on one Files Touched line
+TWO_PATHS_CONTENT="${BASE_VALID_ITEM/- \`app\/web\/src\/App.tsx\`/- \`app\/web\/src\/App.tsx\` \`app\/web\/src\/Other.tsx\`}"
+run_mutation_test "Rejects two paths on one Files Touched line" \
+  "$TWO_PATHS_CONTENT" \
+  "must match.*with exactly one backtick pair"
+
+# 8. Unindented non-app sibling line under Files Touched
+UNINDENTED_CONTENT="${BASE_VALID_ITEM/- \`app\/web\/src\/App.tsx\`/- non\/app\/file.ts}"
+run_mutation_test "Rejects unindented non-app sibling line" \
+  "$UNINDENTED_CONTENT" \
+  "must match.*with exactly one backtick pair"
+
+# 9. Invalid non-field line inside item block
+NON_FIELD_CONTENT="${BASE_VALID_ITEM/Cost Class\*\*: S/Cost Class**: S
+Invalid random non-field text line}"
+run_mutation_test "Rejects invalid non-field line inside item block" \
+  "$NON_FIELD_CONTENT" \
+  "Invalid non-field line inside item block"
+
+# 10. TBD embedded anywhere in acceptance criteria text
+EMBEDDED_TBD_CONTENT="${BASE_VALID_ITEM/This is a valid acceptance criterion with more than three words./This implementation is TBD until next sprint}"
+run_mutation_test "Rejects TBD anywhere in acceptance criteria" \
+  "$EMBEDDED_TBD_CONTENT" \
+  "cannot contain TBD"
 
 echo "----------------------------------------"
 if [ "$failures" -gt 0 ]; then
