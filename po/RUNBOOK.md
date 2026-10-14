@@ -88,10 +88,10 @@ Every execution cycle enforces the following security boundaries (verified by `s
    - Permitted commands:
      - `gh issue create`, `gh issue comment`, `gh issue edit`, `gh issue close`, `gh issue list`, `gh issue view`
      - `gh pr list`, `gh pr view` (read-only)
-     - `gh api` (GET requests only on this repository)
-     - `git fetch origin state main`, `git show origin/state:state.json`, `git show origin/main:po/ROADMAP.md`
-     - `jq`, `cat`
-   - *Credential Risk Note*: The machine uses an account-wide `gh` CLI credential. This accepted risk is mitigated by strictly enforcing the command allow-list in the persona definition and automated lint checks.
+     - `gh api --method GET repos/stevengonsalvez/foundry-autonomous-sdlc/*` (read-only endpoints only)
+     - `git fetch origin main state`, `git show origin/state:state.json`, `git show origin/main:po/ROADMAP.md`
+     - `jq` (stdin filter only, never with file arguments)
+   - *Credential Risk Note*: The machine uses an account-wide `gh` CLI credential. This accepted risk is mitigated by strictly enforcing the command allow-list in the persona definition and automated lint checks (`scripts/po/lint_persona.sh`), which enforce a strict deny-list preventing write commands, PR merges, or unauthorized access to other repositories.
 5. **Spend Cap Protection**:
    - NEVER raise a spend cap.
    - NEVER instruct the orchestrator to continue past the 22.00 USD halt limit.
