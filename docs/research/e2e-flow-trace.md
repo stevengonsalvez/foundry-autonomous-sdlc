@@ -29,3 +29,10 @@ Tracing ONE feature (Issue #83: `feat(web): display event location pin in parcel
     - **After**: 0 open escalations (`open: false`), 19 resolved (`resolved: { ... }`).
     - Commit `cd2e4724fbde870949cd15dffcd4ad31889ee718` on branch `state`: `ledger: reconcile +34 events (seq 771)`.
     - Control center escalation queue count dropped from 19 to 0.
+- **Hosted Coder Redeployment (Post PR 85)**:
+  - PR [#85](https://github.com/stevengonsalvez/foundry-autonomous-sdlc/pull/85) merged to `main` at `4dfb483`.
+  - Clean checkout of latest `origin/main` (`4dfb483`).
+  - Dry run performed: `deploy_agents.py --dry-run hosted --only sdlc-coder` (succeeded).
+  - Deployed `sdlc-coder` version 20 (active at 20:27:18Z, CPU=2, Memory=4Gi, Idle=10m, egress policy `off`).
+  - Verified with `deploy_agents.py status`: `agent sdlc-coder: hosted version 20 active principal -`.
+  - Verified with `deploy_agents.py smoke`: two 404 unknown_job checks passed in session `0431885634846db100Z4uz8DzLZqgvB1NNS1A9S2FeJitGjhVl`.
