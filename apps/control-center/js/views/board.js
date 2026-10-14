@@ -87,7 +87,7 @@ function ticketChip(ticket, nowMs, lens) {
   }[stateTone] ?? stateTone;
   const isPr = ticket.kind === 'pr';
   const chipNumText = isPr ? `PR #${ticket.issue}` : `#${ticket.issue}`;
-  const chipNum = h('span', { class: 'chip-num', title: chipNumText }, chipNumText);
+  const chipNum = h('span', { class: 'chip-num', title: chipNumText, 'aria-hidden': isPr ? 'true' : undefined }, chipNumText);
   const srText = isPr ? `PR #${ticket.issue}, ${stateSrText}` : stateSrText;
   const chipDot = h('span', { class: `chip-dot dot-${stateTone}`, 'aria-hidden': 'true', title: stateSrText }, stateGlyphs[stateTone]);
   const chipAgent = h('span', { class: 'chip-agent', title: agentName || 'unassigned' }, tag);
