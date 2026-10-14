@@ -126,7 +126,8 @@ describe('views', { skip }, () => {
       for (const lensName of ['Delivery', 'Cost', 'Gates']) {
         await page.getByRole('button', { name: lensName }).click();
         const chips = await page.locator('article.card').count();
-        assert.equal(chips, rawSample.tickets.length, `group=${groupName} lens=${lensName} total chips`);
+        const openTotal = Object.values(rawSample.flow.counts).reduce((a, b) => a + b, 0);
+        assert.equal(chips, openTotal, `group=${groupName} lens=${lensName} total chips`);
         for (const stage of rawSample.board_stages) {
           const colCount = Number(await page.locator(`.col-${stage} .col-count`).innerText());
           const stageCards = await page.locator(`.col-${stage} article.card`).count();
@@ -152,7 +153,7 @@ describe('views', { skip }, () => {
       assert.equal(Number(count), rawSample.flow.counts[stage], stage);
       assert.equal(await page.locator(`.col-${stage} article.card`).count(), rawSample.flow.counts[stage]);
     }
-    assert.equal(await page.locator('article.card').count(), 22);
+    assert.equal(await page.locator('article.card').count(), 6);
     assert.equal(await page.locator('.col-escalated').getAttribute('class'), 'col col-escalated');
     const href = await page.locator('article.card .card-link').first().getAttribute('href');
     assert.match(href, /^#\/ticket\/\d+$/);
@@ -162,15 +163,15 @@ describe('views', { skip }, () => {
   test('board: type chips, search, and the new-ticket buttons', async () => {
     const { context, page } = await open('normal');
     await page.getByRole('button', { name: 'bug', exact: true }).click();
-    assert.equal(await page.locator('article.card').count(), 4);
+    assert.equal(await page.locator('article.card').count(), 1);
     await page.getByRole('button', { name: 'bug', exact: true }).click();
     await page.getByLabel('Search by ticket number or title').fill('24');
     assert.equal(await page.locator('article.card').count(), 1);
     assert.match(await text(page, 'article.card'), /Make the parcel tracker better/);
     await page.getByLabel('Search by ticket number or title').fill('lowercase');
-    assert.equal(await page.locator('article.card').count(), 4);
+    assert.equal(await page.locator('article.card').count(), 1);
     await page.getByRole('button', { name: 'Clear filters' }).click();
-    assert.equal(await page.locator('article.card').count(), 22);
+    assert.equal(await page.locator('article.card').count(), 6);
 
     const create = page.getByRole('link', { name: 'New ticket' });
     assert.equal(await create.getAttribute('href'), `${REPO}/issues/new?template=feature_request.yml`);

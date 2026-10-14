@@ -113,7 +113,7 @@ function renderPage({ navigated }) {
 
   const saved = navigated ? null : captureViewport();
   const ctx = { state: snap.state, pending: snap.pending, now: Date.now(), rerender: () => renderPage({ navigated: false }) };
-  shell.setEscalations(snap.state.tickets.filter((t) => t.escalation !== null).length);
+  shell.setEscalations(snap.state.tickets.filter((t) => t.escalation !== null && !t.escalation.resolved).length);
   show(viewFor(route, ctx));
   lastView = { route: location.hash, key: dataKey(snap), pendingKey: pendingKey(snap) };
   if (navigated) {
@@ -126,7 +126,7 @@ function renderPage({ navigated }) {
 
 function announce(snap) {
   const { tickets } = snap.state;
-  const escalated = tickets.filter((t) => t.stage === 'escalated').length;
+  const escalated = tickets.filter((t) => t.stage === 'escalated' && !t.escalation?.resolved).length;
   live.textContent = `Data updated: ${formatInteger(tickets.length)} ${plural(tickets.length, 'ticket')}, ${formatInteger(escalated)} escalated.`;
 }
 
