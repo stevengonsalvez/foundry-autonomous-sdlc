@@ -94,6 +94,7 @@ Merged commit `8137c60` deployed to `/staging/`. Playwright smoke test fails on 
 | [`docs/cd.md`](docs/cd.md) | Staging, smoke, soak, promote and rollback |
 | [`docs/runbook.md`](docs/runbook.md) | Bootstrap, deploy, operate, tear down |
 | [`docs/research/sandboxing-security-options.md`](docs/research/sandboxing-security-options.md) | Security review, threat model and sandboxing options for the coder, with a phased plan |
+| [`docs/research/foundry-evaluations.md`](docs/research/foundry-evaluations.md), [`docs/research/foundry-evaluations-demo.md`](docs/research/foundry-evaluations-demo.md) | Agent evaluations research, options matrix, proof run against demo project, and options demo walkthrough |
 | [`docs/app-spec.md`](docs/app-spec.md) | Spec of the parcel tracker demo app |
 | [`docs/poc-spec.md`](docs/poc-spec.md), [`docs/poc-findings.md`](docs/poc-findings.md) | The earlier Actions-driven proof of concept: spec and findings |
 | [`docs/explainer/`](docs/explainer/README.md) | Visual explainer of the whole system |
