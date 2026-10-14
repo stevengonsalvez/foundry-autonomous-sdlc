@@ -410,6 +410,11 @@ def default_responses() -> dict[str, Responder]:
                            "test_files": ["app/web/tests/home-page.test.tsx"]},
         "sdlc-release-notes": ("### Highlights\n- Shipped the change.\n\n### Changes\n- feat: change\n\n"
                                "### Quality\n- Tests added."),
+        "sdlc-ui-tester": {
+            "verdict": "pass",
+            "findings": [],
+            "summary": "No visual UI anomalies detected across viewports.",
+        },
     }
 
 
@@ -533,6 +538,7 @@ class FakeFoundry:
         self.clock = clock
         self.latency_s = 0.0          # simulated model latency, charged to the clock
         self.calls: list[tuple[str, str]] = []
+        self.image_calls: list[tuple[str, str, list[str] | None]] = []
         self.hosted: list[tuple[str, dict[str, Any], str | None]] = []
         self.scripts: dict[str, list[Responder]] = {}
         self.defaults = default_responses()
@@ -547,8 +553,20 @@ class FakeFoundry:
     def agent_calls(self, agent: str) -> list[str]:
         return [text for name, text in self.calls if name == agent]
 
-    def call_prompt_agent(self, agent: str, input_text: str, *, max_output_tokens: int = 8000) -> AgentResult:
+    def agent_image_parts(self, agent: str) -> list[list[dict[str, Any]]]:
+        parts_list: list[list[dict[str, Any]]] = []
+        for name, text, urls in self.image_calls:
+            if name == agent and urls:
+                parts: list[dict[str, Any]] = [{"type": "input_text", "text": text}]
+                for u in urls:
+                    parts.append({"type": "input_image", "image_url": u})
+                parts_list.append(parts)
+        return parts_list
+
+    def call_prompt_agent(self, agent: str, input_text: str, *, image_urls: list[str] | None = None,
+                          max_output_tokens: int = 8000) -> AgentResult:
         self.calls.append((agent, input_text))
+        self.image_calls.append((agent, input_text, image_urls))
         if self.clock is not None and self.latency_s:
             self.clock.advance(self.latency_s)
         if agent in self.errors:

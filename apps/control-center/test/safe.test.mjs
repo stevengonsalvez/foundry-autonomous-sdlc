@@ -2,6 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
 import { cleanSha, commitUrl, isSafeHref, issueUrl, limitText, positiveInt, pullUrl, releaseUrl, resolveDataParam, safeGithubUrl } from '../js/safe.js';
+import { classToken } from '../js/dom.js';
 
 const REPO = 'https://github.com/stevengonsalvez/foundry-autonomous-sdlc';
 
@@ -74,4 +75,17 @@ test('limitText flattens control characters and caps the length', () => {
   assert.equal(limitText('x'.repeat(5000), 10).length, 10);
   assert.equal(limitText('x'.repeat(5000), 10).endsWith('\u2026'), true);
   assert.equal(limitText(null), '');
+});
+
+test('classToken sanitizes hostile and malformed tokens to bounded [a-z0-9-]', () => {
+  assert.equal(classToken('x is-stale'), 'x-is-stale');
+  assert.equal(classToken('Backlog'), 'backlog');
+  assert.equal(classToken('DEPLOY_FAILED'), 'deploy-failed');
+  assert.equal(classToken('  --leading-and-trailing--  '), 'leading-and-trailing');
+  assert.equal(classToken('<script>alert(1)</script>'), 'script-alert-1-script');
+  assert.equal(classToken('a'.repeat(60)).length, 32);
+  assert.equal(classToken(null), '');
+  assert.equal(classToken(undefined), '');
+  assert.equal(classToken(''), '');
+  assert.equal(classToken('!!!'), '');
 });

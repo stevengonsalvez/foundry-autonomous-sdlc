@@ -8,7 +8,7 @@ import { after, before, describe, test } from 'node:test';
 import assert from 'node:assert/strict';
 
 import { FIXED_NOW, VIEWS, launch, loadPlaywright, openFixed } from './browser.mjs';
-import { startServer } from './dev-server.mjs';
+import { startServer } from '../scripts/dev-server.mjs';
 import { PAYLOADS, makeHostile } from './hostile.mjs';
 import { rawIssues, rawSample } from './helpers.mjs';
 
@@ -25,7 +25,7 @@ const REPO = 'https://github.com/stevengonsalvez/foundry-autonomous-sdlc';
 
 before(async () => {
   if (!browser) return;
-  for (const state of ['normal', 'empty', 'missing', 'bad-version', 'invalid-json', 'http-500', 'hostile']) servers[state] = await startServer({ state, fixed: true });
+  for (const state of ['normal', 'empty', 'missing', 'bad-version', 'invalid-json', 'http-500', 'hostile', 'edge']) servers[state] = await startServer({ state, fixed: true });
   servers.stale = await startServer({ state: 'stale' });
   servers.live = await startServer({ state: 'normal' });
 });
@@ -80,6 +80,100 @@ describe('views', { skip }, () => {
     });
   }
 
+  async function findMissingClasses(page, label) {
+    assert.equal(await page.locator('.error-panel').count(), 0, `no error panel rendered on ${label}`);
+    return page.evaluate(() => {
+      const sheetClasses = new Set();
+      for (const sheet of document.styleSheets) {
+        try {
+          for (const rule of sheet.cssRules) {
+            if (rule.selectorText) {
+              for (const m of rule.selectorText.matchAll(/\.([a-zA-Z0-9_-]+)/g)) {
+                sheetClasses.add(m[1]);
+              }
+            }
+          }
+        } catch {
+          // Ignore cross-origin stylesheet errors
+        }
+      }
+      const domClasses = new Set();
+      for (const el of document.querySelectorAll('*')) {
+        for (const c of el.classList) {
+          domClasses.add(c);
+        }
+      }
+      const notFound = [];
+      for (const c of domClasses) {
+        if (!sheetClasses.has(c)) notFound.push(c);
+      }
+      return notFound;
+    });
+  }
+
+  test('DOM crawl: asserts every class on every rendered element across all views, lenses and groups has a CSS rule', async () => {
+    const targets = [
+      ...VIEWS.map(([, hash]) => hash),
+      '#/ticket/24',
+      '#/ticket/23',
+      '#/ticket/25',
+      '#/ticket/5',
+    ];
+
+    const missingAcrossViews = [];
+
+    // Crawl all standard views and ticket variations across normal and edge fixtures
+    for (const state of ['normal', 'edge']) {
+      for (const hash of targets) {
+        const { context, page } = await open(state, { hash, width: 1440, height: 900 });
+        await page.waitForSelector('#app[aria-busy="false"] .view');
+        const missing = await findMissingClasses(page, `${state} ${hash}`);
+        if (missing.length > 0) {
+          missingAcrossViews.push({ target: `${state} ${hash}`, missing });
+        }
+        await context.close();
+      }
+    }
+
+    // Crawl hostile fixture across views and tickets
+    const hostileTargets = [
+      ...VIEWS.map(([, hash]) => hash),
+      '#/ticket/24',
+      '#/ticket/25',
+      '#/ticket/5',
+    ];
+    for (const hash of hostileTargets) {
+      const { context, page } = await open('hostile', { hash, width: 1440, height: 900 });
+      await page.waitForSelector('#app[aria-busy="false"] .view');
+      const missing = await findMissingClasses(page, `hostile ${hash}`);
+      if (missing.length > 0) {
+        missingAcrossViews.push({ target: `hostile ${hash}`, missing });
+      }
+      await context.close();
+    }
+
+    // Crawl all board lens and group combinations across normal and edge fixtures
+    for (const state of ['normal', 'edge']) {
+      const { context, page } = await open(state, { hash: '#/', width: 1440, height: 900 });
+      await page.waitForSelector('#app[aria-busy="false"] .view');
+
+      for (const group of ['Type', 'Agent', 'Outcome']) {
+        await page.getByRole('button', { name: group }).click();
+        for (const lens of ['Delivery', 'Cost', 'Gates']) {
+          await page.getByRole('button', { name: lens }).click();
+          const target = `${state} board group=${group} lens=${lens}`;
+          const missing = await findMissingClasses(page, target);
+          if (missing.length > 0) {
+            missingAcrossViews.push({ target, missing });
+          }
+        }
+      }
+      await context.close();
+    }
+
+    assert.deepEqual(missingAcrossViews, [], 'Every element class rendered across all views, lenses and groups must have a rule in document.styleSheets');
+  });
+
   test('delivery flow matrix: lens and group switching, macrobands, unclassified and pending ticket rendering', async () => {
     const { context, page } = await open('normal');
 
@@ -90,6 +184,17 @@ describe('views', { skip }, () => {
       await bands.evaluateAll((els) => els.map((e) => e.getAttribute('data-band'))),
       ['shape', 'build', 'release', 'escalated'],
     );
+
+    // 1b. Matrix cells have aria-labelledby referencing valid lane and column headers
+    const cells = await page.locator('.matrix-cell').all();
+    assert.ok(cells.length > 0, 'matrix cells rendered');
+    for (const cell of cells) {
+      const labelledBy = await cell.getAttribute('aria-labelledby');
+      assert.ok(labelledBy, 'matrix-cell must have aria-labelledby');
+      const [laneId, colId] = labelledBy.split(' ');
+      assert.ok(laneId?.startsWith('lane-'), `lane ID "${laneId}" must start with lane-`);
+      assert.ok(colId?.startsWith('col-'), `col ID "${colId}" must start with col-`);
+    }
 
     // 2. Lens switching changes the DOM
     const costBtn = page.getByRole('button', { name: 'Cost' });
@@ -143,6 +248,182 @@ describe('views', { skip }, () => {
       assert.deepEqual(violations, [], 'axe matrix violations');
     }
 
+    await context.close();
+  });
+
+  test('all aria-labelledby tokens across board matrix resolve to existing elements in document, including hostile fixture', async () => {
+    for (const state of ['normal', 'edge', 'hostile']) {
+      const { context, page } = await open(state, { hash: '#/' });
+      await page.waitForSelector('#app[aria-busy="false"] .view');
+
+      for (const group of ['type', 'agent', 'outcome']) {
+        const label = group.charAt(0).toUpperCase() + group.slice(1);
+        const btn = page.locator(`.ctrl-group button:has-text("${label}")`);
+        assert.equal(await btn.count(), 1, `button for group ${group} must exist and be unique on ${state}`);
+        await btn.click();
+        await page.waitForTimeout(50);
+        assert.equal(await btn.getAttribute('aria-pressed'), 'true', `group button ${group} must have aria-pressed=true after click on ${state}`);
+
+        const evaluation = await page.evaluate(() => {
+          const missing = [];
+          const allIds = new Set();
+          const duplicateIds = [];
+          for (const el of document.querySelectorAll('[id]')) {
+            if (allIds.has(el.id)) duplicateIds.push(el.id);
+            allIds.add(el.id);
+          }
+
+          const cellAudits = [];
+          for (const el of document.querySelectorAll('.matrix-cell[aria-labelledby]')) {
+            const raw = el.getAttribute('aria-labelledby') || '';
+            const tokens = raw.trim().split(/\s+/).filter(Boolean);
+            const el0 = tokens[0] ? document.getElementById(tokens[0]) : null;
+            const el1 = tokens[1] ? document.getElementById(tokens[1]) : null;
+            if (!el0) missing.push({ id: tokens[0], tag: el.tagName, class: el.className });
+            if (!el1) missing.push({ id: tokens[1], tag: el.tagName, class: el.className });
+
+            const isLaneName = el0 ? el0.classList.contains('lane-name') : false;
+            const laneName = el0 ? el0.innerText.trim() : '';
+            const stageTitle = el1 ? el1.innerText.trim() : '';
+            const accessibleName = [laneName, stageTitle].filter(Boolean).join(' ');
+
+            cellAudits.push({
+              tokens,
+              isLaneName,
+              laneName,
+              stageTitle,
+              accessibleName,
+            });
+          }
+
+          return { missing, duplicateIds, cellAudits };
+        });
+
+        assert.deepEqual(evaluation.duplicateIds, [], `all IDs must be unique on ${state} with group=${group}`);
+        assert.deepEqual(evaluation.missing, [], `all aria-labelledby tokens must resolve to elements on ${state} with group=${group}`);
+
+        assert.ok(evaluation.cellAudits.length > 0, 'must have matrix cells');
+        for (const cell of evaluation.cellAudits) {
+          assert.equal(cell.tokens.length, 2, 'cell aria-labelledby must contain exactly 2 tokens (lane name and stage title)');
+          assert.equal(cell.isLaneName, true, 'first token in aria-labelledby must point directly to an element with class .lane-name');
+          assert.equal(cell.accessibleName, `${cell.laneName} ${cell.stageTitle}`, 'accessible name must strictly match laneName + " " + stageTitle');
+          assert.ok(cell.laneName.length > 0, 'lane name must not be empty');
+          assert.ok(cell.stageTitle.length > 0, 'stage title must not be empty');
+        }
+      }
+
+      await context.close();
+    }
+  });
+
+  test('in every lens at 360, 1280 and 1440, chip lens right edge stays inside chip content box, chip head items are single line, and lens does not overflow', async () => {
+    for (const width of [360, 1280, 1440]) {
+      const height = width === 360 ? 640 : 900;
+      const { context, page } = await open('normal', { width, height });
+      await page.waitForSelector('#app[aria-busy="false"] .view-board');
+
+      for (const lens of ['delivery', 'cost', 'gates']) {
+        const lensBtn = page.getByRole('button', { name: lens.charAt(0).toUpperCase() + lens.slice(1) });
+        await lensBtn.click();
+        await page.waitForTimeout(50);
+
+        const check = await page.evaluate(() => {
+          const chips = Array.from(document.querySelectorAll('.chip-pill'));
+          const failures = [];
+          for (const chip of chips) {
+            const chipRect = chip.getBoundingClientRect();
+            const chipStyle = window.getComputedStyle(chip);
+            const pr = parseFloat(chipStyle.paddingRight) || 0;
+            const br = parseFloat(chipStyle.borderRightWidth) || 0;
+            const contentBoxRight = chipRect.right - pr - br;
+
+            // Every chip-head visible child must be one line (height <= 18.5px)
+            for (const child of chip.querySelectorAll('.chip-head > *:not(.sr-only)')) {
+              const r = child.getBoundingClientRect();
+              if (r.width > 0 && r.height > 18.5) {
+                failures.push({
+                  type: 'head_child_multiline',
+                  tag: child.tagName,
+                  className: child.className,
+                  text: child.textContent,
+                  height: r.height,
+                });
+              }
+            }
+
+            const lensEl = chip.querySelector('.chip-lens');
+            if (lensEl) {
+              const lensRect = lensEl.getBoundingClientRect();
+              if (lensRect.right > contentBoxRight + 0.5) {
+                failures.push({
+                  type: 'lens_overflow_content_box',
+                  chipText: chip.innerText.slice(0, 30),
+                  contentBoxRight,
+                  lensRight: lensRect.right,
+                  diff: lensRect.right - contentBoxRight,
+                });
+              }
+              if (lensEl.scrollWidth > lensEl.clientWidth + 0.5) {
+                failures.push({
+                  type: 'lens_scroll_overflow',
+                  scrollWidth: lensEl.scrollWidth,
+                  clientWidth: lensEl.clientWidth,
+                });
+              }
+              for (const desc of lensEl.querySelectorAll('*')) {
+                if (desc.scrollWidth > desc.clientWidth + 0.5) {
+                  failures.push({
+                    type: 'desc_scroll_overflow',
+                    tag: desc.tagName,
+                    className: desc.className,
+                    text: desc.textContent,
+                    scrollWidth: desc.scrollWidth,
+                    clientWidth: desc.clientWidth,
+                  });
+                }
+              }
+            }
+          }
+          return { chipCount: chips.length, failures };
+        });
+
+        assert.ok(check.chipCount > 0, `must have chips at width=${width} lens=${lens}`);
+        assert.deepEqual(check.failures, [], `no chip lens overflow or multiline wrapping at width=${width} lens=${lens}`);
+      }
+
+      await context.close();
+    }
+  });
+
+  test('matrix swimlane rows align horizontally with zero vertical drift across all columns', async () => {
+    const { context, page } = await open('normal', { width: 1440, height: 900 });
+    await page.waitForSelector('#app[aria-busy="false"] .view-board');
+
+    const driftCheck = await page.evaluate(() => {
+      const laneHeads = Array.from(document.querySelectorAll('.matrix-spine .lane-head'));
+      const cols = Array.from(document.querySelectorAll('.col'));
+      const rowDrifts = [];
+
+      for (let i = 0; i < laneHeads.length; i++) {
+        const headRect = laneHeads[i].getBoundingClientRect();
+        for (const col of cols) {
+          const cells = col.querySelectorAll('.matrix-cell');
+          const cell = cells[i];
+          if (cell) {
+            const cellRect = cell.getBoundingClientRect();
+            const topDiff = Math.abs(cellRect.top - headRect.top);
+            const bottomDiff = Math.abs(cellRect.bottom - headRect.bottom);
+            if (topDiff > 1.5 || bottomDiff > 1.5) {
+              rowDrifts.push({ laneIndex: i, topDiff, bottomDiff });
+            }
+          }
+        }
+      }
+      return { laneCount: laneHeads.length, rowDrifts };
+    });
+
+    assert.ok(driftCheck.laneCount > 0, 'must have lanes');
+    assert.deepEqual(driftCheck.rowDrifts, [], 'matrix cell row boundaries must align with lane headers');
     await context.close();
   });
 
@@ -598,6 +879,57 @@ describe('fetch strategy in the browser (scripted GitHub, no ?data=)', { skip },
     assert.equal(await page.locator('main img').count(), 0);
     assert.equal(await page.locator('.col-backlog .col-count').innerText(), '1');
     await context.close();
+  });
+
+  test('row hover non-fill cue bolds first cell in environments table and pending chip preserves dashed border on hover', async () => {
+    // 1. Environments table row hover bolds :is(td, th):first-child (which is a th)
+    const { context: envCtx, page: envPage } = await open('normal', { hash: '#/environments', width: 1280, height: 900 });
+    await envPage.waitForSelector('#app[aria-busy="false"] .view-environments');
+    const row = envPage.locator('.view-environments table.data tbody tr').first();
+    const firstCell = row.locator(':is(td, th):first-child');
+    const tag = await firstCell.evaluate((el) => el.tagName.toLowerCase());
+    assert.equal(tag, 'th', 'environments table first cell must be a th');
+
+    await row.hover();
+    await envPage.waitForTimeout(50);
+    const rowHover = await firstCell.evaluate((el) => {
+      const comp = window.getComputedStyle(el);
+      const trComp = window.getComputedStyle(el.closest('tr'));
+      return {
+        fontWeight: comp.fontWeight,
+        outlineStyle: trComp.outlineStyle,
+      };
+    });
+    assert.ok(rowHover.fontWeight === '700' || rowHover.fontWeight === 'bold', 'environments row first cell must become bold on hover');
+    assert.equal(rowHover.outlineStyle, 'solid', 'row hover must have solid outline non-fill cue');
+    await envCtx.close();
+
+    // 2. Pending card intake chip hover preserves dashed border
+    const issues = [
+      { number: 301, title: 'new intake item', user: { login: 'stevengonsalvez' }, created_at: '2026-10-11T20:06:40Z', updated_at: '2026-10-11T20:06:40Z' },
+    ];
+    const { context: pendingCtx, page: pendingPage } = await scripted({ rawDoc: at('2026-10-11T20:05:00Z'), apiDoc: at('2026-10-11T20:06:30Z'), issues });
+    const pendingChip = pendingPage.locator('.chip-pill.card-pending').first();
+    assert.equal(await pendingChip.count(), 1, 'card-pending chip must be rendered');
+
+    const preHover = await pendingChip.evaluate((el) => window.getComputedStyle(el).borderTopStyle);
+    assert.equal(preHover, 'dashed', 'pending chip must have dashed border before hover');
+
+    await pendingChip.hover();
+    await pendingPage.waitForTimeout(50);
+
+    const postHover = await pendingChip.evaluate((el) => {
+      const s = window.getComputedStyle(el);
+      return {
+        borderStyle: s.borderTopStyle,
+        outlineStyle: s.outlineStyle,
+        outlineWidth: s.outlineWidth,
+      };
+    });
+    assert.equal(postHover.borderStyle, 'dashed', 'pending chip border must remain dashed on hover');
+    assert.equal(postHover.outlineStyle, 'solid', 'pending chip must display outline on hover');
+    assert.ok(parseFloat(postHover.outlineWidth) >= 1, 'outline width must be at least 1px');
+    await pendingCtx.close();
   });
 
   test('rate budget: under 15 remaining the API is left alone, raw keeps polling', async () => {

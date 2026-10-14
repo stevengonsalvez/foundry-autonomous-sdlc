@@ -219,6 +219,22 @@ Test globs: `**/*.test.ts`, `**/*.test.tsx`, `**/*.spec.ts`, `app/e2e/**`, `**/t
 
 The orchestrator merges a PR only when all of the following hold on the PR head sha: all six checks `success`, a review marker `<!-- sdlc-review:v1 {"verdict":"approve","head":"<sha>"} -->` from the reviewer agent for exactly that sha, the PR and its issue are owner-authored, cost is under the cap, the branch is `agent/*` or the PR is labelled `maintenance:test-repair`, and every file the PR changes (including rename sources) is under `app/`. The last rule applies to every PR the orchestrator merges, because for `pull_request` events GitHub runs the workflow files from the PR head, so a PR touching `.github/` could weaken its own checks; a violation escalates `escalated:build-failed` at once. Check runs GitHub ties to the PR win over other runs on the same sha (a fork PR cannot override them). Merge method is a merge commit (keeps commit order visible on `main`). The ruleset enforces the six checks again server-side with no bypass actors, so the orchestrator cannot merge around them.
 
+## UI Testing and Proof
+
+Deterministic UI visual testing runs alongside every pull request as an advisory capability. It consists of two phases:
+
+1. **Capture and Proof (Phase 1)**:
+   - **Capture**: `scripts/ui/capture.mjs` starts the built web application against a mocked carrier backend with reduced motion and fixed viewports. Playwright captures four routes (`home`, `parcel-found`, `not-found`, `invalid-input`) at desktop (1280x800) and mobile (390x844). Zero external network egress is permitted. The script writes 8 PNGs and `manifest.json` recording route, viewport, size and SHA-256 hash.
+   - **CI Job**: The `ui-screenshots` job in `.github/workflows/ci.yml` runs on `pull_request` (contents: read, no secrets) and uploads the artifact `ui-screenshots`. This job is NOT a required check and never blocks merges.
+   - **Publish Workflow**: `.github/workflows/ui-proof.yml` triggers via `workflow_run` after CI completes, executing from the trusted default branch with scoped permissions (`contents: write`, `pull-requests: write`). The workflow treats the uploaded artifact as untrusted input: `scripts/ui/validate_artifact.py` verifies file count, size bounds, filename patterns, PNG magic bytes, and SHA-256 hashes against the manifest.
+   - **Hosting on Branch**: Validated screenshots are committed to an orphan branch `pr-screenshots` under path `pr-<number>/<head sha 8>/`.
+   - **Comment**: `scripts/ui/publish_proof.py` creates or updates a single PR comment with marker `<!-- ui-proof:v1 -->` embedding `raw.githubusercontent.com` URLs in a collapsed table. PR screenshot directories for PRs closed more than 14 days ago are automatically pruned.
+
+2. **Vision Tester Agent (Phase 2)**:
+   - **Prompt Agent**: `sdlc-ui-tester` is defined with a strict JSON schema (`verdict` pass or concerns, `findings[]` with route, viewport, issue, severity, and `summary`).
+   - **Tick Integration**: Behind feature flag `UI_TESTER_ENABLED` (defaulting to 0/OFF), the orchestrator tick inspects open agent PRs. When a PR has a `<!-- ui-proof:v1 -->` comment and lacks a marker for the current head sha, the orchestrator invokes `sdlc-ui-tester` with image URLs and PR context, and posts `<!-- ui-tester:v1 <head_sha> -->` with its advisory evaluation.
+   - **Strictly Advisory**: The UI tester verdict never blocks required status checks or merge verification. Model spend for the vision tester is billed to the object ledger and counts toward the spend cap, which can push the issue to cost-cap escalation if exceeded.
+
 ## Release
 
 After a merge: the release-notes agent writes notes from the PR title, body and commits. The orchestrator computes the next version from existing tags (`vMAJOR.MINOR.PATCH`; feature bumps minor, bugfix and maintenance bump patch; first tag is `v0.1.0`), creates the tag on the merge commit and a GitHub Release with the notes, labels `stage:released` and closes the issue.
@@ -329,3 +345,4 @@ All run on the `sdlc-default` deployment (gpt-5-mini, GlobalStandard). All treat
 | `sdlc-triage` | bug report | `severity` s1..s4, `owner` web, api or carrier-mock, `summary`, `suspected_area` |
 | `sdlc-ci-triage` | failing check log, diff and the repo's test file list | `cause` stale-test or real-bug, `explanation`, `test_files[]` |
 | `sdlc-release-notes` | PR title, body, commits | markdown notes |
+| `sdlc-ui-tester` | PR details and screenshot image URLs from `pr-screenshots` branch | `verdict` pass or concerns, `findings[]` with route, viewport, issue, severity; advisory only |

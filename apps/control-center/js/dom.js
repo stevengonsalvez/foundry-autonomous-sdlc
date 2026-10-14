@@ -7,6 +7,15 @@ import { isSafeHref, limitText, safeGithubUrl } from './safe.js';
 const SVG_NS = 'http://www.w3.org/2000/svg';
 const CSS_LENGTH = /^-?\d+(\.\d+)?(%|px|rem|em|deg)?$/;
 
+/** Sanitize an arbitrary data string into a safe, bounded CSS class token. */
+export function classToken(val) {
+  return String(val ?? '')
+    .toLowerCase()
+    .replace(/[^a-z0-9-]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 32);
+}
+
 function setAttribute(el, key, value) {
   if (value === undefined || value === null || value === false) return;
   if (key === 'style' || key === 'srcdoc' || /^on/i.test(key)) {
@@ -81,9 +90,12 @@ export function chartHost(draw, className = '') {
 
 // ----------------------------------------------------------------- small components
 
+export const BADGE_TONES = Object.freeze(['good', 'bad', 'warn', 'info', 'neutral']);
+
 export function badge(text, tone = 'neutral', className = '') {
+  const safeTone = BADGE_TONES.includes(tone) ? tone : 'neutral';
   // Badges hold short labels; the text can come from the data, so it is capped.
-  return h('span', { class: `badge tone-${tone} ${className}`.trim() }, limitText(text, 48));
+  return h('span', { class: `badge tone-${safeTone} ${className}`.trim() }, limitText(text, 48));
 }
 
 /** An external link into this repository, or plain text when the URL is not acceptable. */

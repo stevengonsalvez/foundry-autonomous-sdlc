@@ -145,7 +145,7 @@ function tickStrip(state, now) {
   );
 }
 
-const RESULT_TONE = { ok: 'good', error: 'bad', deferred: 'warn', capped: 'warn' };
+export const RESULT_TONE = Object.freeze({ ok: 'good', error: 'bad', deferred: 'warn', capped: 'warn' });
 
 function tickObjects(state) {
   const tick = state.ledger.last_tick;

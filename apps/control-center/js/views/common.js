@@ -1,16 +1,19 @@
 // Pieces shared by several views. Untrusted text goes in as children (text nodes) only; links
 // come from the validators in safe.js or from the ticket number.
 
-import { badge, ghLink, h } from '../dom.js';
+import { badge, classToken, ghLink, h } from '../dom.js';
 import { icon } from '../icons.js';
-import { escalationLabel, formatDuration, formatTimestamp, formatUsd, parseTime, shortSha, titleCase } from '../format.js';
+import { escalationLabel, formatDuration, formatDurationCompact, formatTimestamp, formatUsd, parseTime, shortSha, titleCase } from '../format.js';
 import { commitUrl, dataLink, issueUrl, pullUrl, releaseUrl, safeGithubUrl } from '../safe.js';
 import { costBand, stageLabel } from '../model.js';
+import { BOARD_STAGES } from '../schema.js';
 
 export const ticketHref = (issue) => `#/ticket/${issue}`;
 
+export const MODE_TONES = Object.freeze(['auto', 'gate', 'sim', 'manual']);
+
 /** CSS class for a board stage: `st-fill-*` (SVG fill), `st-bg-*` (background), `st-text-*` (text). */
-export const stageFill = (stage) => `st-fill-${stage}`;
+export const stageFill = (stage) => `st-fill-${BOARD_STAGES.includes(stage) ? stage : 'backlog'}`;
 
 /** GitHub URL of a ticket: the one in the data when it points into this repo, else built from its number. */
 export function ticketGithubUrl(ticket) {
@@ -31,7 +34,7 @@ export const runLink = (url) => dataLink(url);
 
 export function modeBadge(mode) {
   const m = String(mode).toUpperCase();
-  const tone = m === 'AUTO' ? 'auto' : m === 'GATE' ? 'gate' : m === 'SIM' ? 'sim' : 'manual';
+  const tone = m === 'AUTO' ? MODE_TONES[0] : m === 'GATE' ? MODE_TONES[1] : m === 'SIM' ? MODE_TONES[2] : MODE_TONES[3];
   return h('span', { class: `mode-badge mode-${tone}` }, m);
 }
 
@@ -87,13 +90,13 @@ export function segmentedControl(items, current, onChange, ariaLabel = '') {
 
 // ------------------------------------------------------------------ badges
 
-const TYPE_TONE = { feature: 'info', bug: 'bad', maintenance: 'neutral', unclassified: 'neutral' };
+export const TYPE_TONE = Object.freeze({ feature: 'info', bug: 'bad', maintenance: 'neutral', unclassified: 'neutral' });
 
 export function typeBadge(type) {
   return badge(type === 'unclassified' ? 'New' : type, TYPE_TONE[type] ?? 'neutral', 'badge-type');
 }
 
-const ENV_BADGE = { staging: ['Staging', 'info'], prod: ['In production', 'good'], 'rolled-back': ['Rolled back', 'bad'] };
+export const ENV_BADGE = Object.freeze({ staging: ['Staging', 'info'], prod: ['In production', 'good'], 'rolled-back': ['Rolled back', 'bad'] });
 
 export function envBadge(env) {
   const entry = ENV_BADGE[env];
@@ -108,7 +111,8 @@ export function envBadgeFor(ticket) {
 }
 
 export function stageBadge(stage) {
-  return h('span', { class: `badge badge-stage st-text-${stage}` }, h('span', { class: `sdot st-bg-${stage}`, 'aria-hidden': 'true' }), stageLabel(stage));
+  const token = BOARD_STAGES.includes(stage) ? stage : 'backlog';
+  return h('span', { class: `badge badge-stage st-text-${token}` }, h('span', { class: `sdot st-bg-${token}`, 'aria-hidden': 'true' }), stageLabel(stage));
 }
 
 const FLAGS = {
@@ -189,15 +193,18 @@ export function seconds(iso, nowMs) {
 }
 
 /** A running duration since `iso`, kept current by the page ticker. */
-export function sinceEl(iso, nowMs) {
+export function sinceEl(iso, nowMs, compact = false) {
   const s = seconds(iso, nowMs);
   if (s === null) return h('span', { class: 'muted' }, '-');
-  return h('time', { datetime: iso, title: `since ${formatTimestamp(iso)}`, 'data-since': iso }, formatDuration(s));
+  const full = formatDuration(s);
+  const text = compact ? formatDurationCompact(s) : full;
+  return h('time', { datetime: iso, title: `since ${formatTimestamp(iso)} (${full})`, 'data-since': iso }, text);
 }
 
 // ------------------------------------------------------------------ deploy events
 
 const ENV_LABEL = { staging: 'staging', prod: 'production' };
+export const HOP_ACTIONS = Object.freeze(['stage', 'promote', 'rollback', 'skip', 'fail', 'legacy-publish']);
 
 export function hopTitle(hop) {
   const where = ENV_LABEL[hop.env] ?? hop.env;

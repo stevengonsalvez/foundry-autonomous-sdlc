@@ -130,7 +130,8 @@ class AgentResult:
 
 
 class FoundryPort(Protocol):
-    def call_prompt_agent(self, agent: str, input_text: str, *, max_output_tokens: int = 8000) -> AgentResult:
+    def call_prompt_agent(self, agent: str, input_text: str, *, image_urls: list[str] | None = None,
+                          max_output_tokens: int = 8000) -> AgentResult:
         """Invoke a prompt agent by name (latest version) and return its text. Raises on non-completed responses."""
         ...
 

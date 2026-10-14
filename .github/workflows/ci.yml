@@ -354,6 +354,7 @@ jobs:
           scripts/gates scripts/tests/gates scripts/cd scripts/tests/cd
           scripts/setup_repo.py scripts/tests/test_setup_repo.py
           scripts/verify_egress.py scripts/tests/test_verify_egress.py
+          scripts/ui scripts/tests/ui
 
   # Not a required check: the Python agents package.
   agents:
@@ -385,3 +386,41 @@ jobs:
 
       - name: Lint
         run: uvx --from "ruff==$RUFF_VERSION" ruff check .
+
+  # Not a required check: capture UI screenshots and upload as workflow artifact for ui-proof.
+  ui-screenshots:
+    name: ui-screenshots
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+
+      - name: Install
+        working-directory: app
+        run: npm ci
+
+      - name: Install Chromium
+        working-directory: app
+        run: npx playwright install --with-deps chromium
+
+      - name: Capture screenshots
+        env:
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: node scripts/ui/capture.mjs --out-dir ui-screenshots
+
+      - name: Upload UI screenshots artifact
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: ui-screenshots
+          path: ui-screenshots
+          if-no-files-found: error
+          retention-days: 7
