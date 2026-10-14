@@ -38,7 +38,7 @@
       "pass": 8
     }
   },
-  "generated_at": "2026-10-14T12:45:40Z",
+  "generated_at": "2026-10-14T12:45:52Z",
   "issues": [
     {
       "closed_at": "2026-10-10T12:28:43Z",
@@ -1897,9 +1897,9 @@
     "escalated": 19,
     "issues": 26,
     "ledger_usd": 0.288108,
-    "orchestrator_usd": 2.947964,
+    "orchestrator_usd": 2.958212,
     "released": 6,
-    "usd": 4.938356
+    "usd": 4.948604
   },
   "version": 1
 }
