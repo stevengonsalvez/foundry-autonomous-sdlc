@@ -30,17 +30,29 @@ check_fail() {
 echo "Linting $PERSONA_FILE for autonomous SDLC guardrails..."
 
 # Check 0a: No em-dashes (Unicode \u2014) or en-dashes (\u2013)
-if grep -P "[\x{2014}\x{2013}]" "$PERSONA_FILE" >/dev/null 2>&1; then
-  check_fail "No em-dashes" "Found Unicode em-dash or en-dash in file"
-else
+if python3 -c '
+import sys
+with open(sys.argv[1], "r", encoding="utf-8") as f:
+    text = f.read()
+if "\u2014" in text or "\u2013" in text:
+    sys.exit(1)
+' "$PERSONA_FILE" >/dev/null 2>&1; then
   check_pass "No em-dashes or en-dashes"
+else
+  check_fail "No em-dashes" "Found Unicode em-dash or en-dash in file"
 fi
 
 # Check 0b: No forbidden self-referential terms
-if grep -iP "\b(as an A[I]|artificial intelligenc[e]|\bLL[M]\b)\b" "$PERSONA_FILE" >/dev/null 2>&1; then
-  check_fail "No forbidden mentions" "Found forbidden self-referential terms"
-else
+if python3 -c '
+import sys, re
+with open(sys.argv[1], "r", encoding="utf-8") as f:
+    text = f.read()
+if re.search(r"\b(as an A[I]|artificial intelligenc[e]|\bLL[M]\b)\b", text, re.IGNORECASE):
+    sys.exit(1)
+' "$PERSONA_FILE" >/dev/null 2>&1; then
   check_pass "No forbidden mentions"
+else
+  check_fail "No forbidden mentions" "Found forbidden self-referential terms"
 fi
 
 # Guardrail (a): Untrusted data and author restriction (stevengonsalvez)

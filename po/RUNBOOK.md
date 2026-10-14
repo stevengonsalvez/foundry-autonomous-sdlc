@@ -89,7 +89,7 @@ Every execution cycle enforces the following security boundaries (verified by `s
      - `gh issue create`, `gh issue comment`, `gh issue edit`, `gh issue close`, `gh issue list`, `gh issue view`
      - `gh pr list`, `gh pr view` (read-only)
      - `gh api` (GET requests only on this repository)
-     - `git fetch origin state`, `git show origin/state:state.json`
+     - `git fetch origin state main`, `git show origin/state:state.json`, `git show origin/main:po/ROADMAP.md`
      - `jq`, `cat`
    - *Credential Risk Note*: The machine uses an account-wide `gh` CLI credential. This accepted risk is mitigated by strictly enforcing the command allow-list in the persona definition and automated lint checks.
 5. **Spend Cap Protection**:
@@ -100,9 +100,13 @@ Every execution cycle enforces the following security boundaries (verified by `s
    - NEVER instruct a re-release of a rolled-back build.
    - Retrying deployment is permitted only after a NEW fix PR exists and passes all 6 gates on main.
    - The persona posts failure findings on the ticket and files a dedicated fix issue.
-7. **Single Issue Intake**:
+7. **Single Issue Intake and Deduplication**:
    - At most ONE new issue filed per scheduled run, and only when the repository is verified idle.
    - Requires conventional title, problem description, testable acceptance criteria, and explicit link to a real gap in `app/`, `apps/control-center`, `docs`, `scenarios`, or `scripts`.
+   - Verify that the idea has not been filed before and has not been rejected in `po/MEMORY.md`.
+   - Check existing issues idempotently via `gh issue list --state all --search '"Roadmap item: ITEM-0NN" in:body'`.
+   - Every roadmap issue body must contain the exact marker line: `Roadmap item: ITEM-0NN`.
+   - *Taxonomy Requirement*: The repository maintainer must ensure labels `simulated-human` and `needs-maintainer` exist in GitHub taxonomy before execution, as `gh issue create --label` aborts if a specified label does not exist.
 
 ---
 
@@ -115,20 +119,28 @@ Each item in `po/ROADMAP.md` is structured with:
 - **Identifier**: Standard prefix (`ITEM-001`, `ITEM-002`, ...).
 - **Title**: Conventional commit style (`feat(web): ...` or `feat(api): ...`).
 - **User Value**: Concrete user or stakeholder benefit.
-- **Testable Acceptance Criteria**: Numbered, deterministic criteria with exact values and assertions.
-- **Files Touched**: Strictly restricted to paths under `app/` (`app/core`, `app/contracts`, `app/carrier-mock`, `app/api`, `app/web`, `app/e2e`). Agent pull requests touching files outside `app/` are blocked by the `agent-scope` gate.
+- **Testable Acceptance Criteria**: Numbered, deterministic criteria with exact values and assertions (minimum 3 words each, no TBDs).
+- **Files Touched**: Strictly restricted to paths under `app/` (`app/core`, `app/contracts`, `app/carrier-mock`, `app/api`, `app/web`, `app/e2e`). Every line must be backtick-enclosed (`- \`app/...\``). Agent pull requests touching files outside `app/` are blocked by the `agent-scope` gate.
 - **Dependencies**: Explicit list of prerequisite item IDs that must be completed before the item becomes eligible for intake.
-- **Cost Class**: Rough budget estimate (`S` under 1 USD, or `M`).
+- **Cost Class**:
+  - `S`: Small, focused change (single component, isolated helper, or test addition), budget under 1.00 USD (observed spend ~0.02 to 0.15 USD per ticket).
+  - `M`: Multi-component or cross-workspace change (storage persistence, i18n translation, responsive layout refactors, API pagination), budget 1.00 to 3.00 USD (observed spend ~0.15 to 0.32 USD per ticket; well within the 3.00 USD per-issue cap).
 - **Tags**: Functional groupings (`ui`, `accessibility`, `timeline`, `api`, `storage`, `theme`).
 - **Status**: `todo`, `filed`, or `done`.
 
 ### Intake and Selection Algorithm:
-1. **Dependency Resolution**: When the repository is idle and within spend limits, the persona inspects `po/ROADMAP.md` and filters for items whose dependencies are all satisfied (`done` in `po/ROADMAP.md` or marked `filed`/`done` in `po/MEMORY.md`).
-2. **Sequential Pick**: The persona takes the first unblocked `todo` item in sequential order.
-3. **Issue Creation**: The persona generates an issue containing the title, user story, acceptance criteria, and explicit `app/` scope, referencing the roadmap ID.
-4. **Memory Tracking**: The persona records the item as `filed` in `po/MEMORY.md` along with the created issue number.
-5. **PR-Only Modification**: The persona NEVER edits `po/ROADMAP.md` directly during scheduled runs. Changes to `po/ROADMAP.md` occur strictly through merged pull requests.
-6. **Maintainer Extension Rule**: If fewer than 5 `status: todo` items remain in `po/ROADMAP.md`, the persona files ONE issue titled `roadmap: extend po/ROADMAP.md` carrying the label `needs-maintainer` and pauses new feature intake until maintainers supply new roadmap items.
+1. **Canonical Source from origin/main**: The persona runs `git fetch origin main` and reads the roadmap via `git show origin/main:po/ROADMAP.md`. Because the persona runs in a persistent, resumed session, reading from `origin/main` ensures it immediately picks up newly merged roadmap PRs without relying on stale local worktree state.
+2. **Dependency Resolution**: When the repository is idle and within spend limits, the persona inspects the roadmap and verifies candidate dependencies against GitHub issues. A dependency counts as satisfied ONLY when its corresponding issue carries label `stage:released` or `stage:merged` (or status is `done` in the roadmap), NOT when merely filed.
+3. **Deduplication Check**: The persona searches GitHub via `gh issue list --state all --search '"Roadmap item: ITEM-0NN" in:body'` to verify the candidate item has not already been filed or closed.
+4. **Sequential Pick**: The persona takes the first unblocked `todo` item in sequential order that has not been filed.
+5. **Issue Creation**: The persona generates an issue containing the title, marker line `Roadmap item: ITEM-0NN`, user story, acceptance criteria, and explicit `app/` scope, referencing the roadmap ID.
+6. **Memory Tracking**: The persona records the item as `filed` in `po/MEMORY.md` along with the created issue number.
+7. **PR-Only Modification**: The persona NEVER edits `po/ROADMAP.md` directly during scheduled runs. Changes to `po/ROADMAP.md` occur strictly through merged pull requests.
+8. **Maintainer Extension Rule**: If fewer than 5 `status: todo` items remain unfiled in `po/ROADMAP.md`:
+   - The persona checks `gh issue list --label needs-maintainer --state open`.
+   - If an extension issue is already open, it does NOT file a duplicate.
+   - If none is open, it files ONE issue titled `roadmap: extend po/ROADMAP.md` carrying the labels `needs-maintainer,simulated-human` and pauses new feature intake until maintainers supply new roadmap items.
+   - *Rationale*: The roadmap-extend issue is owner-authored, so the SDLC tick (`agents/sdlc_agents/tick.py:332-350`) would process it as a feature and the coder would attempt to edit `po/ROADMAP.md` outside `app/`, triggering scope escalation. The `needs-maintainer` label flags it for human maintainer intervention.
 
 ---
 
