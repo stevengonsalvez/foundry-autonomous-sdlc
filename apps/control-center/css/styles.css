@@ -2032,7 +2032,7 @@ tr.agent.is-error .agent-name {
 .node-bad { fill: var(--surface-1); stroke: var(--tone-block); stroke-width: 2; }
 .node-core { fill: var(--tone-info); }
 .node-glyph { fill: none; stroke: var(--fg); stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
-.link { stroke: var(--fg-muted); stroke-opacity: 0.55; stroke-dasharray: 4 3; stroke-width: 2; fill: none; }
+.link { stroke: var(--fg-muted); stroke-opacity: 0.65; stroke-dasharray: 4 3; stroke-width: 2; fill: none; }
 .link-done { stroke: var(--tone-done); stroke-opacity: 1; stroke-dasharray: none; }
 
 .node-pulse {

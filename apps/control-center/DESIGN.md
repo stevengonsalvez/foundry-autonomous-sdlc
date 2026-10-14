@@ -133,7 +133,7 @@ Work items appear as dense two-line pill tokens in the matrix grid:
 In the ticket detail progression strip:
 - `.node-done`: Uses `var(--tone-done)` stroke for clear completion semantics.
 - `.node-current`: Uses `var(--tone-info)` stroke with pulsing indicator.
-- `.link`: Unfinished connector uses `var(--fg-muted)` at reduced opacity (0.55) with dashed stroke (`stroke-dasharray: 4 3`), achieving 5.1:1 contrast against `--surface-0` (exceeding WCAG AA non-text 3:1).
+- `.link`: Unfinished connector uses `var(--fg-muted)` at stroke-opacity 0.65 with dashed stroke (`stroke-dasharray: 4 3`), achieving 3.95:1 contrast against `--surface-0` (measured in Chromium by reading pixels, exceeding WCAG AA non-text 3:1).
 - `.link-done`: Completed connector uses solid stroke in `var(--tone-done)`.
 
 ### Spend Banner
