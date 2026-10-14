@@ -38,7 +38,7 @@
       "pass": 9
     }
   },
-  "generated_at": "2026-10-14T21:40:52Z",
+  "generated_at": "2026-10-14T21:45:37Z",
   "issues": [
     {
       "closed_at": "2026-10-10T12:28:43Z",
@@ -1977,21 +1977,58 @@
       ],
       "title": "feat(web): display event location pin in parcel timeline",
       "type": "feature"
+    },
+    {
+      "closed_at": null,
+      "coder_engine": null,
+      "coder_sessions_lost": 0,
+      "cost": {
+        "calls": 1,
+        "coder_model_usd": 0.0,
+        "coder_usd": 0.0,
+        "model_usd": 0.001209,
+        "usd": 0.001209
+      },
+      "deferred": null,
+      "escalation": null,
+      "gate_attempts": {},
+      "gates": {},
+      "kind": "issue",
+      "number": 89,
+      "opened_at": "2026-10-14T21:44:44Z",
+      "outcome": "open",
+      "owner": null,
+      "pr": null,
+      "quality_score": 90,
+      "release": null,
+      "resolution_seconds": null,
+      "scenario": "a",
+      "severity": null,
+      "stages": [
+        {
+          "entered_at": "2026-10-14T21:45:22Z",
+          "in_progress": true,
+          "seconds": 0,
+          "stage": "stage:ready"
+        }
+      ],
+      "title": "feat(web): add copy shareable parcel link button",
+      "type": "feature"
     }
   ],
   "ledger": {
-    "emitted_at": "2026-10-14T21:40:17Z",
+    "emitted_at": "2026-10-14T21:45:24Z",
     "reconciled_at": "2026-10-14T21:00:20Z"
   },
   "repo": "stevengonsalvez/foundry-autonomous-sdlc",
   "totals": {
     "deferred": 0,
     "escalated": 19,
-    "issues": 27,
-    "ledger_usd": 0.488874,
-    "orchestrator_usd": 4.526666,
+    "issues": 28,
+    "ledger_usd": 0.491304,
+    "orchestrator_usd": 4.538551,
     "released": 7,
-    "usd": 6.904643
+    "usd": 6.920167
   },
   "version": 1
 }
