@@ -583,8 +583,15 @@ main {
 }
 
 .timeline__where {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
   color: var(--ink-muted);
   font-size: var(--text-sm);
+}
+
+.timeline__where svg {
+  flex-shrink: 0;
 }
 
 .timeline__when {
