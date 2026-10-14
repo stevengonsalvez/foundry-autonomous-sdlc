@@ -137,8 +137,16 @@ def test_derive_resolution_cases() -> None:
     # None if no esc_at
     assert model.derive_resolution(esc_at=None, closed_at="2026-10-10T16:00:00Z", comments=None) is None
 
-    # Open issue, no marker
-    assert model.derive_resolution(esc_at=esc_at, closed_at=None, comments=[]) is None
+    # Open issue with escalated:* label and no marker stays unresolved (None)
+    assert (
+        model.derive_resolution(
+            esc_at=esc_at,
+            closed_at=None,
+            comments=[],
+            labels=("escalated:cost-cap",),
+        )
+        is None
+    )
 
     # Closed issue, no marker -> human, closed
     res = model.derive_resolution(esc_at=esc_at, closed_at="2026-10-10T16:00:00Z", comments=[])
@@ -162,15 +170,41 @@ def test_derive_resolution_cases() -> None:
     res = model.derive_resolution(esc_at=esc_at, closed_at=None, comments=comments, labels=())
     assert res == {"at": "2026-10-10T15:30:00Z", "by": "simulated-human", "how": "answered"}
 
+    # Open issue whose escalated:* label was removed with no marker comment -> human, answered at updated_at
+    res = model.derive_resolution(
+        esc_at=esc_at,
+        closed_at=None,
+        comments=[],
+        labels=(),
+        updated_at="2026-10-10T17:00:00Z",
+    )
+    assert res == {"at": "2026-10-10T17:00:00Z", "by": "human", "how": "answered"}
+
     # Non-owner marker comment -> resolved None
     non_owner_comments = [
         Comment(2, "other_user", "### Simulated human (antigravity)\nAnswer", "2026-10-10T15:30:00Z")
     ]
-    assert model.derive_resolution(esc_at=esc_at, closed_at=None, comments=non_owner_comments) is None
+    assert (
+        model.derive_resolution(
+            esc_at=esc_at,
+            closed_at=None,
+            comments=non_owner_comments,
+            labels=("escalated:cost-cap",),
+        )
+        is None
+    )
 
     # Comment with no timestamp is ignored
     no_time_comments = [Comment(3, OWNER, "### Simulated human (antigravity)\nAnswer", "")]
-    assert model.derive_resolution(esc_at=esc_at, closed_at=None, comments=no_time_comments) is None
+    assert (
+        model.derive_resolution(
+            esc_at=esc_at,
+            closed_at=None,
+            comments=no_time_comments,
+            labels=("escalated:cost-cap",),
+        )
+        is None
+    )
 
     # Closed-then-reopened with escalated label stays open
     res = model.derive_resolution(
@@ -186,6 +220,7 @@ def test_derive_resolution_cases() -> None:
         esc_at="2026-10-10T18:00:00Z",
         closed_at=None,
         comments=comments,
+        labels=("escalated:cost-cap",),
     )
     assert res is None
 
