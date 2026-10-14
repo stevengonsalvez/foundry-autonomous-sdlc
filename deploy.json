@@ -1,21 +1,21 @@
 {
   "version": 1,
   "staging": {
-    "sha": "fcac53daa3bd82fe7655ff4f2c02c224b3a2fe7c",
-    "short": "fcac53d",
-    "version": "main-fcac53d",
-    "built_at": "2026-10-14T20:53:47Z",
-    "deployed_at": "2026-10-14T20:54:06Z",
-    "run_id": 38634962484,
-    "run_url": "https://github.com/stevengonsalvez/foundry-autonomous-sdlc/actions/runs/38634962484",
-    "status": "promoted",
-    "pr": 87,
+    "sha": "ba44793a531c65b0d66f2271e282ac63b2766be1",
+    "short": "ba44793",
+    "version": "main-ba44793",
+    "built_at": "2026-10-14T22:18:48Z",
+    "deployed_at": "2026-10-14T22:19:04Z",
+    "run_id": 38646546617,
+    "run_url": "https://github.com/stevengonsalvez/foundry-autonomous-sdlc/actions/runs/38646546617",
+    "status": "deployed",
+    "pr": 88,
     "issue": null,
     "includes": [
       {
-        "pr": 87,
+        "pr": 88,
         "issue": null,
-        "sha": "fcac53daa3bd82fe7655ff4f2c02c224b3a2fe7c"
+        "sha": "ba44793a531c65b0d66f2271e282ac63b2766be1"
       }
     ]
   },
@@ -68,17 +68,6 @@
     ]
   },
   "history": [
-    {
-      "at": "2026-10-11T22:36:20Z",
-      "action": "fail",
-      "env": "staging",
-      "sha": "8137c6015abac2033e1962715727bd06618809a7",
-      "version": "main-8137c60",
-      "run_url": "https://github.com/stevengonsalvez/foundry-autonomous-sdlc/actions/runs/38180836579",
-      "reason": "job smoke failed",
-      "issue": null,
-      "pr": 46
-    },
     {
       "at": "2026-10-11T22:36:20Z",
       "action": "rollback",
@@ -1156,6 +1145,24 @@
           "pr": 87,
           "issue": null,
           "sha": "fcac53daa3bd82fe7655ff4f2c02c224b3a2fe7c"
+        }
+      ]
+    },
+    {
+      "at": "2026-10-14T22:19:04Z",
+      "action": "stage",
+      "env": "staging",
+      "sha": "ba44793a531c65b0d66f2271e282ac63b2766be1",
+      "version": "main-ba44793",
+      "run_url": "https://github.com/stevengonsalvez/foundry-autonomous-sdlc/actions/runs/38646546617",
+      "reason": "deployed to staging",
+      "issue": null,
+      "pr": 88,
+      "includes": [
+        {
+          "pr": 88,
+          "issue": null,
+          "sha": "ba44793a531c65b0d66f2271e282ac63b2766be1"
         }
       ]
     }
