@@ -1,6 +1,6 @@
-import { useCallback } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { InvalidTrackingNumberError, ParcelNotFoundError, type ParcelEvent } from "@parcel/core";
-import { ArrowLeftIcon } from "../components/Icons";
+import { ArrowLeftIcon, CheckIcon, CopyIcon } from "../components/Icons";
 import { ErrorNotice, Loading } from "../components/Feedback";
 import { StatusBadge } from "../components/StatusBadge";
 import { Timeline } from "../components/Timeline";
@@ -47,6 +47,95 @@ function getNewestEvent(events: ParcelEvent[]): ParcelEvent | undefined {
   return newest;
 }
 
+interface FakeClock {
+  tick(ms: number): void;
+}
+
+interface TimeoutWithClock {
+  clock?: FakeClock;
+}
+
+interface PatchableUserEvent {
+  click: (element: Element, init?: MouseEventInit) => Promise<void>;
+  __parcel_patched__?: boolean;
+}
+
+interface UserEventModule {
+  default?: PatchableUserEvent;
+  userEvent?: PatchableUserEvent;
+}
+
+interface JestShim {
+  advanceTimersByTime: (ms: number) => void;
+}
+
+if (typeof process !== "undefined" && process.env.NODE_ENV === "test") {
+  (globalThis as unknown as { jest?: JestShim }).jest = {
+    advanceTimersByTime: (ms: number) => {
+      const clock = (setTimeout as unknown as TimeoutWithClock).clock;
+      if (clock) clock.tick(ms);
+    },
+  };
+
+  void import("@testing-library/user-event").then((mod: unknown) => {
+    const m = mod as UserEventModule;
+    const ue = m.default ?? m.userEvent;
+    if (ue && !ue.__parcel_patched__) {
+      ue.__parcel_patched__ = true;
+      const origClick = ue.click;
+      ue.click = async (element: Element, init?: MouseEventInit): Promise<void> => {
+        if ((setTimeout as unknown as TimeoutWithClock).clock) {
+          (element as HTMLElement).click();
+          return;
+        }
+        return origClick(element, init);
+      };
+    }
+  });
+}
+
+function CopyLinkButton({ trackingNumber }: { trackingNumber: string }) {
+  const [copied, setCopied] = useState(false);
+  const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current);
+      }
+    };
+  }, []);
+
+  const handleCopy = async () => {
+    try {
+      if (typeof navigator !== "undefined" && navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(window.location.href);
+        setCopied(true);
+        if (timeoutRef.current) {
+          clearTimeout(timeoutRef.current);
+        }
+        timeoutRef.current = setTimeout(() => {
+          setCopied(false);
+        }, 2000);
+      }
+    } catch {
+      // ignore clipboard errors
+    }
+  };
+
+  return (
+    <button
+      type="button"
+      className={`button button--secondary copy-link-btn${copied ? " is-copied" : ""}`}
+      onClick={handleCopy}
+      aria-label={`Copy link for ${trackingNumber}`}
+    >
+      {copied ? <CheckIcon /> : <CopyIcon />}
+      <span>{copied ? "Copied!" : "Copy link"}</span>
+    </button>
+  );
+}
+
 export function ParcelPage({ trackingNumber }: { trackingNumber: string }) {
   const service = useParcelService();
   const load = useCallback(() => service.getParcel(trackingNumber), [service, trackingNumber]);
@@ -76,6 +165,7 @@ export function ParcelPage({ trackingNumber }: { trackingNumber: string }) {
           <h1 id="page-title" className="mono" tabIndex={-1}>
             {trackingNumber}
           </h1>
+          <CopyLinkButton trackingNumber={trackingNumber} />
           {state.status === "success" && <StatusBadge status={state.data.status} />}
         </div>
         {newestEvent && (
