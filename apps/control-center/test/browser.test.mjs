@@ -233,6 +233,14 @@ describe('views', { skip }, () => {
     const resolvedCards = page.locator('details.esc-resolved-disclosure .esc-card');
     assert.equal(await resolvedCards.count(), 16);
 
+    const domOrder = await page.evaluate(() => {
+      const openList = document.querySelector('.view > .esc-list');
+      const disclosure = document.querySelector('details.esc-resolved-disclosure');
+      if (!openList || !disclosure) return false;
+      return Boolean(openList.compareDocumentPosition(disclosure) & Node.DOCUMENT_POSITION_FOLLOWING);
+    });
+    assert.equal(domOrder, true, 'open .esc-list must appear before details.esc-resolved-disclosure in DOM');
+
     await page.goto(`${servers.normal.url}?data=state.json#/ticket/2`);
     await page.waitForSelector('.ticket-head');
     const ticketResolved = page.locator('.esc-meta');
