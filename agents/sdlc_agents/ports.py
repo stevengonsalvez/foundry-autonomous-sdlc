@@ -31,7 +31,6 @@ class Issue:
     closed_at: str | None = None
     is_pull_request: bool = False
     updated_at: str | None = None
-    reopened_at: str | None = None
 
 
 @dataclass(frozen=True)

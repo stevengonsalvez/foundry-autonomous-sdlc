@@ -1518,7 +1518,6 @@ class _Tick:
                 state_data=obj.st.data, comment_ids=comment_ids,
                 comments=obj.comments,
                 updated_at=getattr(obj.item, "updated_at", None),
-                reopened_at=getattr(obj.item, "reopened_at", None),
             )
             self.pending_events[obj.item.number] = ledger_events.make(
                 "ticket.updated", ticket["updated_at"], {"ticket": ticket}, issue=obj.item.number)

@@ -573,7 +573,7 @@ def _flow(doc: dict[str, Any], now: str) -> dict[str, Any]:
         s: sum(
             1
             for t in tickets
-            if t["stage"] == s and (s != "escalated" or (t.get("escalation") or {}).get("open", True))
+            if t["stage"] == s and (s != "escalated" or (t.get("escalation") or {}).get("resolved") is None)
         )
         for s in model.BOARD_STAGES
     }
@@ -634,10 +634,9 @@ def finalise(doc: dict[str, Any], now: str) -> dict[str, Any]:
     for t in doc["tickets"]:
         t = overlay(t, doc.get("deploy"))
         if t.get("escalation"):
-            if "resolved" not in t["escalation"]:
-                t["escalation"]["resolved"] = None
-            if "open" not in t["escalation"]:
-                t["escalation"]["open"] = t["escalation"]["resolved"] is None
+            res = model.clean_resolved(t["escalation"].get("resolved"))
+            t["escalation"]["resolved"] = res
+            t["escalation"]["open"] = res is None
         saved = doc.get("summaries", {}).get(str(t["issue"]))
         if saved and saved.get("digest") == t.get("digest"):
             t["summary"] = saved["text"]

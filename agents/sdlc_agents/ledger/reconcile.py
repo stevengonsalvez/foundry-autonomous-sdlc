@@ -70,9 +70,6 @@ def build_ticket(
                 ]
         except GitHubError:
             pr_info = None
-    reopened_at = getattr(item, "reopened_at", None)
-    if reopened_at is None and previous and previous.get("closed_at") and item.closed_at is None:
-        reopened_at = item.updated_at
 
     return model.ticket(
         number=item.number,
@@ -88,7 +85,6 @@ def build_ticket(
         comment_ids=ids,
         comments=comments,
         updated_at=getattr(item, "updated_at", None),
-        reopened_at=reopened_at,
     ), None
 
 

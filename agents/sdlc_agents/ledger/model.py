@@ -306,21 +306,25 @@ def derive_resolution(
     esc_at: str | None,
     closed_at: str | None,
     comments: list[Any] | None,
-    reopened_at: str | None = None,
     labels: tuple[str, ...] | list[str] = (),
 ) -> dict[str, Any] | None:
     """Derive resolution for an escalation from GitHub closed status and comments."""
     if not esc_at:
         return None
 
-    # Check marker comments at or after latest of esc_at and reopened_at
-    cutoff = max(esc_at, reopened_at) if reopened_at else esc_at
+    has_esc_label = any(lbl.startswith("escalated:") for lbl in labels) or DEPLOY_FAILED_LABEL in labels
+
+    # A ticket is resolved ONLY when closed or when it no longer has an escalated:* label
+    if not closed_at and has_esc_label:
+        return None
+
+    # Check marker comments at or after esc_at
     marker_comments = []
     for c in comments or []:
         if getattr(c, "author", None) != OWNER:
             continue
         c_at = getattr(c, "created_at", None)
-        if not c_at or c_at < cutoff:
+        if not c_at or c_at < esc_at:
             continue
         c_body = getattr(c, "body", "") or ""
         if c_body.lstrip().startswith("### " + SIMULATED_HUMAN_MARKER):
@@ -334,8 +338,8 @@ def derive_resolution(
             "how": "closed",
         }
 
-    # Case 2: Open issue with simulated human answer comment after escalation / reopen
-    if marker_comments:
+    # Case 2: Open issue whose escalated:* label was removed and answered by simulated human
+    if not closed_at and not has_esc_label and marker_comments:
         first_at = marker_comments[0][0]
         return {
             "at": first_at,
@@ -431,7 +435,6 @@ def ticket(
     summary: str | None = None,
     comments: list[Any] | None = None,
     updated_at: str | None = None,
-    reopened_at: str | None = None,
 ) -> dict[str, Any]:
     """Build one ticket record. `state_data` is the parsed state comment (None before the first tick)."""
     data = state_data or {}
@@ -491,12 +494,13 @@ def ticket(
     if escalation is not None:
         resolved_val = None
         if comments is not None or closed_at is not None:
-            resolved_val = derive_resolution(
-                esc_at=esc_at,
-                closed_at=closed_at,
-                comments=comments,
-                reopened_at=reopened_at,
-                labels=labels,
+            resolved_val = clean_resolved(
+                derive_resolution(
+                    esc_at=esc_at,
+                    closed_at=closed_at,
+                    comments=comments,
+                    labels=labels,
+                )
             )
         escalation["resolved"] = resolved_val
         escalation["open"] = resolved_val is None

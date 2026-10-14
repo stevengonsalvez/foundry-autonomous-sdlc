@@ -181,8 +181,7 @@ class FakeGitHub:
     def _issue(self, number: int) -> Issue:
         i = self.issues[number]
         return Issue(number, i["title"], i["body"], i["author"], tuple(i["labels"]), i["state"],
-                     i["created_at"], i["closed_at"], i["is_pr"], updated_at=i.get("updated_at"),
-                     reopened_at=i.get("reopened_at"))
+                     i["created_at"], i["closed_at"], i["is_pr"], updated_at=i.get("updated_at"))
 
     def list_issues(self, *, state: str = "open", labels: tuple[str, ...] = ()) -> list[Issue]:
         self._record("list_issues")
