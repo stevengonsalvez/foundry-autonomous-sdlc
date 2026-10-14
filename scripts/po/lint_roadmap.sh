@@ -76,6 +76,19 @@ def lint_roadmap(roadmap_file: str) -> int:
     else:
         ok("No forbidden mentions")
 
+    # Check 2b: No forbidden verbs or spend wording across the whole file (including preamble, titles, comments)
+    forbidden_patterns = [
+        (r"\bgh\s+pr\s+merge\b", "Forbidden command 'gh pr merge'"),
+        (r"--admin\b", "Forbidden flag '--admin'"),
+        (r"\bpush\s+to\s+main\b", "Forbidden action 'push to main'"),
+        (r"\bgit\s+push\b", "Forbidden command 'git push'"),
+        (r"\b(raise|increase)\s+(the\s+)?(cap|budget)\b", "Forbidden spend action 'raise/increase the cap or budget'"),
+        (r"\bmerge\b", "Forbidden verb/term 'merge'"),
+    ]
+    for pattern, desc in forbidden_patterns:
+        if re.search(pattern, content, re.IGNORECASE):
+            fail(f"Found forbidden wording in {roadmap_file}: {desc}")
+
     # Check 3: Strict header regex on all lines starting with # and containing ITEM-
     for line_idx, line in enumerate(content.splitlines(), 1):
         if re.search(r"^\s*#+\s*ITEM-", line):
@@ -102,7 +115,8 @@ def lint_roadmap(roadmap_file: str) -> int:
         if item_id in items:
             fail(f"Duplicate item ID detected: {item_id}")
 
-        fields_present: set[str] = set()
+        fields_seen: list[str] = []
+        status_count = 0
         current_field: str | None = None
         status_val: str = ""
         cost_val: str = ""
@@ -124,16 +138,18 @@ def lint_roadmap(roadmap_file: str) -> int:
                 field_value = field_m.group(2).strip()
                 if field_name not in ALLOWED_FIELDS:
                     fail(f"{item_id}: Unknown field '- **{field_name}**:'")
-                fields_present.add(field_name)
+                fields_seen.append(field_name)
                 current_field = field_name
 
-                if field_name in ("Files Touched", "Acceptance Criteria"):
+                if field_name == "Status":
+                    status_count += 1
+                    status_val = field_value.lower()
+                    if status_count > 1:
+                        fail(f"{item_id}: Duplicate '- **Status**:' line detected; exactly one Status field allowed per item")
+                elif field_name in ("Files Touched", "Acceptance Criteria"):
                     if field_value:
                         fail(f"{item_id}: Inline value forbidden on '- **{field_name}**: {field_value}'. Items must be listed on indented child lines.")
                     continue
-
-                if field_name == "Status":
-                    status_val = field_value.lower()
                 elif field_name == "Cost Class":
                     cost_val = field_value
                 elif field_name == "Dependencies":
@@ -173,10 +189,22 @@ def lint_roadmap(roadmap_file: str) -> int:
             else:
                 fail(f"{item_id}: Invalid non-field line inside item block: '{stripped}'")
 
-        # Validate mandatory fields
-        for req_field in ALLOWED_FIELDS:
-            if req_field not in fields_present:
-                fail(f"{item_id}: Missing mandatory field '- **{req_field}**:'")
+        # Validate exact fixed field order
+        ORDERED_FIELDS = [
+            "Status",
+            "Dependencies",
+            "Cost Class",
+            "Tags",
+            "Gap Anchor",
+            "User Value",
+            "Files Touched",
+            "Acceptance Criteria",
+        ]
+        if fields_seen != ORDERED_FIELDS:
+            fail(f"{item_id}: Fields must appear in exact fixed order {ORDERED_FIELDS}. Found: {fields_seen}")
+
+        if status_count != 1:
+            fail(f"{item_id}: Exactly one Status field required per item. Found: {status_count}")
 
         # Validate status
         if status_val not in ("todo", "filed", "done"):
