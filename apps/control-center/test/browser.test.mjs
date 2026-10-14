@@ -254,21 +254,57 @@ describe('views', { skip }, () => {
     for (const state of ['normal', 'edge', 'hostile']) {
       const { context, page } = await open(state, { hash: '#/' });
       await page.waitForSelector('#app[aria-busy="false"] .view');
-      const unresolved = await page.evaluate(() => {
-        const missing = [];
-        for (const el of document.querySelectorAll('[aria-labelledby]')) {
-          const raw = el.getAttribute('aria-labelledby') || '';
-          const tokens = raw.trim().split(/\s+/).filter(Boolean);
-          for (const id of tokens) {
-            const targetEl = document.getElementById(id);
-            if (!targetEl) {
-              missing.push({ id, tag: el.tagName, class: el.className });
-            }
+
+      for (const group of ['type', 'agent', 'outcome']) {
+        if (group !== 'type') {
+          const btn = page.locator(`.ctrl-group button:has-text("${group.charAt(0).toUpperCase() + group.slice(1)}")`);
+          if (await btn.count() > 0) {
+            await btn.click();
+            await page.waitForTimeout(50);
           }
         }
-        return missing;
-      });
-      assert.deepEqual(unresolved, [], `all aria-labelledby tokens must resolve to elements on ${state}`);
+
+        const evaluation = await page.evaluate(() => {
+          const missing = [];
+          const allIds = new Set();
+          const duplicateIds = [];
+          for (const el of document.querySelectorAll('[id]')) {
+            if (allIds.has(el.id)) duplicateIds.push(el.id);
+            allIds.add(el.id);
+          }
+
+          const cellAudits = [];
+          for (const el of document.querySelectorAll('.matrix-cell[aria-labelledby]')) {
+            const raw = el.getAttribute('aria-labelledby') || '';
+            const tokens = raw.trim().split(/\s+/).filter(Boolean);
+            const resolvedParts = [];
+            for (const id of tokens) {
+              const targetEl = document.getElementById(id);
+              if (!targetEl) {
+                missing.push({ id, tag: el.tagName, class: el.className });
+              } else {
+                resolvedParts.push(targetEl.innerText.trim());
+              }
+            }
+            cellAudits.push({
+              tokens,
+              accessibleName: resolvedParts.join(' '),
+            });
+          }
+
+          return { missing, duplicateIds, cellAudits };
+        });
+
+        assert.deepEqual(evaluation.duplicateIds, [], `all IDs must be unique on ${state} with group=${group}`);
+        assert.deepEqual(evaluation.missing, [], `all aria-labelledby tokens must resolve to elements on ${state} with group=${group}`);
+
+        assert.ok(evaluation.cellAudits.length > 0, 'must have matrix cells');
+        for (const cell of evaluation.cellAudits) {
+          assert.equal(cell.tokens.length, 2, 'cell aria-labelledby must contain exactly 2 tokens (lane name and stage title)');
+          assert.ok(cell.accessibleName.length > 0, 'cell accessible name must not be empty');
+        }
+      }
+
       await context.close();
     }
   });

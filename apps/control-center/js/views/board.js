@@ -311,9 +311,9 @@ function laneSpine(lanes) {
     ...lanes.map((l) =>
       h(
         'div',
-        { class: 'lane-head', id: l.id, 'data-lane': l.key, role: 'columnheader' },
+        { class: 'lane-head', 'data-lane': l.key, role: 'columnheader' },
         h('span', { class: `lane-dot dot-${l.tone}`, 'aria-hidden': 'true' }),
-        h('span', { class: 'lane-name' }, l.label),
+        h('span', { class: 'lane-name', id: l.id }, l.label),
         h('span', { class: 'lane-sub' }, l.sub),
       ),
     ),
