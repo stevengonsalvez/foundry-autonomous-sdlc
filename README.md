@@ -108,7 +108,7 @@ Live repository views: [issues](https://github.com/stevengonsalvez/foundry-auton
 
 ## The gates
 
-Every agent PR must pass six required checks on the exact head commit before the orchestrator may merge it, and GitHub enforces the same six server side (branch ruleset `main-gates`, no bypass actors):
+Every agent PR must pass seven required checks on the exact head commit before the orchestrator may merge it, and GitHub enforces the same seven server side (branch ruleset `main-gates`, no bypass actors):
 
 | Check | Passes when |
 |-------|-------------|
@@ -118,6 +118,7 @@ Every agent PR must pass six required checks on the exact head commit before the
 | `gitleaks` | no secrets in the PR range |
 | `tdd-order` | the first commit is tests only, the tests fail for the right reason (an assertion, not a load error), and later commits do not edit them |
 | `agent-scope` | an agent branch only touches `app/` |
+| `evals` | deterministic replay of recorded requirement-gate outputs matches golden expectations |
 
 On top of that the orchestrator requires a review marker from the independent review agent for the same head commit, owner authorship, a cost under the cap, and that every changed file is under `app/`.
 
@@ -141,6 +142,7 @@ Design decisions are in [`docs/decisions.md`](docs/decisions.md), measured facts
 |------|------|
 | [`app/`](app/) | The parcel tracker: `core`, `carrier-mock` (OpenAPI), `api`, `web` (React, Vite), `e2e` (Playwright) |
 | [`agents/`](agents/) | Orchestrator logic, prompt agent definitions, the coder runtime and the hosted agent entry points |
+| [`evals/`](evals/) | Offline requirement-gate replay and mutation tests (blocking CI gate) |
 | [`infra/terraform/`](infra/terraform/) | Foundry, Key Vault, observability and budget modules, plus a remote-state bootstrap |
 | [`scripts/`](scripts/) | Deploy script, repo setup, merge gate scripts, scenario runner, evidence collector, Pages assembly |
 | [`dashboard/`](dashboard/) | The static metrics dashboard |
