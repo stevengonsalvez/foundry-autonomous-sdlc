@@ -35,7 +35,6 @@ The loop participates in the repository state machine using these exact labels:
 | Label Category | Labels | Meaning / Action |
 |---|---|---|
 | **Identity** | `simulated-human` | Mandatory on every issue filed or comment posted by this persona. Header `### Simulated human (antigravity)` is required. |
-| **Maintainer** | `needs-maintainer` | Applied to `roadmap: extend po/ROADMAP.md` when fewer than 5 `todo` items remain in `po/ROADMAP.md`. |
 | **Stage** | `stage:needs-refinement` | Requirement scored < 80. Persona wears Requirements Answerer hat to supply answers. |
 | | `stage:ready` | Requirements passed gate (>= 80). Waiting for feasibility check. |
 | | `stage:feasible` | Feasibility passed. Test designer agent generates failing tests. |
@@ -49,7 +48,7 @@ The loop participates in the repository state machine using these exact labels:
 | | `escalated:deploy-failed` | CD smoke or soak failed; build rolled back. Persona comments findings and files fix issue. |
 | | `escalated:requirements` | Two refinement rounds failed to reach 80. Persona reframes or closes. |
 | | `escalated:build-failed` | Coder exhausted attempts or CI check timeout. Persona reviews diagnostics. |
-| | `escalated:agent-error` | Non-transient failure streak. Persona investigates. |
+| | `escalated:agent-error` | Agent output streak failure (e.g. invalid test generation). Persona posts finding with `<!-- po-answered:v1 -->` and closes issue. |
 | **Triage** | `bug:triaged`, `severity:s1`..`s4`, `owner:web`, `owner:api`, `owner:carrier-mock` | Applied by Triage Lead hat on `type:bug` issues. |
 | **Type** | `type:feature`, `type:bug`, `type:maintenance` | Work item type categorization. |
 
@@ -102,11 +101,11 @@ Every execution cycle enforces the following security boundaries (verified by `s
    - The persona posts failure findings on the ticket and files a dedicated fix issue.
 7. **Single Issue Intake and Deduplication**:
    - At most ONE new issue filed per scheduled run, and only when the repository is verified idle.
-   - Requires conventional title, problem description, testable acceptance criteria, and explicit link to a real gap in `app/`, `apps/control-center`, `docs`, `scenarios`, or `scripts`.
-   - Verify that the idea has not been filed before and has not been rejected in `po/MEMORY.md`.
+   - Requires conventional title, problem description, testable acceptance criteria, and explicit link to a real gap in `app/`.
+   - Check open issues and recent closed issues before creating a new one.
    - Check existing issues idempotently via `gh issue list --state all --search '"Roadmap item: ITEM-0NN" in:body'`.
    - Every roadmap issue body must contain the exact marker line: `Roadmap item: ITEM-0NN`.
-   - *Taxonomy Requirement*: The repository maintainer must ensure labels `simulated-human` and `needs-maintainer` exist in GitHub taxonomy before execution, as `gh issue create --label` aborts if a specified label does not exist.
+   - *Taxonomy Requirement*: The repository maintainer must ensure label `simulated-human` exists in GitHub taxonomy before execution. If missing, the persona logs `BLOCKED: label simulated-human missing, maintainer must create it` and plans no command.
 
 ---
 
@@ -136,21 +135,21 @@ Each item in `po/ROADMAP.md` is structured with:
 5. **Issue Creation**: The persona generates an issue containing the title, marker line `Roadmap item: ITEM-0NN`, user story, acceptance criteria, and explicit `app/` scope, referencing the roadmap ID.
 6. **Memory Tracking**: The persona records the item as `filed` in `po/MEMORY.md` along with the created issue number.
 7. **PR-Only Modification**: The persona NEVER edits `po/ROADMAP.md` directly during scheduled runs. Changes to `po/ROADMAP.md` occur strictly through merged pull requests.
-8. **Maintainer Extension Rule**: If fewer than 5 `status: todo` items remain unfiled in `po/ROADMAP.md`:
-   - The persona checks `gh issue list --label needs-maintainer --state open`.
-   - If an extension issue is already open, it does NOT file a duplicate.
-   - If none is open, it files ONE issue titled `roadmap: extend po/ROADMAP.md` carrying the labels `needs-maintainer,simulated-human` and pauses new feature intake until maintainers supply new roadmap items.
-   - *Rationale*: The roadmap-extend issue is owner-authored, so the SDLC tick (`agents/sdlc_agents/tick.py:332-350`) would process it as a feature and the coder would attempt to edit `po/ROADMAP.md` outside `app/`, triggering scope escalation. The `needs-maintainer` label flags it for human maintainer intervention.
+8. **Maintainer Extension Logging**: If fewer than 5 `status: todo` items remain unfiled in `po/ROADMAP.md`:
+   - The persona records a one-line request to its run log: `Roadmap extension requested: fewer than 5 todo items remaining (N left in po/ROADMAP.md). Maintainer extension needed.`
+   - It does NOT file an issue for roadmap extension (as any owner issue enters the SDLC machine, triggering scope failures against `po/ROADMAP.md`).
+   - It continues intake with the remaining `todo` items, filing the next unblocked item while the request is pending.
 
 ---
 
 ## 6. Memory Conventions (`po/MEMORY.md`)
 
 Because the session is resumed across scheduled runs, the persona maintains `po/MEMORY.md` to ensure continuity:
+- **Notice on Persistence and Authority**: The persona command allow-list permits GitHub CLI operations (`gh issue ...`) but does not permit git commit or push operations, and resumed worktrees do not synchronize uncommitted local edits across distinct host machines. Therefore, `po/MEMORY.md` serves as a local session scratchpad. GitHub (`Roadmap item: ITEM-0NN` markers, issue state, and comments) is the authoritative source of truth for filed and completed work.
 - **Themes Covered**: Tracks broad features previously developed (e.g. parcel timelines, delivery date formatting).
 - **Issues Filed**: Audit table of issues created, reasons, and eventual outcomes.
+- **Escalations Handled**: Log of closed or reframed escalations (cost-cap, deploy-failed, agent-error, not-agent-suitable).
 - **Ideas Rejected**: Records proposals evaluated and rejected (e.g. multi-select filters, third-party vendor integrations) to prevent repeating ideas.
-- **Backlog Candidates**: Real gaps identified in code, OpenAPI contracts, or control center views awaiting idle cycles.
 
 ---
 

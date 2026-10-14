@@ -104,11 +104,15 @@ else
   check_fail "Guardrail (g)" "Must enforce one issue per idle run, testable criteria, and real gap reference"
 fi
 
-# Guardrail (h): Progressive product roadmap (po/ROADMAP.md, dependencies, needs-maintainer when < 5)
-if grep -qi "po/ROADMAP.md" "$PERSONA_FILE" && grep -qi "dependencies" "$PERSONA_FILE" && grep -qi "fewer than 5" "$PERSONA_FILE" && grep -qi "needs-maintainer" "$PERSONA_FILE"; then
-  check_pass "Guardrail (h): Progressive product roadmap (ROADMAP.md, dependencies, needs-maintainer under 5)"
+# Guardrail (h): Progressive product roadmap (po/ROADMAP.md, dependencies, run log request when < 5)
+if grep -qi "po/ROADMAP.md" "$PERSONA_FILE" && grep -qi "dependencies" "$PERSONA_FILE" && grep -qi "fewer than 5" "$PERSONA_FILE" && grep -qi "run log" "$PERSONA_FILE"; then
+  if grep -qi "needs-maintainer" "$PERSONA_FILE"; then
+    check_fail "Guardrail (h)" "Must not reference needs-maintainer; request maintainer extension in run log without filing an issue"
+  else
+    check_pass "Guardrail (h): Progressive product roadmap (ROADMAP.md, dependencies, run log request under 5)"
+  fi
 else
-  check_fail "Guardrail (h)" "Must require sequential roadmap intake, dependency resolution, and maintainer alert under 5 items"
+  check_fail "Guardrail (h)" "Must require sequential roadmap intake, dependency resolution, and run log maintainer request under 5 items"
 fi
 
 if [ "$failures" -gt 0 ]; then
