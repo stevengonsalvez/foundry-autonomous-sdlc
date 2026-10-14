@@ -17,6 +17,7 @@ import os
 import shutil
 import subprocess
 import sys
+import time
 from pathlib import Path
 from typing import Any
 
@@ -25,6 +26,15 @@ from scripts.ui.validate_artifact import validate_artifact_dir
 MARKER = "<!-- ui-proof:v1 -->"
 BRANCH_NAME = "pr-screenshots"
 PRUNE_DAYS = 14
+
+FIXED_ROUTES = ("home", "parcel-found", "not-found", "invalid-input")
+FIXED_VIEWPORTS = ("desktop", "mobile")
+ROUTE_TITLES = {
+    "home": "Home",
+    "parcel-found": "Parcel Found",
+    "not-found": "Not Found",
+    "invalid-input": "Invalid Input",
+}
 
 
 def run_cmd(cmd: list[str], *, cwd: Path | str | None = None, check: bool = True) -> str:
@@ -44,26 +54,56 @@ def run_cmd(cmd: list[str], *, cwd: Path | str | None = None, check: bool = True
 
 
 def resolve_pr_number(
-    head_sha: str, repo: str, pull_requests_json: str | None = None
+    head_sha: str,
+    repo: str,
+    pull_requests_json: str | None = None,
+    head_repo: str | None = None,
+    head_branch: str | None = None,
 ) -> int | None:
     if pull_requests_json:
         try:
             data = json.loads(pull_requests_json)
-            if isinstance(data, list) and data:
-                num = data[0].get("number")
-                if isinstance(num, int):
+            if isinstance(data, list):
+                for pr in data:
+                    if not isinstance(pr, dict):
+                        continue
+                    num = pr.get("number")
+                    if not isinstance(num, int):
+                        continue
+                    pr_head = pr.get("head") or {}
+                    pr_head_repo = (pr_head.get("repo") or {}).get("full_name")
+                    pr_head_ref = pr_head.get("ref")
+                    if head_repo and pr_head_repo and pr_head_repo != head_repo:
+                        continue
+                    if head_branch and pr_head_ref and pr_head_ref != head_branch:
+                        continue
                     return num
         except Exception:
             pass
 
-    # Fallback to GitHub API
+    # Fallback to GitHub API: pick only the PR whose head.repo.full_name and head.ref match the run
     try:
         out = run_cmd(
-            ["gh", "api", f"repos/{repo}/commits/{head_sha}/pulls", "--jq", ".[0].number"],
+            ["gh", "api", "--paginate", f"repos/{repo}/commits/{head_sha}/pulls"],
             check=False,
         )
-        if out and out.isdigit():
-            return int(out)
+        if out:
+            pulls = json.loads(out)
+            if isinstance(pulls, list):
+                for pr in pulls:
+                    if not isinstance(pr, dict):
+                        continue
+                    num = pr.get("number")
+                    if not isinstance(num, int):
+                        continue
+                    pr_head = pr.get("head") or {}
+                    pr_head_repo = (pr_head.get("repo") or {}).get("full_name")
+                    pr_head_ref = pr_head.get("ref")
+                    if head_repo and pr_head_repo and pr_head_repo != head_repo:
+                        continue
+                    if head_branch and pr_head_ref and pr_head_ref != head_branch:
+                        continue
+                    return num
     except Exception:
         pass
 
@@ -78,38 +118,40 @@ def format_pr_comment(
     screenshots: list[dict[str, Any]],
 ) -> str:
     head_short = head_sha[:8]
-    base_url = (
-        f"https://raw.githubusercontent.com/{repo}/{BRANCH_NAME}/pr-{pr_number}/{head_short}"
-    )
+    base_url = f"https://raw.githubusercontent.com/{repo}/{BRANCH_NAME}/pr-{pr_number}/{head_short}"
 
     by_route: dict[str, dict[str, str]] = {}
-    routes_order: list[str] = []
-
     for item in screenshots:
-        route = item["route"]
-        viewport = item["viewport"]
-        filename = item["filename"]
-        if route not in by_route:
-            by_route[route] = {}
-            routes_order.append(route)
-        by_route[route][viewport] = filename
+        route = item.get("route")
+        viewport = item.get("viewport")
+        filename = item.get("filename")
+        if route in FIXED_ROUTES and viewport in FIXED_VIEWPORTS and filename:
+            by_route.setdefault(route, {})[viewport] = filename
 
     table_rows = []
-    for route in routes_order:
+    capture_count = 0
+    for route in FIXED_ROUTES:
+        if route not in by_route:
+            continue
         desktop_file = by_route[route].get("desktop")
         mobile_file = by_route[route].get("mobile")
 
-        desktop_cell = (
-            f'<img src="{base_url}/{desktop_file}" alt="{route} desktop" width="320" />'
-            if desktop_file
-            else "-"
-        )
-        mobile_cell = (
-            f'<img src="{base_url}/{mobile_file}" alt="{route} mobile" width="160" />'
-            if mobile_file
-            else "-"
-        )
-        table_rows.append(f"| **{route}** | {desktop_cell} | {mobile_cell} |")
+        if desktop_file:
+            desktop_cell = (
+                f'<img src="{base_url}/{desktop_file}" alt="{route} desktop" width="320" />'
+            )
+            capture_count += 1
+        else:
+            desktop_cell = "-"
+
+        if mobile_file:
+            mobile_cell = f'<img src="{base_url}/{mobile_file}" alt="{route} mobile" width="160" />'
+            capture_count += 1
+        else:
+            mobile_cell = "-"
+
+        title = ROUTE_TITLES.get(route, route)
+        table_rows.append(f"| **{title}** | {desktop_cell} | {mobile_cell} |")
 
     lines = [
         MARKER,
@@ -120,7 +162,7 @@ def format_pr_comment(
         f"- Storage: [`{BRANCH_NAME}`](https://github.com/{repo}/tree/{BRANCH_NAME}/pr-{pr_number}/{head_short})",
         "",
         "<details open>",
-        f"<summary><b>Screenshots ({len(screenshots)} captures)</b></summary>",
+        f"<summary><b>Screenshots ({capture_count} captures)</b></summary>",
         "",
         "| Route | Desktop (1280px) | Mobile (390px) |",
         "|---|---|---|",
@@ -135,14 +177,29 @@ def format_pr_comment(
 
 def post_or_update_comment(repo: str, pr_number: int, body: str) -> None:
     comments_raw = run_cmd(
-        ["gh", "api", f"repos/{repo}/issues/{pr_number}/comments", "--paginate"]
+        [
+            "gh",
+            "api",
+            f"repos/{repo}/issues/{pr_number}/comments",
+            "--paginate",
+            "--slurp",
+        ]
     )
-    comments = json.loads(comments_raw) if comments_raw else []
+    pages = json.loads(comments_raw) if comments_raw else []
+    comments: list[dict[str, Any]] = []
+    if isinstance(pages, list):
+        for p in pages:
+            if isinstance(p, list):
+                comments.extend(p)
+            elif isinstance(p, dict):
+                comments.append(p)
 
     existing_id = None
     for comment in comments:
+        user = comment.get("user") or {}
+        user_login = user.get("login")
         c_body = comment.get("body", "")
-        if c_body.startswith(MARKER) or MARKER in c_body:
+        if user_login == "github-actions[bot]" and c_body.startswith(MARKER):
             existing_id = comment.get("id")
             break
 
@@ -188,7 +245,16 @@ def prune_old_prs(worktree_dir: Path, repo: str) -> list[int]:
 
         try:
             pr_data_raw = run_cmd(
-                ["gh", "pr", "view", str(num), "--repo", repo, "--json", "state,closedAt"],
+                [
+                    "gh",
+                    "pr",
+                    "view",
+                    str(num),
+                    "--repo",
+                    repo,
+                    "--json",
+                    "state,closedAt",
+                ],
                 check=False,
             )
             if not pr_data_raw:
@@ -197,9 +263,7 @@ def prune_old_prs(worktree_dir: Path, repo: str) -> list[int]:
             state = pr_info.get("state")
             closed_at_str = pr_info.get("closedAt")
             if state in ("CLOSED", "MERGED") and closed_at_str:
-                closed_at = datetime.datetime.fromisoformat(
-                    closed_at_str.replace("Z", "+00:00")
-                )
+                closed_at = datetime.datetime.fromisoformat(closed_at_str.replace("Z", "+00:00"))
                 if (now - closed_at).total_seconds() > PRUNE_DAYS * 86400:
                     shutil.rmtree(item)
                     pruned.append(num)
@@ -216,6 +280,8 @@ def publish(
     repo: str,
     pr_number: int | None = None,
     pull_requests_json: str | None = None,
+    head_repo: str | None = None,
+    head_branch: str | None = None,
 ) -> None:
     print(f"Validating artifacts in {artifacts_dir}...")
     res = validate_artifact_dir(artifacts_dir)
@@ -224,7 +290,13 @@ def publish(
         raise RuntimeError(err_msg)
 
     if pr_number is None:
-        pr_number = resolve_pr_number(head_sha, repo, pull_requests_json)
+        pr_number = resolve_pr_number(
+            head_sha=head_sha,
+            repo=repo,
+            pull_requests_json=pull_requests_json,
+            head_repo=head_repo,
+            head_branch=head_branch,
+        )
 
     if pr_number is None:
         print(f"No open PR found for head sha {head_sha}. Nothing to publish.")
@@ -243,7 +315,9 @@ def publish(
     run_cmd(["git", "remote", "add", "origin", remote_url], cwd=work_dir)
 
     remote_branches = run_cmd(
-        ["git", "ls-remote", "--heads", "origin", BRANCH_NAME], cwd=work_dir, check=False
+        ["git", "ls-remote", "--heads", "origin", BRANCH_NAME],
+        cwd=work_dir,
+        check=False,
     )
     if BRANCH_NAME in remote_branches:
         run_cmd(["git", "fetch", "origin", BRANCH_NAME, "--depth=1"], cwd=work_dir)
@@ -268,7 +342,12 @@ def publish(
     # Configure git committer
     run_cmd(["git", "config", "user.name", "github-actions[bot]"], cwd=work_dir)
     run_cmd(
-        ["git", "config", "user.email", "41898282+github-actions[bot]@users.noreply.github.com"],
+        [
+            "git",
+            "config",
+            "user.email",
+            "41898282+github-actions[bot]@users.noreply.github.com",
+        ],
         cwd=work_dir,
     )
 
@@ -280,8 +359,24 @@ def publish(
         if pruned:
             msg += f" (pruned: {', '.join(f'#{n}' for n in pruned)})"
         run_cmd(["git", "commit", "-m", msg], cwd=work_dir)
-        run_cmd(["git", "push", "origin", BRANCH_NAME], cwd=work_dir)
-        print(f"Pushed UI screenshots to branch {BRANCH_NAME}")
+
+        # Push with a loop of up to 3 attempts with rebase
+        for attempt in range(3):
+            try:
+                run_cmd(
+                    ["git", "pull", "--rebase", "origin", BRANCH_NAME],
+                    cwd=work_dir,
+                    check=False,
+                )
+                run_cmd(["git", "push", "origin", BRANCH_NAME], cwd=work_dir)
+                print(f"Pushed UI screenshots to branch {BRANCH_NAME}")
+                break
+            except Exception as exc:
+                if attempt == 2:
+                    raise RuntimeError(
+                        f"Failed to push to {BRANCH_NAME} after 3 attempts: {exc}"
+                    ) from exc
+                time.sleep(1)
     else:
         print("No changes to commit on pr-screenshots branch.")
 
@@ -303,9 +398,13 @@ def main() -> None:
     parser.add_argument("--repo", required=True, help="Repository owner/name")
     parser.add_argument("--pr-number", type=int, help="Pull request number")
     parser.add_argument("--pull-requests-json", help="JSON string of PRs from workflow event")
+    parser.add_argument("--head-repo", help="Head repository full name")
+    parser.add_argument("--head-branch", help="Head branch name")
 
     args = parser.parse_args()
     pull_requests_json = args.pull_requests_json or os.environ.get("PULL_REQUESTS_JSON")
+    head_repo = args.head_repo or os.environ.get("HEAD_REPO")
+    head_branch = args.head_branch or os.environ.get("HEAD_BRANCH")
 
     publish(
         artifacts_dir=args.artifacts_dir,
@@ -313,6 +412,8 @@ def main() -> None:
         repo=args.repo,
         pr_number=args.pr_number,
         pull_requests_json=pull_requests_json,
+        head_repo=head_repo,
+        head_branch=head_branch,
     )
 
 
