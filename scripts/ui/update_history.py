@@ -48,6 +48,14 @@ def run_cmd(cmd: list[str], *, cwd: Path | str | None = None, check: bool = True
     return res.stdout.strip()
 
 
+def parse_semver_tag(tag: str) -> tuple[int, ...]:
+    """Parse vMAJOR.MINOR.PATCH into a tuple for sorting."""
+    m = TAG_RE.match(tag)
+    if m:
+        return tuple(int(x) for x in m.groups())
+    return (999, 999, 999)
+
+
 def resolve_release_key(repo_root: Path, override_key: str | None = None) -> tuple[str, str]:
     """Resolve release key (tag or sha8) and full commit sha.
 
@@ -64,18 +72,23 @@ def resolve_release_key(repo_root: Path, override_key: str | None = None) -> tup
 
     full_sha = run_cmd(["git", "rev-parse", "HEAD"], cwd=repo_root, check=False) or "00000000"
 
-    # Check if HEAD is an exact tag match (v*)
+    # Check if HEAD has matching semver tags (v*), ignoring any prod/ tags
     tag_res = subprocess.run(
-        ["git", "describe", "--tags", "--exact-match"],
+        ["git", "tag", "--points-at", "HEAD"],
         cwd=repo_root,
         capture_output=True,
         text=True,
         check=False,
     )
     if tag_res.returncode == 0:
-        tag_cand = tag_res.stdout.strip()
-        if TAG_RE.match(tag_cand):
-            return tag_cand, full_sha
+        matching_tags = [
+            t.strip()
+            for t in tag_res.stdout.splitlines()
+            if TAG_RE.match(t.strip())
+        ]
+        if matching_tags:
+            matching_tags.sort(key=parse_semver_tag)
+            return matching_tags[-1], full_sha
 
     short_sha = full_sha[:8]
     if not re.match(r"^[0-9a-f]{8}$", short_sha):

@@ -45,13 +45,18 @@ jobs:
     steps:
       - name: Resolve target ref
         id: target
+        env:
+          INPUT_REF: ${{ github.event.inputs.ref }}
+          EVENT_NAME: ${{ github.event_name }}
+          WORKFLOW_RUN_HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+          GITHUB_REF: ${{ github.ref }}
         run: |
-          if [ -n "${{ github.event.inputs.ref }}" ]; then
-            echo "ref=${{ github.event.inputs.ref }}" >> "$GITHUB_OUTPUT"
-          elif [ "${{ github.event_name }}" = "workflow_run" ]; then
-            echo "ref=${{ github.event.workflow_run.head_sha }}" >> "$GITHUB_OUTPUT"
+          if [ -n "$INPUT_REF" ]; then
+            echo "ref=$INPUT_REF" >> "$GITHUB_OUTPUT"
+          elif [ "$EVENT_NAME" = "workflow_run" ]; then
+            echo "ref=$WORKFLOW_RUN_HEAD_SHA" >> "$GITHUB_OUTPUT"
           else
-            echo "ref=${{ github.ref }}" >> "$GITHUB_OUTPUT"
+            echo "ref=$GITHUB_REF" >> "$GITHUB_OUTPUT"
           fi
 
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -62,18 +67,20 @@ jobs:
 
       - name: Validate ref and resolve release key
         id: resolve-key
+        env:
+          INPUT_REF: ${{ github.event.inputs.ref }}
+          EVENT_NAME: ${{ github.event_name }}
         run: |
-          tag="$(git describe --tags --exact-match 2>/dev/null || true)"
+          tag="$(git tag --points-at HEAD | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | sort -V | tail -1)"
           key=""
 
           if [[ "$tag" =~ ^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]; then
             key="$tag"
-          elif [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ -n "${{ github.event.inputs.ref }}" ]; then
-            input_ref="${{ github.event.inputs.ref }}"
-            if [[ "$input_ref" =~ ^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]; then
-              key="$input_ref"
-            elif [[ "$input_ref" =~ ^[0-9a-f]{8}$ ]]; then
-              key="$input_ref"
+          elif [ "$EVENT_NAME" = "workflow_dispatch" ] && [ -n "$INPUT_REF" ]; then
+            if [[ "$INPUT_REF" =~ ^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]; then
+              key="$INPUT_REF"
+            elif [[ "$INPUT_REF" =~ ^[0-9a-f]{8}$ ]]; then
+              key="$INPUT_REF"
             else
               key="$(git rev-parse --short=8 HEAD)"
             fi
