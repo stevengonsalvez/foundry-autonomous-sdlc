@@ -142,7 +142,7 @@ class SubprocessGit:
         return bool(self._git("ls-remote", "--heads", "origin", f"refs/heads/{name}").strip())
 
     def commits_since(self, base: str) -> list[tuple[str, str]]:
-        out = self._git("log", "--reverse", "--format=%H%x1f%s", f"origin/{base}..HEAD")
+        out = self._git("log", "--reverse", "--topo-order", "--format=%H%x1f%s", f"origin/{base}..HEAD")
         return [tuple(line.split("\x1f", 1)) for line in out.splitlines() if line]  # type: ignore[misc]
 
     def files_in_commit(self, sha: str) -> list[str]:
@@ -199,6 +199,38 @@ class SubprocessGit:
         if not changed:
             return []
         return [path for mode, path in self._index_modes(*changed) if mode in ("160000", "120000")]
+
+    def rev_parse(self, ref: str) -> str:
+        return self._git("rev-parse", "--verify", f"{ref}^{{commit}}").strip()
+
+    def merge_origin(self, base: str) -> list[str]:
+        """Merge origin/<base> into HEAD as a real merge commit (never a fast-forward, rebase or force).
+        Returns the conflicted paths: [] when the merge went through (and is committed), else the tree holds
+        the half-done merge with conflict markers for the caller to commit and resolve."""
+        try:
+            self._git("merge", "--quiet", "--no-ff", "--no-edit", f"origin/{base}")
+            return []
+        except GitError:
+            unmerged = sorted({p for p in self._git("diff", "--name-only", "--diff-filter=U", "-z").split("\0") if p})
+            if not unmerged:
+                raise
+            return unmerged
+
+    def commit_merge(self, parents: tuple[str, ...], message: str) -> str:
+        """One commit holding the working tree and exactly these parents; HEAD (and the index) move onto it."""
+        self._stage_all()
+        tree = self._git("write-tree").strip()
+        args = [arg for parent in parents for arg in ("-p", parent)]
+        sha = self._git("commit-tree", tree, *args, "-m", message).strip()
+        self._git("reset", "--quiet", "--soft", sha)
+        return sha
+
+    def diff_paths(self, old: str, new: str) -> list[str]:
+        out = self._git("diff", "--no-renames", "--ignore-submodules=dirty", "-z", "--name-only", old, new)
+        return [p for p in out.split("\0") if p]
+
+    def special_paths_between(self, old: str, new: str) -> list[str]:
+        return _special(self._git("diff", "--no-renames", "--raw", "-z", old, new))
 
     def special_paths_in_commit(self, sha: str) -> list[str]:
         return _special(self._git("diff-tree", "--no-commit-id", "--root", "-r", "--raw", "-z", sha))
