@@ -831,6 +831,10 @@ class JobRunner:
         changed = self.git.diff_paths(f"origin/{base}", sha)
         bad = scope.violations(changed, allowed_paths=self.spec.allowed_paths, protected=(), tests_only=False)
         bad += self.git.special_paths_between(f"origin/{base}", sha)
+        # Existing tests stay as the branch had them, unless main itself changed them.
+        by_main = set(self.git.diff_paths(self._start_sha, self._main_sha))
+        bad += [p for p in self.git.diff_paths(self._start_sha, sha)
+                if p in self._protected and p not in by_main and p not in bad]
         if bad:
             raise JobStop(Status.FAILED, "scope-violation", "merge contained out-of-scope paths: " + ", ".join(bad))
         self._engine_event(self.state.engine or "", "squashed", sha=sha)
