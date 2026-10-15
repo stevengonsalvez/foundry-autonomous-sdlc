@@ -1,6 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, type MouseEvent } from "react";
 import type { ParcelService } from "@parcel/core";
 import { BoxIcon } from "./components/Icons";
+import { ThemeToggle } from "./components/ThemeToggle";
 import { HomePage } from "./pages/HomePage";
 import { NotFoundPage } from "./pages/NotFoundPage";
 import { ParcelPage } from "./pages/ParcelPage";
@@ -54,6 +55,7 @@ export function App({ service }: { service: ParcelService }) {
             <BoxIcon />
             <span>Parcel Tracker</span>
           </a>
+          <ThemeToggle />
         </div>
       </header>
       <main id="main-content" ref={main} tabIndex={-1} className="container">
