@@ -179,6 +179,17 @@ else
   check_fail "Guardrail (h)" "Must require sequential roadmap intake, dependency resolution, and run log maintainer request under 5 items"
 fi
 
+# Guardrail (i): Visible surface (home or parcel page), ui-proof screenshot diff criterion, highest-visibility preference
+if grep -qi "visible surface" "$PERSONA_FILE" && \
+   grep -qiE '(`?home`?\s+or\s+`?parcel page`?|home\s*,\s*parcel page)' "$PERSONA_FILE" && \
+   grep -qi "ui-proof" "$PERSONA_FILE" && \
+   grep -qiE '(screenshot.*differ|differ.*screenshot)' "$PERSONA_FILE" && \
+   grep -qi "highest-visibility" "$PERSONA_FILE"; then
+  check_pass "Guardrail (i): Visible surface (home or parcel page), ui-proof screenshot diff criterion, highest-visibility preference"
+else
+  check_fail "Guardrail (i)" "Must require naming visible surface (home or parcel page), ui-proof screenshot diff criterion, and preferring highest-visibility ready item first"
+fi
+
 if [ "$failures" -gt 0 ]; then
   echo "FAIL: po/PERSONA.md failed $failures guardrail check(s)" >&2
   exit 1

@@ -145,6 +145,24 @@ run_mutation_test "Rejects missing 3 USD threshold" \
   "$M12_CONTENT" \
   "Guardrail \(e\)|18/22/25/3"
 
+# 13. Rejects missing visible surface requirement
+M13_CONTENT="${BASE_CONTENT//[Vv]isible [Ss]urface/target interface}"
+run_mutation_test "Rejects missing visible surface requirement" \
+  "$M13_CONTENT" \
+  "Guardrail \(i\)|visible surface"
+
+# 14. Rejects missing ui-proof screenshot diff rule
+M14_CONTENT="${BASE_CONTENT//ui-proof/browser capture}"
+run_mutation_test "Rejects missing ui-proof screenshot diff rule" \
+  "$M14_CONTENT" \
+  "Guardrail \(i\)|ui-proof"
+
+# 15. Rejects missing highest-visibility preference rule
+M15_CONTENT="${BASE_CONTENT//highest-visibility/random priority}"
+run_mutation_test "Rejects missing highest-visibility preference rule" \
+  "$M15_CONTENT" \
+  "Guardrail \(i\)|highest-visibility"
+
 echo "----------------------------------------"
 if [ "$failures" -gt 0 ]; then
   echo "FAILED: $failures of $total tests failed."

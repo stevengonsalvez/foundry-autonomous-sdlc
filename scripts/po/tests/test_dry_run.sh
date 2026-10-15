@@ -225,6 +225,33 @@ run_dry_test "Stranger roadmap issue is ignored and does not skip item" \
   "gh issue create --title \"feat\(web\): clear search query button\"" \
   "Roadmap item: ITEM-001"
 
+# 21. Roadmap item with Visible Surface generates ## Visible surface in issue body
+tmp_visible_dir="$(mktemp -d "${TMPDIR:-/tmp}/dry_vis.XXXXXX")"
+cp "$FIXTURES/idle_with_roadmap/state.json" "$tmp_visible_dir/state.json"
+cp "$FIXTURES/idle_with_roadmap/issues.json" "$tmp_visible_dir/issues.json"
+cat > "$tmp_visible_dir/roadmap.md" << 'EOF'
+# Roadmap
+### ITEM-001: feat(web): hero banner
+- **Status**: todo
+- **Dependencies**: []
+- **Cost Class**: S
+- **Tags**: ui, high-visibility
+- **Visible Surface**: home
+- **Gap Anchor**: `app/web/src/pages/HomePage.tsx#L29`. Hero banner gap.
+- **User Value**: Engaging hero banner.
+- **Files Touched**:
+  - `app/web/src/pages/HomePage.tsx`
+- **Acceptance Criteria**:
+  1. The home hero renders an official brand badge.
+  2. The ui-proof screenshot for home surface differs from previous release with test id brand-badge.
+EOF
+run_dry_test "Roadmap item with Visible Surface generates visible surface section" \
+  "\"$tmp_visible_dir\"" \
+  "## Visible surface" \
+  "" \
+  "Roadmap item: ITEM-001"
+rm -rf "$tmp_visible_dir"
+
 echo "----------------------------------------"
 if [ "$failures" -gt 0 ]; then
   echo "FAILED: $failures of $total tests failed."

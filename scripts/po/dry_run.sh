@@ -348,6 +348,9 @@ for block in item_blocks:
     dep_m = re.search(r"-\s+\*\*Dependencies\*\*:\s*\[(.*?)\]", block)
     deps = [d.strip() for d in dep_m.group(1).split(",") if d.strip()] if dep_m else []
 
+    vs_m = re.search(r"-\s+\*\*Visible Surface\*\*:\s*(.+)$", block, re.MULTILINE)
+    visible_surface = vs_m.group(1).strip() if vs_m else ""
+
     gap_m = re.search(r"-\s+\*\*Gap Anchor\*\*:\s*(.+)$", block, re.MULTILINE)
     gap = gap_m.group(1).strip() if gap_m else ""
 
@@ -365,6 +368,7 @@ for block in item_blocks:
         "title": title,
         "status": status,
         "deps": deps,
+        "visible_surface": visible_surface,
         "gap": gap,
         "user_val": user_val,
         "ac": ac,
@@ -450,6 +454,7 @@ PYEOF
       if [ "$ready_item" != "null" ]; then
         item_id="$(jq -r '.id' <<< "$ready_item")"
         item_title="$(jq -r '.title' <<< "$ready_item")"
+        item_visible_surface="$(jq -r '.visible_surface // empty' <<< "$ready_item")"
         item_gap="$(jq -r '.gap' <<< "$ready_item")"
         item_user_val="$(jq -r '.user_val' <<< "$ready_item")"
         item_ac="$(jq -r '.ac' <<< "$ready_item")"
@@ -463,7 +468,7 @@ PYEOF
 ### Simulated human (antigravity)
 
 Roadmap item: $item_id
-
+$([ -n "$item_visible_surface" ] && printf "\n## Visible surface\n%s\n" "$item_visible_surface")
 ## Context
 $item_gap
 
