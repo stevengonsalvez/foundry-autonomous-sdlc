@@ -44,7 +44,7 @@
       "pass": 13
     }
   },
-  "generated_at": "2026-10-15T11:20:41Z",
+  "generated_at": "2026-10-15T11:30:43Z",
   "issues": [
     {
       "closed_at": "2026-10-10T12:28:43Z",
@@ -2296,17 +2296,17 @@
     },
     {
       "closed_at": null,
-      "coder_engine": null,
+      "coder_engine": "loop",
       "coder_sessions_lost": 0,
       "cost": {
         "calls": 5,
-        "coder_model_usd": 0.0,
-        "coder_usd": 0.36481,
+        "coder_model_usd": 0.015424,
+        "coder_usd": 0.522226,
         "model_usd": 0.017631,
-        "usd": 0.382441
+        "usd": 0.555281
       },
       "deferred": null,
-      "escalation": null,
+      "escalation": "escalated:build-failed",
       "gate_attempts": {
         "agent-scope": [
           "success"
@@ -2342,7 +2342,7 @@
       "kind": "issue",
       "number": 96,
       "opened_at": "2026-10-15T08:24:25Z",
-      "outcome": "open",
+      "outcome": "escalated",
       "owner": null,
       "pr": null,
       "quality_score": 88,
@@ -2403,9 +2403,13 @@
         },
         {
           "entered_at": "2026-10-15T11:20:19Z",
-          "in_progress": true,
-          "seconds": 0,
+          "seconds": 602,
           "stage": "stage:building"
+        },
+        {
+          "entered_at": "2026-10-15T11:30:21Z",
+          "seconds": 0,
+          "stage": "escalated:build-failed"
         }
       ],
       "title": "feat(web): add left navigation sidebar with mobile menu",
@@ -2413,18 +2417,18 @@
     }
   ],
   "ledger": {
-    "emitted_at": "2026-10-15T11:20:28Z",
+    "emitted_at": "2026-10-15T11:30:23Z",
     "reconciled_at": "2026-10-15T11:00:20Z"
   },
   "repo": "stevengonsalvez/foundry-autonomous-sdlc",
   "totals": {
     "deferred": 0,
-    "escalated": 19,
+    "escalated": 20,
     "issues": 31,
-    "ledger_usd": 0.891066,
-    "orchestrator_usd": 7.233406,
+    "ledger_usd": 0.894359,
+    "orchestrator_usd": 7.24574,
     "released": 10,
-    "usd": 11.543029
+    "usd": 11.731496
   },
   "version": 1
 }
