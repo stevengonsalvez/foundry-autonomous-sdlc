@@ -61,8 +61,8 @@ The loop participates in the repository state machine using these exact labels:
 Orca evaluates `scripts/po/precheck.sh` before launching each scheduled run. The script outputs exactly one explanatory line and returns exit code 0 to proceed or exit code 1 to skip.
 
 ### Skip Conditions:
-1. **Billed Spend Exceeded**: Billed spend in `state.json` (`cost.billing.billed_usd` or `cost.totals.billed_usd`) exceeds 21.00 USD.
-2. **22 USD Halt State Flagged**: The 22.00 USD halt state is flagged in `state.json` (`cost.totals.halted` is true, or billed/ledger spend reaches or exceeds the 22.00 USD halt line).
+1. **Billed Spend Exceeded**: Billed spend in `state.json` (`cost.billing.billed_usd` or `cost.totals.billed_usd`) exceeds 30.00 USD.
+2. **32 USD Halt State Flagged**: The 32.00 USD halt state is flagged in `state.json` (`cost.totals.halted` is true, or billed/ledger spend reaches or exceeds the 32.00 USD halt line).
 3. **State File Missing or Stale**: `state.json` is missing from branch `state` or has an `updated_at` older than 45 minutes (2700 seconds).
 4. **Antigravity Quota Exhausted**: Token file missing or CLI reports quota exhaustion.
 5. **Daily Issue Cap Reached**: 6 or more issues carrying label `simulated-human` were filed in the preceding 24 hours.
@@ -95,10 +95,10 @@ Every execution cycle enforces the following security boundaries (verified by `s
      - `jq` (stdin filter only, never with file arguments)
    - *Credential Risk Note*: The machine uses an account-wide `gh` CLI credential. This accepted risk is mitigated by strictly enforcing the command allow-list in the persona definition and automated lint checks (`scripts/po/lint_persona.sh`), which enforce a strict deny-list preventing write commands, PR merges, or unauthorized access to other repositories.
 5. **Spend Cap Protection**:
-   - Strict repository spend ceiling: 21.00 USD precheck threshold; 22.00 USD hard pipeline halt; 25.00 USD kill limit.
-   - Hard rule: The PO must also stop when the 22.00 USD halt state is flagged.
+   - Strict repository spend ceiling: 30.00 USD precheck threshold; 32.00 USD hard pipeline halt; 35.00 USD kill limit.
+   - Hard rule: The PO must also stop when the 32.00 USD halt state is flagged.
    - NEVER raise a spend cap.
-   - NEVER instruct the orchestrator to continue past the 22.00 USD halt limit.
+   - NEVER instruct the orchestrator to continue past the 32.00 USD halt limit.
    - For `escalated:cost-cap`, only close the issue, shrink its scope into a smaller follow-up, or park the issue.
 6. **CD Rollback Safety**:
    - NEVER instruct a re-release of a rolled-back build.
@@ -135,7 +135,7 @@ Each item in `po/ROADMAP.md` is structured with:
 
 ### Intake and Selection Algorithm:
 1. **Canonical Source from origin/main**: The persona runs `git fetch origin main` and reads the roadmap via `git show origin/main:po/ROADMAP.md`. Because the persona runs in a persistent, resumed session, reading from `origin/main` ensures it immediately picks up newly merged roadmap PRs without relying on stale local worktree state.
-2. **Dependency Resolution**: When the repository is idle and within spend limits (billed spend under 21.00 USD and 22.00 USD halt state not flagged), the persona inspects the roadmap and verifies candidate dependencies against GitHub issues. A dependency counts as satisfied ONLY when its corresponding issue carries label `stage:released` or `stage:merged` (or status is `done` in the roadmap), NOT when merely filed.
+2. **Dependency Resolution**: When the repository is idle and within spend limits (billed spend under 30.00 USD and 32.00 USD halt state not flagged), the persona inspects the roadmap and verifies candidate dependencies against GitHub issues. A dependency counts as satisfied ONLY when its corresponding issue carries label `stage:released` or `stage:merged` (or status is `done` in the roadmap), NOT when merely filed.
 3. **Deduplication Check**: The persona searches GitHub via `gh issue list --author stevengonsalvez --state all --search '"Roadmap item: ITEM-0NN" in:body'` to verify the candidate item has not already been filed or closed.
 4. **Highest-Visibility Priority and Sequential Pick**: When multiple unblocked `todo` items are eligible, the persona prefers the highest-visibility ready item first among candidate items, taking the first unblocked ready item in roadmap order to drive visible UI and functional evolution on the first screen and parcel details.
 5. **Issue Creation**: The persona generates an issue containing the title, marker line `Roadmap item: ITEM-0NN`, explicit `Visible surface` section (`home` or `parcel page`), user story, acceptance criteria (including the `ui-proof` screenshot diff assertion with stable test id or text), and explicit `app/` scope, referencing the roadmap ID.

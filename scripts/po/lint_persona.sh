@@ -142,20 +142,20 @@ else
   check_fail "Guardrail (d)" "Allow-list failed validation: $allow_list_check"
 fi
 
-# Guardrail (e): Spend cap protection with exact thresholds 21, 22, 25, 3 USD and second hard rule on 22 halt state
+# Guardrail (e): Spend cap protection with exact thresholds 30, 32, 35, 3 USD and second hard rule on 32 halt state
 if grep -qi "never raise.*spend cap" "$PERSONA_FILE" && \
-   grep -qE "\b21(\.00)?\s*USD\b" "$PERSONA_FILE" && \
-   grep -qE "\b22(\.00)?\s*USD\b" "$PERSONA_FILE" && \
-   grep -qE "\b25(\.00)?\s*USD\b" "$PERSONA_FILE" && \
+   grep -qE "\b30(\.00)?\s*USD\b" "$PERSONA_FILE" && \
+   grep -qE "\b32(\.00)?\s*USD\b" "$PERSONA_FILE" && \
+   grep -qE "\b35(\.00)?\s*USD\b" "$PERSONA_FILE" && \
    grep -qE "\b3(\.00)?\s*USD\b" "$PERSONA_FILE" && \
    grep -qi "close.*shrink.*park" "$PERSONA_FILE" && \
-   grep -qiE "(stop.*22.*halt|halt state.*flagged|22(\.00)?\s*USD halt state)" "$PERSONA_FILE" && \
-   ! grep -qE "\b18(\.00)?\s*USD\b" "$PERSONA_FILE" && \
-   ! grep -qiE "\b(18|22|25)(\.00)?\s*USD\s*(precheck threshold|filing stop)" "$PERSONA_FILE" && \
-   ! grep -qiE "spend (is )?under\s*(18|22|25)(\.00)?\s*USD" "$PERSONA_FILE"; then
-  check_pass "Guardrail (e): Spend cap protection with exact thresholds 21/22/25/3 USD (never raise, 22 USD halt stop rule, close/shrink/park, filing stop 21 USD)"
+   grep -qiE "(stop.*32.*halt|halt state.*flagged|32(\.00)?\s*USD halt state)" "$PERSONA_FILE" && \
+   ! grep -qE "\b(18|21|22|25)(\.00)?\s*USD\b" "$PERSONA_FILE" && \
+   ! grep -qiE "\b(18|21|22|25|32|35)(\.00)?\s*USD\s*(precheck threshold|filing stop)" "$PERSONA_FILE" && \
+   ! grep -qiE "spend (is )?under\s*(18|21|22|25|32|35)(\.00)?\s*USD" "$PERSONA_FILE"; then
+  check_pass "Guardrail (e): Spend cap protection with exact thresholds 30/32/35/3 USD (never raise, 32 USD halt stop rule, close/shrink/park, filing stop 30 USD)"
 else
-  check_fail "Guardrail (e)" "Must forbid raising caps, enforce exact spend thresholds 21/22/25/3 USD, require stopping when 22 halt state is flagged, reject 18/22/25 as filing stop, and restrict cost-cap to close/shrink/park"
+  check_fail "Guardrail (e)" "Must forbid raising caps, enforce exact spend thresholds 30/32/35/3 USD, require stopping when 32 halt state is flagged, reject 18/21/22/25/32/35 as filing stop, and restrict cost-cap to close/shrink/park"
 fi
 
 # Guardrail (f): CD rollback escalations (never re-release rolled back build, retry only after new fix PR exists)

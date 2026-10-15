@@ -10,19 +10,18 @@
 # 6. Rejects git push in allow-list
 # 7. Rejects bare cat in allow-list
 # 8. Rejects missing author restriction line (only repo slug present)
-# 9. Rejects missing 21 USD threshold
-# 10. Rejects 18 USD as filing stop
-# 11. Rejects 22 USD as filing stop
-# 12. Rejects 25 USD as filing stop
-# 13. Rejects missing 22 halt state stop rule
-# 14. Rejects missing 22 USD threshold
-# 15. Rejects missing 25 USD threshold
-# 16. Rejects missing 3 USD threshold
-# 17. Rejects missing visible surface requirement
-# 18. Rejects missing ui-proof screenshot diff rule
-# 19. Rejects missing highest-visibility preference rule
-# 20. Rejects re-filing on a merge-conflict escalation
-# 21. Rejects a missing merge-conflict rule
+# 9. Rejects missing 30 USD threshold
+# 10-15. Rejects 18, 21, 22, 25, 32 and 35 USD as filing stop (21, 22 and 25 are the retired caps)
+# 16. Rejects missing 32 halt state stop rule
+# 17. Rejects missing 32 USD threshold
+# 18. Rejects missing 35 USD threshold
+# 19. Rejects a stale 22 USD halt line
+# 20. Rejects missing 3 USD threshold
+# 21. Rejects missing visible surface requirement
+# 22. Rejects missing ui-proof screenshot diff rule
+# 23. Rejects missing highest-visibility preference rule
+# 24. Rejects re-filing on a merge-conflict escalation
+# 25. Rejects a missing merge-conflict rule
 
 set -euo pipefail
 
