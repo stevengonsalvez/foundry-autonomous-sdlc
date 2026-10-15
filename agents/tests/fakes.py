@@ -25,11 +25,13 @@ from sdlc_agents.ports import (
     Comment,
     GitHubError,
     Issue,
+    MergeConflict,
     PullCommit,
     PullRequest,
 )
 
 START = "2026-10-10T12:00:00Z"
+MERGED_MAIN = "Merge origin/main"    # the message of the commit a merge_main job pushes
 
 
 class FakeClock:
@@ -74,6 +76,7 @@ class FakeGitHub:
         self.merges: list[tuple[int, str, str]] = []
         self.calls: list[str] = []
         self.ci: CiPolicy = green
+        self.merge_conflict = False             # merges answer 405 'has merge conflicts' until main is merged in
         self.fail_on: dict[str, Exception] = {}
         self.fail_once: dict[str, int] = {}     # method name -> how many next calls fail with 502
         self._number = 0
@@ -279,6 +282,8 @@ class FakeGitHub:
             raise GitHubError(405, "Pull Request is not mergeable")
         if self.head_of(number) != sha:
             raise GitHubError(409, "Head branch was modified")
+        if self.merge_conflict and not self.commits[sha]["message"].startswith(MERGED_MAIN):
+            raise MergeConflict(405, f"PUT /pulls/{number}/merge: Pull Request has merge conflicts")
         merge_sha = self._commit(f"Merge pull request #{number}", (), self.branches["main"])
         self.branches["main"] = merge_sha
         pr.update(merged=True, merge_sha=merge_sha, merged_at=self.clock.now_iso(), final_head=sha)
@@ -439,6 +444,7 @@ class FakeCoder:
         self.duplicate_starts = 0
         self.lease_refusals = 0
         self.lose_next_start_reply = False
+        self.resolve_conflicts = True            # a merge_main job pushes a head that merges main (else a plain fix)
         self.report_pr = True                    # include the PR number in the succeeded status
         self.invalid_detail = "app/web/tests/x.test.tsx: ReferenceError: expect is not defined"
         self.start_status = "running"
@@ -525,7 +531,9 @@ class FakeCoder:
                             job["branch"], [], labels=("agent:pr",))
             record["pr"] = pr
         elif job["mode"] == "revise":
-            gh.push(job["branch"], "fix: address review findings", (f"app/web/src/feature-{number}.tsx",))
+            merged = job.get("merge_main") and self.resolve_conflicts
+            gh.push(job["branch"], f"{MERGED_MAIN} into {job['branch']}" if merged else "fix: address review findings",
+                    (f"app/web/src/feature-{number}.tsx",))
         else:
             gh.push(job["branch"], "test: repair stale test", tuple(job["allowed_paths"]))
         record["status"] = "succeeded"
