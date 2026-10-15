@@ -38,7 +38,7 @@
       "pass": 10
     }
   },
-  "generated_at": "2026-10-15T00:00:20Z",
+  "generated_at": "2026-10-15T00:06:11Z",
   "issues": [
     {
       "closed_at": "2026-10-10T12:28:43Z",
@@ -2084,21 +2084,58 @@
       ],
       "title": "feat(web): add copy shareable parcel link button",
       "type": "feature"
+    },
+    {
+      "closed_at": null,
+      "coder_engine": null,
+      "coder_sessions_lost": 0,
+      "cost": {
+        "calls": 1,
+        "coder_model_usd": 0.0,
+        "coder_usd": 0.0,
+        "model_usd": 0.001199,
+        "usd": 0.001199
+      },
+      "deferred": null,
+      "escalation": null,
+      "gate_attempts": {},
+      "gates": {},
+      "kind": "issue",
+      "number": 93,
+      "opened_at": "2026-10-15T00:02:42Z",
+      "outcome": "open",
+      "owner": null,
+      "pr": null,
+      "quality_score": 90,
+      "release": null,
+      "resolution_seconds": null,
+      "scenario": "a",
+      "severity": null,
+      "stages": [
+        {
+          "entered_at": "2026-10-15T00:05:24Z",
+          "in_progress": true,
+          "seconds": 0,
+          "stage": "stage:ready"
+        }
+      ],
+      "title": "feat(web): store and display recent searches in local storage",
+      "type": "feature"
     }
   ],
   "ledger": {
-    "emitted_at": "2026-10-14T23:55:18Z",
-    "reconciled_at": "2026-10-14T23:00:29Z"
+    "emitted_at": "2026-10-15T00:05:26Z",
+    "reconciled_at": "2026-10-15T00:05:26Z"
   },
   "repo": "stevengonsalvez/foundry-autonomous-sdlc",
   "totals": {
     "deferred": 0,
     "escalated": 19,
-    "issues": 28,
-    "ledger_usd": 0.620686,
-    "orchestrator_usd": 5.245584,
+    "issues": 29,
+    "ledger_usd": 0.625144,
+    "orchestrator_usd": 5.260182,
     "released": 8,
-    "usd": 8.27913
+    "usd": 8.299385
   },
   "version": 1
 }
