@@ -30,7 +30,9 @@ test('a bare version-1 document is valid and empty', () => {
   assert.deepEqual(r.state.tickets, []);
   assert.equal(r.state.environments.source, 'none');
   assert.equal(r.state.cost.billing, null);
-  assert.equal(r.state.cost.caps.halt_usd, 22);
+  assert.equal(r.state.cost.caps.halt_usd, 32);
+  assert.equal(r.state.cost.caps.total_usd, 35);
+  assert.equal(r.state.cost.caps.issue_usd, 3);
   assert.deepEqual(r.state.agents, []);
   assert.equal(r.state.ledger.last_tick, null);
 });

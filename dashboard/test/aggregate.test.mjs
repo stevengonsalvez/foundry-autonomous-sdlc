@@ -220,9 +220,9 @@ test('gateRates: empty input has no rates', () => {
 test('costSummary: totals, cap and per issue line', () => {
   const c = costSummary(parsedFixture.metrics);
   assert.equal(c.total, 1.9915);
-  assert.equal(c.cap, 25);
-  assert.ok(Math.abs(c.percentOfCap - 7.966) < 0.01);
-  assert.ok(Math.abs(c.remaining - 23.0085) < 1e-9);
+  assert.equal(c.cap, 35);
+  assert.ok(Math.abs(c.percentOfCap - 5.69) < 0.01);
+  assert.ok(Math.abs(c.remaining - 33.0085) < 1e-9);
   assert.equal(c.haltReached, false);
   assert.deepEqual(c.rows.filter((r) => r.overLine).map((r) => r.ref), []); // none is over the 3 USD line
   assert.equal(c.callsTotal, 82);
