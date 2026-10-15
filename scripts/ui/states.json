@@ -1,0 +1,111 @@
+{
+  "version": 1,
+  "_doc": "Declarative UI states captured by scripts/ui/capture.mjs. Fields: id (kebab-case, unique), title, route (key of 'routes'), viewports (optional, default both), setup.localStorage (key -> value, objects are JSON-stringified; applied before the app loads), steps (click|fill|press|select|waitFor, run in order), requires (selector or text, or a list; checked AFTER the steps: when absent the state is SKIPPED, not failed, so old releases and old PRs still capture cleanly), waitFor (selector or text, or a list; must hold before the screenshot, failure is an error), caption. To show a new feature in every PR/release proof, append a state here. Titles and captions: letters, digits, spaces and . , : ; ' ( ) / + - only.",
+  "routes": {
+    "home": "/#/",
+    "parcel-found": "/#/parcel/PK1000000001",
+    "not-found": "/#/parcel/PK9999999999",
+    "invalid-input": "/#/parcel/12345"
+  },
+  "states": [
+    {
+      "id": "home-default",
+      "title": "Home",
+      "route": "home",
+      "waitFor": { "selector": "table" },
+      "caption": "Home page in the default light theme: search form and recent parcels table."
+    },
+    {
+      "id": "home-dark",
+      "title": "Home, dark theme",
+      "route": "home",
+      "setup": { "localStorage": { "theme": "dark" } },
+      "requires": { "selector": "[data-testid='theme-toggle']" },
+      "waitFor": [{ "selector": "html[data-theme='dark']" }, { "selector": "table" }],
+      "caption": "Home page with the dark theme selected via the theme toggle preference."
+    },
+    {
+      "id": "home-recent-searches",
+      "title": "Home, recent searches",
+      "route": "home",
+      "steps": [
+        { "fill": ["#tracking-number", "PK1000000001"] },
+        { "press": ["#tracking-number", "Enter"] },
+        { "waitFor": { "selector": ".timeline" } },
+        { "click": ".back-link" },
+        { "fill": ["#tracking-number", "PK1000000002"] },
+        { "press": ["#tracking-number", "Enter"] },
+        { "waitFor": { "selector": ".timeline" } },
+        { "click": ".back-link" }
+      ],
+      "requires": { "selector": ".recent-searches__chip" },
+      "waitFor": [{ "selector": ".recent-searches__chip" }, { "selector": "table" }],
+      "caption": "Home page after searching PK1000000001 and PK1000000002: recent search chips under the form."
+    },
+    {
+      "id": "home-filtered",
+      "title": "Home, status filter",
+      "route": "home",
+      "steps": [{ "select": ["#status-filter", "in_transit"] }],
+      "requires": { "selector": "#status-filter" },
+      "waitFor": { "selector": "table" },
+      "caption": "Home page with the status filter set to In transit."
+    },
+    {
+      "id": "home-empty-search",
+      "title": "Home, empty search error",
+      "route": "home",
+      "steps": [{ "click": "form[role='search'] button[type='submit']" }],
+      "requires": { "selector": ".field-error" },
+      "waitFor": { "selector": ".field-error" },
+      "caption": "Home page after pressing Track with no tracking number: inline field error."
+    },
+    {
+      "id": "home-left-nav",
+      "title": "Home, left navigation",
+      "route": "home",
+      "requires": { "selector": "nav, [role='navigation']" },
+      "waitFor": [{ "selector": "nav, [role='navigation']" }, { "selector": "table" }],
+      "caption": "Home page with the navigation landmark visible (captured once the app has a nav)."
+    },
+    {
+      "id": "parcel-timeline",
+      "title": "Parcel timeline",
+      "route": "parcel-found",
+      "waitFor": [{ "selector": "h1#page-title" }, { "selector": ".timeline" }],
+      "caption": "Parcel PK1000000001 shipment history: events, locations and latest marker."
+    },
+    {
+      "id": "parcel-dark",
+      "title": "Parcel timeline, dark theme",
+      "route": "parcel-found",
+      "setup": { "localStorage": { "theme": "dark" } },
+      "requires": { "selector": "[data-testid='theme-toggle']" },
+      "waitFor": [{ "selector": "html[data-theme='dark']" }, { "selector": ".timeline" }],
+      "caption": "Parcel PK1000000001 shipment history in the dark theme."
+    },
+    {
+      "id": "parcel-copy-link",
+      "title": "Parcel, copy link",
+      "route": "parcel-found",
+      "steps": [{ "click": ".copy-link-btn" }],
+      "requires": { "selector": ".copy-link-btn.is-copied" },
+      "waitFor": [{ "text": "Copied!" }, { "selector": ".timeline" }],
+      "caption": "Parcel page right after pressing Copy link: button shows the Copied confirmation."
+    },
+    {
+      "id": "parcel-not-found",
+      "title": "Parcel not found",
+      "route": "not-found",
+      "waitFor": { "selector": ".notice--error" },
+      "caption": "Unknown tracking number PK9999999999: not found message."
+    },
+    {
+      "id": "parcel-invalid-input",
+      "title": "Invalid tracking number",
+      "route": "invalid-input",
+      "waitFor": { "selector": ".notice--error" },
+      "caption": "Malformed tracking number 12345: invalid tracking number message."
+    }
+  ]
+}
