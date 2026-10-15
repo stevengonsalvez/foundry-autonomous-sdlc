@@ -87,6 +87,7 @@ def test_bug_keeps_its_triage_and_maintenance_pr_is_its_own_kind(real) -> None:
         ("stage:released", None, "prod", "prod"),
         ("stage:released", None, "rolled-back", "escalated"),
         ("stage:building", "escalated:build-failed", "none", "escalated"),
+        ("stage:in-review", "escalated:merge-conflict", "none", "escalated"),
     ],
 )
 def test_board_column_follows_stage_escalation_and_environment(stage, esc, env, want) -> None:
@@ -293,3 +294,16 @@ def test_merged_pr_with_deploy_failed_stays_open() -> None:
     assert t["stage"] == "escalated"
     assert t["escalation"]["resolved"] is None
     assert t["escalation"]["open"] is True
+
+
+def test_a_merge_conflict_escalation_is_an_escalated_ticket_with_its_reasons(real) -> None:
+    item = json.loads(json.dumps(next(h for h in real.values() if h["state_data"].get("escalation"))))
+    reason = "required merge failed after 2 merge conflict rounds: GitHub 405: Pull Request has merge conflicts"
+    data = item["state_data"]
+    data["escalation"] = {"label": "escalated:merge-conflict", "reasons": [reason], "at": data["escalation"]["at"]}
+    data["stages"][-1] = {"stage": "escalated:merge-conflict", "at": data["escalation"]["at"]}
+    item["labels"] = [*(lbl for lbl in item["labels"] if not lbl.startswith("escalated:")), "escalated:merge-conflict"]
+    t = ticket_of(item)
+    assert t["stage"] == "escalated"
+    assert t["escalation"]["label"] == "escalated:merge-conflict"
+    assert t["escalation"]["reasons"] == [reason] and t["escalation"]["open"] is True
