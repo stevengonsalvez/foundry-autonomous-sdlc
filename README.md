@@ -14,20 +14,20 @@
 
 <p align="center">
   <a href="https://stevengonsalvez.github.io/foundry-autonomous-sdlc/control-center/">
-    <img src="docs/proof/control-center-board-desktop.png" alt="Control center board: every ticket by stage from backlog to production, with lens and group controls, mode badges and cost" width="100%" />
+    <img src="docs/proof/control-center-board-desktop.png" alt="Control center board hero: delivery flow matrix with Delivery lens and Type grouping, live tickets from backlog to production" width="100%" />
   </a>
 </p>
+<p align="center">
+  <sub><b>Hero:</b> Delivery flow matrix showing real tickets from backlog to production across feature, bug, and maintenance lanes. <a href="https://stevengonsalvez.github.io/foundry-autonomous-sdlc/control-center/">Open live control center &rarr;</a></sub>
+</p>
 
-<details>
-<summary>More views: ticket, cost, environments, agents, escalations, flow</summary>
-
-| | |
-|---|---|
-| <img src="docs/proof/control-center-ticket-desktop.png" alt="Ticket view with stage strip, gates and timeline" width="100%" /> | <img src="docs/proof/control-center-cost-desktop.png" alt="Cost view: per ticket cost, caps, billed versus ledger" width="100%" /> |
-| <img src="docs/proof/control-center-environments-desktop.png" alt="Environments: staging and production hops, promotions and rollbacks" width="100%" /> | <img src="docs/proof/control-center-agents-desktop.png" alt="Agent activity and health" width="100%" /> |
-| <img src="docs/proof/control-center-escalations-desktop.png" alt="Escalation queue with reasons" width="100%" /> | <img src="docs/proof/control-center-flow-desktop.png" alt="Flow metrics: cycle time, gate pass rates, defects" width="100%" /> |
-
-</details>
+| | | |
+|---|---|---|
+| <a href="https://stevengonsalvez.github.io/foundry-autonomous-sdlc/control-center/#/ticket/93"><img src="docs/proof/control-center-ticket-desktop.png" alt="Ticket view with stage strip, gates table and timeline" width="100%" /></a><br />**Ticket detail (#93)**: Stage strip, verification gates, and event timeline | <a href="https://stevengonsalvez.github.io/foundry-autonomous-sdlc/control-center/#/environments"><img src="docs/proof/control-center-environments-desktop.png" alt="Environments view with staging and production hops" width="100%" /></a><br />**Environments**: Live staging and production hops with target deployments | <a href="https://stevengonsalvez.github.io/foundry-autonomous-sdlc/control-center/#/cost"><img src="docs/proof/control-center-cost-desktop.png" alt="Cost view with ledger estimate and Azure billed spend" width="100%" /></a><br />**Cost**: Ledger estimate versus Azure billed spend, billing cap, and meters |
+| <a href="https://stevengonsalvez.github.io/foundry-autonomous-sdlc/control-center/#/agents"><img src="docs/proof/control-center-agents-desktop.png" alt="Agent health and activity status" width="100%" /></a><br />**Agents**: Health status and ledger invocation metrics for all 11 agents | <a href="https://stevengonsalvez.github.io/foundry-autonomous-sdlc/control-center/#/escalations"><img src="docs/proof/control-center-escalations-desktop.png" alt="Escalations view with resolved items" width="100%" /></a><br />**Escalations (live)**: Live queue showing 0 open and 19 resolved incidents | <a href="https://stevengonsalvez.github.io/foundry-autonomous-sdlc/control-center/#/flow"><img src="docs/proof/control-center-flow-desktop.png" alt="Flow metrics view with cycle times" width="100%" /></a><br />**Flow metrics**: Stage cycle times, lead time breakdown, and defect resolution |
+| <a href="https://stevengonsalvez.github.io/foundry-autonomous-sdlc/control-center/#/trail"><img src="docs/proof/control-center-trail-desktop.png" alt="Review and questions-back trail" width="100%" /></a><br />**Review trail**: Questions-back history and independent review decisions | <a href="https://stevengonsalvez.github.io/foundry-autonomous-sdlc/control-center/"><img src="docs/proof/control-center-board-mobile.png" alt="Mobile delivery flow board" width="100%" /></a><br />**Mobile board**: Responsive delivery flow matrix at 390px mobile viewport | <a href="https://stevengonsalvez.github.io/foundry-autonomous-sdlc/control-center/"><img src="docs/proof/control-center-board-cost-desktop.png" alt="Board with Cost lens" width="100%" /></a><br />**Cost lens**: Board matrix with Cost lens highlighting budget cap usage |
+| <a href="https://stevengonsalvez.github.io/foundry-autonomous-sdlc/control-center/"><img src="docs/proof/control-center-board-gates-desktop.png" alt="Board with Gates lens" width="100%" /></a><br />**Gates lens**: Board matrix with Gates lens highlighting verification criteria | <a href="https://stevengonsalvez.github.io/foundry-autonomous-sdlc/control-center/"><img src="docs/proof/control-center-board-group-agent-desktop.png" alt="Board grouped by agent" width="100%" /></a><br />**Agent grouping**: Delivery flow matrix grouped by autonomous agent swimlane | <a href="https://stevengonsalvez.github.io/foundry-autonomous-sdlc/control-center/"><img src="docs/proof/control-center-board-group-outcome-desktop.png" alt="Board grouped by outcome" width="100%" /></a><br />**Outcome grouping**: Delivery flow matrix grouped by release outcome status |
+| <img src="docs/proof/control-center-escalations-fixture.png" alt="Fixture shot: open escalation queue" width="100%" /><br />**Fixture: Escalation queue**: Historical test fixture showing open escalations with triage steps and reasons | <img src="docs/proof/control-center-environments-fixture.png" alt="Fixture shot: rollback and failure history" width="100%" /><br />**Fixture: Rollback history**: Historical test fixture showing deployment failures and rollback events | <img src="docs/proof/control-center-stale-banner-fixture.png" alt="Fixture shot: spend halt banner and stale snapshot alert" width="100%" /><br />**Fixture: Spend halt banner**: Historical test fixture showing spend limit halt banner and stale snapshot alert |
 
 <p align="center">
   <img src="docs/media/hero.svg" alt="Autonomous SDLC motion header: live topology network and 4 delivery flow lanes for feature, bug, escalation, and rollback" width="100%" />
