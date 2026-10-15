@@ -232,3 +232,15 @@ def test_tracebacks_are_redacted_capped_free_of_locals_and_home_paths() -> None:
     assert "/home/agyuser" not in text and "~/.config/x" in text
     assert text.startswith("Traceback (most recent call last):")
     assert len(text) <= 4000
+
+
+def test_merge_main_is_for_revise_jobs_only() -> None:
+    revise = {"mode": "revise", "tests": [], "pr": {"number": 41}}
+    spec = JobSpec.from_request(request(**revise, merge_main=True))
+    assert spec.merge_main is True and spec.to_request()["merge_main"] is True
+    plain = JobSpec.from_request(request(**revise))
+    assert plain.merge_main is False and "merge_main" not in plain.to_request()
+    with pytest.raises(JobSpecError, match="merge_main"):
+        JobSpec.from_request(request(merge_main=True))                         # a feature job
+    with pytest.raises(JobSpecError, match="merge_main"):
+        JobSpec.from_request(request(**revise, merge_main="yes"))
