@@ -26,7 +26,7 @@ const MAX_TITLE = 60;
 const MAX_CAPTION = 160;
 const MAX_SELECTOR = 200;
 
-const DEFAULTS = { stepTimeoutMs: 5000, requiresTimeoutMs: 2000, waitTimeoutMs: 10000 };
+const DEFAULTS = { stepTimeoutMs: 4000, requiresTimeoutMs: 3000, waitTimeoutMs: 10000 };
 
 function fail(where, message) {
   throw new Error(`states.json ${where}: ${message}`);
