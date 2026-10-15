@@ -241,7 +241,7 @@ def test_billed_spend_is_shown_next_to_the_ledger_estimate_and_the_gap_is_never_
     over = events.make(
         "billing.observed",
         later,
-        {"source": "azure-cost-management", "billed_usd": 26.0, "currency": "USD", "as_of": later, "by_meter": []},
+        {"source": "azure-cost-management", "billed_usd": 36.0, "currency": "USD", "as_of": later, "by_meter": []},
         source="ledger",
     )
     past = fold.fold([*all_tickets(real), billed, metrics, invoked, over], later)["cost"]["totals"]
