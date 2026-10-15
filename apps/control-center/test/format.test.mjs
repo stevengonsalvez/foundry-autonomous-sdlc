@@ -61,5 +61,6 @@ test('small helpers', () => {
   assert.equal(shortSha('<img>'), '-');
   assert.equal(truncate('abcdef', 4), 'abc\u2026');
   assert.equal(escalationLabel('escalated:build-failed'), 'Build failed');
+  assert.equal(escalationLabel('escalated:merge-conflict'), 'Merge conflict');
   assert.equal(escalationLabel(undefined), 'Escalated');
 });
