@@ -3,7 +3,7 @@ import { PARCEL_STATUSES, type ParcelStatus } from "@parcel/core";
 import { ErrorNotice, EmptyState, Loading } from "../components/Feedback";
 import { ParcelTable } from "../components/ParcelTable";
 import { SearchForm } from "../components/SearchForm";
-import { STATUS_LABELS } from "../components/StatusBadge";
+import { STATUS_LABELS, StatusBadge } from "../components/StatusBadge";
 import { goToHome, goToParcel, parseStatusFilter, useHash } from "../router";
 import { useParcelService } from "../service-context";
 import { useDocumentTitle } from "../useDocumentTitle";
@@ -34,7 +34,7 @@ export function HomePage() {
         <SearchForm onSearch={goToParcel} showRecentSearches />
       </section>
 
-      <section className="recent" aria-labelledby="recent-heading">
+      <section id="recent" className="recent" aria-labelledby="recent-heading">
         <div className="recent__header">
           <h2 id="recent-heading">Recent parcels</h2>
           {state.status === "success" && state.data.length > 0 && (
@@ -72,6 +72,35 @@ export function HomePage() {
             <p className="notice notice--empty">No parcels match this status.</p>
           )
         )}
+      </section>
+
+      <section id="status-guide" className="status-guide" aria-labelledby="status-guide-heading">
+        <div className="status-guide__header">
+          <h2 id="status-guide-heading">Status guide</h2>
+          <p className="lead">Understand what each shipment status means for your parcel.</p>
+        </div>
+        <div className="status-guide__grid">
+          <div className="status-guide__card">
+            <StatusBadge status="label_created" />
+            <p className="status-guide__desc">The carrier has received shipment details and is waiting for the parcel.</p>
+          </div>
+          <div className="status-guide__card">
+            <StatusBadge status="in_transit" />
+            <p className="status-guide__desc">The parcel is moving through the carrier network toward its destination.</p>
+          </div>
+          <div className="status-guide__card">
+            <StatusBadge status="out_for_delivery" />
+            <p className="status-guide__desc">The parcel is on the local delivery vehicle and scheduled for delivery today.</p>
+          </div>
+          <div className="status-guide__card">
+            <StatusBadge status="delivered" />
+            <p className="status-guide__desc">The parcel has been successfully delivered to the recipient address.</p>
+          </div>
+          <div className="status-guide__card">
+            <StatusBadge status="exception" />
+            <p className="status-guide__desc">An unexpected event or delay occurred during transit.</p>
+          </div>
+        </div>
       </section>
     </>
   );

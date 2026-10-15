@@ -1,10 +1,10 @@
 import { useEffect, useLayoutEffect, useRef, type MouseEvent } from "react";
 import type { ParcelService } from "@parcel/core";
-import { BoxIcon } from "./components/Icons";
+import { SideNav } from "./components/SideNav";
 import { HomePage } from "./pages/HomePage";
 import { NotFoundPage } from "./pages/NotFoundPage";
 import { ParcelPage } from "./pages/ParcelPage";
-import { HOME_HREF, parseRoute, useHash, type Route } from "./router";
+import { parseRoute, useHash, type Route } from "./router";
 import { ServiceContext } from "./service-context";
 
 function routeKey(route: Route): string {
@@ -12,13 +12,17 @@ function routeKey(route: Route): string {
 }
 
 export function App({ service }: { service: ParcelService }) {
-  const route = parseRoute(useHash());
+  const hash = useHash();
+  const route = parseRoute(hash);
   const main = useRef<HTMLElement>(null);
   const key = routeKey(route);
   const shownKey = useRef(key);
 
   useLayoutEffect(() => {
-    const container = main.current?.parentElement;
+    let container = main.current?.parentElement;
+    while (container && container.parentElement !== document.body) {
+      container = container.parentElement;
+    }
     if (container && container.parentElement === document.body) {
       let prev = container.previousElementSibling;
       while (prev) {
@@ -48,22 +52,19 @@ export function App({ service }: { service: ParcelService }) {
       <a className="skip-link" href="#main-content" onClick={skipToContent}>
         Skip to content
       </a>
-      <header className="site-header">
-        <div className="container">
-          <a className="brand" href={HOME_HREF}>
-            <BoxIcon />
-            <span>Parcel Tracker</span>
-          </a>
+      <div className="app-layout">
+        <SideNav currentRoute={route} hash={hash} />
+        <div className="app-main-area">
+          <main id="main-content" ref={main} tabIndex={-1} className="container">
+            {route.name === "home" && <HomePage />}
+            {route.name === "parcel" && <ParcelPage key={route.trackingNumber} trackingNumber={route.trackingNumber} />}
+            {route.name === "unknown" && <NotFoundPage />}
+          </main>
+          <footer className="site-footer">
+            <div className="container">Demo app with sample shipments. Not a real carrier.</div>
+          </footer>
         </div>
-      </header>
-      <main id="main-content" ref={main} tabIndex={-1} className="container">
-        {route.name === "home" && <HomePage />}
-        {route.name === "parcel" && <ParcelPage key={route.trackingNumber} trackingNumber={route.trackingNumber} />}
-        {route.name === "unknown" && <NotFoundPage />}
-      </main>
-      <footer className="site-footer">
-        <div className="container">Demo app with sample shipments. Not a real carrier.</div>
-      </footer>
+      </div>
     </ServiceContext.Provider>
   );
 }
