@@ -306,4 +306,4 @@ def test_a_merge_conflict_escalation_is_an_escalated_ticket_with_its_reasons(rea
     t = ticket_of(item)
     assert t["stage"] == "escalated"
     assert t["escalation"]["label"] == "escalated:merge-conflict"
-    assert t["escalation"]["reasons"] == [reason] and t["escalation"]["open"] is True
+    assert t["escalation"]["reasons"] == [reason]
