@@ -20,6 +20,12 @@ const MIME_TYPES: Record<string, string> = {
   ".svg": "image/svg+xml",
 };
 
+const STATE_TITLES: Record<string, string> = {
+  "home-default": "Home",
+  "parcel-timeline": "Parcel timeline",
+  "home-dark": "Home, dark theme",
+};
+
 let tempScreenshotsDir: string;
 let tempHistoryDir: string;
 let server: http.Server;
@@ -32,7 +38,6 @@ test.beforeAll(async () => {
     "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=",
     "base64"
   );
-  const routes = ["home", "parcel-found", "not-found", "invalid-input"];
   const viewports = ["desktop", "mobile"];
 
   // Dynamically discover all release tags from git so future tags (e.g. v0.6.0) don't break the test.
@@ -41,24 +46,42 @@ test.beforeAll(async () => {
   const allGitTags = execSync("git tag -l 'v*'", { cwd: REPO_ROOT, encoding: "utf-8" })
     .trim()
     .split(/\s+/)
-    .filter(Boolean);
+    .filter(Boolean)
+    .sort((a, b) => {
+      const pa = a.slice(1).split(".").map(Number);
+      const pb = b.slice(1).split(".").map(Number);
+      return pa[0] - pb[0] || pa[1] - pb[1] || pa[2] - pb[2];
+    });
   const uncapturedTag = "v0.1.0";
   const capturedTags = allGitTags.filter((t) => t !== uncapturedTag);
+  const tagsToStub = capturedTags.length > 0 ? capturedTags : allGitTags;
 
-  for (const tag of (capturedTags.length > 0 ? capturedTags : allGitTags)) {
+  for (const [index, tag] of tagsToStub.entries()) {
     const tagDir = path.join(tempScreenshotsDir, tag);
     fs.mkdirSync(tagDir, { recursive: true });
+    // home-default changes in every release, parcel-timeline never does, and home-dark
+    // appears (as a new state) three releases from the newest, inside the full cards.
+    const states: Array<[string, string]> = [
+      ["home-default", `home-default-${index}`],
+      ["parcel-timeline", "parcel-timeline-constant"],
+    ];
+    if (index >= Math.max(0, tagsToStub.length - 3)) {
+      states.push(["home-dark", "home-dark-constant"]);
+    }
     const screenshots = [];
-    for (const r of routes) {
+    for (const [state, sha] of states) {
       for (const vp of viewports) {
-        const fn = `${r}-${vp}.png`;
+        const fn = `${state}-${vp}.png`;
         fs.writeFileSync(path.join(tagDir, fn), stubPng);
         screenshots.push({
-          route: r,
+          state,
+          route: state.startsWith("home") ? "home" : "parcel-found",
           viewport: vp,
           filename: fn,
-          sha256: "stub",
-          size_bytes: stubPng.length,
+          title: STATE_TITLES[state],
+          caption: `Stub capture of ${STATE_TITLES[state]}.`,
+          sha256: sha,
+          size: stubPng.length,
         });
       }
     }
@@ -212,25 +235,48 @@ test.describe("App Evolution Showcase (/history/)", () => {
     await expect(mobileBtn).toHaveAttribute("aria-pressed", "false");
   });
 
-  test("interactive route switcher switches routes across timeline comparisons", async ({ page }) => {
+  test("interactive state switcher filters the timeline by state", async ({ page }) => {
     await page.goto(historyUrl);
 
-    const homeBtn = page.getByRole("button", { name: "Home" });
-    const parcelFoundBtn = page.getByRole("button", { name: "Parcel Found" });
-    const notFoundBtn = page.getByRole("button", { name: "Not Found" });
-    const invalidInputBtn = page.getByRole("button", { name: "Invalid Input" });
+    const allBtn = page.getByRole("button", { name: "All changes" });
+    const homeBtn = page.getByRole("button", { name: "Home", exact: true });
+    const darkBtn = page.getByRole("button", { name: "Home, dark theme" });
+    const timelineBtn = page.getByRole("button", { name: "Parcel timeline" });
 
+    await expect(allBtn).toHaveAttribute("aria-pressed", "true");
+
+    await darkBtn.click();
+    await expect(darkBtn).toHaveAttribute("aria-pressed", "true");
+    await expect(allBtn).toHaveAttribute("aria-pressed", "false");
+    // only dark-theme blocks remain visible, and cards without one say so
+    await expect(page.locator('.change[data-state="home-default"]:not([hidden])')).toHaveCount(0);
+    await expect(page.locator('.change[data-state="home-dark"]:not([hidden])').first()).toBeVisible();
+    await expect(page.locator(".state-empty:not([hidden])").first()).toBeVisible();
+
+    // parcel-timeline never changes after the first release: no block, every card says so
+    await timelineBtn.click();
+    await expect(timelineBtn).toHaveAttribute("aria-pressed", "true");
+    await expect(page.locator(".change:not([hidden])")).toHaveCount(0);
+    await expect(page.locator(".state-empty:not([hidden])").first()).toBeVisible();
+
+    await homeBtn.click();
     await expect(homeBtn).toHaveAttribute("aria-pressed", "true");
+    await allBtn.click();
+    await expect(allBtn).toHaveAttribute("aria-pressed", "true");
+  });
 
-    await parcelFoundBtn.click();
-    await expect(parcelFoundBtn).toHaveAttribute("aria-pressed", "true");
-    await expect(homeBtn).toHaveAttribute("aria-pressed", "false");
+  test("a new state shows before as not-present and after as the capture", async ({ page }) => {
+    const dataJson = JSON.parse(fs.readFileSync(path.join(tempHistoryDir, "data.json"), "utf-8"));
+    const withNew = (dataJson.entries as Array<{ tag: string; changes: Array<{ state: string; status: string }> }>).find(
+      (e) => e.changes.some((c) => c.state === "home-dark" && c.status === "new")
+    );
+    expect(withNew, "fixture should contain a release that introduces home-dark").toBeTruthy();
 
-    await notFoundBtn.click();
-    await expect(notFoundBtn).toHaveAttribute("aria-pressed", "true");
-
-    await invalidInputBtn.click();
-    await expect(invalidInputBtn).toHaveAttribute("aria-pressed", "true");
+    await page.goto(historyUrl);
+    const block = page.locator('.change[data-state="home-dark"]').first();
+    await expect(block.getByText("New state")).toBeVisible();
+    await expect(block.locator(".no-prior")).toContainText("Not present in");
+    await expect(block.locator('img[data-viewport="desktop"]')).toBeVisible();
   });
 
   test("renders then-vs-now strip and side-by-side timeline comparisons dynamically from data.json", async ({ page }) => {
