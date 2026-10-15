@@ -81,6 +81,10 @@ class GitHubError(RuntimeError):
         self.status = status
 
 
+class MergeConflict(GitHubError):
+    """A merge GitHub refused (405) because the PR conflicts with its base: retrying cannot help."""
+
+
 class GitHubPort(Protocol):
     """Everything is scoped to REPO. Implementations must refuse any other repository."""
 
