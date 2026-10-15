@@ -49,3 +49,21 @@ def test_backfill_records_changes_between_consecutive_tags(tmp_path: Path) -> No
     assert second["changes"]["vs"] == "v0.1.0"
     assert second["changes"]["states"]["home-dark"]["status"] == "new"
     assert second["changes"]["states"]["home-default"]["status"] == "unchanged"
+
+
+def test_overlay_keeps_files_from_earlier_captures(tmp_path: Path) -> None:
+    stored = tmp_path / "stored"
+    stored.mkdir()
+    (stored / "home-desktop.png").write_bytes(b"old capture linked from the README")
+    (stored / "manifest.json").write_text("old", encoding="utf-8")
+
+    fresh = tmp_path / "fresh"
+    fresh.mkdir()
+    (fresh / "home-default-desktop.png").write_bytes(b"new")
+    (fresh / "manifest.json").write_text("new", encoding="utf-8")
+
+    backfill_history.overlay_release(fresh, stored)
+
+    assert (stored / "home-desktop.png").read_bytes() == b"old capture linked from the README"
+    assert (stored / "home-default-desktop.png").read_bytes() == b"new"
+    assert (stored / "manifest.json").read_text(encoding="utf-8") == "new"

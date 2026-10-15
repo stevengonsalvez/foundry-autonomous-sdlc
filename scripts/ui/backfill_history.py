@@ -240,6 +240,15 @@ def get_remote_url() -> str:
     return url
 
 
+def overlay_release(src: Path, dst: Path) -> None:
+    """Copy a captured release over its stored directory without deleting what is there.
+
+    Files from earlier captures (for example home-desktop.png, linked from the README) stay
+    until nothing references them; the new manifest decides what the history page shows.
+    """
+    shutil.copytree(src, dst, dirs_exist_ok=True)
+
+
 def commit_to_pr_screenshots_branch(
     releases_dir: Path,
     tags: list[str],
@@ -293,10 +302,7 @@ def commit_to_pr_screenshots_branch(
                 src_tag_dir = releases_dir / tag
                 if not src_tag_dir.exists():
                     continue
-                dst_tag_dir = wt_releases / tag
-                if dst_tag_dir.exists():
-                    shutil.rmtree(dst_tag_dir)
-                shutil.copytree(src_tag_dir, dst_tag_dir)
+                overlay_release(src_tag_dir, wt_releases / tag)
                 changed = True
 
             if changed:
