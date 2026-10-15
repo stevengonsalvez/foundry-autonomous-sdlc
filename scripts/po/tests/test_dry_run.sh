@@ -252,6 +252,46 @@ run_dry_test "Roadmap item with Visible Surface generates visible surface sectio
   "Roadmap item: ITEM-001"
 rm -rf "$tmp_visible_dir"
 
+# 22. Halt state flagged stops Hat 4 intake with zero commands
+tmp_halt_dir="$(mktemp -d -t dry-run-halt-XXXXXX)"
+cp "$FIXTURES/idle_with_roadmap/roadmap.md" "$tmp_halt_dir/roadmap.md"
+cp "$FIXTURES/idle_with_roadmap/issues.json" "$tmp_halt_dir/issues.json"
+cat > "$tmp_halt_dir/state.json" << 'EOF'
+{
+  "version": 1,
+  "cost": {
+    "billing": { "billed_usd": 15.00 },
+    "caps": { "halt_usd": 22.0, "issue_usd": 3.0, "total_usd": 25.0 },
+    "totals": { "halted": true }
+  }
+}
+EOF
+run_dry_test "22 USD halt state flagged stops Hat 4 intake" \
+  "\"$tmp_halt_dir\"" \
+  "22 USD halt state is flagged. Intake stopped." \
+  "gh issue create"
+rm -rf "$tmp_halt_dir"
+
+# 23. Billed spend over 21 USD stops Hat 4 intake with zero commands
+tmp_spend_dir="$(mktemp -d -t dry-run-spend-XXXXXX)"
+cp "$FIXTURES/idle_with_roadmap/roadmap.md" "$tmp_spend_dir/roadmap.md"
+cp "$FIXTURES/idle_with_roadmap/issues.json" "$tmp_spend_dir/issues.json"
+cat > "$tmp_spend_dir/state.json" << 'EOF'
+{
+  "version": 1,
+  "cost": {
+    "billing": { "billed_usd": 21.50 },
+    "caps": { "halt_usd": 22.0, "issue_usd": 3.0, "total_usd": 25.0 },
+    "totals": { "halted": false }
+  }
+}
+EOF
+run_dry_test "Billed spend over 21 USD stops Hat 4 intake" \
+  "\"$tmp_spend_dir\"" \
+  "exceeds 21.00 USD cap. Intake stopped." \
+  "gh issue create"
+rm -rf "$tmp_spend_dir"
+
 echo "----------------------------------------"
 if [ "$failures" -gt 0 ]; then
   echo "FAILED: $failures of $total tests failed."
