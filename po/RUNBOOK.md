@@ -119,21 +119,22 @@ Each item in `po/ROADMAP.md` is structured with:
 - **Identifier**: Standard prefix (`ITEM-001`, `ITEM-002`, ...).
 - **Title**: Conventional commit style (`feat(web): ...` or `feat(api): ...`).
 - **User Value**: Concrete user or stakeholder benefit.
-- **Testable Acceptance Criteria**: Numbered, deterministic criteria with exact values and assertions (minimum 3 words each, no TBDs).
+- **Testable Acceptance Criteria**: Numbered, deterministic criteria with exact values and assertions (minimum 3 words each, no TBDs). Every item MUST include an acceptance criterion verifying that the `ui-proof` screenshot for the changed surface differs from the previous release (new visible element with a stable test id or text).
 - **Files Touched**: Strictly restricted to paths under `app/` (`app/core`, `app/contracts`, `app/carrier-mock`, `app/api`, `app/web`, `app/e2e`). Every line must be backtick-enclosed (`- \`app/...\``). Agent pull requests touching files outside `app/` are blocked by the `agent-scope` gate.
 - **Dependencies**: Explicit list of prerequisite item IDs that must be completed before the item becomes eligible for intake.
 - **Cost Class**:
   - `S`: Small, focused change (single component, isolated helper, or test addition), budget under 1.00 USD (observed spend ~0.02 to 0.15 USD per ticket).
   - `M`: Multi-component or cross-workspace change (storage persistence, i18n translation, responsive layout refactors, API pagination), budget 1.00 to 3.00 USD (observed spend ~0.15 to 0.32 USD per ticket; well within the 3.00 USD per-issue cap).
-- **Tags**: Functional groupings (`ui`, `accessibility`, `timeline`, `api`, `storage`, `theme`).
+- **Tags**: Functional groupings (`ui`, `accessibility`, `timeline`, `api`, `storage`, `theme`, `high-visibility`).
+- **Visible Surface**: Target user interface surface being modified (`home`, `parcel page`, or `home, parcel page`).
 - **Status**: `todo`, `filed`, or `done`.
 
 ### Intake and Selection Algorithm:
 1. **Canonical Source from origin/main**: The persona runs `git fetch origin main` and reads the roadmap via `git show origin/main:po/ROADMAP.md`. Because the persona runs in a persistent, resumed session, reading from `origin/main` ensures it immediately picks up newly merged roadmap PRs without relying on stale local worktree state.
 2. **Dependency Resolution**: When the repository is idle and within spend limits, the persona inspects the roadmap and verifies candidate dependencies against GitHub issues. A dependency counts as satisfied ONLY when its corresponding issue carries label `stage:released` or `stage:merged` (or status is `done` in the roadmap), NOT when merely filed.
 3. **Deduplication Check**: The persona searches GitHub via `gh issue list --author stevengonsalvez --state all --search '"Roadmap item: ITEM-0NN" in:body'` to verify the candidate item has not already been filed or closed.
-4. **Sequential Pick**: The persona takes the first unblocked `todo` item in sequential order that has not been filed.
-5. **Issue Creation**: The persona generates an issue containing the title, marker line `Roadmap item: ITEM-0NN`, user story, acceptance criteria, and explicit `app/` scope, referencing the roadmap ID.
+4. **Highest-Visibility Priority and Sequential Pick**: When multiple unblocked `todo` items are eligible, the persona prefers the highest-visibility ready item first among candidate items, taking the first unblocked ready item in roadmap order to drive visible UI and functional evolution on the first screen and parcel details.
+5. **Issue Creation**: The persona generates an issue containing the title, marker line `Roadmap item: ITEM-0NN`, explicit `Visible surface` section (`home` or `parcel page`), user story, acceptance criteria (including the `ui-proof` screenshot diff assertion with stable test id or text), and explicit `app/` scope, referencing the roadmap ID.
 6. **Authority Notice**: GitHub is the sole authoritative source of truth for filed items (derived from issue markers). `po/MEMORY.md` serves only as local session scratchpad.
 7. **PR-Only Modification**: The persona NEVER edits `po/ROADMAP.md` directly during scheduled runs. Changes to `po/ROADMAP.md` occur strictly through merged pull requests.
 8. **Maintainer Extension Logging**: If fewer than 5 `status: todo` items remain unfiled in `po/ROADMAP.md`:

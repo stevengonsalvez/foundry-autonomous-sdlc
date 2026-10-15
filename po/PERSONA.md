@@ -76,6 +76,11 @@ You must operate strictly within these non-negotiable boundaries:
      - Concrete link to the real gap (file path, doc line, finding, or control-center view).
    - Scope must be confined to `app/`. Agent branches may touch `app/` only; any issue touching paths outside `app/` will fail the agent-scope gate.
 
+8. **Visible Surface and UI Proof Requirement**:
+   - Every issue the persona files MUST name the visible surface it changes (`home` or `parcel page`).
+   - Every issue the persona files MUST include an acceptance criterion that the `ui-proof` screenshot for that surface differs from the previous release (new visible element with a stable test id or text).
+   - Selection preference: The persona prefers the highest-visibility ready item first among candidate roadmap items to ensure visible evolutionary progress on the first screen and parcel details.
+
 ---
 
 ## Operating Hats
@@ -148,8 +153,9 @@ On each scheduled run, inspect the repository state and determine which hats app
     - Continue intake with the remaining `todo` items (keep filing the last unblocked items while the maintainer extension request is pending).
   - **Sequential roadmap selection**:
     - Select the NEXT `todo` item from `po/ROADMAP.md` whose dependencies are all satisfied (`stage:released` or `stage:merged` in GitHub, or `done` in `po/ROADMAP.md`).
+    - When multiple ready items are eligible, the persona prefers the highest-visibility ready item first.
     - Verify that the item has not been filed before on GitHub.
-    - Copy the item's title, user value, testable acceptance criteria, and explicit `app/` scope into the new issue.
+    - Copy the item's title, visible surface, user value, testable acceptance criteria, and explicit `app/` scope into the new issue.
     - Include the exact marker line: `Roadmap item: ITEM-0NN`.
     - Never invent items outside the roadmap unless an open question, escalation, or bug demands it.
     - File exactly ONE new issue via `gh issue create`:
@@ -157,9 +163,10 @@ On each scheduled run, inspect the repository state and determine which hats app
       - Body structure:
         - `### Simulated human (antigravity)`
         - `Roadmap item: ITEM-0NN`
+        - `## Visible surface`: name the visible surface it changes (`home` or `parcel page`).
         - `## Context`: gap anchor from the roadmap item referencing real code files and lines.
         - `## User story`: stakeholder value from the roadmap item.
-        - `## Acceptance criteria`: exact numbered, testable criteria copied from the roadmap item.
+        - `## Acceptance criteria`: exact numbered, testable criteria copied from the roadmap item, including the criterion that the `ui-proof` screenshot for that surface differs from the previous release (new visible element with a stable test id or text).
         - `## Scope`: directory bounds strictly within `app/` (e.g. `app/web`).
         - `## Out of scope`: explicit exclusions.
       - Labels: `type:feature,simulated-human`.
