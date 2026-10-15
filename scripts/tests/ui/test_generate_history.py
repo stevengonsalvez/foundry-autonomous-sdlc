@@ -22,6 +22,7 @@ from scripts.ui.generate_history import (
     BUDGET_CSS_BYTES,
     BUDGET_HTML_BYTES,
     BUDGET_JS_BYTES,
+    MAX_CHANGE_BLOCKS,
     ROUTES,
     VIEWPORTS,
     build_history_site,
@@ -202,11 +203,10 @@ def test_missing_screenshots() -> None:
             tags=["v0.1.0"],
         )
 
-        assert payload["entries"][0]["screenshots"]["home"]["desktop"] == "home-desktop.png"
-        assert (
-            "parcel-found" not in payload["entries"][0]["screenshots"]
-            or not payload["entries"][0]["screenshots"]["parcel-found"]
-        )
+        # screenshots are keyed by state id; a legacy `home` route is the home-default state
+        screenshots = payload["entries"][0]["screenshots"]
+        assert screenshots["home-default"]["desktop"] == "home-desktop.png"
+        assert "parcel-timeline" not in screenshots
         assert (out_dir / "index.html").exists()
         assert (out_dir / "data.json").exists()
 
@@ -683,3 +683,284 @@ def test_uncaptured_release_does_not_produce_404_images() -> None:
             msg = f"Image referenced in HTML does not exist (would 404): {src}"
             assert file_on_disk.exists(), msg
 
+
+
+# ---- states: what changed per release ------------------------------------------------
+
+STATE_META = {
+    "home-default": ("Home", "Home page default."),
+    "home-dark": ("Home, dark theme", "Home page in dark theme."),
+    "parcel-timeline": ("Parcel timeline", "Parcel shipment history."),
+    "parcel-copy-link": ("Parcel, copy link", "Copied confirmation."),
+}
+
+
+def create_state_release(
+    dest_dir: Path,
+    tag: str,
+    states: dict[str, str],
+    *,
+    precomputed: dict | None = None,
+    extra: dict[str, dict] | None = None,
+) -> None:
+    """states: state id -> sha256 stand-in. Two viewports each, tiny PNG files."""
+    tag_dir = dest_dir / tag
+    tag_dir.mkdir(parents=True, exist_ok=True)
+    shots = []
+    for sid, sha in states.items():
+        title, caption = STATE_META.get(sid, (sid, ""))
+        for vp in VIEWPORTS:
+            fn = f"{sid}-{vp}.png"
+            (tag_dir / fn).write_bytes(TINY_PNG)
+            item = {
+                "filename": fn,
+                "state": sid,
+                "route": "home",
+                "viewport": vp,
+                "title": title,
+                "caption": caption,
+                "sha256": sha,
+                "size": len(TINY_PNG),
+                **((extra or {}).get(sid, {})),
+            }
+            shots.append(item)
+    manifest: dict = {"version": 1, "tag": tag, "reproducible": True, "screenshots": shots}
+    if precomputed is not None:
+        manifest["changes"] = precomputed
+    (tag_dir / "manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
+
+
+def _entries(screens: Path, tags: list[str]) -> list[dict]:
+    return collect_evolution_entries(state_data={}, screenshots_dir=screens, tags=tags)
+
+
+def test_changes_are_new_changed_and_omit_unchanged(tmp_path: Path) -> None:
+    create_state_release(tmp_path, "v0.7.0", {"home-default": "a", "parcel-timeline": "p"})
+    create_state_release(
+        tmp_path,
+        "v0.8.0",
+        {"home-default": "b", "parcel-timeline": "p", "home-dark": "d"},
+    )
+    entries = _entries(tmp_path, ["v0.7.0", "v0.8.0"])
+    latest = entries[0]
+    by_state = {c["state"]: c for c in latest["changes"]}
+
+    assert set(by_state) == {"home-dark", "home-default"}  # parcel-timeline unchanged
+    assert by_state["home-dark"]["status"] == "new"
+    assert by_state["home-default"]["status"] == "changed"
+    assert by_state["home-default"]["before"]["desktop"] == "home-default-desktop.png"
+    assert by_state["home-dark"]["before"] == {}
+    assert by_state["home-dark"]["after"]["mobile"] == "home-dark-mobile.png"
+    # new states lead, then changed
+    assert [c["state"] for c in latest["changes"]] == ["home-dark", "home-default"]
+    assert latest["before"]["tag"] == "v0.7.0"
+
+
+def test_first_release_lists_all_its_states_as_new(tmp_path: Path) -> None:
+    create_state_release(tmp_path, "v0.1.0", {"home-default": "a", "parcel-timeline": "p"})
+    entries = _entries(tmp_path, ["v0.1.0"])
+    assert {c["status"] for c in entries[0]["changes"]} == {"new"}
+    assert entries[0]["before"] is None
+
+
+def test_precomputed_changes_in_manifest_win_over_sha_compare(tmp_path: Path) -> None:
+    create_state_release(tmp_path, "v0.7.0", {"home-default": "a"})
+    # shas differ (a vs b) but the publisher measured only render noise: unchanged
+    create_state_release(
+        tmp_path,
+        "v0.8.0",
+        {"home-default": "b", "home-dark": "d"},
+        precomputed={
+            "vs": "v0.7.0",
+            "states": {
+                "home-default": {"status": "unchanged", "pct": {"desktop": 0.0, "mobile": 0.0}},
+                "home-dark": {"status": "new", "pct": {}},
+            },
+        },
+    )
+    latest = _entries(tmp_path, ["v0.7.0", "v0.8.0"])[0]
+    assert [c["state"] for c in latest["changes"]] == ["home-dark"]
+
+
+def test_precomputed_pct_is_carried_for_changed_states(tmp_path: Path) -> None:
+    create_state_release(tmp_path, "v0.7.0", {"home-default": "a"})
+    create_state_release(
+        tmp_path,
+        "v0.8.0",
+        {"home-default": "b"},
+        precomputed={
+            "vs": "v0.7.0",
+            "states": {
+                "home-default": {"status": "changed", "pct": {"desktop": 12.5, "mobile": 3.0}}
+            },
+        },
+    )
+    latest = _entries(tmp_path, ["v0.7.0", "v0.8.0"])[0]
+    assert latest["changes"][0]["pct"] == {"desktop": 12.5, "mobile": 3.0}
+
+
+def test_before_skips_non_reproducible_releases(tmp_path: Path) -> None:
+    create_state_release(tmp_path, "v0.1.0", {"home-default": "a"})
+    create_release_fixture(tmp_path, "v0.2.0", reproducible=False, reason="build failed")
+    create_state_release(tmp_path, "v0.3.0", {"home-default": "b"})
+    entries = _entries(tmp_path, ["v0.1.0", "v0.2.0", "v0.3.0"])
+    assert entries[0]["before"]["tag"] == "v0.1.0"
+    assert entries[0]["changes"][0]["status"] == "changed"
+
+
+def test_legacy_route_manifests_map_to_states(tmp_path: Path) -> None:
+    create_release_fixture(tmp_path, "v0.1.0")
+    entries = _entries(tmp_path, ["v0.1.0"])
+    assert set(entries[0]["screenshots"]) == {
+        "home-default",
+        "parcel-timeline",
+        "parcel-not-found",
+        "parcel-invalid-input",
+    }
+
+
+def _render(tmp_path: Path, tags: list[str]) -> str:
+    return render_html(_entries(tmp_path, tags))
+
+
+def test_card_shows_before_and_after_for_changed_states_only(tmp_path: Path) -> None:
+    create_state_release(tmp_path, "v0.7.0", {"home-default": "a", "parcel-timeline": "p"})
+    create_state_release(
+        tmp_path, "v0.8.0", {"home-default": "b", "parcel-timeline": "p", "home-dark": "d"}
+    )
+    page = _render(tmp_path, ["v0.7.0", "v0.8.0"])
+    latest_card = page.split('<article class="timeline-item">')[1]
+
+    assert 'data-state="home-dark"' in latest_card
+    assert "Home, dark theme" in latest_card
+    assert "Home page in dark theme." in latest_card
+    assert "New state" in latest_card
+    assert 'data-state="home-default"' in latest_card
+    # before + after columns for the changed state, with the compared tags
+    assert "Before (v0.7.0)" in latest_card and "After (v0.8.0)" in latest_card
+    assert "./screenshots/v0.7.0/home-default-desktop.png" in latest_card
+    assert "./screenshots/v0.8.0/home-default-desktop.png" in latest_card
+    # unchanged state is not shown as a change
+    assert 'data-state="parcel-timeline"' not in latest_card.split("</article>")[0]
+
+
+def test_card_without_changes_says_so(tmp_path: Path) -> None:
+    create_state_release(tmp_path, "v0.7.0", {"home-default": "a"})
+    create_state_release(tmp_path, "v0.8.0", {"home-default": "a"})
+    page = _render(tmp_path, ["v0.7.0", "v0.8.0"])
+    assert "No visible UI change vs v0.7.0" in page
+
+
+def test_changed_blocks_are_capped_and_the_rest_listed(tmp_path: Path) -> None:
+    ids = ["home-default", "home-dark", "parcel-timeline", "parcel-copy-link"]
+    create_state_release(tmp_path, "v0.7.0", dict.fromkeys(ids, "a"))
+    create_state_release(tmp_path, "v0.8.0", dict.fromkeys(ids, "b"))
+    page = _render(tmp_path, ["v0.7.0", "v0.8.0"])
+    card = page.split('<article class="timeline-item">')[1].split("</article>")[0]
+    assert card.count('class="change"') == MAX_CHANGE_BLOCKS
+    assert "more changed" in card
+
+
+def test_toolbar_lists_every_state_in_the_data(tmp_path: Path) -> None:
+    create_state_release(tmp_path, "v0.7.0", {"home-default": "a"})
+    create_state_release(tmp_path, "v0.8.0", {"home-default": "a", "home-dark": "d"})
+    page = _render(tmp_path, ["v0.7.0", "v0.8.0"])
+    assert 'data-action="set-state" data-state="all"' in page
+    assert 'data-action="set-state" data-state="home-default"' in page
+    assert 'data-action="set-state" data-state="home-dark"' in page
+    assert "Home, dark theme" in page
+
+
+def test_hostile_manifest_values_cannot_reach_the_page(tmp_path: Path) -> None:
+    create_state_release(tmp_path, "v0.7.0", {"home-default": "a"})
+    create_state_release(
+        tmp_path,
+        "v0.8.0",
+        {"home-default": "b", "home-dark": "d"},
+        extra={
+            "home-dark": {
+                "title": "<script>alert(1)</script>",
+                "caption": '"><img src=x onerror=alert(2)>',
+            },
+            "home-default": {"filename": "../../etc/passwd.png"},
+        },
+    )
+    page = _render(tmp_path, ["v0.7.0", "v0.8.0"])
+    assert "<script>alert" not in page
+    assert "onerror" not in page
+    assert "etc/passwd" not in page
+    assert "..\\" not in page and "/../" not in page
+
+
+def test_no_ledger_ticket_falls_back_to_merge_commit_title_and_pr_link(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    create_state_release(tmp_path, "v0.9.0", {"home-default": "a"})
+
+    def fake_meta(ref: str, repo_root: Path | None = None) -> dict[str, str]:
+        return {
+            "sha": "0123456789abcdef0123456789abcdef01234567",
+            "date": "2026-10-14T10:00:00Z",
+            "subject": "Merge pull request #104 from stevengonsalvez/agent/issue-96",
+            "body": "feat(web): add a left navigation (#96)",
+        }
+
+    monkeypatch.setattr("scripts.ui.generate_history.get_commit_metadata", fake_meta)
+    entry = _entries(tmp_path, ["v0.9.0"])[0]
+    assert entry["title"] == "feat(web): add a left navigation"
+    assert entry["pr_number"] == 104
+    assert entry["pr_url"] == "https://github.com/stevengonsalvez/foundry-autonomous-sdlc/pull/104"
+    page = render_html([entry])
+    assert "pr #104" in page and "add a left navigation" in page
+
+
+def test_ledger_title_and_pr_win_over_commit_fallback(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    create_state_release(tmp_path, "v0.9.0", {"home-default": "a"})
+
+    def fake_meta(ref: str, repo_root: Path | None = None) -> dict[str, str]:
+        return {
+            "sha": "0123456789abcdef0123456789abcdef01234567",
+            "date": "2026-10-14T10:00:00Z",
+            "subject": "Merge pull request #104 from x/y",
+            "body": "commit body title (#96)",
+        }
+
+    monkeypatch.setattr("scripts.ui.generate_history.get_commit_metadata", fake_meta)
+    state = {
+        "tickets": [
+            {
+                "release": {"tag": "v0.9.0"},
+                "title": "Ledger title",
+                "issue": 96,
+                "pr": {"number": 104, "url": "https://github.com/o/r/pull/104"},
+            }
+        ]
+    }
+    entry = collect_evolution_entries(state, tmp_path, tags=["v0.9.0"])[0]
+    assert entry["title"] == "Ledger title"
+    assert entry["pr_url"] == "https://github.com/o/r/pull/104"
+
+
+def test_compact_rows_name_the_changed_states(tmp_path: Path) -> None:
+    create_state_release(tmp_path, "v0.1.0", {"home-default": "a"})
+    for minor in range(2, 8):
+        create_state_release(
+            tmp_path, f"v0.{minor}.0", {"home-default": "a", "home-dark": str(minor)}
+        )
+    tags = [f"v0.{m}.0" for m in range(1, 8)]
+    page = _render(tmp_path, tags)
+    older = page.split('class="older-entries-disclosure"')[1]
+    assert "timeline-item-compact" in older
+    assert "Changed: " in older
+    assert "<img" not in older
+
+
+def test_worst_case_page_stays_inside_the_html_budget(tmp_path: Path) -> None:
+    ids = list(STATE_META)
+    for minor in range(1, 31):
+        create_state_release(tmp_path, f"v0.{minor}.0", dict.fromkeys(ids, str(minor)))
+    tags = [f"v0.{m}.0" for m in range(1, 31)]
+    page = _render(tmp_path, tags)
+    assert len(page.encode("utf-8")) < BUDGET_HTML_BYTES
