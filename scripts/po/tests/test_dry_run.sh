@@ -25,6 +25,8 @@
 # 24. merge-conflict escalation is close only, never an issue create
 # 25. two merge-conflict escalations in one run create no issue
 # 26. persona and runbook both document escalated:merge-conflict as close only
+# 27. agent-quota escalation is left for the owner, no commands
+# 28. persona and runbook document escalated:agent-quota as left for the owner
 
 set -euo pipefail
 
@@ -321,6 +323,27 @@ if [ "$doc_ok" -eq 1 ]; then
   echo "PASS"
 else
   echo "FAIL (po/PERSONA.md and po/RUNBOOK.md must say escalated:merge-conflict is close only, not close or re-file)"
+  failures=$((failures + 1))
+fi
+
+# 27. agent-quota escalation is left for the owner: no comment, label, close or create
+run_dry_test "agent-quota escalation is left for the owner with no commands" \
+  "\"$FIXTURES/agent_quota\"" \
+  "Leaving agent-quota escalation on issue #96 for the owner" \
+  "gh issue (close|create|comment|edit)"
+
+# 28. the persona and the runbook say agent-quota is left for the owner, never closed or re-filed
+total=$((total + 1))
+echo -n "Test $total: persona and runbook document escalated:agent-quota as left for the owner ... "
+doc_ok=1
+for doc in "$SCRIPT_DIR/../../../po/PERSONA.md" "$SCRIPT_DIR/../../../po/RUNBOOK.md"; do
+  grep -q "escalated:agent-quota" "$doc" && grep -qi "leave for the owner" "$doc" \
+    && grep -qi "do not close or re-file" "$doc" || doc_ok=0
+done
+if [ "$doc_ok" -eq 1 ]; then
+  echo "PASS"
+else
+  echo "FAIL (po/PERSONA.md and po/RUNBOOK.md must say escalated:agent-quota is left for the owner, do not close or re-file)"
   failures=$((failures + 1))
 fi
 
