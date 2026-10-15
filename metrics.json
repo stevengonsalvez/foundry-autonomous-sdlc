@@ -44,7 +44,7 @@
       "pass": 13
     }
   },
-  "generated_at": "2026-10-15T10:20:45Z",
+  "generated_at": "2026-10-15T10:30:53Z",
   "issues": [
     {
       "closed_at": "2026-10-10T12:28:43Z",
@@ -2184,15 +2184,15 @@
       "type": "feature"
     },
     {
-      "closed_at": null,
+      "closed_at": "2026-10-15T10:20:25Z",
       "coder_engine": "agy-unrestricted",
       "coder_sessions_lost": 0,
       "cost": {
-        "calls": 5,
+        "calls": 6,
         "coder_model_usd": 0.0,
         "coder_usd": 0.34762,
-        "model_usd": 0.016574,
-        "usd": 0.364194
+        "model_usd": 0.018034,
+        "usd": 0.365654
       },
       "deferred": null,
       "escalation": null,
@@ -2231,12 +2231,12 @@
       "kind": "issue",
       "number": 95,
       "opened_at": "2026-10-15T08:24:24Z",
-      "outcome": "open",
+      "outcome": "released",
       "owner": null,
       "pr": 100,
       "quality_score": 93,
-      "release": null,
-      "resolution_seconds": null,
+      "release": "v0.8.0",
+      "resolution_seconds": 7568,
       "scenario": "a",
       "severity": null,
       "stages": [
@@ -2282,9 +2282,13 @@
         },
         {
           "entered_at": "2026-10-15T10:20:24Z",
-          "in_progress": true,
-          "seconds": 0,
+          "seconds": 608,
           "stage": "stage:merged"
+        },
+        {
+          "entered_at": "2026-10-15T10:30:32Z",
+          "seconds": 0,
+          "stage": "stage:released"
         }
       ],
       "title": "feat(web): add light and dark theme toggle with persisted choice",
@@ -2394,7 +2398,7 @@
     }
   ],
   "ledger": {
-    "emitted_at": "2026-10-15T10:20:32Z",
+    "emitted_at": "2026-10-15T10:30:39Z",
     "reconciled_at": "2026-10-15T09:50:24Z"
   },
   "repo": "stevengonsalvez/foundry-autonomous-sdlc",
@@ -2402,10 +2406,10 @@
     "deferred": 0,
     "escalated": 19,
     "issues": 31,
-    "ledger_usd": 0.871261,
-    "orchestrator_usd": 7.126439,
-    "released": 9,
-    "usd": 11.414797
+    "ledger_usd": 0.87369,
+    "orchestrator_usd": 7.139451,
+    "released": 10,
+    "usd": 11.431698
   },
   "version": 1
 }
