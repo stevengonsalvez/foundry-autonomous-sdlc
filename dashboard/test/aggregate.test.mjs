@@ -242,10 +242,10 @@ test('costSummary: sums rows when totals.usd is missing, tolerates issues withou
 });
 
 test('costSummary: over the cap is clamped for the bar but not for the figure', () => {
-  const m = ok({ version: 1, totals: { usd: 30 }, issues: [{ number: 1, cost: { usd: 30 } }] });
+  const m = ok({ version: 1, totals: { usd: 40 }, issues: [{ number: 1, cost: { usd: 40 } }] });
   const c = costSummary(m);
   assert.equal(c.fractionOfCap, 1);
-  assert.equal(c.total, 30);
+  assert.equal(c.total, 40);
   assert.equal(c.remaining, 0);
   assert.equal(c.haltReached, true);
 });

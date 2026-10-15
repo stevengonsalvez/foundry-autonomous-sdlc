@@ -142,7 +142,7 @@ test('billing story: the gap in plain words, honest when unread', () => {
   assert.equal(s.overCap, false);
   assert.equal(s.overHalt, false);
   const over = structuredClone(state.cost);
-  over.billing.billed_usd = 26;
+  over.billing.billed_usd = 36;
   const o = billingSummary(over);
   assert.equal(o.tone, 'danger');
   assert.equal(o.overCap, true);
