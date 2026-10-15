@@ -52,6 +52,7 @@ LABEL_GROUPS: dict[str, tuple[str, list[tuple[str, str]]]] = {
             ("escalated:build-failed", "Terminal: coder could not make the tests pass"),
             ("escalated:agent-error", "Terminal: an agent kept returning unusable output"),
             ("escalated:merge-conflict", "Terminal: the approved PR still conflicts with main"),
+            ("escalated:agent-quota", "Terminal: agy account quota spent, owner rotates or waits"),
             (
                 "escalated:deploy-failed",
                 "Terminal: a release failed smoke or soak and was rolled back",
