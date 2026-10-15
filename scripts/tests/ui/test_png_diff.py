@@ -196,7 +196,14 @@ def test_oversized_dimensions_raise() -> None:
 
 @pytest.mark.parametrize(
     ("pct", "text"),
-    [(0.0, "0%"), (0.004, "<0.01%"), (0.5, "0.50%"), (12.345, "12.35%"), (100.0, "100.00%"), (None, "changed")],
+    [
+        (0.0, "0%"),
+        (0.004, "<0.01%"),
+        (0.5, "0.50%"),
+        (12.345, "12.35%"),
+        (100.0, "100.00%"),
+        (None, "changed"),
+    ],
 )
 def test_format_pct(pct: float | None, text: str) -> None:
     assert format_pct(pct) == text

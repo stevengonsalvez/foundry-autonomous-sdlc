@@ -309,7 +309,9 @@ def validate_artifact_dir(artifact_dir: str | Path) -> ValidationResult:
     skipped = manifest_data.get("skipped")
     if skipped is not None:
         if not isinstance(skipped, list) or len(skipped) > MAX_SKIPPED:
-            errors.append(f"manifest.json skipped must be a list of at most {MAX_SKIPPED} state ids")
+            errors.append(
+                f"manifest.json skipped must be a list of at most {MAX_SKIPPED} state ids"
+            )
         else:
             for sid in skipped:
                 if (

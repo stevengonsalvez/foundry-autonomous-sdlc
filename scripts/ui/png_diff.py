@@ -121,7 +121,8 @@ def decode_png(content: bytes) -> Image:
     width, height, depth, color_type, _comp, _filt, interlace = ihdr
     if depth != 8 or color_type not in (2, 6) or interlace != 0:
         raise PngDecodeError(
-            f"unsupported PNG format (depth={depth}, color_type={color_type}, interlace={interlace})"
+            f"unsupported PNG format (depth={depth}, color_type={color_type}, "
+            f"interlace={interlace})"
         )
     if width <= 0 or height <= 0 or width * height > MAX_PIXELS:
         raise PngDecodeError(f"unsupported PNG dimensions {width}x{height}")
