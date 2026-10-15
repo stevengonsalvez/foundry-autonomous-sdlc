@@ -4,7 +4,8 @@ import { ArrowLeftIcon, CheckIcon, CopyIcon } from "../components/Icons";
 import { ErrorNotice, Loading } from "../components/Feedback";
 import { StatusBadge } from "../components/StatusBadge";
 import { Timeline } from "../components/Timeline";
-import { HOME_HREF } from "../router";
+import { SearchForm } from "../components/SearchForm";
+import { HOME_HREF, goToParcel } from "../router";
 import { useParcelService } from "../service-context";
 import { useDocumentTitle } from "../useDocumentTitle";
 import { useRemote } from "../useRemote";
@@ -197,6 +198,8 @@ export function ParcelPage({ trackingNumber }: { trackingNumber: string }) {
           <Timeline events={state.data.events} labelledBy="timeline-heading" />
         </section>
       )}
+
+      <SearchForm onSearch={goToParcel} />
     </>
   );
 }

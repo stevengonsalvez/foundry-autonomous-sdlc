@@ -31,7 +31,7 @@ export function HomePage() {
           Track a parcel
         </h1>
         <p className="lead">See where your parcel is, where it has been and what happens next.</p>
-        <SearchForm onSearch={goToParcel} />
+        <SearchForm onSearch={goToParcel} showRecentSearches />
       </section>
 
       <section className="recent" aria-labelledby="recent-heading">
