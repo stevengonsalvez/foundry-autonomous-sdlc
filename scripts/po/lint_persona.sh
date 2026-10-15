@@ -142,16 +142,20 @@ else
   check_fail "Guardrail (d)" "Allow-list failed validation: $allow_list_check"
 fi
 
-# Guardrail (e): Spend cap protection with exact thresholds 18, 22, 25, 3 USD
+# Guardrail (e): Spend cap protection with exact thresholds 21, 22, 25, 3 USD and second hard rule on 22 halt state
 if grep -qi "never raise.*spend cap" "$PERSONA_FILE" && \
-   grep -qE "\b18(\.00)?\s*USD\b" "$PERSONA_FILE" && \
+   grep -qE "\b21(\.00)?\s*USD\b" "$PERSONA_FILE" && \
    grep -qE "\b22(\.00)?\s*USD\b" "$PERSONA_FILE" && \
    grep -qE "\b25(\.00)?\s*USD\b" "$PERSONA_FILE" && \
    grep -qE "\b3(\.00)?\s*USD\b" "$PERSONA_FILE" && \
-   grep -qi "close.*shrink.*park" "$PERSONA_FILE"; then
-  check_pass "Guardrail (e): Spend cap protection with exact thresholds 18/22/25/3 USD (never raise, 22 USD halt, close/shrink/park)"
+   grep -qi "close.*shrink.*park" "$PERSONA_FILE" && \
+   grep -qiE "(stop.*22.*halt|halt state.*flagged|22(\.00)?\s*USD halt state)" "$PERSONA_FILE" && \
+   ! grep -qE "\b18(\.00)?\s*USD\b" "$PERSONA_FILE" && \
+   ! grep -qiE "\b(18|22|25)(\.00)?\s*USD\s*(precheck threshold|filing stop)" "$PERSONA_FILE" && \
+   ! grep -qiE "spend (is )?under\s*(18|22|25)(\.00)?\s*USD" "$PERSONA_FILE"; then
+  check_pass "Guardrail (e): Spend cap protection with exact thresholds 21/22/25/3 USD (never raise, 22 USD halt stop rule, close/shrink/park, filing stop 21 USD)"
 else
-  check_fail "Guardrail (e)" "Must forbid raising caps, enforce exact spend thresholds 18/22/25/3 USD, and restrict cost-cap to close/shrink/park"
+  check_fail "Guardrail (e)" "Must forbid raising caps, enforce exact spend thresholds 21/22/25/3 USD, require stopping when 22 halt state is flagged, reject 18/22/25 as filing stop, and restrict cost-cap to close/shrink/park"
 fi
 
 # Guardrail (f): CD rollback escalations (never re-release rolled back build, retry only after new fix PR exists)
@@ -177,6 +181,17 @@ if grep -qi "po/ROADMAP.md" "$PERSONA_FILE" && grep -qi "dependencies" "$PERSONA
   fi
 else
   check_fail "Guardrail (h)" "Must require sequential roadmap intake, dependency resolution, and run log maintainer request under 5 items"
+fi
+
+# Guardrail (i): Visible surface (home or parcel page), ui-proof screenshot diff criterion, highest-visibility preference
+if grep -qi "visible surface" "$PERSONA_FILE" && \
+   grep -qiE '(`?home`?\s+or\s+`?parcel page`?|home\s*,\s*parcel page)' "$PERSONA_FILE" && \
+   grep -qi "ui-proof" "$PERSONA_FILE" && \
+   grep -qiE '(screenshot.*differ|differ.*screenshot)' "$PERSONA_FILE" && \
+   grep -qi "highest-visibility" "$PERSONA_FILE"; then
+  check_pass "Guardrail (i): Visible surface (home or parcel page), ui-proof screenshot diff criterion, highest-visibility preference"
+else
+  check_fail "Guardrail (i)" "Must require naming visible surface (home or parcel page), ui-proof screenshot diff criterion, and preferring highest-visibility ready item first"
 fi
 
 if [ "$failures" -gt 0 ]; then

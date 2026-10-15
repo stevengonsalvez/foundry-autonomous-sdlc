@@ -36,6 +36,7 @@ ALLOWED_FIELDS = {
     "Dependencies",
     "Cost Class",
     "Tags",
+    "Visible Surface",
     "Gap Anchor",
     "User Value",
     "Files Touched",
@@ -123,6 +124,7 @@ def lint_roadmap(roadmap_file: str) -> int:
         current_field: str | None = None
         status_val: str = ""
         cost_val: str = ""
+        visible_surface_val: str = ""
         deps: list[str] = []
         files: list[str] = []
         ac_items: list[str] = []
@@ -155,6 +157,8 @@ def lint_roadmap(roadmap_file: str) -> int:
                     continue
                 elif field_name == "Cost Class":
                     cost_val = field_value
+                elif field_name == "Visible Surface":
+                    visible_surface_val = field_value
                 elif field_name == "Dependencies":
                     dep_m = re.match(r"^\[(.*?)\]$", field_value)
                     if dep_m:
@@ -198,6 +202,7 @@ def lint_roadmap(roadmap_file: str) -> int:
             "Dependencies",
             "Cost Class",
             "Tags",
+            "Visible Surface",
             "Gap Anchor",
             "User Value",
             "Files Touched",
@@ -217,6 +222,10 @@ def lint_roadmap(roadmap_file: str) -> int:
         if cost_val not in ("S", "M"):
             fail(f"{item_id}: Invalid Cost Class '{cost_val}'. Must be strictly 'S' or 'M'")
 
+        # Validate visible surface
+        if not re.match(r"^(home|parcel page|home,\s*parcel page)$", visible_surface_val, re.IGNORECASE):
+            fail(f"{item_id}: Invalid Visible Surface '{visible_surface_val}'. Must be 'home', 'parcel page', or 'home, parcel page'")
+
         # Validate files count
         if not files:
             fail(f"{item_id}: No valid files listed under Files Touched")
@@ -224,6 +233,11 @@ def lint_roadmap(roadmap_file: str) -> int:
         # Validate acceptance criteria count
         if not ac_items:
             fail(f"{item_id}: No valid acceptance criteria listed")
+
+        # Validate ui-proof acceptance criterion presence
+        has_ui_proof = any(re.search(r"\bui-proof\b", ac, re.IGNORECASE) for ac in ac_items)
+        if not has_ui_proof:
+            fail(f"{item_id}: Must include an acceptance criterion verifying that the ui-proof screenshot differs from previous release")
 
         items[item_id] = {
             "title": title,

@@ -50,9 +50,16 @@ run_test "Idle state runs successfully" 0 "RUN: pipeline idle" \
       CURRENT_TIME_OVERRIDE="2026-10-13T17:35:00Z" \
       "$PRECHECK"
 
-# 2. Spend exceeded (> 18 USD) -> Exit 1 (SKIP)
-run_test "Billed spend over 18 USD skips" 1 "exceeds 18.00 USD cap" \
+# 2. Spend exceeded (> 21 USD) -> Exit 1 (SKIP)
+run_test "Billed spend over 21 USD skips" 1 "exceeds 21.00 USD cap" \
   env STATE_FILE="$FIXTURES/state_spend_exceeded.json" \
+      ISSUES_FILE="$FIXTURES/issues_idle.json" \
+      CURRENT_TIME_OVERRIDE="2026-10-13T17:35:00Z" \
+      "$PRECHECK"
+
+# 2b. 22 USD halt state flagged -> Exit 1 (SKIP)
+run_test "22 USD halt state flagged skips" 1 "22 USD halt state is flagged" \
+  env STATE_FILE="$FIXTURES/state_halted.json" \
       ISSUES_FILE="$FIXTURES/issues_idle.json" \
       CURRENT_TIME_OVERRIDE="2026-10-13T17:35:00Z" \
       "$PRECHECK"
