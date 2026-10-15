@@ -105,3 +105,27 @@ def test_annotation_is_idempotent(tmp_path: Path) -> None:
     first = annotate_release(tmp_path, "v0.8.0")
     second = annotate_release(tmp_path, "v0.8.0")
     assert first == second
+
+
+def test_manifest_order_keeps_pre_state_readers_on_the_default_screenshots(
+    tmp_path: Path,
+) -> None:
+    """Pages may rebuild /history/ with a generator that predates states and keys screenshots
+    by route, last entry winning. The four legacy default states must come last per route."""
+    from scripts.ui.validate_artifact import LEGACY_ROUTE_STATES
+
+    spec = {
+        "home-default": ("Home", "Home page default.", "home", 0),
+        "home-dark": ("Home, dark theme", "Home page in dark theme.", "home", 0),
+        "home-filtered": ("Home, status filter", "Filtered.", "home", 0),
+        "parcel-timeline": ("Parcel timeline", "Timeline.", "parcel-found", 0),
+        "parcel-copy-link": ("Parcel, copy link", "Copy link.", "parcel-found", 0),
+    }
+    write_set(tmp_path / "v0.1.0", spec)
+    annotate_release(tmp_path, "v0.1.0")
+
+    last_by_route: dict[tuple[str, str], str] = {}
+    for item in manifest(tmp_path, "v0.1.0")["screenshots"]:
+        last_by_route[(item["route"], item["viewport"])] = item["state"]  # last wins
+    assert last_by_route[("home", "desktop")] == LEGACY_ROUTE_STATES["home"]
+    assert last_by_route[("parcel-found", "mobile")] == LEGACY_ROUTE_STATES["parcel-found"]

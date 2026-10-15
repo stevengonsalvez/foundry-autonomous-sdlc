@@ -18,7 +18,7 @@ from pathlib import Path
 from typing import Any
 
 from scripts.ui.publish_proof import compare_screenshots
-from scripts.ui.validate_artifact import state_id_of
+from scripts.ui.validate_artifact import LEGACY_ROUTE_STATES, state_id_of
 
 TAG_RE = re.compile(r"^v(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$")
 
@@ -37,6 +37,20 @@ def _load_captured(release_dir: Path) -> dict[str, Any] | None:
         return None
     shots = data.get("screenshots")
     return data if isinstance(shots, list) and shots else None
+
+
+def _legacy_reader_order(screenshots: list[Any]) -> list[Any]:
+    """Put the four original default states last.
+
+    A Pages build that predates states keys screenshots by route and lets the last entry win,
+    so with several states per route it would show e.g. the dark home page as "Home". Listing
+    the original states last keeps such a reader on the screenshots it always showed. The
+    order is otherwise stable and irrelevant to state-aware readers.
+    """
+    legacy = set(LEGACY_ROUTE_STATES.values())
+    return [s for s in screenshots if state_id_of(s) not in legacy] + [
+        s for s in screenshots if state_id_of(s) in legacy
+    ]
 
 
 def find_previous_release(releases_dir: Path, key: str) -> str | None:
@@ -92,6 +106,7 @@ def annotate_release(releases_dir: Path, key: str) -> dict[str, Any] | None:
 
     changes = {"vs": prev_tag, "states": states}
     manifest["changes"] = changes
+    manifest["screenshots"] = _legacy_reader_order(manifest["screenshots"])
     (release_dir / "manifest.json").write_text(
         json.dumps(manifest, indent=2) + "\n", encoding="utf-8"
     )
