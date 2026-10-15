@@ -38,7 +38,7 @@
       "pass": 11
     }
   },
-  "generated_at": "2026-10-15T00:35:37Z",
+  "generated_at": "2026-10-15T00:40:40Z",
   "issues": [
     {
       "closed_at": "2026-10-10T12:28:43Z",
@@ -2086,15 +2086,15 @@
       "type": "feature"
     },
     {
-      "closed_at": null,
+      "closed_at": "2026-10-15T00:35:23Z",
       "coder_engine": "agy-unrestricted",
       "coder_sessions_lost": 0,
       "cost": {
-        "calls": 4,
+        "calls": 5,
         "coder_model_usd": 0.0,
         "coder_usd": 0.245912,
-        "model_usd": 0.010307,
-        "usd": 0.256219
+        "model_usd": 0.01169,
+        "usd": 0.257603
       },
       "deferred": null,
       "escalation": null,
@@ -2129,12 +2129,12 @@
       "kind": "issue",
       "number": 93,
       "opened_at": "2026-10-15T00:02:42Z",
-      "outcome": "open",
+      "outcome": "released",
       "owner": null,
       "pr": 94,
       "quality_score": 90,
-      "release": null,
-      "resolution_seconds": null,
+      "release": "v0.7.0",
+      "resolution_seconds": 2264,
       "scenario": "a",
       "severity": null,
       "stages": [
@@ -2165,9 +2165,13 @@
         },
         {
           "entered_at": "2026-10-15T00:35:23Z",
-          "in_progress": true,
-          "seconds": 0,
+          "seconds": 303,
           "stage": "stage:merged"
+        },
+        {
+          "entered_at": "2026-10-15T00:40:26Z",
+          "seconds": 0,
+          "stage": "stage:released"
         }
       ],
       "title": "feat(web): store and display recent searches in local storage",
@@ -2175,7 +2179,7 @@
     }
   ],
   "ledger": {
-    "emitted_at": "2026-10-15T00:35:25Z",
+    "emitted_at": "2026-10-15T00:40:28Z",
     "reconciled_at": "2026-10-15T00:05:26Z"
   },
   "repo": "stevengonsalvez/foundry-autonomous-sdlc",
@@ -2183,10 +2187,10 @@
     "deferred": 0,
     "escalated": 19,
     "issues": 29,
-    "ledger_usd": 0.698008,
-    "orchestrator_usd": 5.606953,
-    "released": 8,
-    "usd": 8.97404
+    "ledger_usd": 0.700436,
+    "orchestrator_usd": 5.619084,
+    "released": 9,
+    "usd": 8.989982
   },
   "version": 1
 }
