@@ -609,7 +609,7 @@ class JobRunner:
                 self._check_stops()
                 self._log(f"engine {engine.name} failed ({result.returncode}), falling back: {result.output[-1500:]}")
                 self.git.revert_paths(changed)
-                if engine.name.startswith("agy") and is_quota_failure(result):
+                if engine.name.startswith("agy") and not changed and is_quota_failure(result):
                     quota_dead.add(engine.name)
                     self._engine_event(engine.name, "engine-quota")
                     if {e.name for e in engines if e.name.startswith("agy")} <= quota_dead:
