@@ -427,3 +427,13 @@ class TestBaseSyncMerges:
         merged = repo.git("commit-tree", tree, "-p", "HEAD", "-p", "main~1", "-m", "Merge main")
         repo.git("reset", "-q", "--hard", merged)
         assert gate(repo).note == "tests-modified-after-red"
+
+    def test_a_merge_cannot_swap_the_red_test_for_one_from_base(self, agent_repo: Repo) -> None:
+        agent_repo.commit(RED_ASSERT, "test: red")
+        agent_repo.commit(IMPL, "feat: impl")
+        agent_repo.git("checkout", "-q", "main")
+        agent_repo.commit(GREEN_TEST, "test: main gets a file at the red test's path")
+        agent_repo.git("checkout", "-q", BRANCH)
+        agent_repo.git("merge", "-q", "--no-ff", "-X", "theirs", "-m", "Merge origin/main", "main")
+        assert gate(agent_repo).note == "tests-modified-after-red"
+

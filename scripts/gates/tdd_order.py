@@ -397,7 +397,7 @@ def evaluate(
         for c in tree_changes(repo, tip.sha, head_sha)
         if c.status != "A"
         and is_test_path(c.path)
-        and not _came_from_base(repo, c.path, head_sha, from_base)
+        and not _came_from_base(repo, c.path, head_sha, red_base, from_base)
     ]
     if edited:
         report.append(f"existing test files changed after the red commit ({len(edited)}):")
@@ -413,8 +413,11 @@ def _blob(repo: Path, rev: str, path: str) -> str | None:
         return None
 
 
-def _came_from_base(repo: Path, path: str, head: str, synced: list[str]) -> bool:
-    """A test file that is exactly as in a base commit the branch merged in: main changed it."""
+def _came_from_base(repo: Path, path: str, head: str, fork: str, synced: list[str]) -> bool:
+    """A test file that is exactly as in a base commit the branch merged in: main changed it.
+    Only for a test that existed when the branch forked: the branch's own are never main's."""
+    if _blob(repo, fork, path) is None:
+        return False
     here = _blob(repo, head, path)
     return any(_blob(repo, parent, path) == here for parent in synced)
 
