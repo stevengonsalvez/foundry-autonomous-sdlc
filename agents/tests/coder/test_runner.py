@@ -1718,7 +1718,7 @@ def test_a_revise_without_merge_main_still_squashes_to_one_commit(world: World) 
 
 AGY_JSON = 'AGY_ERROR: {"short_error":"RESOURCE_EXHAUSTED (code 429)","status":"RESOURCE_EXHAUSTED"}'
 ABORT_MARK = "[aborted: agy reported a quota or rate limit]"
-QUOTA_RESTRICTED = CommandResult(125, f"error: Individual quota reached. Resets in 19h13m22s.\n{AGY_JSON}\n{ABORT_MARK}")
+QUOTA_RESTRICTED = CommandResult(125, f"error: Individual quota reached.\n{AGY_JSON}\n{ABORT_MARK}")
 ECHOED_ABORT = CommandResult(125, f"error: quota exceeded\n{ABORT_MARK}")      # the coder's own abort
 QUOTA_UNRESTRICTED = CommandResult(
     3, "error: Individual quota reached. Please upgrade your subscription to increase your limits. "
