@@ -44,7 +44,7 @@
       "pass": 11
     }
   },
-  "generated_at": "2026-10-15T09:01:46Z",
+  "generated_at": "2026-10-15T09:10:58Z",
   "issues": [
     {
       "closed_at": "2026-10-10T12:28:43Z",
@@ -2222,9 +2222,14 @@
         },
         {
           "entered_at": "2026-10-15T09:00:50Z",
+          "seconds": 571,
+          "stage": "stage:tests-written"
+        },
+        {
+          "entered_at": "2026-10-15T09:10:21Z",
           "in_progress": true,
           "seconds": 0,
-          "stage": "stage:tests-written"
+          "stage": "stage:building"
         }
       ],
       "title": "feat(web): add light and dark theme toggle with persisted choice",
@@ -2269,9 +2274,14 @@
         },
         {
           "entered_at": "2026-10-15T09:01:18Z",
+          "seconds": 551,
+          "stage": "stage:tests-written"
+        },
+        {
+          "entered_at": "2026-10-15T09:10:29Z",
           "in_progress": true,
           "seconds": 0,
-          "stage": "stage:tests-written"
+          "stage": "stage:building"
         }
       ],
       "title": "feat(web): add left navigation sidebar with mobile menu",
@@ -2279,7 +2289,7 @@
     }
   ],
   "ledger": {
-    "emitted_at": "2026-10-15T09:01:21Z",
+    "emitted_at": "2026-10-15T09:10:37Z",
     "reconciled_at": "2026-10-15T08:40:39Z"
   },
   "repo": "stevengonsalvez/foundry-autonomous-sdlc",
@@ -2287,10 +2297,10 @@
     "deferred": 0,
     "escalated": 19,
     "issues": 31,
-    "ledger_usd": 0.844207,
-    "orchestrator_usd": 7.019011,
+    "ledger_usd": 0.848602,
+    "orchestrator_usd": 7.032446,
     "released": 9,
-    "usd": 10.550413
+    "usd": 10.568243
   },
   "version": 1
 }
