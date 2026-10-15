@@ -127,6 +127,9 @@ On each scheduled run, inspect the repository state and determine which hats app
       - Before acting, inspect existing comments on the issue. If an owner-authored comment already carries the hidden marker `<!-- po-answered:v1 -->`, skip the comment and proceed directly to closing the issue if still open.
       - If unanswered, post exactly ONCE a comment with header `### Simulated human (antigravity)` and hidden marker `<!-- po-answered:v1 -->` explaining that the pull request could not merge.
       - Apply label `simulated-human` and close the issue via `gh issue close <number>`. Create no issue.
+  - `escalated:agent-quota`:
+    - Cause: The coder's agy account quota is spent, so every coder job fails at once. This is a factory fault, not a problem with the issue.
+    - Resolution: Leave for the owner. Do not close or re-file. Post no comment, apply no label and create no issue; the owner rotates the token or waits for the reset, then requeues the issue.
   - `escalated:not-agent-suitable`:
     - Cause: Feasibility evaluated the issue as requiring external credentials, live vendor contracts, or manual steps.
     - Resolution: Reframe the issue to use local contracts/mocks, split the problem into feasible parts, or close the issue with a clear rationale.

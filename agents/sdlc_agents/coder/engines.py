@@ -54,7 +54,26 @@ AGY_UNRESTRICTED_CALL_TIMEOUT_S = 900  # one full-tools round: a multi-file feat
 # agy does not exit when it cannot work: with a missing or expired token it prints a login URL and
 # blocks; quota errors are printed too. Both end the call early so the fallback engine takes over.
 _AGY_AUTH = re.compile(r"Authentication required", re.IGNORECASE)
-_AGY_QUOTA = re.compile(r"quota|RESOURCE_EXHAUSTED|\b429\b", re.IGNORECASE)
+# Only lines agy itself prints count as a quota error, matched at the start of a line. The model's own
+# narration and echoed repo content ("add a quota check, return 429") reach the same stream and must never
+# stop a healthy call. The real lines (reproduced 2026-10-15) are
+#   error: Individual quota reached. Please upgrade your subscription ... Resets in 19h13m22s.
+#   AGY_ERROR: {"short_error":"RESOURCE_EXHAUSTED (code 429): ...","status":"RESOURCE_EXHAUSTED","error_code":429,...}
+_AGY_QUOTA = re.compile(
+    r"^\r?(?:error: [^\n]*\bquota (?:reached|exceeded)\b"
+    r"|AGY_ERROR: [^\n]*(?:\"status\"\s*:\s*\"RESOURCE_EXHAUSTED\"|\"error_code\"\s*:\s*429))",
+    re.MULTILINE,
+)
+AGY_QUOTA_EXIT = 3   # agy's own exit code after printing those lines
+
+
+def is_quota_failure(result: CommandResult) -> bool:
+    """agy died because the account's quota is spent: it printed its own quota error line and was either
+    aborted by the coder (rc 125) or exited with its quota code. The abort marker alone proves nothing, it
+    is added by the same match; an auth abort or any other failure is not quota."""
+    return result.returncode in (shell.ABORTED_RC, AGY_QUOTA_EXIT) and bool(_AGY_QUOTA.search(result.output))
+
+
 # Everything else (managed identity, Azure, Foundry, Key Vault, GitHub, git askpass, telemetry) stays out.
 _AGY_ENV_PASSTHROUGH = ("LANG", "TERM", "TMPDIR")
 _SYSTEM_PATH = "/usr/local/bin:/usr/bin:/bin"

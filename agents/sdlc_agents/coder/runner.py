@@ -33,6 +33,7 @@ from pathlib import Path
 from typing import Any, Protocol
 
 from sdlc_agents.coder import checks, sandbox, scope, shell
+from sdlc_agents.coder.engines import is_quota_failure
 from sdlc_agents.coder.git_adapter import resolve_author
 from sdlc_agents.coder.job import JobSpec, JobSpecError, JobState, JobStore, Mode, Phase, Redactor, Status
 from sdlc_agents.coder.testrun import TestOutcome, TestRunner
@@ -564,6 +565,7 @@ class JobRunner:
         self._protected, self._tests_only = protected, tests_only
         current = 0
         rejected: tuple[TestOutcome, list[checks.CheckResult]] | None = None   # a reverted round's results
+        quota_dead: set[str] = set()   # agy engines that died on the account quota
         idle_rounds = 0   # consecutive rounds in which the current engine changed nothing (or was reverted)
         rounds = 0        # rounds the current engine has had
         outcome = self._run_tests()
@@ -607,6 +609,15 @@ class JobRunner:
                 self._check_stops()
                 self._log(f"engine {engine.name} failed ({result.returncode}), falling back: {result.output[-1500:]}")
                 self.git.revert_paths(changed)
+                if engine.name.startswith("agy") and not changed and is_quota_failure(result):
+                    quota_dead.add(engine.name)
+                    self._engine_event(engine.name, "engine-quota")
+                    if {e.name for e in engines if e.name.startswith("agy")} <= quota_dead:
+                        # The account is spent, so the loop fallback cannot do the work either: stop here
+                        # rather than burn rounds (live issue 96: two jobs, about 0.16 USD each, no result).
+                        self._engine_event(engine.name, "agent-quota")
+                        raise JobStop(Status.FAILED, "agent-quota",
+                                      f"every agy engine hit the account quota: {result.output[-400:]}")
                 current, rounds = current + 1, 0
                 continue
             self.state.iterations += 1

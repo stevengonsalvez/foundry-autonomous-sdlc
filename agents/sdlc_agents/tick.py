@@ -88,7 +88,7 @@ CODER_REASONS = frozenset({
     "tests-not-red", "scope-violation", "max-iterations", "engines-exhausted", "cost-cap", "install-failed",
     "branch-missing", "branch-conflict", "interrupted", "deadline", "cancelled", "error", "tests-invalid",
     "sandbox-unavailable", "lease-held", "lease-error", "engine-unavailable", "internal-error",
-    "invalid-allowed-paths", "unresolved-conflicts",
+    "invalid-allowed-paths", "unresolved-conflicts", "agent-quota",
 })
 UNREPORTED_CODER_SLACK_S = 900    # one missed poll is normal; longer gaps are billed as estimated time
 UNREPORTED_STATUSES = ("running", "starting", "start-unconfirmed", "lease-held")

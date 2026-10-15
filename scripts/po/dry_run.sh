@@ -165,6 +165,13 @@ except Exception:
     print("0")
 ' "$issue")"
 
+  # Agent-quota escalation: a factory fault (the coder's agy account is spent); leave it for the owner
+  if grep -q "escalated:agent-quota" <<< "$labels"; then
+    hat_escalation=$((hat_escalation + 1))
+    echo "[HAT] Escalation Owner: Leaving agent-quota escalation on issue #$number for the owner (no comment, no label, no close, no new issue)."
+    continue
+  fi
+
   # Handle build-failed and review-failed escalations (close even if already answered)
   if grep -q "escalated:build-failed" <<< "$labels" || grep -q "escalated:review-failed" <<< "$labels" \
     || grep -q "escalated:merge-conflict" <<< "$labels"; then

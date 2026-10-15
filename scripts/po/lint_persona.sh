@@ -201,6 +201,13 @@ else
   check_fail "Guardrail (j)" "Must handle escalated:merge-conflict as close only and forbid re-filing it"
 fi
 
+# Guardrail (k): an agent-quota escalation is a factory fault left for the owner, never closed or re-filed
+if grep -q "escalated:agent-quota" "$PERSONA_FILE" && grep -qi "leave for the owner" "$PERSONA_FILE" && grep -qi "do not close or re-file" "$PERSONA_FILE"; then
+  check_pass "Guardrail (k): agent-quota escalation is left for the owner, never closed or re-filed"
+else
+  check_fail "Guardrail (k)" "Must leave escalated:agent-quota for the owner and forbid closing or re-filing it"
+fi
+
 if [ "$failures" -gt 0 ]; then
   echo "FAIL: po/PERSONA.md failed $failures guardrail check(s)" >&2
   exit 1

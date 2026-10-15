@@ -24,6 +24,7 @@ from sdlc_agents.ports import OWNER, Budget, PullRequest
 from sdlc_agents.state import (
     BUILDING,
     ESC_AGENT_ERROR,
+    ESC_AGENT_QUOTA,
     ESC_BUILD_FAILED,
     ESC_COST_CAP,
     ESC_MERGE_CONFLICT,
@@ -388,6 +389,10 @@ def after_coder(status: str, reason: str = "") -> Outcome:
         return Outcome(repair_tests=True)
     if status == "failed" and reason in RETRY_LIMITS:
         return Outcome(retry=True, escalate=ESC_BUILD_FAILED, reason=f"coder failed ({reason})")
+    if status == "failed" and reason == "agent-quota":
+        # Not retried and not counted as an attempt: the quota can stay spent for days (weekly reset), so a
+        # new job each tick would only bill coder time. The owner rotates the token or waits, then requeues.
+        return Outcome(escalate=ESC_AGENT_QUOTA, reason="coder failed (agent-quota)")
     if status == "failed" and reason == "invalid-allowed-paths":
         return Outcome(fix_paths=True, escalate=ESC_AGENT_ERROR, reason=f"coder failed ({reason})")
     if status in ("failed", "timeout", "cancelled"):
