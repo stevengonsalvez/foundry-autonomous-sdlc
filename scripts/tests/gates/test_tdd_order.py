@@ -369,7 +369,7 @@ class TestCli:
 
 
 class TestBaseSyncMerges:
-    """The coder merges origin/main into a PR branch that conflicts with it; that merge is not agent work."""
+    """The coder merges origin/main into a conflicting PR branch; that merge is not agent work."""
 
     def merge_main_in(self, repo: Repo, main_files: dict[str, str | None]) -> None:
         repo.git("checkout", "-q", "main")
@@ -391,11 +391,13 @@ class TestBaseSyncMerges:
         self.merge_main_in(agent_repo, {"app/core/existing.test.ts": "it pass changed by main\n"})
         assert gate(agent_repo).note == "tests-first"
 
-    def test_the_branch_editing_a_test_is_still_caught_beside_a_sync_merge(self, agent_repo: Repo) -> None:
+    def test_a_branch_edit_of_a_test_is_still_caught_beside_a_sync_merge(
+        self, agent_repo: Repo
+    ) -> None:
         agent_repo.commit(RED_ASSERT, "test: red")
         agent_repo.commit(IMPL, "feat: impl")
         self.merge_main_in(agent_repo, {"CHANGELOG.md": "x\n"})
-        agent_repo.commit({"app/core/existing.test.ts": "it pass edited by the branch\n"}, "test: tweak")
+        agent_repo.commit({"app/core/existing.test.ts": "it pass edited here\n"}, "test: tweak")
         assert gate(agent_repo).note == "tests-modified-after-red"
 
     def test_a_merge_of_anything_but_the_base_is_still_rejected(self, agent_repo: Repo) -> None:

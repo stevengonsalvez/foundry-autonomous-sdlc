@@ -14,7 +14,10 @@ branch passes when
 
 A branch made only of test-only commits (maintenance) passes with note `test-only`.
 Any other branch passes with note `not-agent-branch`. Merge commits and commits
-that change no files are rejected, because neither can be classified.
+that change no files are rejected, because neither can be classified. The exception is a base
+sync: a merge commit whose other parents are all on the base branch (the coder merging origin/main
+into a PR that conflicts with it) is set aside, and a test file that has the same content as in
+the merged base commit counts as main's change, not the branch's edit.
 
 Red evidence comes from the vitest JSON report: the test command contains `{report}`, which
 is replaced by a scratch file path. A failure is INVALID when the test could not really run
@@ -52,6 +55,7 @@ from .common import (
     git,
     glob_to_regex,
     is_agent_branch,
+    is_ancestor,
     merge_base,
     resolve_commit,
     tree_changes,
@@ -98,13 +102,19 @@ class CommitInfo:
     subject: str
     parents: int
     paths: tuple[str, ...]
+    synced: tuple[str, ...] = ()  # base commits a base sync merge brought in (see list_commits)
 
     @property
     def test_only(self) -> bool:
         return bool(self.paths) and all(is_test_path(p) for p in self.paths)
 
 
-def list_commits(repo: Path, fork_point: str, head: str) -> list[CommitInfo]:
+def list_commits(
+    repo: Path, fork_point: str, head: str, base: str | None = None
+) -> list[CommitInfo]:
+    """Commits in fork_point..head, oldest first. With `base`, a merge commit whose other parents
+    are all on the base branch is a base sync (the coder merging origin/main into a PR that
+    conflicts): it carries no agent work, so `synced` marks it for the caller to set aside."""
     # Subjects are free text, so each is read on its own rather than parsed out of a stream.
     listing = git(
         repo, "rev-list", "--reverse", "--topo-order", "--parents", f"{fork_point}..{head}"
@@ -114,7 +124,9 @@ def list_commits(repo: Path, fork_point: str, head: str) -> list[CommitInfo]:
         sha, *parents = line.split()
         subject = git(repo, "log", "-1", "--format=%s", sha).strip()
         paths = tuple(sorted({c.path for c in commit_changes(repo, sha)}))
-        commits.append(CommitInfo(sha, subject, len(parents), paths))
+        others = tuple(parents[1:])
+        sync = bool(base and others and all(is_ancestor(repo, p, base) for p in others))
+        commits.append(CommitInfo(sha, subject, len(parents), paths, others if sync else ()))
     return commits
 
 
@@ -303,13 +315,16 @@ def evaluate(
 
     head_sha = resolve_commit(repo, head)
     fork_point = merge_base(repo, resolve_commit(repo, base), head_sha)
-    commits = list_commits(repo, fork_point, head_sha)
+    listed = list_commits(repo, fork_point, head_sha, resolve_commit(repo, base))
+    commits = [c for c in listed if not c.synced]
+    synced = [p for c in listed for p in c.synced]
 
     report = [f"branch {branch}", f"merge base {fork_point[:12]}", f"head {head_sha[:12]}"]
     report += [
         f"  {i + 1:>2}. {c.sha[:12]} {'test-only' if c.test_only else 'other    '} {c.subject}"
         for i, c in enumerate(commits)
     ]
+    report += [f"      {c.sha[:12]} merged base {c.subject}" for c in listed if c.synced]
 
     if not commits:
         return GateResult(False, "no-commits", [*report, "no commits between base and head"])
@@ -369,19 +384,37 @@ def evaluate(
             )
         report.append(f"red: {outcome.failed_tests} failed test(s), exit code {outcome.exit_code}")
     else:
-        verdict = judge_report(outcome, changed_test_files(repo, fork_point, tip.sha), report)
+        red_base = resolve_commit(repo, f"{commits[0].sha}^") if synced else fork_point
+        verdict = judge_report(outcome, changed_test_files(repo, red_base, tip.sha), report)
         if verdict is not None:
             return verdict
 
     # Red only means something if the tests that were red are the tests that later go green.
     edited = [
-        c for c in tree_changes(repo, tip.sha, head_sha) if c.status != "A" and is_test_path(c.path)
+        c
+        for c in tree_changes(repo, tip.sha, head_sha)
+        if c.status != "A"
+        and is_test_path(c.path)
+        and not _came_from_base(repo, c.path, head_sha, synced)
     ]
     if edited:
         report.append(f"existing test files changed after the red commit ({len(edited)}):")
         report.extend(f"  {c.path!r} [{c.status}]" for c in edited)
         return GateResult(False, "tests-modified-after-red", report)
     return GateResult(True, "tests-first", report)
+
+
+def _blob(repo: Path, rev: str, path: str) -> str | None:
+    try:
+        return git(repo, "rev-parse", "--verify", "-q", f"{rev}:{path}").strip()
+    except GateError:
+        return None
+
+
+def _came_from_base(repo: Path, path: str, head: str, synced: list[str]) -> bool:
+    """A test file that is exactly as in a base commit the branch merged in: main changed it."""
+    here = _blob(repo, head, path)
+    return any(_blob(repo, parent, path) == here for parent in synced)
 
 
 def main(argv: list[str] | None = None) -> int:
