@@ -21,6 +21,8 @@
 # 17. Rejects missing visible surface requirement
 # 18. Rejects missing ui-proof screenshot diff rule
 # 19. Rejects missing highest-visibility preference rule
+# 20. Rejects re-filing on a merge-conflict escalation
+# 21. Rejects a missing merge-conflict rule
 
 set -euo pipefail
 
@@ -197,6 +199,18 @@ M19_CONTENT="${BASE_CONTENT//highest-visibility/random priority}"
 run_mutation_test "Rejects missing highest-visibility preference rule" \
   "$M19_CONTENT" \
   "Guardrail \(i\)|highest-visibility"
+
+# 20. Rejects a persona that re-files merge-conflict escalations
+M20_CONTENT="${BASE_CONTENT//[Nn][Ee][Vv][Ee][Rr] re-file/re-file}"
+run_mutation_test "Rejects re-filing on a merge-conflict escalation" \
+  "$M20_CONTENT" \
+  "Guardrail \(j\)|merge-conflict"
+
+# 21. Rejects a persona with no merge-conflict rule at all
+M21_CONTENT="${BASE_CONTENT//escalated:merge-conflict/escalated:other}"
+run_mutation_test "Rejects a missing merge-conflict rule" \
+  "$M21_CONTENT" \
+  "Guardrail \(j\)|merge-conflict"
 
 echo "----------------------------------------"
 if [ "$failures" -gt 0 ]; then

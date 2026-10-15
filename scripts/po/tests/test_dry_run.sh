@@ -22,9 +22,9 @@
 # 18. answered build-failed issue plans close only without second comment
 # 19. stranger marker comment does not silence persona and plans answer and close
 # 20. stranger roadmap issue is ignored and does not skip roadmap item
-# 24. merge-conflict escalation: closes the stale issue and re-files it while intake is open
-# 25. merge-conflict escalation over the 21 USD intake line: closes only, no re-file
-# 26. persona and runbook both document escalated:merge-conflict as close or re-file
+# 24. merge-conflict escalation is close only, never an issue create
+# 25. two merge-conflict escalations in one run create no issue
+# 26. persona and runbook both document escalated:merge-conflict as close only
 
 set -euo pipefail
 
@@ -295,31 +295,32 @@ run_dry_test "Billed spend over 21 USD stops Hat 4 intake" \
   "gh issue create"
 rm -rf "$tmp_spend_dir"
 
-# 24. merge-conflict escalation closes the stale issue and re-files it while intake is open
-run_dry_test "merge-conflict escalation closes the issue and re-files it" \
+# 24. merge-conflict escalation is close only: comment, label, close, never an issue create
+run_dry_test "merge-conflict escalation closes the issue and never re-files it" \
   "\"$FIXTURES/merge_conflict\"" \
   "gh issue close 96" \
-  "gh pr create|gh pr merge|git push" \
-  "gh issue create --title \"feat\\(web\\): add left navigation sidebar with mobile menu\"" \
+  "gh issue create|gh pr create|gh pr merge|git push" \
   "po-answered:v1"
 
-# 25. merge-conflict escalation over the 21 USD intake line only closes
-run_dry_test "merge-conflict escalation over the intake line closes without re-filing" \
-  "\"$FIXTURES/merge_conflict_over_spend\"" \
-  "gh issue close 96" \
-  "gh issue create"
+# 25. two merge-conflict escalations in one run never cause an issue create
+run_dry_test "two merge-conflict escalations in one run create no issue" \
+  "\"$FIXTURES/merge_conflict_two\"" \
+  "gh issue close 97" \
+  "gh issue create" \
+  "gh issue close 96"
 
-# 26. the persona and the runbook document the new label the same way
+# 26. the persona and the runbook document the label as close only, never as a re-file
 total=$((total + 1))
-echo -n "Test $total: persona and runbook document escalated:merge-conflict as close or re-file ... "
+echo -n "Test $total: persona and runbook document escalated:merge-conflict as close only ... "
 doc_ok=1
 for doc in "$SCRIPT_DIR/../../../po/PERSONA.md" "$SCRIPT_DIR/../../../po/RUNBOOK.md"; do
-  grep -q "escalated:merge-conflict" "$doc" && grep -qi "close or re-file" "$doc" || doc_ok=0
+  grep -q "escalated:merge-conflict" "$doc" && grep -qi "close only" "$doc" || doc_ok=0
+  grep -qi "close or re-file" "$doc" && doc_ok=0
 done
 if [ "$doc_ok" -eq 1 ]; then
   echo "PASS"
 else
-  echo "FAIL (po/PERSONA.md and po/RUNBOOK.md must both say escalated:merge-conflict is close or re-file)"
+  echo "FAIL (po/PERSONA.md and po/RUNBOOK.md must say escalated:merge-conflict is close only, not close or re-file)"
   failures=$((failures + 1))
 fi
 

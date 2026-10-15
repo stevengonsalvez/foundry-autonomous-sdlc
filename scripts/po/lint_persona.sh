@@ -194,6 +194,13 @@ else
   check_fail "Guardrail (i)" "Must require naming visible surface (home or parcel page), ui-proof screenshot diff criterion, and preferring highest-visibility ready item first"
 fi
 
+# Guardrail (j): a merge-conflict escalation is close only; re-filing would bypass the one new issue per run rule
+if grep -q "escalated:merge-conflict" "$PERSONA_FILE" && grep -qi "close only" "$PERSONA_FILE" && grep -qi "never re-file" "$PERSONA_FILE"; then
+  check_pass "Guardrail (j): merge-conflict escalation is close only, never re-filed"
+else
+  check_fail "Guardrail (j)" "Must handle escalated:merge-conflict as close only and forbid re-filing it"
+fi
+
 if [ "$failures" -gt 0 ]; then
   echo "FAIL: po/PERSONA.md failed $failures guardrail check(s)" >&2
   exit 1

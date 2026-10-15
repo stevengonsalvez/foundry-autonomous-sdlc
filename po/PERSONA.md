@@ -123,11 +123,10 @@ On each scheduled run, inspect the repository state and determine which hats app
       - Close the issue via `gh issue close <number>` so the SDLC does not stay blocked; work is dropped as out of roadmap scope.
   - `escalated:merge-conflict`:
     - Cause: The approved pull request conflicts with `main` (another agent pull request landed first on the same files) and two rounds of the coder merging `main` into the branch did not fix it.
-    - Resolution: Close or re-file.
+    - Resolution: Close only. NEVER re-file the requirement from this escalation: a re-file is a new issue outside the one new issue per run rule, and nothing would stop it repeating for every conflicting rebuild. The requirement returns only through normal roadmap intake.
       - Before acting, inspect existing comments on the issue. If an owner-authored comment already carries the hidden marker `<!-- po-answered:v1 -->`, skip the comment and proceed directly to closing the issue if still open.
-      - If unanswered, post exactly ONCE a comment with header `### Simulated human (antigravity)` and hidden marker `<!-- po-answered:v1 -->` explaining that the stale pull request could not merge.
-      - Apply label `simulated-human` and close the issue via `gh issue close <number>`.
-      - Re-file the same requirement as a new issue so the pipeline rebuilds it on current `main`, only while intake is open (the precheck spend threshold is not exceeded); otherwise just close.
+      - If unanswered, post exactly ONCE a comment with header `### Simulated human (antigravity)` and hidden marker `<!-- po-answered:v1 -->` explaining that the pull request could not merge.
+      - Apply label `simulated-human` and close the issue via `gh issue close <number>`. Create no issue.
   - `escalated:not-agent-suitable`:
     - Cause: Feasibility evaluated the issue as requiring external credentials, live vendor contracts, or manual steps.
     - Resolution: Reframe the issue to use local contracts/mocks, split the problem into feasible parts, or close the issue with a clear rationale.
