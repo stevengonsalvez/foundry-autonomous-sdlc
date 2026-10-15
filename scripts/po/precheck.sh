@@ -61,7 +61,7 @@ if [ -z "$state_json" ] || ! jq -e 'type == "object"' <<< "$state_json" >/dev/nu
   exit 1
 fi
 
-# 3. Check staleness (over 30 minutes / 1800 seconds)
+# 3. Check staleness (over 45 minutes / 2700 seconds)
 updated_at="$(jq -r '.updated_at // .generated_at // empty' <<< "$state_json")"
 if [ -z "$updated_at" ]; then
   echo "SKIP: state.json is missing updated_at timestamp"
@@ -81,8 +81,8 @@ else
 fi
 
 age_s=$((now_epoch - state_epoch))
-if [ "$age_s" -gt 1800 ]; then
-  echo "SKIP: state.json is stale (${age_s}s old, exceeds 30 min limit)"
+if [ "$age_s" -gt 2700 ]; then
+  echo "SKIP: state.json is stale (${age_s}s old, exceeds 45 min limit)"
   exit 1
 fi
 

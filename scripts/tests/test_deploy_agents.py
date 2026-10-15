@@ -568,6 +568,35 @@ def test_routine_drift_is_corrected_keeping_the_enabled_state() -> None:
     assert foundry.routines["sdlc-tick"]["enabled"] is True
 
 
+def test_routine_custom_cron_applied_and_updates_description() -> None:
+    foundry = FakeFoundry()
+    deployer, _out, _ = make(foundry=foundry)
+    deployer.routine(enable=True, cron="*/30 * * * *")
+    tick = foundry.routines["sdlc-tick"]
+    assert tick["cron"] == "*/30 * * * *"
+    assert "*/30 * * * *" in tick["description"]
+    assert tick["enabled"] is True
+
+
+def test_routine_update_path_replaces_existing_routine_cron() -> None:
+    foundry = FakeFoundry()
+    foundry.routines["sdlc-tick"] = {
+        "description": "Wakes sdlc-orchestrator every five minutes to advance issues and PRs.",
+        "enabled": True,
+        "cron": "*/5 * * * *",
+        "time_zone": "UTC",
+        "agent": "sdlc-orchestrator",
+        "input": {"op": "tick"},
+    }
+    deployer, out, _ = make(foundry=foundry)
+    deployer.routine(enable=None, cron="*/30 * * * *")
+    assert foundry.routines["sdlc-tick"]["cron"] == "*/30 * * * *"
+    assert "*/30 * * * *" in foundry.routines["sdlc-tick"]["description"]
+    assert foundry.routines["sdlc-tick"]["enabled"] is True
+    assert "sdlc-tick" in foundry.puts
+    assert "updated" in out.getvalue()
+
+
 def test_probe_routine_is_left_alone_but_never_left_enabled() -> None:
     foundry = FakeFoundry()
     foundry.routines["probe-tick"] = {"description": "", "enabled": True, "cron": "*/5 * * * *", "time_zone": "UTC",
@@ -628,6 +657,21 @@ def test_parse_args_sizes_and_routine_flags() -> None:
     assert da.parse_args(["routine", "--disable"]).enable is False
     with pytest.raises(SystemExit):
         da.parse_args(["routine", "--enable", "--disable"])
+    # --cron default and custom parsing
+    assert da.parse_args(["routine"]).cron == "*/5 * * * *"
+    assert da.parse_args(["all"]).cron == "*/5 * * * *"
+    assert da.parse_args(["routine", "--cron", "*/10 * * * *"]).cron == "*/10 * * * *"
+    assert da.parse_args(["all", "--cron", "*/10 * * * *"]).cron == "*/10 * * * *"
+    assert da.parse_args(["routine", "--cron", "*/30 * * * *"]).cron == "*/30 * * * *"
+    assert da.parse_args(["all", "--cron", "*/30 * * * *"]).cron == "*/30 * * * *"
+    with pytest.raises(SystemExit):
+        da.parse_args(["routine", "--cron", "not a cron"])
+    with pytest.raises(SystemExit):
+        da.parse_args(["routine", "--cron", "1 2 3 4"])
+    with pytest.raises(SystemExit):
+        da.parse_args(["routine", "--cron", "1 2 3 4 5 6"])
+    with pytest.raises(SystemExit):
+        da.parse_args(["all", "--cron", "invalid"])
 
 
 def test_main_reports_deploy_errors_as_exit_code_1(monkeypatch: pytest.MonkeyPatch,
