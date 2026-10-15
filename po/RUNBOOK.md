@@ -49,6 +49,7 @@ The loop participates in the repository state machine using these exact labels:
 | | `escalated:requirements` | Two refinement rounds failed to reach 80. Persona reframes or closes. |
 | | `escalated:build-failed` | Coder exhausted attempts or CI check timeout. Persona posts failure findings with `<!-- po-answered:v1 -->` and closes the issue to unblock pipeline. |
 | | `escalated:review-failed` | PR review failed with unresolved comments. Persona posts findings with `<!-- po-answered:v1 -->` and closes the issue. |
+| | `escalated:merge-conflict` | Approved PR still conflicts with main after two coder merge rounds. Persona posts findings with `<!-- po-answered:v1 -->`, then close or re-file: closes the issue and re-files the requirement (only while intake is open, see the precheck guardrails below). |
 | | `escalated:agent-error` | Agent output streak failure (e.g. invalid test generation). Persona posts finding with `<!-- po-answered:v1 -->` and closes issue. |
 | **Triage** | `bug:triaged`, `severity:s1`..`s4`, `owner:web`, `owner:api`, `owner:carrier-mock` | Applied by Triage Lead hat on `type:bug` issues. |
 | **Type** | `type:feature`, `type:bug`, `type:maintenance` | Work item type categorization. |
