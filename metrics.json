@@ -38,7 +38,7 @@
       "pass": 10
     }
   },
-  "generated_at": "2026-10-15T00:31:20Z",
+  "generated_at": "2026-10-15T00:31:59Z",
   "issues": [
     {
       "closed_at": "2026-10-10T12:28:43Z",
@@ -2092,9 +2092,9 @@
       "cost": {
         "calls": 3,
         "coder_model_usd": 0.0,
-        "coder_usd": 0.149776,
+        "coder_usd": 0.245912,
         "model_usd": 0.007613,
-        "usd": 0.157389
+        "usd": 0.253526
       },
       "deferred": null,
       "escalation": null,
@@ -2105,7 +2105,7 @@
       "opened_at": "2026-10-15T00:02:42Z",
       "outcome": "open",
       "owner": null,
-      "pr": null,
+      "pr": 94,
       "quality_score": 90,
       "release": null,
       "resolution_seconds": null,
@@ -2129,9 +2129,14 @@
         },
         {
           "entered_at": "2026-10-15T00:15:17Z",
+          "seconds": 988,
+          "stage": "stage:building"
+        },
+        {
+          "entered_at": "2026-10-15T00:31:45Z",
           "in_progress": true,
           "seconds": 0,
-          "stage": "stage:building"
+          "stage": "stage:in-review"
         }
       ],
       "title": "feat(web): store and display recent searches in local storage",
@@ -2139,7 +2144,7 @@
     }
   ],
   "ledger": {
-    "emitted_at": "2026-10-15T00:31:08Z",
+    "emitted_at": "2026-10-15T00:31:47Z",
     "reconciled_at": "2026-10-15T00:05:26Z"
   },
   "repo": "stevengonsalvez/foundry-autonomous-sdlc",
@@ -2147,10 +2152,10 @@
     "deferred": 0,
     "escalated": 19,
     "issues": 29,
-    "ledger_usd": 0.690731,
-    "orchestrator_usd": 5.5712,
+    "ledger_usd": 0.693162,
+    "orchestrator_usd": 5.582857,
     "released": 8,
-    "usd": 8.832179
+    "usd": 8.942404
   },
   "version": 1
 }
