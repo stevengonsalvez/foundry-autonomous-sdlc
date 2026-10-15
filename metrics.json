@@ -38,7 +38,7 @@
       "pass": 10
     }
   },
-  "generated_at": "2026-10-15T00:11:28Z",
+  "generated_at": "2026-10-15T00:15:37Z",
   "issues": [
     {
       "closed_at": "2026-10-10T12:28:43Z",
@@ -2124,9 +2124,14 @@
         },
         {
           "entered_at": "2026-10-15T00:11:13Z",
+          "seconds": 244,
+          "stage": "stage:tests-written"
+        },
+        {
+          "entered_at": "2026-10-15T00:15:17Z",
           "in_progress": true,
           "seconds": 0,
-          "stage": "stage:tests-written"
+          "stage": "stage:building"
         }
       ],
       "title": "feat(web): store and display recent searches in local storage",
@@ -2134,7 +2139,7 @@
     }
   ],
   "ledger": {
-    "emitted_at": "2026-10-15T00:11:16Z",
+    "emitted_at": "2026-10-15T00:15:25Z",
     "reconciled_at": "2026-10-15T00:05:26Z"
   },
   "repo": "stevengonsalvez/foundry-autonomous-sdlc",
@@ -2142,10 +2147,10 @@
     "deferred": 0,
     "escalated": 19,
     "issues": 29,
-    "ledger_usd": 0.62999,
-    "orchestrator_usd": 5.285223,
+    "ledger_usd": 0.632413,
+    "orchestrator_usd": 5.297152,
     "released": 8,
-    "usd": 8.335686
+    "usd": 8.350038
   },
   "version": 1
 }
