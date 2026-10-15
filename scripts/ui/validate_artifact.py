@@ -7,6 +7,9 @@ Treats downloaded workflow artifacts as untrusted data:
 - Reject path traversals, symlinks, hidden files, non-regular files
 - Verify PNG magic bytes (89 50 4E 47 0D 0A 1A 0A)
 - Verify manifest.json schema and exact SHA-256 and byte size matches
+- State-aware manifests (scripts/ui/states.json): state ids, titles and captions come from
+  a PR-controlled file and end up in PR comments, so they are restricted to a tiny safe
+  charset and each filename must be exactly <state>-<viewport>.png
 """
 
 from __future__ import annotations
@@ -25,7 +28,7 @@ from pathlib import Path
 from typing import Any
 
 PNG_MAGIC_BYTES = b"\x89PNG\r\n\x1a\n"
-MAX_FILE_COUNT = 16
+MAX_FILE_COUNT = 64  # manifest.json + up to 63 PNGs (states x viewports)
 MIN_SCREENSHOT_COUNT = 1
 MAX_SINGLE_FILE_BYTES = 5 * 1024 * 1024  # 5 MB
 MAX_MANIFEST_BYTES = 64 * 1024  # 64 KB
@@ -35,6 +38,30 @@ SAFE_PNG_NAME_RE = re.compile(r"^[a-zA-Z0-9_-]+\.png$")
 SHA256_HEX_RE = re.compile(r"^[0-9a-f]{64}$")
 ROUTE_RE = re.compile(r"^(home|parcel-found|not-found|invalid-input)$")
 VIEWPORT_RE = re.compile(r"^(desktop|mobile)$")
+STATE_ID_RE = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
+MAX_STATE_ID_LEN = 40
+# Letters, digits, space and . , : ; ' ( ) / + - only: no markup, links, mentions,
+# backticks, newlines or HTML comment markers can survive into a PR comment.
+TEXT_RE = re.compile(r"^[A-Za-z0-9 .,:;'()/+-]+$")
+MAX_TITLE_LEN = 60
+MAX_CAPTION_LEN = 160
+MAX_SKIPPED = 64
+
+# Manifests written before states existed carry only a route; map them onto state ids.
+LEGACY_ROUTE_STATES = {
+    "home": "home-default",
+    "parcel-found": "parcel-timeline",
+    "not-found": "parcel-not-found",
+    "invalid-input": "parcel-invalid-input",
+}
+
+
+def state_id_of(item: dict[str, Any]) -> str | None:
+    """State id of a manifest entry, falling back to the legacy route mapping."""
+    state = item.get("state")
+    if isinstance(state, str) and state:
+        return state
+    return LEGACY_ROUTE_STATES.get(str(item.get("route")))
 
 ALLOWED_CHUNK_TYPES: frozenset[bytes] = frozenset(
     {b"IHDR", b"IDAT", b"IEND", b"sRGB", b"gAMA", b"pHYs"}
@@ -277,6 +304,20 @@ def validate_artifact_dir(artifact_dir: str | Path) -> ValidationResult:
         )
 
     manifest_entries_by_filename: dict[str, dict[str, Any]] = {}
+    seen_state_viewports: set[tuple[str, str]] = set()
+
+    skipped = manifest_data.get("skipped")
+    if skipped is not None:
+        if not isinstance(skipped, list) or len(skipped) > MAX_SKIPPED:
+            errors.append(f"manifest.json skipped must be a list of at most {MAX_SKIPPED} state ids")
+        else:
+            for sid in skipped:
+                if (
+                    not isinstance(sid, str)
+                    or len(sid) > MAX_STATE_ID_LEN
+                    or not STATE_ID_RE.fullmatch(sid)
+                ):
+                    errors.append(f"manifest.json skipped has invalid state id: {sid!r}")
 
     for i, item in enumerate(screenshots_list):
         if not isinstance(item, dict):
@@ -304,6 +345,32 @@ def validate_artifact_dir(artifact_dir: str | Path) -> ValidationResult:
 
         if type(expected_size) is not int or expected_size < 0:
             errors.append(f"screenshots[{i}] has invalid size: {expected_size!r}")
+
+        if "state" in item:
+            state = item["state"]
+            if (
+                not isinstance(state, str)
+                or len(state) > MAX_STATE_ID_LEN
+                or not STATE_ID_RE.fullmatch(state)
+            ):
+                errors.append(f"screenshots[{i}] has invalid state: {state!r}")
+            elif isinstance(viewport, str) and filename != f"{state}-{viewport}.png":
+                errors.append(
+                    f"screenshots[{i}] filename {filename!r} does not match state/viewport "
+                    f"({state}-{viewport}.png)"
+                )
+            elif (state, str(viewport)) in seen_state_viewports:
+                errors.append(f"Duplicate state/viewport in manifest: {state}/{viewport}")
+            else:
+                seen_state_viewports.add((state, str(viewport)))
+
+        for key, limit in (("title", MAX_TITLE_LEN), ("caption", MAX_CAPTION_LEN)):
+            if key in item:
+                text = item[key]
+                if not isinstance(text, str) or not 0 < len(text) <= limit or not TEXT_RE.fullmatch(
+                    text
+                ):
+                    errors.append(f"screenshots[{i}] has invalid {key}: {text!r}")
 
         if filename in manifest_entries_by_filename:
             errors.append(f"Duplicate filename in manifest: {filename}")
