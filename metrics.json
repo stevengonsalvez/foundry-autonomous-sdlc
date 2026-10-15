@@ -44,7 +44,7 @@
       "pass": 11
     }
   },
-  "generated_at": "2026-10-15T09:51:01Z",
+  "generated_at": "2026-10-15T10:00:44Z",
   "issues": [
     {
       "closed_at": "2026-10-10T12:28:43Z",
@@ -2185,14 +2185,14 @@
     },
     {
       "closed_at": null,
-      "coder_engine": "agy",
+      "coder_engine": "agy-unrestricted",
       "coder_sessions_lost": 0,
       "cost": {
         "calls": 4,
         "coder_model_usd": 0.0,
-        "coder_usd": 0.192273,
+        "coder_usd": 0.34762,
         "model_usd": 0.013093,
-        "usd": 0.205366
+        "usd": 0.360713
       },
       "deferred": null,
       "escalation": null,
@@ -2203,7 +2203,7 @@
       "opened_at": "2026-10-15T08:24:24Z",
       "outcome": "open",
       "owner": null,
-      "pr": null,
+      "pr": 100,
       "quality_score": 93,
       "release": null,
       "resolution_seconds": null,
@@ -2242,9 +2242,14 @@
         },
         {
           "entered_at": "2026-10-15T09:40:21Z",
+          "seconds": 1203,
+          "stage": "stage:building"
+        },
+        {
+          "entered_at": "2026-10-15T10:00:24Z",
           "in_progress": true,
           "seconds": 0,
-          "stage": "stage:building"
+          "stage": "stage:in-review"
         }
       ],
       "title": "feat(web): add light and dark theme toggle with persisted choice",
@@ -2252,14 +2257,14 @@
     },
     {
       "closed_at": null,
-      "coder_engine": "agy",
+      "coder_engine": "agy-unrestricted",
       "coder_sessions_lost": 0,
       "cost": {
         "calls": 4,
         "coder_model_usd": 0.0,
-        "coder_usd": 0.192114,
+        "coder_usd": 0.36481,
         "model_usd": 0.013563,
-        "usd": 0.205677
+        "usd": 0.378373
       },
       "deferred": null,
       "escalation": null,
@@ -2270,7 +2275,7 @@
       "opened_at": "2026-10-15T08:24:25Z",
       "outcome": "open",
       "owner": null,
-      "pr": null,
+      "pr": 101,
       "quality_score": 88,
       "release": null,
       "resolution_seconds": null,
@@ -2309,9 +2314,14 @@
         },
         {
           "entered_at": "2026-10-15T09:40:30Z",
+          "seconds": 1198,
+          "stage": "stage:building"
+        },
+        {
+          "entered_at": "2026-10-15T10:00:28Z",
           "in_progress": true,
           "seconds": 0,
-          "stage": "stage:building"
+          "stage": "stage:in-review"
         }
       ],
       "title": "feat(web): add left navigation sidebar with mobile menu",
@@ -2319,7 +2329,7 @@
     }
   ],
   "ledger": {
-    "emitted_at": "2026-10-15T09:50:24Z",
+    "emitted_at": "2026-10-15T10:00:30Z",
     "reconciled_at": "2026-10-15T09:50:24Z"
   },
   "repo": "stevengonsalvez/foundry-autonomous-sdlc",
@@ -2327,10 +2337,10 @@
     "deferred": 0,
     "escalated": 19,
     "issues": 31,
-    "ledger_usd": 0.863951,
-    "orchestrator_usd": 7.088365,
+    "ledger_usd": 0.866403,
+    "orchestrator_usd": 7.100656,
     "released": 9,
-    "usd": 11.033821
+    "usd": 11.376607
   },
   "version": 1
 }
