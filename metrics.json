@@ -4,47 +4,47 @@
     "agent-scope": {
       "fail": 0,
       "first_fail": 0,
-      "first_pass": 14,
-      "pass": 17
+      "first_pass": 16,
+      "pass": 19
     },
     "coverage": {
       "fail": 5,
       "first_fail": 5,
-      "first_pass": 9,
-      "pass": 12
+      "first_pass": 11,
+      "pass": 14
     },
     "e2e": {
       "fail": 7,
       "first_fail": 6,
-      "first_pass": 8,
-      "pass": 10
+      "first_pass": 10,
+      "pass": 12
     },
     "evals": {
       "fail": 0,
       "first_fail": 0,
-      "first_pass": 0,
-      "pass": 0
+      "first_pass": 2,
+      "pass": 2
     },
     "gitleaks": {
       "fail": 0,
       "first_fail": 0,
-      "first_pass": 14,
-      "pass": 17
+      "first_pass": 16,
+      "pass": 19
     },
     "tdd-order": {
       "fail": 0,
       "first_fail": 0,
-      "first_pass": 14,
-      "pass": 17
+      "first_pass": 16,
+      "pass": 19
     },
     "test": {
       "fail": 6,
       "first_fail": 6,
-      "first_pass": 8,
-      "pass": 11
+      "first_pass": 10,
+      "pass": 13
     }
   },
-  "generated_at": "2026-10-15T10:00:44Z",
+  "generated_at": "2026-10-15T10:10:56Z",
   "issues": [
     {
       "closed_at": "2026-10-10T12:28:43Z",
@@ -2188,16 +2188,46 @@
       "coder_engine": "agy-unrestricted",
       "coder_sessions_lost": 0,
       "cost": {
-        "calls": 4,
+        "calls": 5,
         "coder_model_usd": 0.0,
         "coder_usd": 0.34762,
-        "model_usd": 0.013093,
-        "usd": 0.360713
+        "model_usd": 0.016574,
+        "usd": 0.364194
       },
       "deferred": null,
       "escalation": null,
-      "gate_attempts": {},
-      "gates": {},
+      "gate_attempts": {
+        "agent-scope": [
+          "success"
+        ],
+        "coverage": [
+          "success"
+        ],
+        "e2e": [
+          "success"
+        ],
+        "evals": [
+          "success"
+        ],
+        "gitleaks": [
+          "success"
+        ],
+        "tdd-order": [
+          "success"
+        ],
+        "test": [
+          "success"
+        ]
+      },
+      "gates": {
+        "agent-scope": "success",
+        "coverage": "success",
+        "e2e": "success",
+        "evals": "success",
+        "gitleaks": "success",
+        "tdd-order": "success",
+        "test": "success"
+      },
       "kind": "issue",
       "number": 95,
       "opened_at": "2026-10-15T08:24:24Z",
@@ -2260,16 +2290,46 @@
       "coder_engine": "agy-unrestricted",
       "coder_sessions_lost": 0,
       "cost": {
-        "calls": 4,
+        "calls": 5,
         "coder_model_usd": 0.0,
         "coder_usd": 0.36481,
-        "model_usd": 0.013563,
-        "usd": 0.378373
+        "model_usd": 0.017631,
+        "usd": 0.382441
       },
       "deferred": null,
       "escalation": null,
-      "gate_attempts": {},
-      "gates": {},
+      "gate_attempts": {
+        "agent-scope": [
+          "success"
+        ],
+        "coverage": [
+          "success"
+        ],
+        "e2e": [
+          "success"
+        ],
+        "evals": [
+          "success"
+        ],
+        "gitleaks": [
+          "success"
+        ],
+        "tdd-order": [
+          "success"
+        ],
+        "test": [
+          "success"
+        ]
+      },
+      "gates": {
+        "agent-scope": "success",
+        "coverage": "success",
+        "e2e": "success",
+        "evals": "success",
+        "gitleaks": "success",
+        "tdd-order": "success",
+        "test": "success"
+      },
       "kind": "issue",
       "number": 96,
       "opened_at": "2026-10-15T08:24:25Z",
@@ -2329,7 +2389,7 @@
     }
   ],
   "ledger": {
-    "emitted_at": "2026-10-15T10:00:30Z",
+    "emitted_at": "2026-10-15T10:10:42Z",
     "reconciled_at": "2026-10-15T09:50:24Z"
   },
   "repo": "stevengonsalvez/foundry-autonomous-sdlc",
@@ -2337,10 +2397,10 @@
     "deferred": 0,
     "escalated": 19,
     "issues": 31,
-    "ledger_usd": 0.866403,
-    "orchestrator_usd": 7.100656,
+    "ledger_usd": 0.868835,
+    "orchestrator_usd": 7.11397,
     "released": 9,
-    "usd": 11.376607
+    "usd": 11.399902
   },
   "version": 1
 }
