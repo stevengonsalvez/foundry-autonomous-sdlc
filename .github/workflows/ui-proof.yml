@@ -4,7 +4,8 @@ name: UI Proof
 # `pr-screenshots` and comments on the PR with embedded preview images.
 #
 # Runs from main (trusted code) via workflow_run of CI with write permissions.
-# Never checks out PR code; never runs PR scripts; treats the artifact as untrusted data.
+# Never checks out PR code; never runs PR scripts; treats the artifacts (the PR capture and
+# the baseline captured from the PR's base commit) as untrusted data.
 
 on:
   workflow_run:
@@ -34,7 +35,7 @@ jobs:
       github.event.workflow_run.conclusion != 'cancelled' &&
       github.event.workflow_run.head_repository.full_name == github.repository
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
     env:
       GH_TOKEN: ${{ github.token }}
     steps:
@@ -47,15 +48,21 @@ jobs:
         with:
           python-version: ${{ env.PYTHON_VERSION }}
 
-      - name: Check for ui-screenshots artifact
+      - name: Check for ui-screenshots artifacts
         id: check-artifact
         run: |
-          count=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/${{ github.event.workflow_run.id }}/artifacts" --jq '[.artifacts[] | select(.name == "ui-screenshots")] | length')
-          if [ "$count" -eq 0 ]; then
+          names=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/${{ github.event.workflow_run.id }}/artifacts" --jq '[.artifacts[].name]')
+          if jq -e 'index("ui-screenshots")' <<<"$names" >/dev/null; then
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          else
             echo "Artifact ui-screenshots not found; skipping."
             echo "present=false" >> "$GITHUB_OUTPUT"
+          fi
+          if jq -e 'index("ui-screenshots-base")' <<<"$names" >/dev/null; then
+            echo "base_present=true" >> "$GITHUB_OUTPUT"
           else
-            echo "present=true" >> "$GITHUB_OUTPUT"
+            echo "No baseline artifact; publishing PR-only screenshots."
+            echo "base_present=false" >> "$GITHUB_OUTPUT"
           fi
 
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
@@ -63,6 +70,15 @@ jobs:
         with:
           name: ui-screenshots
           path: untrusted-screenshots
+          run-id: ${{ github.event.workflow_run.id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      # Same states captured from the PR's base commit. Untrusted like the PR capture.
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        if: steps.check-artifact.outputs.present == 'true' && steps.check-artifact.outputs.base_present == 'true'
+        with:
+          name: ui-screenshots-base
+          path: untrusted-screenshots-base
           run-id: ${{ github.event.workflow_run.id }}
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
@@ -77,6 +93,7 @@ jobs:
           PULL_REQUESTS_JSON: ${{ toJson(github.event.workflow_run.pull_requests) }}
           HEAD_REPO: ${{ github.event.workflow_run.head_repository.full_name }}
           HEAD_BRANCH: ${{ github.event.workflow_run.head_branch }}
+          BASE_DIR: ${{ steps.check-artifact.outputs.base_present == 'true' && 'untrusted-screenshots-base' || '' }}
         run: >-
           python -m scripts.ui.publish_proof
           --artifacts-dir untrusted-screenshots
@@ -84,3 +101,4 @@ jobs:
           --repo "$GITHUB_REPOSITORY"
           --head-repo "$HEAD_REPO"
           --head-branch "$HEAD_BRANCH"
+          ${BASE_DIR:+--base-dir "$BASE_DIR"}
