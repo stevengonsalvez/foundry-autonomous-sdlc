@@ -509,3 +509,18 @@ def test_the_loop_writes_nothing_when_every_proposal_is_invalid(web: Path) -> No
     assert result.returncode == 0
     assert "rejected" in result.output
     assert "// STALE HEADING" in (web / "app/web/tests/home-page.test.tsx").read_text()
+
+
+@pytest.mark.parametrize(("code", "output", "quota"), [
+    (125, "[aborted: agy reported a quota or rate limit]", True),
+    (3, "error: Individual quota reached. Resets in 19h13m22s.", True),
+    (3, 'AGY_ERROR: {"short_error":"RESOURCE_EXHAUSTED (code 429): Individual quota reached."}', True),
+    (125, "[aborted: agy needs authentication (token missing or expired)]", False),
+    (3, "error: something else broke", False),
+    (0, "the quota check in the code was changed", False),
+    (1, "429 Too Many Requests in a test fixture", False),
+])
+def test_quota_failures_are_told_apart_from_auth_and_other_failures(code: int, output: str, quota: bool) -> None:
+    from sdlc_agents.coder.engines import is_quota_failure
+    from sdlc_agents.ports import CommandResult
+    assert is_quota_failure(CommandResult(code, output)) is quota
