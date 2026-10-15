@@ -44,7 +44,7 @@
       "pass": 11
     }
   },
-  "generated_at": "2026-10-15T09:20:58Z",
+  "generated_at": "2026-10-15T09:31:31Z",
   "issues": [
     {
       "closed_at": "2026-10-10T12:28:43Z",
@@ -2188,11 +2188,11 @@
       "coder_engine": null,
       "coder_sessions_lost": 0,
       "cost": {
-        "calls": 3,
+        "calls": 4,
         "coder_model_usd": 0.0,
         "coder_usd": 0.101548,
-        "model_usd": 0.008807,
-        "usd": 0.110355
+        "model_usd": 0.013093,
+        "usd": 0.114641
       },
       "deferred": null,
       "escalation": null,
@@ -2232,9 +2232,14 @@
         },
         {
           "entered_at": "2026-10-15T09:20:25Z",
+          "seconds": 615,
+          "stage": "stage:feasible"
+        },
+        {
+          "entered_at": "2026-10-15T09:30:40Z",
           "in_progress": true,
           "seconds": 0,
-          "stage": "stage:feasible"
+          "stage": "stage:tests-written"
         }
       ],
       "title": "feat(web): add light and dark theme toggle with persisted choice",
@@ -2245,11 +2250,11 @@
       "coder_engine": null,
       "coder_sessions_lost": 0,
       "cost": {
-        "calls": 3,
+        "calls": 4,
         "coder_model_usd": 0.0,
         "coder_usd": 0.101389,
-        "model_usd": 0.007926,
-        "usd": 0.109315
+        "model_usd": 0.013563,
+        "usd": 0.114952
       },
       "deferred": null,
       "escalation": null,
@@ -2289,9 +2294,14 @@
         },
         {
           "entered_at": "2026-10-15T09:20:29Z",
+          "seconds": 636,
+          "stage": "stage:feasible"
+        },
+        {
+          "entered_at": "2026-10-15T09:31:05Z",
           "in_progress": true,
           "seconds": 0,
-          "stage": "stage:feasible"
+          "stage": "stage:tests-written"
         }
       ],
       "title": "feat(web): add left navigation sidebar with mobile menu",
@@ -2299,7 +2309,7 @@
     }
   ],
   "ledger": {
-    "emitted_at": "2026-10-15T09:20:32Z",
+    "emitted_at": "2026-10-15T09:31:08Z",
     "reconciled_at": "2026-10-15T08:40:39Z"
   },
   "repo": "stevengonsalvez/foundry-autonomous-sdlc",
@@ -2307,10 +2317,10 @@
     "deferred": 0,
     "escalated": 19,
     "issues": 31,
-    "ledger_usd": 0.853615,
-    "orchestrator_usd": 7.045807,
+    "ledger_usd": 0.858621,
+    "orchestrator_usd": 7.061843,
     "released": 9,
-    "usd": 10.789554
+    "usd": 10.820519
   },
   "version": 1
 }
