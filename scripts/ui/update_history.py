@@ -3,6 +3,7 @@ r"""Automate publishing release screenshots to the pr-screenshots branch.
 Used by the trusted app-history.yml workflow:
 - Validates the captured artifact directory as untrusted data using validate_artifact.py
 - Commits the validated PNGs to branch pr-screenshots under releases/<key>/
+- Records which states changed versus the previous release in the manifest (`changes`)
 - Verifies key against allowlist (^v(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$|^[0-9a-f]{8}$)
 - Pushes to pr-screenshots with jittered retry backoff
 """
@@ -10,6 +11,7 @@ Used by the trusted app-history.yml workflow:
 from __future__ import annotations
 
 import argparse
+import json
 import os
 import random
 import re
@@ -25,6 +27,7 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
+from scripts.ui.release_changes import annotate_release  # noqa: E402
 from scripts.ui.validate_artifact import validate_artifact_dir  # noqa: E402
 
 BRANCH_NAME = "pr-screenshots"
@@ -96,6 +99,27 @@ def resolve_release_key(repo_root: Path, override_key: str | None = None) -> tup
     return short_sha, full_sha
 
 
+def _record_changes(releases_dir: Path, key: str) -> None:
+    """Drop any artifact-supplied `changes`, then compute them against the previous release.
+
+    A failure here must not stop the screenshots being published: /history/ then falls back
+    to comparing sha256.
+    """
+    manifest_path = releases_dir / key / "manifest.json"
+    try:
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        if isinstance(manifest, dict) and manifest.pop("changes", None) is not None:
+            manifest_path.write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
+        changes = annotate_release(releases_dir, key)
+        if changes is not None:
+            counts = {}
+            for st in changes["states"].values():
+                counts[st["status"]] = counts.get(st["status"], 0) + 1
+            print(f"Recorded changes for {key} vs {changes['vs']}: {counts}")
+    except Exception as exc:
+        print(f"Notice: could not record changes for {key}: {exc}", file=sys.stderr)
+
+
 def publish_to_pr_screenshots(
     artifacts_dir: Path,
     key: str,
@@ -126,6 +150,9 @@ def publish_to_pr_screenshots(
         for item in artifacts_dir.iterdir():
             if item.is_file() and (item.name.endswith(".png") or item.name == "manifest.json"):
                 shutil.copy2(item, target_dir / item.name)
+
+        # `changes` is computed here from pixels, never taken from the artifact
+        _record_changes(work_dir / "releases", key)
 
         run_cmd(["git", "config", "user.name", "github-actions[bot]"], cwd=work_dir)
         run_cmd(
