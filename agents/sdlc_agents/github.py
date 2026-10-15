@@ -20,7 +20,7 @@ import urllib.parse
 from collections.abc import Callable
 from typing import Any
 
-from sdlc_agents.ports import REPO, CheckRun, Comment, GitHubError, Issue, PullCommit, PullRequest
+from sdlc_agents.ports import REPO, CheckRun, Comment, GitHubError, Issue, MergeConflict, PullCommit, PullRequest
 from sdlc_agents.transport import HttpRequest, HttpResponse, Transport, urllib_transport
 
 API = "https://api.github.com"
@@ -236,7 +236,12 @@ class GitHubClient:
         return _pull(self._call("POST", "/pulls", body={"title": title, "head": head, "base": base, "body": body}))
 
     def merge_pull(self, number: int, *, sha: str, method: str = "merge") -> str:
-        data = self._call("PUT", f"/pulls/{number}/merge", body={"sha": sha, "merge_method": method})
+        try:
+            data = self._call("PUT", f"/pulls/{number}/merge", body={"sha": sha, "merge_method": method})
+        except GitHubError as exc:
+            if exc.status == 405 and "merge conflict" in str(exc).lower():
+                raise MergeConflict(exc.status, str(exc).removeprefix(f"GitHub {exc.status}: ")) from exc
+            raise
         return str(data["sha"])
 
     def get_check_runs(self, sha: str) -> list[CheckRun]:
