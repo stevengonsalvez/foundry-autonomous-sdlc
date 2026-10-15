@@ -9,7 +9,8 @@ Deploy the agent side of the demo onto the Foundry project. Idempotent; every st
                  ledger 2 minutes at 0.25 vCPU and 0.5 GiB: it wakes only when events arrive)
   roles          Key Vault Secrets User per secret, Foundry User on the project for the hosted agents,
                  Cost Management Reader on the resource group for the ledger
-  routine        routine sdlc-tick: every five minutes, invocations {"op":"tick"} to sdlc-orchestrator
+  routine        routine sdlc-tick: on schedule cron (default '*/5 * * * *', configurable with --cron),
+                 invocations {"op":"tick"} to sdlc-orchestrator
   status         agent versions, identities, routine state and the last routine runs
   smoke          two coder status calls (no job, so 404 expected) proving the endpoint and session reuse
   all            connection, prompt-agents, hosted, roles, routine (in that order)
@@ -94,7 +95,13 @@ _POLICY_ID = re.compile(
 ROUTINE = "sdlc-tick"
 PROBE_ROUTINE = "probe-tick"
 ROUTINE_CRON = "*/5 * * * *"
-ROUTINE_DESCRIPTION = "Wakes sdlc-orchestrator every five minutes to advance issues and PRs."
+
+
+def routine_description(cron: str = ROUTINE_CRON) -> str:
+    return f"Wakes sdlc-orchestrator on schedule '{cron}' to advance issues and PRs."
+
+
+ROUTINE_DESCRIPTION = routine_description(ROUTINE_CRON)
 POLL_S = 5
 KV_SECRETS_USER = "Key Vault Secrets User"
 FOUNDRY_USER = "Foundry User"
@@ -608,15 +615,16 @@ class Deployer:
 
     # -- routine ---------------------------------------------------------------------------
 
-    def routine(self, enable: bool | None) -> None:
+    def routine(self, enable: bool | None, cron: str = ROUTINE_CRON) -> None:
         self._quiet_probe()
-        desired = {"description": ROUTINE_DESCRIPTION, "cron": ROUTINE_CRON, "time_zone": "UTC",
+        description = routine_description(cron)
+        desired = {"description": description, "cron": cron, "time_zone": "UTC",
                    "agent": ORCHESTRATOR, "input": {"op": "tick"}}
         current = self.foundry.get_routine(ROUTINE)
         if current is None:
             enabled = bool(enable)
             if self.dry_run:
-                self.say(f"would create routine {ROUTINE} (enabled={enabled}): cron '{ROUTINE_CRON}' UTC, "
+                self.say(f"would create routine {ROUTINE} (enabled={enabled}): cron '{cron}' UTC, "
                          f"invocations {{\"op\":\"tick\"}} to {ORCHESTRATOR}")
                 return
             self.foundry.put_routine(ROUTINE, enabled=enabled, **desired)
@@ -717,6 +725,8 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
                         help="deploy sdlc-coder with no egress policy (its outbound traffic is unrestricted); "
                              "without this or EGRESS_POLICY_ID=off, a missing policy fails the deploy")
     routine = argparse.ArgumentParser(add_help=False)
+    routine.add_argument("--cron", type=_cron_expression, default=ROUTINE_CRON,
+                         help=f"5-field cron expression for the routine schedule (default: '{ROUTINE_CRON}')")
     toggle = routine.add_mutually_exclusive_group()
     toggle.add_argument("--enable", dest="enable", action="store_const", const=True, default=None)
     toggle.add_argument("--disable", dest="enable", action="store_const", const=False)
@@ -731,6 +741,16 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     smoke = sub.add_parser("smoke")
     smoke.add_argument("--session", help="an existing coder session id to call into")
     return parser.parse_args(argv)
+
+
+def _cron_expression(value: str) -> str:
+    cleaned = value.strip()
+    fields = cleaned.split()
+    if len(fields) != 5:
+        raise argparse.ArgumentTypeError(
+            f"cron expression must have exactly 5 fields (minute hour day month day-of-week), got {len(fields)}"
+        )
+    return cleaned
 
 
 def _idle_minutes(value: str) -> int:
@@ -766,7 +786,7 @@ def dispatch(deployer: Deployer, args: argparse.Namespace) -> None:
     if command in ("all", "roles"):
         deployer.roles()
     if command in ("all", "routine"):
-        deployer.routine(args.enable)
+        deployer.routine(args.enable, cron=getattr(args, "cron", ROUTINE_CRON))
     if command == "status":
         deployer.status()
     if command == "smoke":

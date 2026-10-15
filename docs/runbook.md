@@ -116,7 +116,7 @@ uv run --project agents python scripts/deploy_agents.py all
 | `prompt-agents` | Registers the prompt agent versions (`python -m sdlc_agents.create_agents`). |
 | `hosted` | Zips and deploys `sdlc-orchestrator` (1 vCPU, 2Gi, idle timeout 2 minutes), `sdlc-coder` (2 vCPU, 4Gi, idle timeout 10 minutes) and `sdlc-ledger` (0.25 vCPU, 0.5Gi, idle timeout 2 minutes): `python_3_13`, `remote_build`, Invocations 2.0.0. The coder version gets the egress policy from terraform output `egress_policy_id` (section 9). Waits up to 900 seconds for status `active` and prints `error.message` on failure. An unchanged zip and definition reuse the existing version. The orchestrator gets `LEDGER_MODE` from `--ledger-mode` (`hosted` default, `inline`, `off`); `inline` deploys no ledger agent. |
 | `roles` | Assigns `Key Vault Secrets User` on single secrets (orchestrator: `github-pat`; coder: `github-pat`, `agy-cli-token`; ledger: `github-pat`) and `Foundry User` on the project to the hosted agents: the orchestrator calls the prompt agents, the coder and the ledger, the coder's fallback engine calls the model, the ledger asks the model for ticket summaries. The ledger also gets `Cost Management Reader` on the resource group, to read what Azure billed. Role ids are resolved by name with `az role definition list`. |
-| `routine` | Creates the routine `sdlc-tick` (cron `*/5 * * * *`, UTC, Invocations body `{"op":"tick"}` to `sdlc-orchestrator`) disabled. The spike routine `probe-tick` cannot be deleted yet; it is kept disabled. |
+| `routine` | Creates the routine `sdlc-tick` (cron `*/5 * * * *` by default, configurable with `--cron`, UTC, Invocations body `{"op":"tick"}` to `sdlc-orchestrator`) disabled. The spike routine `probe-tick` cannot be deleted yet; it is kept disabled. |
 
 The idle timeout decides how long compute stays billed after the last request. The orchestrator's 2 minutes (the platform minimum) is shorter than the five minute tick, so its compute is released between ticks; the coder's 10 minutes keeps a running job alive between the orchestrator's five minute status polls (one missed tick is tolerated; a longer gap evicts the sandbox and the job resumes as `interrupted`). Sizes, idle timeouts (2 to 60 minutes) and the wait can be overridden, for example:
 
@@ -130,6 +130,9 @@ Role assignments take a minute or more to propagate. Check the deployment and th
 uv run --project agents python scripts/deploy_agents.py status
 uv run --project agents python scripts/deploy_agents.py smoke
 uv run --project agents python scripts/deploy_agents.py routine --enable
+# or with a custom cadence (e.g. every 10 minutes for sprints, or every 30 minutes to reduce spend):
+uv run --project agents python scripts/deploy_agents.py routine --enable --cron "*/10 * * * *"
+uv run --project agents python scripts/deploy_agents.py routine --enable --cron "*/30 * * * *"
 ```
 
 `status` prints each agent's latest version, state and identity principal, both routines, and their last five runs. The first tick runs within five minutes of enabling.
