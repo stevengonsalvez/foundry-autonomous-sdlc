@@ -44,7 +44,7 @@
       "pass": 13
     }
   },
-  "generated_at": "2026-10-15T11:50:41Z",
+  "generated_at": "2026-10-15T12:01:07Z",
   "issues": [
     {
       "closed_at": "2026-10-10T12:28:43Z",
@@ -2296,17 +2296,17 @@
     },
     {
       "closed_at": null,
-      "coder_engine": null,
+      "coder_engine": "loop",
       "coder_sessions_lost": 0,
       "cost": {
         "calls": 5,
-        "coder_model_usd": 0.015424,
-        "coder_usd": 0.522226,
+        "coder_model_usd": 0.04003,
+        "coder_usd": 0.655926,
         "model_usd": 0.017631,
-        "usd": 0.555281
+        "usd": 0.713587
       },
       "deferred": null,
-      "escalation": null,
+      "escalation": "escalated:build-failed",
       "gate_attempts": {
         "agent-scope": [
           "success"
@@ -2342,7 +2342,7 @@
       "kind": "issue",
       "number": 96,
       "opened_at": "2026-10-15T08:24:25Z",
-      "outcome": "open",
+      "outcome": "escalated",
       "owner": null,
       "pr": null,
       "quality_score": 88,
@@ -2418,9 +2418,13 @@
         },
         {
           "entered_at": "2026-10-15T11:50:21Z",
-          "in_progress": true,
-          "seconds": 0,
+          "seconds": 601,
           "stage": "stage:building"
+        },
+        {
+          "entered_at": "2026-10-15T12:00:22Z",
+          "seconds": 0,
+          "stage": "escalated:build-failed"
         }
       ],
       "title": "feat(web): add left navigation sidebar with mobile menu",
@@ -2428,18 +2432,18 @@
     }
   ],
   "ledger": {
-    "emitted_at": "2026-10-15T11:50:28Z",
-    "reconciled_at": "2026-10-15T11:00:20Z"
+    "emitted_at": "2026-10-15T12:00:23Z",
+    "reconciled_at": "2026-10-15T12:00:23Z"
   },
   "repo": "stevengonsalvez/foundry-autonomous-sdlc",
   "totals": {
     "deferred": 0,
-    "escalated": 19,
+    "escalated": 20,
     "issues": 31,
-    "ledger_usd": 0.899218,
-    "orchestrator_usd": 7.279739,
+    "ledger_usd": 0.90305,
+    "orchestrator_usd": 7.293927,
     "released": 10,
-    "usd": 11.770354
+    "usd": 11.94668
   },
   "version": 1
 }
