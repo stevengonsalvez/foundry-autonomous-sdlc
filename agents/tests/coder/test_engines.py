@@ -313,7 +313,7 @@ def test_agy_waiting_for_a_login_is_killed_at_once_and_fails(tmp_path: Path) -> 
 
 
 def test_agy_quota_message_aborts_only_without_edits(tmp_path: Path) -> None:
-    fake = _fake_agy(tmp_path, "print('Error: RESOURCE_EXHAUSTED (429): quota exceeded', flush=True)\ntime.sleep(60)\n")
+    fake = _fake_agy(tmp_path, f"print({REAL_LINE!r}, flush=True)\ntime.sleep(60)\n")
     assert AgyEngine(fake, home=tmp_path, dirty=lambda: False).edit(
         "p", workdir=str(tmp_path), timeout_s=120).returncode == shell.ABORTED_RC
     finishing = _fake_agy(tmp_path, "print('retrying after 429', flush=True)\ntime.sleep(1)\nprint('done')\n")
@@ -422,7 +422,7 @@ def test_a_timed_out_round_with_edits_keeps_them_and_says_it_timed_out(tmp_path:
 def test_root_never_inspects_the_tree_while_agy_still_runs(tmp_path: Path) -> None:
     pid_file = tmp_path / "agy.pid"
     fake = _fake_agy(tmp_path, f"import os; open({str(pid_file)!r}, 'w').write(str(os.getpid()))\n"
-                               "print('Error: RESOURCE_EXHAUSTED (429): quota exceeded', flush=True)\ntime.sleep(60)\n")
+                               f"print({REAL_LINE!r}, flush=True)\ntime.sleep(60)\n")
     checks: list[bool] = []
 
     def dirty() -> bool:
@@ -509,3 +509,55 @@ def test_the_loop_writes_nothing_when_every_proposal_is_invalid(web: Path) -> No
     assert result.returncode == 0
     assert "rejected" in result.output
     assert "// STALE HEADING" in (web / "app/web/tests/home-page.test.tsx").read_text()
+
+
+REAL_LINE = "error: Individual quota reached. Please upgrade your subscription to increase your limits."
+REAL_JSON = ('AGY_ERROR: {"short_error":"RESOURCE_EXHAUSTED (code 429): Individual quota reached.",'
+             '"status":"RESOURCE_EXHAUSTED","error_code":429,"retryable":true}')
+NARRATION = "I will add a per-user quota check and return HTTP 429 when the limit is exceeded."
+ABORT = "[aborted: agy reported a quota or rate limit]"
+
+
+@pytest.mark.parametrize(("code", "output", "quota"), [
+    (125, f"{REAL_LINE}\n{ABORT}", True),
+    (125, f"{REAL_JSON}\n{ABORT}", True),
+    (3, f"{REAL_LINE} Resets in 19h13m22s.\n{REAL_JSON}", True),
+    (3, f"working on it\n{REAL_JSON}", True),
+    (125, f"{NARRATION}\n{ABORT}", False),            # the abort marker alone is no evidence
+    (3, f"{NARRATION}\nerror: something else broke", False),
+    (3, "RESOURCE_EXHAUSTED mentioned by the model, not an agy error line", False),
+    (125, "  the quota is spent says the model  \n" + ABORT, False),
+    (125, "[aborted: agy needs authentication (token missing or expired)]", False),
+    (3, "error: something else broke", False),
+    (0, REAL_LINE, False),                              # exit 0: agy finished
+    (1, f"{NARRATION}\n429 Too Many Requests in a test fixture", False),
+])
+def test_quota_failures_are_told_apart_from_auth_narration_and_other_failures(
+        code: int, output: str, quota: bool) -> None:
+    from sdlc_agents.coder.engines import is_quota_failure
+    from sdlc_agents.ports import CommandResult
+    assert is_quota_failure(CommandResult(code, output)) is quota
+
+
+def test_model_narration_about_quotas_and_429_does_not_abort_a_healthy_agy(tmp_path: Path) -> None:
+    fake = _fake_agy(tmp_path, f"print({NARRATION!r}, flush=True)\nprint('echoed: if (n > limit) return 429', "
+                               "flush=True)\ntime.sleep(2)\nprint('done')\n")
+    result = AgyEngine(fake, home=tmp_path, dirty=lambda: False).edit("p", workdir=str(tmp_path), timeout_s=120)
+    assert result.returncode == 0 and "done" in result.output
+    assert (tmp_path / "calls").read_text() == "x"
+
+
+def test_agys_real_quota_error_line_is_aborted_and_classified_as_quota(tmp_path: Path) -> None:
+    from sdlc_agents.coder.engines import is_quota_failure
+    fake = _fake_agy(tmp_path, f"print({NARRATION!r}, flush=True)\nprint({REAL_LINE!r}, flush=True)\n"
+                               "time.sleep(60)\n")
+    result = AgyEngine(fake, home=tmp_path, dirty=lambda: False).edit("p", workdir=str(tmp_path), timeout_s=120)
+    assert result.returncode == shell.ABORTED_RC and is_quota_failure(result)
+
+
+def test_agys_own_quota_exit_is_classified_as_quota(tmp_path: Path) -> None:
+    from sdlc_agents.coder.engines import is_quota_failure
+    fake = _fake_agy(tmp_path, f"print({REAL_LINE!r}, flush=True)\nprint({REAL_JSON!r}, flush=True)\nsys.exit(3)\n")
+    result = AgyEngine(fake, home=tmp_path, dirty=lambda: False).edit("p", workdir=str(tmp_path), timeout_s=120)
+    # The coder's poll may abort agy (125) a moment before agy exits by itself (3): both are quota.
+    assert result.returncode in (3, shell.ABORTED_RC) and is_quota_failure(result)

@@ -1,0 +1,24 @@
+{
+  "version": 1,
+  "updated_at": "2026-10-15T12:30:00Z",
+  "tickets": [
+    {
+      "issue": 96,
+      "kind": "issue",
+      "title": "Add a left navigation sidebar with a mobile menu",
+      "type": "feature",
+      "stage": "escalated",
+      "sdlc_stage": "stage:building",
+      "opened_at": "2026-10-15T08:30:00Z",
+      "escalation": {
+        "label": "escalated:agent-quota",
+        "at": "2026-10-15T12:25:00Z",
+        "attempts": 1,
+        "open": true,
+        "resolved": null,
+        "reasons": ["coder failed (agent-quota) in phase implement", "both agy engines hit the account quota"],
+        "tried": ["Coder job j-96-5: failed, engine agy, 0 iteration(s), attempt 5."]
+      }
+    }
+  ]
+}

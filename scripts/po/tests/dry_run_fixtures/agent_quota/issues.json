@@ -1,0 +1,21 @@
+[
+  {
+    "number": 96,
+    "title": "feat(web): add left navigation sidebar with mobile menu",
+    "author": {
+      "login": "stevengonsalvez"
+    },
+    "body": "Add a left navigation sidebar.",
+    "labels": [
+      {
+        "name": "type:feature"
+      },
+      {
+        "name": "stage:building"
+      },
+      {
+        "name": "escalated:agent-quota"
+      }
+    ]
+  }
+]

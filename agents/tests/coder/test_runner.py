@@ -1714,3 +1714,79 @@ def test_a_revise_without_merge_main_still_squashes_to_one_commit(world: World) 
     assert len(parents(world, "agent/issue-40")) == 1
 
 
+# -- agent quota: agy dies on the account's quota; the loop fallback must not burn rounds -----------------
+
+QUOTA_RESTRICTED = CommandResult(125, "error: Individual quota reached. Resets in 19h13m22s.\n"
+                                 "[aborted: agy reported a quota or rate limit]")      # the coder's own abort
+QUOTA_UNRESTRICTED = CommandResult(
+    3, "error: Individual quota reached. Please upgrade your subscription to increase your limits. "
+       "Resets in 19h13m22s.\nAGY_ERROR: {\"short_error\":\"RESOURCE_EXHAUSTED (code 429)\"}")        # agy's own exit
+NARRATION_ABORT = CommandResult(125, "I will add a per-user quota check and return HTTP 429.\n"
+                                     "[aborted: agy reported a quota or rate limit]")
+AUTH_ABORT = CommandResult(125, "[aborted: agy needs authentication (token missing or expired)]")
+
+
+def test_both_agy_engines_dying_on_quota_fail_the_job_fast_without_loop_rounds(world: World) -> None:
+    world.engines = [ScriptedEngine("agy", [lambda root: QUOTA_RESTRICTED]),
+                     ScriptedEngine("agy-unrestricted", [lambda root: QUOTA_UNRESTRICTED]),
+                     ScriptedEngine("loop", [{"app/web/src/eta.txt": "2026-10-12\n"}])]
+    service = world.service()
+    start(service, job())
+    status = wait(service, "j-12-1")
+    assert status["status"] == "failed" and status["reason"] == "agent-quota", status
+    assert "Resets in 19h13m22s" in status["detail"] or "quota" in status["detail"]
+    assert world.engines[2].prompts == []                        # the loop engine never ran
+    assert [e["reason"] for e in status["engine_events"] if e["reason"] == "agent-quota"] == ["agent-quota"]
+    assert world.github.pulls == []
+
+
+def test_quota_on_the_restricted_engine_alone_still_tries_the_unrestricted_one(world: World) -> None:
+    world.engines = [ScriptedEngine("agy", [lambda root: QUOTA_RESTRICTED]),
+                     ScriptedEngine("agy-unrestricted", [{"app/web/src/eta.txt": "2026-10-12\n"}]),
+                     ScriptedEngine("loop", [])]
+    service = world.service()
+    start(service, job())
+    status = wait(service, "j-12-1")
+    assert status["status"] == "succeeded" and status["engine"] == "agy-unrestricted", status
+
+
+def test_authentication_failures_are_not_quota_and_still_fall_back_to_the_loop(world: World) -> None:
+    world.engines = [ScriptedEngine("agy", [lambda root: AUTH_ABORT]),
+                     ScriptedEngine("agy-unrestricted", [lambda root: AUTH_ABORT]),
+                     ScriptedEngine("loop", [{"app/web/src/eta.txt": "2026-10-12\n"}])]
+    service = world.service()
+    start(service, job())
+    status = wait(service, "j-12-1")
+    assert status["status"] == "succeeded" and status["engine"] == "loop", status
+
+
+def test_a_job_with_only_the_loop_engine_never_reports_quota(world: World) -> None:
+    world.engines = [ScriptedEngine("loop", ["fail"])]
+    service = world.service()
+    start(service, job(max_iterations=1))
+    assert wait(service, "j-12-1")["reason"] != "agent-quota"
+
+
+def test_a_quota_abort_caused_by_model_narration_falls_back_to_the_loop_not_agent_quota(world: World) -> None:
+    world.engines = [ScriptedEngine("agy", [lambda root: NARRATION_ABORT]),
+                     ScriptedEngine("agy-unrestricted", [lambda root: NARRATION_ABORT]),
+                     ScriptedEngine("loop", [{"app/web/src/eta.txt": "2026-10-12\n"}])]
+    service = world.service()
+    start(service, job())
+    status = wait(service, "j-12-1")
+    assert status["status"] == "succeeded" and status["engine"] == "loop", status
+
+
+def test_quota_errors_after_edits_are_not_agent_quota(world: World) -> None:
+    def edit_then_quota(root: Path) -> CommandResult:
+        (root / "app/web/src/half.txt").write_text("half")
+        return QUOTA_UNRESTRICTED
+
+    world.engines = [ScriptedEngine("agy", [edit_then_quota]),
+                     ScriptedEngine("agy-unrestricted", [edit_then_quota]),
+                     ScriptedEngine("loop", [{"app/web/src/eta.txt": "2026-10-12\n"}])]
+    service = world.service()
+    start(service, job())
+    status = wait(service, "j-12-1")
+    assert status["status"] == "succeeded" and status["engine"] == "loop", status
+

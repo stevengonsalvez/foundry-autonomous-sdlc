@@ -23,6 +23,8 @@
 # 19. Rejects missing highest-visibility preference rule
 # 20. Rejects re-filing on a merge-conflict escalation
 # 21. Rejects a missing merge-conflict rule
+# 22. Rejects closing or re-filing an agent-quota escalation
+# 23. Rejects a missing agent-quota rule
 
 set -euo pipefail
 
@@ -211,6 +213,18 @@ M21_CONTENT="${BASE_CONTENT//escalated:merge-conflict/escalated:other}"
 run_mutation_test "Rejects a missing merge-conflict rule" \
   "$M21_CONTENT" \
   "Guardrail \(j\)|merge-conflict"
+
+# 22. Rejects a persona that closes agent-quota escalations
+M22_CONTENT="${BASE_CONTENT//[Dd]o not close or re-file/close it}"
+run_mutation_test "Rejects closing or re-filing an agent-quota escalation" \
+  "$M22_CONTENT" \
+  "Guardrail \(k\)|agent-quota"
+
+# 23. Rejects a persona with no agent-quota rule
+M23_CONTENT="${BASE_CONTENT//escalated:agent-quota/escalated:other}"
+run_mutation_test "Rejects a missing agent-quota rule" \
+  "$M23_CONTENT" \
+  "Guardrail \(k\)|agent-quota"
 
 echo "----------------------------------------"
 if [ "$failures" -gt 0 ]; then

@@ -100,7 +100,7 @@ One object, one `stage:*` label at a time. Transitions are performed only by the
 Label set (created by `scripts/setup_repo.py`; names are exact):
 
 - Stage: `stage:needs-refinement`, `stage:ready`, `stage:feasible`, `stage:tests-written`, `stage:building`, `stage:in-review`, `stage:merged`, `stage:released`
-- Escalation (terminal): `escalated:not-agent-suitable`, `escalated:requirements`, `escalated:review-failed`, `escalated:cost-cap`, `escalated:build-failed`, `escalated:agent-error`, `escalated:merge-conflict`, `escalated:deploy-failed` (set by the CD workflow when a release is rolled back, never by the orchestrator)
+- Escalation (terminal): `escalated:not-agent-suitable`, `escalated:requirements`, `escalated:review-failed`, `escalated:cost-cap`, `escalated:build-failed`, `escalated:agent-error`, `escalated:merge-conflict`, `escalated:agent-quota`, `escalated:deploy-failed` (set by the CD workflow when a release is rolled back, never by the orchestrator)
 - Type: `type:feature`, `type:bug`, `type:maintenance`
 - Bug triage: `bug:triaged`, `severity:s1`, `severity:s2`, `severity:s3`, `severity:s4`, `owner:web`, `owner:api`, `owner:carrier-mock`
 - PR: `agent:pr` (set on every PR the coder opens), `maintenance:test-repair`
