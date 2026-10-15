@@ -89,14 +89,14 @@ It serves as the backlog for the Simulated Human product owner loop.
 - **Tags**: ui, hero, home, high-visibility
 - **Visible Surface**: home
 - **Gap Anchor**: `app/web/src/pages/HomePage.tsx#L29-L35` and `app/web/src/components/SearchForm.tsx#L57-L62`. The home hero section currently shows an unstyled heading and generic button, lacking distinctive brand identity and prominent primary action styling on the initial screen.
-- **User Value**: Visitors to the home page immediately see a professional, branded parcel tracking hero with an official carrier badge and a clear primary action button.
+- **User Value**: Visitors to the home page immediately see a professional, branded parcel tracking hero with a Parcel Tracker badge and a clear primary action button.
 - **Files Touched**:
   - `app/web/src/pages/HomePage.tsx`
   - `app/web/src/components/SearchForm.tsx`
   - `app/web/src/styles.css`
   - `app/web/tests/home-page.test.tsx`
 - **Acceptance Criteria**:
-  1. The home hero renders an official carrier identity badge with data-testid="brand-identity-badge" displaying "Official Carrier Tracking".
+  1. The home hero renders a brand identity badge with data-testid="brand-identity-badge" displaying "Parcel Tracker".
   2. The search submit button displays primary call-to-action text "Track shipment" with data-testid="track-shipment-button".
   3. The hero includes a dedicated tagline element with class hero__tagline highlighting live status updates.
   4. The ui-proof screenshot for home surface differs from previous release by showing the brand identity badge with test id brand-identity-badge and primary action button.
