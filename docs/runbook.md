@@ -227,9 +227,38 @@ To enable:
 | `failed` / `interrupted` | The sandbox was evicted while the job ran (a restarted server marks such jobs at once). `start` with the same job resumes. |
 | `failed` / `internal-error` | An unexpected exception in the coder itself. `detail` has the redacted traceback tail, the same traceback is in the job log and on stdout (the platform logstream); the lease was released. A coder bug: read the traceback before retrying. |
 | `failed` / `engine-unavailable` | agy could not be set up after one retry (`detail` and the `agy-unavailable` engine event name the step: secret read, install, token or settings write, copy to `/opt/agy`). The job stops rather than run the model loop alone; start a new attempt once the cause is fixed. |
+| `failed` / `agent-quota` | Both agy engines died on the account's quota (the coder's own abort with `agy reported a quota or rate limit`, or agy's exit code 3 with `RESOURCE_EXHAUSTED`). The job stops at once with no model-loop rounds; the orchestrator escalates `escalated:agent-quota`. See "Rotate the agy token" below. |
 | `failed` / `invalid-allowed-paths` | revise or maintenance: no `allowed_paths` entry matches a file at the head of the branch (`detail` names them). Fix the paths the orchestrator sent. |
 | `timeout` / `deadline` | `deadline_s` elapsed. If the job was stuck, the watchdog (every 30 s heartbeat) records this 60 s past the deadline and cancels it, `detail` starting `watchdog:`. |
 | `cancelled` | A `cancel` call stopped it. |
+
+### Rotate the agy token, and tell quota from auth
+
+The coder's agy runs on ONE Antigravity account: the Key Vault secret `agy-cli-token` is a copy of that account's token file (section 4). Your own agy sessions on other machines draw on the same weekly quota if they use the same account.
+
+| What you see | Meaning |
+|--------------|---------|
+| Job `failed` / `agent-quota`; issue `escalated:agent-quota`; engine events `engine-quota`, then `agent-quota` | Quota spent. In the job output agy printed `Individual quota reached ... Resets in 19h13m` (`RESOURCE_EXHAUSTED`, code 429) and exited 3, or the coder killed it (exit 125, `agy reported a quota or rate limit`). Seconds, not minutes, per round. |
+| Engine event `agy-unavailable`, job `engine-unavailable` | The secret could not be read or agy could not be installed or started. Not the quota. |
+| agy exit 125 with `agy needs authentication (token missing or expired)` | Auth: the token is missing, expired or revoked. The coder falls back to the model loop (`engines-exhausted` if that fails too). Rotating to a fresh token file fixes it; waiting does not. |
+| rounds that run for minutes and exit 0 | agy works. |
+
+To check an account without a coder job, run one word through agy from a throwaway HOME that holds only that token file: `HOME=$tmp agy -p "Reply with the single word ok" --mode accept-edits`. Exit 0 and `ok` means it has quota; exit 3 prints the reset time.
+
+Rotate (needs the Key Vault Secrets Officer role; the deploy principal does not have it):
+
+```bash
+KV=$(terraform -chdir=infra/terraform output -raw key_vault_name)
+OLD=$(az keyvault secret show --vault-name "$KV" --name agy-cli-token --query id -o tsv)   # keep: the rollback target
+# NEW is a token file of the account with headroom (mode 600, outside the repo): the file
+# ~/.gemini/antigravity-cli/antigravity-oauth-token while that account is active, or one built from its refresh token.
+az keyvault secret set --vault-name "$KV" --name agy-cli-token --file "$NEW" --output none
+az keyvault secret show --vault-name "$KV" --name agy-cli-token --query id -o tsv           # the new version id
+# rollback:
+az keyvault secret show --id "$OLD" --query value -o tsv | az keyvault secret set --vault-name "$KV" --name agy-cli-token --file /dev/stdin --output none
+```
+
+The coder reads the secret once per process (`keyvault.py` caches it), and every new job starts in a new session, so the next job uses the new value; to be sure, redeploy (`deploy_agents.py hosted --only sdlc-coder`). Then requeue the issue: remove `escalated:agent-quota`, and reset its state comment (`escalation` to null, a new `stage:tests-written` entry, `pr` and `review` to null). Never print the token; compare accounts by the email claim of the id token or a hash of the refresh token.
 
 ## 7a. Ledger, state branch and control center
 
