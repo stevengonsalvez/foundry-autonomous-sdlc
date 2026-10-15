@@ -65,6 +65,7 @@ from sdlc_agents.ports import (
     GitHubError,
     GitHubPort,
     Issue,
+    MergeConflict,
     PullRequest,
     SecretsPort,
 )
@@ -87,7 +88,7 @@ CODER_REASONS = frozenset({
     "tests-not-red", "scope-violation", "max-iterations", "engines-exhausted", "cost-cap", "install-failed",
     "branch-missing", "branch-conflict", "interrupted", "deadline", "cancelled", "error", "tests-invalid",
     "sandbox-unavailable", "lease-held", "lease-error", "engine-unavailable", "internal-error",
-    "invalid-allowed-paths",
+    "invalid-allowed-paths", "unresolved-conflicts",
 })
 UNREPORTED_CODER_SLACK_S = 900    # one missed poll is normal; longer gaps are billed as estimated time
 UNREPORTED_STATUSES = ("running", "starting", "start-unconfirmed", "lease-held")
@@ -778,6 +779,8 @@ class _Tick:
         else:
             attempts = int(previous.get("attempts", 0)) + 1
         job = self._coder_job(obj, ctx, mode, attempts)
+        if job.get("merge_main"):
+            st.section("merge_conflict")["job"] = job["job_id"]      # this round's coder job
         if mode in ("feature", "bugfix"):
             old = previous.get("branch")
             if old and old != job["branch"] and str(old).startswith(f"agent/issue-{obj.item.number}"):
@@ -796,7 +799,7 @@ class _Tick:
             else st.data["cost"].get("coder_model_usd", 0.0),
             "branch": job["branch"], "base_head": pr.get("head") if mode == "revise" else
             (ctx.pr.head_sha if mode == "maintenance" and ctx.pr else None),
-            "resends": 0, "lease": "requested",
+            "resends": 0, "lease": "requested", "merge_main": job.get("merge_main", False),
         }
         self._save(obj)
         return self._send_start(obj, job)
@@ -830,7 +833,15 @@ class _Tick:
             job.update(branch=pr["branch"], pr={"number": pr["number"]})
             head = ctx.pr.head_sha if ctx.pr else pr.get("head")
             ci = st.get("ci_revise") or {}
-            if ci.get("head") == head and ci.get("action") == "revise":
+            conflict = st.get("merge_conflict") or {}
+            if conflict.get("head") == head:
+                job["merge_main"] = True
+                spec["notes"] = (
+                    "GitHub refuses to merge this pull request: it has merge conflicts with main (another pull "
+                    "request changed the same files and landed first). Merge origin/main into the branch and "
+                    "resolve every conflict keeping BOTH intents: what this pull request adds and what main "
+                    "added. Do not drop either side. Make the tests pass again.")
+            elif ci.get("head") == head and ci.get("action") == "revise":
                 spec["notes"] = str(ci["notes"])           # CI error lines (untrusted; the coder wraps them)
             else:
                 spec["notes"] = f"Address the reviewer's findings:\n{review_notes}"
@@ -1004,7 +1015,9 @@ class _Tick:
         elif outcome.escalate:
             detail = resp.get("detail") or resp.get("log_tail") or ""
             tail = sanitise_markdown(one_line(str(detail), 300))
-            self._escalate(obj, outcome.escalate, [f"{outcome.reason} in phase {coder.get('phase')}", tail])
+            label = state.ESC_MERGE_CONFLICT if coder.get("merge_main") and outcome.escalate == state.ESC_BUILD_FAILED \
+                else outcome.escalate
+            self._escalate(obj, label, [f"{outcome.reason} in phase {coder.get('phase')}", tail])
         else:
             st.data["failures"] = None
         if json.dumps(st.data, sort_keys=True) != before:
@@ -1313,12 +1326,32 @@ class _Tick:
             return "merge refused: files outside app/"
         if not result.passed:
             raise StepError("merge gate failed: " + "; ".join(result.reasons))
-        merge_sha = self.github.merge_pull(pr.number, sha=pr.head_sha, method="merge")
+        try:
+            merge_sha = self.github.merge_pull(pr.number, sha=pr.head_sha, method="merge")
+        except MergeConflict as exc:
+            return self._merge_conflict(obj, pr, exc)
         st.data["pr"] = {"number": pr.number, "branch": pr.head_ref, "head": pr.head_sha, "merge_sha": merge_sha}
         self._record_gates(st, pr.head_sha, result.checks)
         st.enter(state.MERGED, self.clock.now_iso())
         self._save(obj)
         return f"merged #{pr.number} as {merge_sha[:7]}"
+
+    def _merge_conflict(self, obj: _Object, pr: PullRequest, exc: MergeConflict) -> str:
+        """GitHub refused the merge: another PR changed the same lines on main. Retrying cannot help, so the
+        coder merges main into the branch (a revise job, keeping both intents), the new head runs the
+        gates and is reviewed, then merged. After MAX_MERGE_CONFLICT_ROUNDS rounds: escalated:merge-conflict."""
+        st = obj.st
+        rounds = int((st.get("merge_conflict") or {}).get("rounds", 0))
+        if obj.kind != "issue" or rounds >= machine.MAX_MERGE_CONFLICT_ROUNDS:
+            self._escalate(obj, state.ESC_MERGE_CONFLICT, [
+                f"merge of #{pr.number} still conflicts with main after {rounds} merge conflict rounds: "
+                f"{one_line(str(exc), 200)}"])
+            self._save(obj)
+            return "merge conflict: escalated"
+        st.data["merge_conflict"] = {"rounds": rounds + 1, "head": pr.head_sha, "error": one_line(str(exc), 200)}
+        st.data["failures"] = None
+        self._save(obj)
+        return f"merge conflict on {pr.head_sha[:7]}: merge conflict round {rounds + 1}"
 
     def _do_mark_merged(self, obj: _Object, ctx: Context, action: Action) -> str:
         st, pr = obj.st, _require_pr(ctx)

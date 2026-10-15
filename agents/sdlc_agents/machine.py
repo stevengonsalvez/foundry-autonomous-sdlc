@@ -26,6 +26,7 @@ from sdlc_agents.state import (
     ESC_AGENT_ERROR,
     ESC_BUILD_FAILED,
     ESC_COST_CAP,
+    ESC_MERGE_CONFLICT,
     ESC_NOT_SUITABLE,
     ESC_REQUIREMENTS,
     ESC_REVIEW_FAILED,
@@ -41,7 +42,9 @@ from sdlc_agents.state import (
 )
 
 MAX_REVIEW_REJECTIONS = 2
-MAX_CODER_ATTEMPTS = 8            # first build, two rebuilds after test repairs, two CI revisions, a review one
+MAX_CODER_ATTEMPTS = 10           # first build, two rebuilds after test repairs, two CI revisions, a review one,
+                                  # two merge conflict rounds
+MAX_MERGE_CONFLICT_ROUNDS = 2     # GitHub 405 on an approved PR: coder rounds that merge main in before merge-conflict
 MAX_CI_REVISIONS = 2              # red required checks on an agent PR: coder revise rounds before build-failed
 CI_REVISABLE = ("test", "coverage", "e2e")   # code failures; gitleaks, tdd-order, agent-scope, evals escalate at once
 MAX_TEST_REPAIRS = 2              # coder reported tests-invalid: designer repairs before agent-error
@@ -313,6 +316,14 @@ def _review_action(ctx: Context, *, revise_mode: str) -> Action:
     grace = _cancel_grace(ctx, pr.head_sha)
     if grace:
         return grace
+    conflict = state.get("merge_conflict") if state else None
+    if conflict and conflict.get("head") == pr.head_sha:
+        # GitHub refused to merge this head: the coder merges main into the branch, then it is reviewed anew.
+        coder = state.get("coder") or {}
+        if conflict.get("job") and coder.get("job_id") == conflict["job"] and coder.get("status") == "succeeded":
+            return Action(Kind.ESCALATE, "the coder merged main but pushed no new head: still " + str(
+                conflict.get("error") or "conflicting"), label=ESC_MERGE_CONFLICT)
+        return _start_coder(state, revise_mode)
     failed = gates.failed(ctx.checks)
     code_failures = [name for name in failed if ctx.checks[name] != "cancelled"]
     if code_failures and ctx.kind == "issue" and set(code_failures) <= set(CI_REVISABLE):

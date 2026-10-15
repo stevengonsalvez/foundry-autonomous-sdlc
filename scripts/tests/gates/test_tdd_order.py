@@ -366,3 +366,74 @@ class TestCli:
         proc = self.run(repo, "--base", "main", "--branch", "main")
         assert proc.returncode == 0
         assert "NOTE=not-agent-branch" in proc.stdout
+
+
+class TestBaseSyncMerges:
+    """The coder merges origin/main into a conflicting PR branch; that merge is not agent work."""
+
+    def merge_main_in(self, repo: Repo, main_files: dict[str, str | None]) -> None:
+        repo.git("checkout", "-q", "main")
+        repo.commit(main_files, "feat: another pr lands on main")
+        repo.git("checkout", "-q", BRANCH)
+        repo.git("merge", "-q", "--no-ff", "-m", "Merge origin/main into agent/issue-12", "main")
+
+    def test_a_merge_of_the_base_branch_is_not_classified(self, agent_repo: Repo) -> None:
+        agent_repo.commit(RED_ASSERT, "test: red")
+        agent_repo.commit(IMPL, "feat: impl")
+        self.merge_main_in(agent_repo, {"CHANGELOG.md": "x\n"})
+        result = gate(agent_repo)
+        assert (result.passed, result.note) == (True, "tests-first")
+        assert any("merged base" in line for line in result.report)
+
+    def test_tests_that_main_changed_are_not_edits_after_red(self, agent_repo: Repo) -> None:
+        agent_repo.commit(RED_ASSERT, "test: red")
+        agent_repo.commit(IMPL, "feat: impl")
+        self.merge_main_in(agent_repo, {"app/core/existing.test.ts": "it pass changed by main\n"})
+        assert gate(agent_repo).note == "tests-first"
+
+    def test_a_branch_edit_of_a_test_is_still_caught_beside_a_sync_merge(
+        self, agent_repo: Repo
+    ) -> None:
+        agent_repo.commit(RED_ASSERT, "test: red")
+        agent_repo.commit(IMPL, "feat: impl")
+        self.merge_main_in(agent_repo, {"CHANGELOG.md": "x\n"})
+        agent_repo.commit({"app/core/existing.test.ts": "it pass edited here\n"}, "test: tweak")
+        assert gate(agent_repo).note == "tests-modified-after-red"
+
+    def test_a_merge_of_anything_but_the_base_is_still_rejected(self, agent_repo: Repo) -> None:
+        agent_repo.commit(RED_ASSERT, "test: red")
+        agent_repo.git("checkout", "-q", "-b", "side", "main")
+        agent_repo.commit({"side.txt": "x\n"}, "feat: side work, never on main")
+        agent_repo.git("checkout", "-q", BRANCH)
+        agent_repo.git("merge", "-q", "--no-ff", "-m", "merge side", "side")
+        agent_repo.commit(IMPL, "feat: impl")
+        result = gate(agent_repo)
+        assert (result.passed, result.note) == (False, "merge-commit")
+
+    def test_a_branch_of_only_a_sync_merge_has_no_agent_commits(self, agent_repo: Repo) -> None:
+        self.merge_main_in(agent_repo, {"CHANGELOG.md": "x\n"})
+        assert gate(agent_repo).note == "no-commits"
+
+    def test_a_merge_cannot_restore_a_weaker_test_from_old_base_history(self, repo: Repo) -> None:
+        """The merged parent is on main but older than the fork: not main's change."""
+        repo.commit({"app/core/existing.test.ts": "it pass weaker\n"}, "test: weaken on main (old)")
+        repo.commit({"app/core/existing.test.ts": "it pass strong\n"}, "test: strengthen on main")
+        repo.branch(BRANCH)
+        repo.commit(RED_ASSERT, "test: red")
+        repo.commit(IMPL, "feat: impl")
+        (repo.path / "app/core/existing.test.ts").write_text("it pass weaker\n")
+        repo.git("add", "--", "app/core/existing.test.ts")
+        tree = repo.git("write-tree")
+        merged = repo.git("commit-tree", tree, "-p", "HEAD", "-p", "main~1", "-m", "Merge main")
+        repo.git("reset", "-q", "--hard", merged)
+        assert gate(repo).note == "tests-modified-after-red"
+
+    def test_a_merge_cannot_swap_the_red_test_for_one_from_base(self, agent_repo: Repo) -> None:
+        agent_repo.commit(RED_ASSERT, "test: red")
+        agent_repo.commit(IMPL, "feat: impl")
+        agent_repo.git("checkout", "-q", "main")
+        agent_repo.commit(GREEN_TEST, "test: main gets a file at the red test's path")
+        agent_repo.git("checkout", "-q", BRANCH)
+        agent_repo.git("merge", "-q", "--no-ff", "-X", "theirs", "-m", "Merge origin/main", "main")
+        assert gate(agent_repo).note == "tests-modified-after-red"
+

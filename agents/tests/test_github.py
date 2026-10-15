@@ -9,7 +9,7 @@ from typing import Any
 import pytest
 
 from sdlc_agents.github import API, GitHubClient, _issue
-from sdlc_agents.ports import GitHubError
+from sdlc_agents.ports import GitHubError, MergeConflict
 from sdlc_agents.transport import HttpRequest, HttpResponse
 
 TOKEN = "ghp_test_token_value"
@@ -177,6 +177,22 @@ def test_merge_conflict_surfaces_as_github_error() -> None:
     with pytest.raises(GitHubError) as exc:
         gh.merge_pull(5, sha="a" * 40)
     assert exc.value.status == 409
+
+
+def test_405_merge_conflicts_surface_as_merge_conflict() -> None:
+    body = b'{"message":"Pull Request has merge conflicts"}'
+    gh, _, _ = client({"PUT /pulls/5/merge": HttpResponse(405, {}, body)})
+    with pytest.raises(MergeConflict) as exc:
+        gh.merge_pull(5, sha="a" * 40)
+    assert isinstance(exc.value, GitHubError) and exc.value.status == 405
+
+
+def test_other_405_merge_refusals_stay_plain_github_errors() -> None:
+    body = b'{"message":"Required status check \\"test\\" is expected."}'
+    gh, _, _ = client({"PUT /pulls/5/merge": HttpResponse(405, {}, body)})
+    with pytest.raises(GitHubError) as exc:
+        gh.merge_pull(5, sha="a" * 40)
+    assert exc.value.status == 405 and not isinstance(exc.value, MergeConflict)
 
 
 def test_check_runs_and_log_download_without_forwarding_the_token() -> None:

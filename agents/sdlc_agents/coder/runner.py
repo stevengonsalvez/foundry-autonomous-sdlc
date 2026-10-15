@@ -51,6 +51,7 @@ from sdlc_agents.ports import (
 )
 
 AGENT_PR_LABEL = "agent:pr"
+CONFLICT_MARKER = re.compile(r"^(<<<<<<<|>>>>>>>)( |$)", re.MULTILINE)   # git's conflict markers, resolved or not
 LEASE_PREFIX = "agent-lease/"   # refs/heads/agent-lease/<issue>: one live coder job per issue
 INSTALL_TIMEOUT_S = 1800
 TEST_TIMEOUT_S = 1800
@@ -94,6 +95,11 @@ class CoderGit(GitPort, Protocol):
     def clean_ignored(self, subdir: str) -> None: ...
     def special_paths_since(self, sha: str) -> list[str]: ...
     def special_paths_in_commit(self, sha: str) -> list[str]: ...
+    def rev_parse(self, ref: str) -> str: ...
+    def merge_origin(self, base: str) -> list[str]: ...
+    def commit_merge(self, parents: tuple[str, ...], message: str) -> str: ...
+    def diff_paths(self, old: str, new: str) -> list[str]: ...
+    def special_paths_between(self, old: str, new: str) -> list[str]: ...
 
 
 class Toolchain(Protocol):
@@ -178,6 +184,8 @@ class JobRunner:
         self._watchdog_fired = False
         self._failing: tuple[str, ...] = ()
         self._start_sha = ""
+        self._main_sha = ""                       # merge_main: the origin/<base> commit merged into the branch
+        self._conflicts: tuple[str, ...] = ()     # merge_main: paths that conflicted (the engine's to resolve)
 
     # -- lifecycle -------------------------------------------------------------------------
 
@@ -332,9 +340,33 @@ class JobRunner:
         else:
             self.git.checkout_new_branch(self.spec.branch, base=self.spec.base)
             self._last_sha = self.git.head_sha()
+        if self.spec.merge_main:
+            self._merge_main()
         if not self.spec.mode.writes_red_tests:
             self._check_allowed_paths()
         self._install()
+
+    def _merge_main(self) -> None:
+        """The PR conflicts with its base. Merge origin/<base> into the branch (a merge commit: no rebase, no
+        force push). Conflicts are committed locally with their markers so the engine's round is judged
+        against that commit; the commit pushed in the end replaces it (see `_squash_merge`)."""
+        base = self.spec.base
+        self._main_sha = self.git.rev_parse(f"origin/{base}")
+        self._conflicts = tuple(self.git.merge_origin(base))
+        if self._conflicts:
+            self.git.commit_all(f"wip: merge {base} with conflicts")
+            self._log(f"merging origin/{base} conflicts in: {', '.join(self._conflicts)}")
+        else:
+            self._log(f"merged origin/{base} cleanly")
+        self._last_sha = self.git.head_sha()
+
+    def _conflict_markers_left(self) -> list[str]:
+        left = []
+        for path in self._conflicts:
+            target = scope.contained_path(self.checkout, path)
+            if target is not None and target.is_file() and CONFLICT_MARKER.search(target.read_text(errors="replace")):
+                left.append(path)
+        return left
 
     def _check_allowed_paths(self) -> None:
         """revise and maintenance work on an existing branch: allowed_paths must name something there."""
@@ -539,7 +571,7 @@ class JobRunner:
         must_pass = red_files or tuple(outcome.report.failing_paths(str(self.checkout)))
         found = self._checks_if_green(outcome, must_pass)
         # A revise job exists to put a new head on the PR, so green alone is not done until it commits.
-        committed = self.spec.mode is not Mode.REVISE
+        committed = self.spec.mode is not Mode.REVISE or (self.spec.merge_main and not self._conflicts)
         while True:
             if committed and self._done(outcome, must_pass, found):
                 if not self.spec.install_cmd.strip():
@@ -751,7 +783,8 @@ class JobRunner:
         if self.spec.mode is Mode.MAINTENANCE:
             message = f"test: repair stale tests for #{n}"
         elif self.spec.mode is Mode.REVISE:
-            message = f"fix: address review findings for #{n}"
+            message = (f"fix: resolve merge conflicts with {self.spec.base} for #{n}" if self.spec.merge_main
+                       else f"fix: address review findings for #{n}")
         else:
             message = f"{prefix}: {self._title()} (#{n})"
         if i > 1:
@@ -774,12 +807,36 @@ class JobRunner:
 
     def _squash(self) -> str:
         """revise and maintenance push to a branch a person owns: one commit, made only once green."""
+        if self.spec.merge_main:
+            return self._squash_merge()
         n = self.spec.issue_number
         message = (f"test: repair stale tests for #{n}" if self.spec.mode is Mode.MAINTENANCE
                    else f"fix: address review findings for #{n}")
         self.git.reset_soft(self._start_sha)
         sha = self.git.commit_all(message)
         self._verify_commit(sha)
+        self._engine_event(self.state.engine or "", "squashed", sha=sha)
+        return sha
+
+    def _squash_merge(self) -> str:
+        """One merge commit on top of the branch as it was, with origin/<base> as second parent: GitHub then
+        sees base merged in. The wip commit and the engine's own commits collapse into it."""
+        left = self._conflict_markers_left()
+        if left:
+            raise JobStop(Status.FAILED, "unresolved-conflicts",
+                          f"conflict markers are still in: {', '.join(left)}")
+        base = self.spec.base
+        sha = self.git.commit_merge((self._start_sha, self._main_sha), f"Merge origin/{base} into {self.spec.branch}")
+        # What leaves the sandbox is judged as CI judges the PR: its whole diff against the base branch.
+        changed = self.git.diff_paths(f"origin/{base}", sha)
+        bad = scope.violations(changed, allowed_paths=self.spec.allowed_paths, protected=(), tests_only=False)
+        bad += self.git.special_paths_between(f"origin/{base}", sha)
+        # Existing tests stay as the branch had them, unless main itself changed them.
+        by_main = set(self.git.diff_paths(self._start_sha, self._main_sha))
+        bad += [p for p in self.git.diff_paths(self._start_sha, sha)
+                if p in self._protected and p not in by_main and p not in bad]
+        if bad:
+            raise JobStop(Status.FAILED, "scope-violation", "merge contained out-of-scope paths: " + ", ".join(bad))
         self._engine_event(self.state.engine or "", "squashed", sha=sha)
         return sha
 
@@ -792,6 +849,13 @@ class JobRunner:
         if s.mode is Mode.MAINTENANCE:
             task = ("An intended app change made some tests stale. Update only these test files so they pass "
                     f"against the current app: {allowed}. Do not change application source.")
+        elif s.mode is Mode.REVISE and self._conflicts:
+            task = (f"This pull request has merge conflicts with {s.base}: {s.base} was merged into the branch and "
+                    f"these files contain conflict markers (<<<<<<<, =======, >>>>>>>): {', '.join(self._conflicts)}. "
+                    "Resolve every conflict keeping BOTH sides' intent, what this pull request adds and what "
+                    f"{s.base} added; drop neither. Remove all conflict markers. "
+                    f"Never edit the test files {', '.join(red_files)} or any other existing test file or vitest "
+                    f"config; touch only paths under {allowed}.")
         elif s.mode is Mode.REVISE:
             task = ("A reviewer requested changes on this pull request; the notes below are the findings. "
                     f"Address them while keeping every test passing. Never edit the test files {', '.join(red_files)} "

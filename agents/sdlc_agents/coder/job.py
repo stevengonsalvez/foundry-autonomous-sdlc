@@ -107,6 +107,7 @@ class JobSpec:
     install_cmd: str
     max_model_usd: float
     pr_number: int | None = None
+    merge_main: bool = False      # revise only: merge origin/<base> into the branch first (the PR conflicts)
 
     @classmethod
     def from_request(cls, job: Any) -> JobSpec:
@@ -141,6 +142,9 @@ class JobSpec:
             if mode is not Mode.MAINTENANCE:
                 raise JobSpecError("issue.number is required")
             issue = {**issue, "number": pr_number}
+        merge_main = job.get("merge_main", False)
+        if not isinstance(merge_main, bool) or (merge_main and mode is not Mode.REVISE):
+            raise JobSpecError("merge_main must be a boolean and is only for revise jobs")
         allowed = tuple(job.get("allowed_paths") or ())
         if not allowed or not all(isinstance(p, str) and scope.is_safe_relative(p.rstrip("/")) for p in allowed):
             raise JobSpecError("allowed_paths must be non-empty repo-relative paths")
@@ -170,7 +174,7 @@ class JobSpec:
             deadline_s=_int(job, "deadline_s", DEFAULT_DEADLINE_S, MIN_DEADLINE_S, DEFAULT_DEADLINE_S),
             allowed_paths=allowed, workdir=workdir, install_cmd=_command(job, "install_cmd", default="npm ci"),
             max_model_usd=_usd(job.get("max_model_usd", DEFAULT_MAX_MODEL_USD)),
-            pr_number=pr_number if isinstance(pr_number, int) else None,
+            pr_number=pr_number if isinstance(pr_number, int) else None, merge_main=merge_main,
         )
 
     def to_request(self) -> dict[str, Any]:
@@ -184,6 +188,7 @@ class JobSpec:
             "allowed_paths": list(self.allowed_paths), "workdir": self.workdir, "install_cmd": self.install_cmd,
             "max_model_usd": self.max_model_usd,
             **({"pr": {"number": self.pr_number}} if self.pr_number is not None else {}),
+            **({"merge_main": True} if self.merge_main else {}),
         }
 
 

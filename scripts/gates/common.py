@@ -79,6 +79,19 @@ def merge_base(repo: Path, base: str, head: str) -> str:
         raise GateError(f"no merge base between {base} and {head}") from exc
 
 
+def is_ancestor(repo: Path, ancestor: str, descendant: str) -> bool:
+    proc = subprocess.run(
+        ["git", "-C", str(repo), "merge-base", "--is-ancestor", ancestor, descendant],
+        capture_output=True,
+        check=False,
+        env=_git_env(),
+    )
+    if proc.returncode not in (0, 1):
+        detail = proc.stderr.decode("utf-8", "replace").strip()
+        raise GateError(f"git merge-base --is-ancestor failed: {detail}")
+    return proc.returncode == 0
+
+
 def glob_to_regex(glob: str) -> re.Pattern[str]:
     """Compile a path glob: `*` stays inside a directory, `**/` spans zero or more."""
     out: list[str] = []

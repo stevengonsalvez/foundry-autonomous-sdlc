@@ -1,0 +1,9 @@
+[
+  {
+    "number": 96,
+    "title": "feat(web): add left navigation sidebar with mobile menu",
+    "author": { "login": "stevengonsalvez" },
+    "body": "Add a left navigation sidebar. Acceptance: links to Home and Parcels, collapses to a menu button on mobile.",
+    "labels": [{ "name": "type:feature" }, { "name": "stage:in-review" }, { "name": "escalated:merge-conflict" }]
+  }
+]

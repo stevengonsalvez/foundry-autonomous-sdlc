@@ -237,6 +237,31 @@ Closing ticket to unblock autonomous SDLC pipeline; work is dropped as out of ro
       continue
     fi
 
+    # Merge-conflict escalation: close the stale issue, re-file it while intake is open
+    if grep -q "escalated:merge-conflict" <<< "$labels"; then
+      echo "[HAT] Escalation Owner: Handling merge-conflict escalation on issue #$number"
+      if [ "$already_answered" != "1" ]; then
+        comment_body="### Simulated human (antigravity)
+<!-- po-answered:v1 -->
+
+The approved pull request conflicts with main (another change landed first on the same files) and the coder could not merge it.
+Closing this ticket; the requirement is re-filed to be rebuilt on current main when intake is open."
+        commands+=("gh issue comment $number --body \"$comment_body\"")
+        commands+=("gh issue edit $number --add-label \"simulated-human\"")
+      fi
+      commands+=("gh issue close $number")
+      refile_over_spend="$(jq -n --arg b "$billed_usd" '($b | tonumber) > 21.0')"
+      if [ "$refile_over_spend" != "true" ]; then
+        refile_body="### Simulated human (antigravity)
+
+Re-filed from #$number, whose pull request could not merge because main moved. Same requirement, to be rebuilt on current main.
+
+$body"
+        commands+=("gh issue create --title \"$title\" --body \"$refile_body\" --label \"type:feature,simulated-human\"")
+      fi
+      continue
+    fi
+
     # Cost-cap escalation
     if grep -q "escalated:cost-cap" <<< "$labels"; then
       echo "[HAT] Escalation Owner: Handling cost-cap escalation on issue #$number"

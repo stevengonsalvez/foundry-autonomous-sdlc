@@ -42,8 +42,9 @@ ESC_REVIEW_FAILED = "escalated:review-failed"
 ESC_COST_CAP = "escalated:cost-cap"
 ESC_BUILD_FAILED = "escalated:build-failed"
 ESC_AGENT_ERROR = "escalated:agent-error"   # a prompt agent kept answering invalidly or refusing
+ESC_MERGE_CONFLICT = "escalated:merge-conflict"   # the approved PR still conflicts with main after the coder merged it
 ESCALATIONS = (ESC_NOT_SUITABLE, ESC_REQUIREMENTS, ESC_REVIEW_FAILED, ESC_COST_CAP, ESC_BUILD_FAILED,
-               ESC_AGENT_ERROR)
+               ESC_AGENT_ERROR, ESC_MERGE_CONFLICT)
 
 TYPES = ("feature", "bug", "maintenance")
 SCENARIOS = ("a", "b", "c", "d", "d-maintenance")

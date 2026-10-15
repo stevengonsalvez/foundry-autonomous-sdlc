@@ -48,6 +48,19 @@ def make_remote(root: Path, files: dict[str, str], branches: dict[str, Commits] 
     return f"{root.as_uri()}/"
 
 
+def advance_main(root: Path, message: str, files: dict[str, str]) -> str:
+    """Land one more commit on the remote's main (another PR merged first). Returns the new main sha."""
+    clone = root / "advance"
+    if not clone.exists():
+        git(root, "clone", "-q", str(root / f"{REPO}.git"), str(clone))
+    git(clone, "pull", "-q", "origin", "main")
+    _write(clone, files)
+    git(clone, "add", "-A")
+    git(clone, "commit", "-q", "-m", message)
+    git(clone, "push", "-q", "origin", "main")
+    return git(clone, "rev-parse", "HEAD").strip()
+
+
 def remote_log(root: Path, branch: str) -> list[str]:
     """Subjects of commits on `branch` not on main, oldest first."""
     bare = root / f"{REPO}.git"

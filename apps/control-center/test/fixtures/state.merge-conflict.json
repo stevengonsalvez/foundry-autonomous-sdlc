@@ -1,0 +1,26 @@
+{
+  "version": 1,
+  "updated_at": "2026-10-15T10:41:00Z",
+  "tickets": [
+    {
+      "issue": 96,
+      "kind": "issue",
+      "title": "Add a left navigation sidebar with a mobile menu",
+      "type": "feature",
+      "stage": "escalated",
+      "sdlc_stage": "stage:in-review",
+      "opened_at": "2026-10-15T08:30:00Z",
+      "escalation": {
+        "label": "escalated:merge-conflict",
+        "at": "2026-10-15T10:40:56Z",
+        "attempts": 3,
+        "open": true,
+        "resolved": null,
+        "reasons": [
+          "merge failed after 2 merge conflict rounds: GitHub 405: PUT /pulls/101/merge: Pull Request has merge conflicts"
+        ],
+        "tried": ["Coder job j-96-2: succeeded, engine agy-unrestricted, 2 iteration(s), attempt 2."]
+      }
+    }
+  ]
+}
