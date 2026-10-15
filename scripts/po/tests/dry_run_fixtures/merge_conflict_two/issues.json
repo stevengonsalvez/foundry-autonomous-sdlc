@@ -1,0 +1,40 @@
+[
+  {
+    "number": 96,
+    "title": "feat(web): add left navigation sidebar with mobile menu",
+    "author": {
+      "login": "stevengonsalvez"
+    },
+    "body": "Rebuild blocked by merge conflicts.",
+    "labels": [
+      {
+        "name": "type:feature"
+      },
+      {
+        "name": "stage:in-review"
+      },
+      {
+        "name": "escalated:merge-conflict"
+      }
+    ]
+  },
+  {
+    "number": 97,
+    "title": "feat(web): add a footer with build info",
+    "author": {
+      "login": "stevengonsalvez"
+    },
+    "body": "Rebuild blocked by merge conflicts.",
+    "labels": [
+      {
+        "name": "type:feature"
+      },
+      {
+        "name": "stage:in-review"
+      },
+      {
+        "name": "escalated:merge-conflict"
+      }
+    ]
+  }
+]
