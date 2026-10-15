@@ -44,7 +44,7 @@
       "pass": 13
     }
   },
-  "generated_at": "2026-10-15T10:40:39Z",
+  "generated_at": "2026-10-15T10:41:16Z",
   "issues": [
     {
       "closed_at": "2026-10-10T12:28:43Z",
@@ -2306,7 +2306,7 @@
         "usd": 0.382441
       },
       "deferred": null,
-      "escalation": null,
+      "escalation": "escalated:build-failed",
       "gate_attempts": {
         "agent-scope": [
           "success"
@@ -2342,7 +2342,7 @@
       "kind": "issue",
       "number": 96,
       "opened_at": "2026-10-15T08:24:25Z",
-      "outcome": "open",
+      "outcome": "escalated",
       "owner": null,
       "pr": 101,
       "quality_score": 88,
@@ -2388,9 +2388,13 @@
         },
         {
           "entered_at": "2026-10-15T10:00:28Z",
-          "in_progress": true,
-          "seconds": 0,
+          "seconds": 2428,
           "stage": "stage:in-review"
+        },
+        {
+          "entered_at": "2026-10-15T10:40:56Z",
+          "seconds": 0,
+          "stage": "escalated:build-failed"
         }
       ],
       "title": "feat(web): add left navigation sidebar with mobile menu",
@@ -2398,18 +2402,18 @@
     }
   ],
   "ledger": {
-    "emitted_at": "2026-10-15T10:40:25Z",
+    "emitted_at": "2026-10-15T10:40:58Z",
     "reconciled_at": "2026-10-15T09:50:24Z"
   },
   "repo": "stevengonsalvez/foundry-autonomous-sdlc",
   "totals": {
     "deferred": 0,
-    "escalated": 19,
+    "escalated": 20,
     "issues": 31,
-    "ledger_usd": 0.876122,
-    "orchestrator_usd": 7.151358,
+    "ledger_usd": 0.879459,
+    "orchestrator_usd": 7.163433,
     "released": 10,
-    "usd": 11.446037
+    "usd": 11.461449
   },
   "version": 1
 }
