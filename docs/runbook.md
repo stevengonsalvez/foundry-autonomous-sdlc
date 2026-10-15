@@ -64,7 +64,7 @@ terraform apply tfplan
 cd ../..
 ```
 
-The apply creates the resource group `rg-fsdlcd-demo`, the Foundry account and project, the `sdlc-default` model deployment (gpt-5-mini, 10k tokens per minute), Key Vault, App Insights and a 25 USD budget with alerts. Check the outputs the deploy script reads:
+The apply creates the resource group `rg-fsdlcd-demo`, the Foundry account and project, the `sdlc-default` model deployment (gpt-5-mini, 10k tokens per minute), Key Vault, App Insights and a 35 USD budget with alerts. Check the outputs the deploy script reads:
 
 ```bash
 terraform -chdir=infra/terraform output
@@ -268,16 +268,16 @@ Control center: published with the rest of the site at `/control-center/` by `pa
 | Cap | Value | Enforced by |
 |-----|-------|-------------|
 | Per issue | 1.00 USD of model and coder compute | Orchestrator, label `escalated:cost-cap` |
-| All work | New work halts at 22 USD total (25 USD hard cap) (`metrics.json` `totals.usd`) | Orchestrator |
-| Monthly budget | 25 USD, alerts only, data lags up to 72 hours | Terraform budget on the resource group |
+| All work | New work halts at 32 USD total (35 USD hard cap) (`metrics.json` `totals.usd`) | Orchestrator |
+| Monthly budget | 35 USD, alerts only, data lags up to 72 hours | Terraform budget on the resource group |
 | Model throughput | 10k tokens per minute on `sdlc-default` | Model deployment capacity |
 | Coder job | `max_iterations` 5, `deadline_s` 7200 (default and maximum: two hours of coder compute is about 1.15 USD at the real hosted rate, so the 3 USD issue cap does not stop a two hour job; the deadline does), model loop spend 0.50 USD | Coder runtime hard stops |
-| Ledger | Counts toward both the 22 USD halt (`metrics.json` `totals.usd` includes `totals.ledger_usd`) and, as a share per ticket, the 3 USD issue cap in the control center | `cost.ledger_call_usd`; shown in the cost view |
+| Ledger | Counts toward both the 32 USD halt (`metrics.json` `totals.usd` includes `totals.ledger_usd`) and, as a share per ticket, the 3 USD issue cap in the control center | `cost.ledger_call_usd`; shown in the cost view |
 | Hosted compute | Billed twice while a session is active: Foundry 'Hosted vCPU/Memory Usage' (0.10934 USD per vCPU-hour, 0.01298 per GiB-hour) and Azure Container Apps 'Standard vCPU/Memory Active Usage' (0.000034 USD per vCPU-second, 0.000004 per GiB-second), together 0.2318 USD per vCPU-hour and 0.0274 per GiB-hour | Idle timeouts: orchestrator 2 minutes (0.2865 USD per active hour at 1 vCPU, 2 GiB; a one minute tick plus the 2 minute idle tail is about 0.014 USD), coder 10 minutes (0.5730 USD per active hour at 2 vCPU, 4 GiB, and one 10 minute tail per finished job, about 0.095 USD) |
 
 agy usage is billed to the Antigravity plan behind the token and is not metered by the demo.
 
-Check the real spend against Azure, not against the ledger. The ledger (`metrics.json`) is an estimate; on 2026-10-10 it said 1.86 USD while Azure billed 4.80 USD. Cost Management lags by hours, so leave a margin below the 25 USD limit:
+Check the real spend against Azure, not against the ledger. The ledger (`metrics.json`) is an estimate; on 2026-10-10 it said 1.86 USD while Azure billed 4.80 USD. Cost Management lags by hours, so leave a margin below the 35 USD limit:
 
 ```bash
 SUB=$(az account show --query id -o tsv)
@@ -287,7 +287,7 @@ az rest --method post \
   --query "properties.rows" -o json
 ```
 
-Disable the routine (`deploy_agents.py routine --disable`) as soon as a run is finished: hosted sessions are the whole bill.
+Disable the routine (`deploy_agents.py routine --disable --cron '*/10 * * * *'`, always with the cron the routine has: without it the command tries to reset the trigger to `*/5` and Foundry refuses to change a trigger after creation) as soon as a run is finished: hosted sessions are the whole bill.
 
 ## 9. How the coder isolates and checks its work
 
@@ -450,7 +450,7 @@ Findings from the security review of the coder (2026-10-10) that remain by desig
 
 Orchestrator findings (fail-open spend, trust boundary; 2026-10-10) that remain by design:
 
-- A per-issue spend floor from `metrics.json` only covers objects still listed: if a human both strips an issue's pipeline labels and deletes its state comment, its per-issue figure restarts, but `totals.usd` (and so the 22 USD halt) never decreases, and the issue gets no further spend unless it is relabelled.
+- A per-issue spend floor from `metrics.json` only covers objects still listed: if a human both strips an issue's pipeline labels and deletes its state comment, its per-issue figure restarts, but `totals.usd` (and so the 32 USD halt) never decreases, and the issue gets no further spend unless it is relabelled.
 - The `checks` and `head` sections of the reviewer input are trusted: they hold only the head sha, the PR number, the seven check names and GitHub's own conclusion values; branch names, titles, bodies, commits, diffs and logs are passed as untrusted data.
 - MCP agents can ask `get_file_contents` for any repository the `github-mcp` PAT can read, which is every repository of the account: the orchestrator only narrows this (one read-only tool, a two to four call budget, a prompt rule naming this repository, schema validation and sanitising before anything is posted); it cannot technically prevent a cross-repository read.
 - A coder status that cannot be read is billed as estimated time (wall clock since start, less 15 minutes of normal poll gap), which can over-count briefly; over-counting only stops spend earlier.

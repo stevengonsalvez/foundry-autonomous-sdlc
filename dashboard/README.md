@@ -11,7 +11,7 @@ Header: repository, time the data was generated, and counts of issues, released 
 | Cycle time per stage | Median time in each stage across issues, and one stacked bar per issue | Stages still running are drawn faded and left out of the median, never counted as zero. A table with every value sits behind the charts. |
 | Gate pass rates | Per gate: share of issues that passed on the first attempt and eventually, with counts | First attempt needs per-issue `gate_attempts` (see below). Without it the panel says so and shows only the eventual rate. |
 | Defect owner and resolution time | Bugs only: owner, severity, time from opened to release | Open bugs show no resolution time. |
-| Cost per issue | Model cost, coder cost (runtime plus its model), calls and total per issue, and the total against the 25 USD cap | Progress bar marks the 22 USD point where the loop stops new work. Orchestrator compute is its own row. Each row shows the 3 USD per issue line and flags issues over it. |
+| Cost per issue | Model cost, coder cost (runtime plus its model), calls and total per issue, and the total against the 35 USD cap | Progress bar marks the 32 USD point where the loop stops new work. Orchestrator compute is its own row. Each row shows the 3 USD per issue line and flags issues over it. |
 | Scenarios and issues | Every issue with scenario, type, outcome, and links to its GitHub issue, pull request and release | Links are built from `repo` and the numbers in the data. |
 
 Page states: loading, no data yet (file missing or empty, or no issues), and error (fetch failure, invalid JSON, or an unsupported schema version, with a retry button). The dashboard never invents data.
