@@ -55,6 +55,17 @@ AGY_UNRESTRICTED_CALL_TIMEOUT_S = 900  # one full-tools round: a multi-file feat
 # blocks; quota errors are printed too. Both end the call early so the fallback engine takes over.
 _AGY_AUTH = re.compile(r"Authentication required", re.IGNORECASE)
 _AGY_QUOTA = re.compile(r"quota|RESOURCE_EXHAUSTED|\b429\b", re.IGNORECASE)
+AGY_QUOTA_EXIT = 3   # agy's own exit code for "Individual quota reached ... Resets in 19h13m" (RESOURCE_EXHAUSTED)
+
+
+def is_quota_failure(result: CommandResult) -> bool:
+    """agy died because the account's quota is spent: the coder aborted it on a quota message (rc 125 with
+    QUOTA_ABORT), or agy exited itself with its quota code. An auth abort or any other failure is not."""
+    if result.returncode == shell.ABORTED_RC:
+        return QUOTA_ABORT in result.output
+    return result.returncode == AGY_QUOTA_EXIT and (
+        "RESOURCE_EXHAUSTED" in result.output or "quota reached" in result.output.lower())
+
 # Everything else (managed identity, Azure, Foundry, Key Vault, GitHub, git askpass, telemetry) stays out.
 _AGY_ENV_PASSTHROUGH = ("LANG", "TERM", "TMPDIR")
 _SYSTEM_PATH = "/usr/local/bin:/usr/bin:/bin"
