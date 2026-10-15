@@ -555,8 +555,9 @@ def test_agys_real_quota_error_line_is_aborted_and_classified_as_quota(tmp_path:
     assert result.returncode == shell.ABORTED_RC and is_quota_failure(result)
 
 
-def test_agys_own_quota_exit_code_is_classified_as_quota(tmp_path: Path) -> None:
+def test_agys_own_quota_exit_is_classified_as_quota(tmp_path: Path) -> None:
     from sdlc_agents.coder.engines import is_quota_failure
     fake = _fake_agy(tmp_path, f"print({REAL_LINE!r}, flush=True)\nprint({REAL_JSON!r}, flush=True)\nsys.exit(3)\n")
     result = AgyEngine(fake, home=tmp_path, dirty=lambda: False).edit("p", workdir=str(tmp_path), timeout_s=120)
-    assert result.returncode == 3 and is_quota_failure(result)
+    # The coder's poll may abort agy (125) a moment before agy exits by itself (3): both are quota.
+    assert result.returncode in (3, shell.ABORTED_RC) and is_quota_failure(result)
