@@ -19,6 +19,12 @@
       "first_pass": 8,
       "pass": 10
     },
+    "evals": {
+      "fail": 0,
+      "first_fail": 0,
+      "first_pass": 0,
+      "pass": 0
+    },
     "gitleaks": {
       "fail": 0,
       "first_fail": 0,
@@ -38,7 +44,7 @@
       "pass": 11
     }
   },
-  "generated_at": "2026-10-15T08:10:55Z",
+  "generated_at": "2026-10-15T08:15:21Z",
   "issues": [
     {
       "closed_at": "2026-10-10T12:28:43Z",
@@ -2188,9 +2194,9 @@
     "escalated": 19,
     "issues": 29,
     "ledger_usd": 0.830063,
-    "orchestrator_usd": 6.962299,
+    "orchestrator_usd": 6.972815,
     "released": 9,
-    "usd": 10.462824
+    "usd": 10.47334
   },
   "version": 1
 }
