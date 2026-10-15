@@ -198,6 +198,27 @@ uv run --project agents python scripts/deploy_agents.py hosted --only sdlc-coder
 uv run --project agents python scripts/deploy_agents.py roles
 ```
 
+### UI proof states and history backfill
+
+Every PR's `ui-proof` comment and the `/history/` page are driven by `scripts/ui/states.json`. To make a new feature visible, append a state (route, `setup.localStorage`, `steps`, `waitFor`, `requires`, `caption`; the file's `_doc` field lists the rules). `requires` must name something that only exists once the feature does, so older builds skip the state instead of failing. Titles and captions allow letters, digits, spaces and `. , : ; ' ( ) / + -` only.
+
+```bash
+cd app && npm ci && npx playwright install chromium && cd ..
+node --test scripts/tests/ui/states.test.mjs                  # loader + skip behaviour, real Chromium
+node scripts/ui/capture.mjs --out-dir ui-screenshots          # all present states, 1280 and 390
+python3 -m scripts.ui.validate_artifact ui-screenshots        # what ui-proof will accept
+```
+
+Headless Chromium on some sandboxes never produces frames and hangs on screenshots or clicks. Set `UI_CHROMIUM_ARGS="--disable-gpu --disable-software-rasterizer"` there; CI needs nothing.
+
+To rebuild `/history/` data for every tag with the current capture code (builds each tag, so it takes a while; GitHub Actions and Pages only, no Azure):
+
+```bash
+python3 -m scripts.ui.backfill_history --no-local-history --push
+```
+
+Releases published before states existed left `home-desktop.png`, `parcel-found-desktop.png` and friends in `releases/<tag>/` on `pr-screenshots`. The backfill keeps them so older links keep working; delete them once nothing references them.
+
 ### Advisory UI Vision Tester
 
 The vision prompt agent `sdlc-ui-tester` evaluates screenshots attached to agent pull requests. It is disabled by default and costs nothing in Azure until enabled.
