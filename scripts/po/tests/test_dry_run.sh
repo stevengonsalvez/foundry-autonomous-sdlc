@@ -317,7 +317,7 @@ echo -n "Test $total: persona and runbook document escalated:merge-conflict as c
 doc_ok=1
 for doc in "$SCRIPT_DIR/../../../po/PERSONA.md" "$SCRIPT_DIR/../../../po/RUNBOOK.md"; do
   grep -q "escalated:merge-conflict" "$doc" && grep -qi "close only" "$doc" || doc_ok=0
-  grep -qi "close or re-file" "$doc" && doc_ok=0
+  grep -qiE "merge-conflict.*close or re-file" "$doc" && doc_ok=0
 done
 if [ "$doc_ok" -eq 1 ]; then
   echo "PASS"

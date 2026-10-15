@@ -50,6 +50,7 @@ The loop participates in the repository state machine using these exact labels:
 | | `escalated:build-failed` | Coder exhausted attempts or CI check timeout. Persona posts failure findings with `<!-- po-answered:v1 -->` and closes the issue to unblock pipeline. |
 | | `escalated:review-failed` | PR review failed with unresolved comments. Persona posts findings with `<!-- po-answered:v1 -->` and closes the issue. |
 | | `escalated:merge-conflict` | Approved PR still conflicts with main after two coder merge rounds. Close only: persona posts findings with `<!-- po-answered:v1 -->` and closes the issue. It never re-files (no new issue, one new issue per run stays the only intake). |
+| | `escalated:agent-quota` | The coder's agy account quota is spent. Leave for the owner: do not close or re-file, no comment, no label, no issue. The owner rotates the token or waits for the reset, then requeues. |
 | | `escalated:agent-error` | Agent output streak failure (e.g. invalid test generation). Persona posts finding with `<!-- po-answered:v1 -->` and closes issue. |
 | **Triage** | `bug:triaged`, `severity:s1`..`s4`, `owner:web`, `owner:api`, `owner:carrier-mock` | Applied by Triage Lead hat on `type:bug` issues. |
 | **Type** | `type:feature`, `type:bug`, `type:maintenance` | Work item type categorization. |
