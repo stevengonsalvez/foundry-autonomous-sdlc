@@ -210,6 +210,11 @@ class TestBootstrap:
         assert color == sr.LABELS["escalated:build-failed"][0]
         assert "rolled back" in description
 
+    def test_the_merge_conflict_label_is_terminal_red(self) -> None:
+        color, description = sr.LABELS["escalated:merge-conflict"]
+        assert color == sr.LABELS["escalated:build-failed"][0]
+        assert "conflict" in description
+
 
 class TestProtectDeploy:
     def test_only_the_actions_app_may_move_the_deploy_branch(self) -> None:
