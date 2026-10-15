@@ -44,7 +44,7 @@
       "pass": 13
     }
   },
-  "generated_at": "2026-10-15T10:10:56Z",
+  "generated_at": "2026-10-15T10:20:45Z",
   "issues": [
     {
       "closed_at": "2026-10-10T12:28:43Z",
@@ -2277,9 +2277,14 @@
         },
         {
           "entered_at": "2026-10-15T10:00:24Z",
+          "seconds": 1200,
+          "stage": "stage:in-review"
+        },
+        {
+          "entered_at": "2026-10-15T10:20:24Z",
           "in_progress": true,
           "seconds": 0,
-          "stage": "stage:in-review"
+          "stage": "stage:merged"
         }
       ],
       "title": "feat(web): add light and dark theme toggle with persisted choice",
@@ -2389,7 +2394,7 @@
     }
   ],
   "ledger": {
-    "emitted_at": "2026-10-15T10:10:42Z",
+    "emitted_at": "2026-10-15T10:20:32Z",
     "reconciled_at": "2026-10-15T09:50:24Z"
   },
   "repo": "stevengonsalvez/foundry-autonomous-sdlc",
@@ -2397,10 +2402,10 @@
     "deferred": 0,
     "escalated": 19,
     "issues": 31,
-    "ledger_usd": 0.868835,
-    "orchestrator_usd": 7.11397,
+    "ledger_usd": 0.871261,
+    "orchestrator_usd": 7.126439,
     "released": 9,
-    "usd": 11.399902
+    "usd": 11.414797
   },
   "version": 1
 }
