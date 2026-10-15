@@ -112,7 +112,7 @@ class TestBootstrap:
         fake = FakeGitHub()
         run_phase(fake, "bootstrap")
 
-        assert set(fake.labels) == set(sr.LABELS) and len(sr.LABELS) == 29
+        assert set(fake.labels) == set(sr.LABELS) and len(sr.LABELS) == 30
         assert fake.repo["allow_merge_commit"] is True
         assert fake.repo["allow_squash_merge"] is False
         assert fake.repo["allow_rebase_merge"] is False
@@ -214,6 +214,11 @@ class TestBootstrap:
         color, description = sr.LABELS["escalated:merge-conflict"]
         assert color == sr.LABELS["escalated:build-failed"][0]
         assert "conflict" in description
+
+    def test_the_agent_quota_label_is_terminal_red(self) -> None:
+        color, description = sr.LABELS["escalated:agent-quota"]
+        assert color == sr.LABELS["escalated:build-failed"][0]
+        assert "quota" in description
 
 
 class TestProtectDeploy:
