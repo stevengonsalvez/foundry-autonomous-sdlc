@@ -318,6 +318,8 @@ def evaluate(
     listed = list_commits(repo, fork_point, head_sha, resolve_commit(repo, base))
     commits = [c for c in listed if not c.synced]
     synced = [p for c in listed for p in c.synced]
+    # Where the branch's own work starts: its first commit's parent (the fork point without a sync).
+    red_base = resolve_commit(repo, f"{commits[0].sha}^") if commits and synced else fork_point
 
     report = [f"branch {branch}", f"merge base {fork_point[:12]}", f"head {head_sha[:12]}"]
     report += [
@@ -384,18 +386,18 @@ def evaluate(
             )
         report.append(f"red: {outcome.failed_tests} failed test(s), exit code {outcome.exit_code}")
     else:
-        red_base = resolve_commit(repo, f"{commits[0].sha}^") if synced else fork_point
         verdict = judge_report(outcome, changed_test_files(repo, red_base, tip.sha), report)
         if verdict is not None:
             return verdict
 
     # Red only means something if the tests that were red are the tests that later go green.
+    from_base = _new_on_base(repo, red_base, synced)
     edited = [
         c
         for c in tree_changes(repo, tip.sha, head_sha)
         if c.status != "A"
         and is_test_path(c.path)
-        and not _came_from_base(repo, c.path, head_sha, synced)
+        and not _came_from_base(repo, c.path, head_sha, from_base)
     ]
     if edited:
         report.append(f"existing test files changed after the red commit ({len(edited)}):")
@@ -415,6 +417,12 @@ def _came_from_base(repo: Path, path: str, head: str, synced: list[str]) -> bool
     """A test file that is exactly as in a base commit the branch merged in: main changed it."""
     here = _blob(repo, head, path)
     return any(_blob(repo, parent, path) == here for parent in synced)
+
+
+def _new_on_base(repo: Path, fork: str, synced: list[str]) -> list[str]:
+    """Merged base commits that came after the branch forked: an older one is not main's change
+    (a crafted merge could restore a weaker historic test through it)."""
+    return [parent for parent in synced if is_ancestor(repo, fork, parent)]
 
 
 def main(argv: list[str] | None = None) -> int:

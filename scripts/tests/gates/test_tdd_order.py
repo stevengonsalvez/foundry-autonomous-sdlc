@@ -413,3 +413,17 @@ class TestBaseSyncMerges:
     def test_a_branch_of_only_a_sync_merge_has_no_agent_commits(self, agent_repo: Repo) -> None:
         self.merge_main_in(agent_repo, {"CHANGELOG.md": "x\n"})
         assert gate(agent_repo).note == "no-commits"
+
+    def test_a_merge_cannot_restore_a_weaker_test_from_old_base_history(self, repo: Repo) -> None:
+        """The merged parent is on main but older than the fork: not main's change."""
+        repo.commit({"app/core/existing.test.ts": "it pass weaker\n"}, "test: weaken on main (old)")
+        repo.commit({"app/core/existing.test.ts": "it pass strong\n"}, "test: strengthen on main")
+        repo.branch(BRANCH)
+        repo.commit(RED_ASSERT, "test: red")
+        repo.commit(IMPL, "feat: impl")
+        (repo.path / "app/core/existing.test.ts").write_text("it pass weaker\n")
+        repo.git("add", "--", "app/core/existing.test.ts")
+        tree = repo.git("write-tree")
+        merged = repo.git("commit-tree", tree, "-p", "HEAD", "-p", "main~1", "-m", "Merge main")
+        repo.git("reset", "-q", "--hard", merged)
+        assert gate(repo).note == "tests-modified-after-red"
