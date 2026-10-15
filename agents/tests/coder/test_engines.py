@@ -313,7 +313,7 @@ def test_agy_waiting_for_a_login_is_killed_at_once_and_fails(tmp_path: Path) -> 
 
 
 def test_agy_quota_message_aborts_only_without_edits(tmp_path: Path) -> None:
-    fake = _fake_agy(tmp_path, "print('error: Individual quota reached. Please upgrade your subscription to increase your limits. Resets in 19h13m22s.', flush=True)\ntime.sleep(60)\n")
+    fake = _fake_agy(tmp_path, f"print({REAL_LINE!r}, flush=True)\ntime.sleep(60)\n")
     assert AgyEngine(fake, home=tmp_path, dirty=lambda: False).edit(
         "p", workdir=str(tmp_path), timeout_s=120).returncode == shell.ABORTED_RC
     finishing = _fake_agy(tmp_path, "print('retrying after 429', flush=True)\ntime.sleep(1)\nprint('done')\n")
@@ -422,7 +422,7 @@ def test_a_timed_out_round_with_edits_keeps_them_and_says_it_timed_out(tmp_path:
 def test_root_never_inspects_the_tree_while_agy_still_runs(tmp_path: Path) -> None:
     pid_file = tmp_path / "agy.pid"
     fake = _fake_agy(tmp_path, f"import os; open({str(pid_file)!r}, 'w').write(str(os.getpid()))\n"
-                               "print('error: Individual quota reached. Please upgrade your subscription to increase your limits. Resets in 19h13m22s.', flush=True)\ntime.sleep(60)\n")
+                               f"print({REAL_LINE!r}, flush=True)\ntime.sleep(60)\n")
     checks: list[bool] = []
 
     def dirty() -> bool:
