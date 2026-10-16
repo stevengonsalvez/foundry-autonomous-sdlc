@@ -44,7 +44,7 @@
       "pass": 15
     }
   },
-  "generated_at": "2026-10-16T17:10:38Z",
+  "generated_at": "2026-10-16T17:11:24Z",
   "issues": [
     {
       "closed_at": "2026-10-10T12:28:43Z",
@@ -2484,11 +2484,11 @@
       "coder_engine": null,
       "coder_sessions_lost": 0,
       "cost": {
-        "calls": 5,
+        "calls": 6,
         "coder_model_usd": 0.0,
         "coder_usd": 0.105846,
-        "model_usd": 0.009928,
-        "usd": 0.115774
+        "model_usd": 0.013895,
+        "usd": 0.119741
       },
       "deferred": null,
       "escalation": null,
@@ -2533,9 +2533,14 @@
         },
         {
           "entered_at": "2026-10-16T17:10:22Z",
+          "seconds": 47,
+          "stage": "stage:feasible"
+        },
+        {
+          "entered_at": "2026-10-16T17:11:09Z",
           "in_progress": true,
           "seconds": 0,
-          "stage": "stage:feasible"
+          "stage": "stage:tests-written"
         }
       ],
       "title": "feat(web): redesigned home hero banner with brand identity badge and primary action button",
@@ -2543,7 +2548,7 @@
     }
   ],
   "ledger": {
-    "emitted_at": "2026-10-16T17:10:25Z",
+    "emitted_at": "2026-10-16T17:11:12Z",
     "reconciled_at": "2026-10-16T16:20:29Z"
   },
   "repo": "stevengonsalvez/foundry-autonomous-sdlc",
@@ -2551,10 +2556,10 @@
     "deferred": 0,
     "escalated": 19,
     "issues": 32,
-    "ledger_usd": 1.049306,
-    "orchestrator_usd": 8.209225,
+    "ledger_usd": 1.051734,
+    "orchestrator_usd": 8.222078,
     "released": 11,
-    "usd": 13.576723
+    "usd": 13.595971
   },
   "version": 1
 }
