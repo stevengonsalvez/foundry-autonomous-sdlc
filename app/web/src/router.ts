@@ -17,7 +17,16 @@ function decode(segment: string): string {
 export function parseRoute(hash: string): Route {
   const raw = hash.replace(/^#/, "");
   const path = raw.split("?")[0] ?? "";
-  if (path === "" || path === "/") return { name: "home" };
+  if (
+    path === "" ||
+    path === "/" ||
+    path === "recent" ||
+    path === "/recent" ||
+    path === "status-guide" ||
+    path === "/status-guide"
+  ) {
+    return { name: "home" };
+  }
   const match = /^\/parcel\/([^/]+)$/.exec(path);
   return match ? { name: "parcel", trackingNumber: decode(match[1] ?? "") } : { name: "unknown" };
 }
