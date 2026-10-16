@@ -208,6 +208,20 @@ else
   check_fail "Guardrail (k)" "Must leave escalated:agent-quota for the owner and forbid closing or re-filing it"
 fi
 
+# Guardrail (l): an agent-error close is "not planned", never "completed", and never claims the item was out of roadmap scope
+if grep -q 'gh issue close <number> --reason "not planned"' "$PERSONA_FILE" && ! grep -qi "out of roadmap scope" "$PERSONA_FILE"; then
+  check_pass "Guardrail (l): agent-error close uses --reason \"not planned\", no out of roadmap scope claim"
+else
+  check_fail "Guardrail (l)" "Must close escalated:agent-error with gh issue close <number> --reason \"not planned\" and must not say the work is out of roadmap scope"
+fi
+
+# Guardrail (m): the requirements answerer must not invent acceptance criteria
+if grep -qi "never add acceptance criteria" "$PERSONA_FILE"; then
+  check_pass "Guardrail (m): requirements answers never add acceptance criteria"
+else
+  check_fail "Guardrail (m)" "Must forbid the requirements answerer from adding acceptance criteria absent from the roadmap item"
+fi
+
 if [ "$failures" -gt 0 ]; then
   echo "FAIL: po/PERSONA.md failed $failures guardrail check(s)" >&2
   exit 1
