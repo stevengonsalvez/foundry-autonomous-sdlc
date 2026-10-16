@@ -44,7 +44,7 @@
       "pass": 15
     }
   },
-  "generated_at": "2026-10-16T16:00:54Z",
+  "generated_at": "2026-10-16T16:10:44Z",
   "issues": [
     {
       "closed_at": "2026-10-10T12:28:43Z",
@@ -2478,21 +2478,58 @@
       ],
       "title": "feat(web): add left navigation sidebar with mobile menu",
       "type": "feature"
+    },
+    {
+      "closed_at": null,
+      "coder_engine": null,
+      "coder_sessions_lost": 0,
+      "cost": {
+        "calls": 1,
+        "coder_model_usd": 0.0,
+        "coder_usd": 0.0,
+        "model_usd": 0.001606,
+        "usd": 0.001606
+      },
+      "deferred": null,
+      "escalation": null,
+      "gate_attempts": {},
+      "gates": {},
+      "kind": "issue",
+      "number": 108,
+      "opened_at": "2026-10-16T16:04:16Z",
+      "outcome": "open",
+      "owner": null,
+      "pr": null,
+      "quality_score": 73,
+      "release": null,
+      "resolution_seconds": null,
+      "scenario": "b",
+      "severity": null,
+      "stages": [
+        {
+          "entered_at": "2026-10-16T16:10:29Z",
+          "in_progress": true,
+          "seconds": 0,
+          "stage": "stage:needs-refinement"
+        }
+      ],
+      "title": "feat(web): redesigned home hero banner with brand identity badge and primary action button",
+      "type": "feature"
     }
   ],
   "ledger": {
-    "emitted_at": "2026-10-16T16:00:20Z",
+    "emitted_at": "2026-10-16T16:10:32Z",
     "reconciled_at": "2026-10-16T15:20:19Z"
   },
   "repo": "stevengonsalvez/foundry-autonomous-sdlc",
   "totals": {
     "deferred": 0,
     "escalated": 19,
-    "issues": 31,
-    "ledger_usd": 1.031817,
-    "orchestrator_usd": 8.121243,
+    "issues": 32,
+    "ledger_usd": 1.034244,
+    "orchestrator_usd": 8.133601,
     "released": 11,
-    "usd": 13.355478
+    "usd": 13.371869
   },
   "version": 1
 }
