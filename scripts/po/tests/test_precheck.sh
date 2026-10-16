@@ -97,6 +97,36 @@ run_test "Ledger spend at the 32 USD halt line skips" 1 "32 USD halt state is fl
       "$PRECHECK"
 rm -f "$halt_file"
 
+# 2d. A bill that is missing, null or not a plain number is unknown, never 0 USD: the run is skipped
+billed_state() {
+  local filter="$1" file
+  file="$(mktemp -t precheck-billed-XXXXXX.json)"
+  jq "$filter" "$FIXTURES/state_idle.json" > "$file"
+  echo "$file"
+}
+for filter in \
+  'del(.cost.billing) | del(.cost.totals.billed_usd)' \
+  '.cost.billing = null' \
+  '.cost.billing.billed_usd = null' \
+  '.cost.billing.billed_usd = "n/a"' \
+  '.cost.billing.billed_usd = -1'; do
+  unknown_file="$(billed_state "$filter")"
+  run_test "Unknown billed spend skips: $filter" 1 "SKIP: billed spend unknown" \
+    env STATE_FILE="$unknown_file" \
+        ISSUES_FILE="$FIXTURES/issues_idle.json" \
+        CURRENT_TIME_OVERRIDE="2026-10-13T17:35:00Z" \
+        "$PRECHECK"
+  rm -f "$unknown_file"
+done
+# The older totals field still counts when the billing block is absent
+fallback_file="$(billed_state 'del(.cost.billing) | .cost.totals.billed_usd = 13.02')"
+run_test "Billed spend read from totals when billing is absent runs" 0 "RUN: pipeline idle" \
+  env STATE_FILE="$fallback_file" \
+      ISSUES_FILE="$FIXTURES/issues_idle.json" \
+      CURRENT_TIME_OVERRIDE="2026-10-13T17:35:00Z" \
+      "$PRECHECK"
+rm -f "$fallback_file"
+
 # 3. State file missing -> Exit 1 (SKIP)
 run_test "Missing state.json skips" 1 "state.json is missing" \
   env STATE_FILE="$FIXTURES/non_existent_state.json" \
