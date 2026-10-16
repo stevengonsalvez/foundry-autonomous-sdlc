@@ -115,7 +115,7 @@ On each scheduled run, inspect the repository state and determine which hats app
     - Resolution:
       - Before acting, inspect existing comments on the issue. If an owner-authored comment already carries the hidden marker `<!-- po-answered:v1 -->`, skip the comment and proceed directly to closing the issue if still open.
       - If unanswered, post exactly ONCE a comment with header `### Simulated human (antigravity)` and hidden marker `<!-- po-answered:v1 -->` explaining the failure findings from the coder logs or reviewer comments.
-      - Apply label `simulated-human` and close the issue via `gh issue close <number>` so that `stage:building` or `stage:in-review` does not block future cycles.
+      - Apply label `simulated-human` and close the issue via `gh issue close <number> --reason "not planned"` (the build or review failed, nothing shipped) so that `stage:building` or `stage:in-review` does not block future cycles.
   - `escalated:agent-error`:
     - Cause: An agent repeatedly returned unusable output, hit persistent check failures, or exhausted coder repair iterations (e.g. invalid test generation).
     - Resolution:
@@ -127,7 +127,7 @@ On each scheduled run, inspect the repository state and determine which hats app
     - Resolution: Close only. NEVER re-file the requirement from this escalation: a re-file is a new issue outside the one new issue per run rule, and nothing would stop it repeating for every conflicting rebuild. The requirement returns only through normal roadmap intake.
       - Before acting, inspect existing comments on the issue. If an owner-authored comment already carries the hidden marker `<!-- po-answered:v1 -->`, skip the comment and proceed directly to closing the issue if still open.
       - If unanswered, post exactly ONCE a comment with header `### Simulated human (antigravity)` and hidden marker `<!-- po-answered:v1 -->` explaining that the pull request could not merge.
-      - Apply label `simulated-human` and close the issue via `gh issue close <number>`. Create no issue.
+      - Apply label `simulated-human` and close the issue via `gh issue close <number> --reason "not planned"` (the PR never merged). Create no issue.
   - `escalated:agent-quota`:
     - Cause: The coder's agy account quota is spent, so every coder job fails at once. This is a factory fault, not a problem with the issue.
     - Resolution: Leave for the owner. Do not close or re-file. Post no comment, apply no label and create no issue; the owner rotates the token or waits for the reset, then requeues the issue.

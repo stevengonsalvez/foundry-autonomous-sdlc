@@ -209,10 +209,10 @@ else
 fi
 
 # Guardrail (l): an agent-error close is "not planned", never "completed", and never claims the item was out of roadmap scope
-if grep -q 'gh issue close <number> --reason "not planned"' "$PERSONA_FILE" && ! grep -qi "out of roadmap scope" "$PERSONA_FILE"; then
-  check_pass "Guardrail (l): agent-error close uses --reason \"not planned\", no out of roadmap scope claim"
+if grep -q 'gh issue close <number> --reason "not planned"' "$PERSONA_FILE" && ! grep -qi "out of roadmap scope" "$PERSONA_FILE" && ! grep -E 'gh issue close <number>' "$PERSONA_FILE" | grep -qv -- '--reason "not planned"'; then
+  check_pass "Guardrail (l): agent-error close uses --reason \"not planned\", no out of roadmap scope claim, no bare close of dropped work"
 else
-  check_fail "Guardrail (l)" "Must close escalated:agent-error with gh issue close <number> --reason \"not planned\" and must not say the work is out of roadmap scope"
+  check_fail "Guardrail (l)" "Must close escalated:agent-error with gh issue close <number> --reason \"not planned\" must not say the work is out of roadmap scope, and must not close with a bare gh issue close <number> (completed)"
 fi
 
 # Guardrail (m): the requirements answerer must not invent acceptance criteria
