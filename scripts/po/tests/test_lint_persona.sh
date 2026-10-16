@@ -24,6 +24,8 @@
 # 25. Rejects a missing merge-conflict rule
 # 26. Rejects closing or re-filing an agent-quota escalation
 # 27. Rejects a missing agent-quota rule
+# 28. Rejects an agent-error close without the not planned reason
+# 29. Rejects the retired out of roadmap scope wording
 
 set -euo pipefail
 
@@ -218,6 +220,19 @@ M23_CONTENT="${BASE_CONTENT//escalated:agent-quota/escalated:other}"
 run_mutation_test "Rejects a missing agent-quota rule" \
   "$M23_CONTENT" \
   "Guardrail \(k\)|agent-quota"
+
+# 24. Rejects an agent-error close without the not planned reason
+M24_CONTENT="${BASE_CONTENT//--reason \"not planned\"/}"
+run_mutation_test "Rejects an agent-error close without the not planned reason" \
+  "$M24_CONTENT" \
+  "Guardrail \(l\)|not planned"
+
+# 25. Rejects the retired out of roadmap scope wording
+M25_CONTENT="${BASE_CONTENT}
+Work is dropped as out of roadmap scope."
+run_mutation_test "Rejects the retired out of roadmap scope wording" \
+  "$M25_CONTENT" \
+  "Guardrail \(l\)|out of roadmap scope"
 
 echo "----------------------------------------"
 if [ "$failures" -gt 0 ]; then

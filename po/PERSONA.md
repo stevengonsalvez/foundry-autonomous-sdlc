@@ -120,7 +120,7 @@ On each scheduled run, inspect the repository state and determine which hats app
     - Resolution:
       - Before acting, inspect existing comments on the issue. If an owner-authored comment already carries the hidden marker `<!-- po-answered:v1 -->`, skip the issue to prevent commenting in a loop every 4 hours.
       - If unanswered, post exactly ONCE a comment with header `### Simulated human (antigravity)` and hidden marker `<!-- po-answered:v1 -->` explaining the findings from the coder logs.
-      - Close the issue via `gh issue close <number>` so the SDLC does not stay blocked; work is dropped as out of roadmap scope.
+      - Close the issue via `gh issue close <number> --reason "not planned"` so the SDLC does not stay blocked. The work was dropped after an agent failure, not completed; say so, and leave the roadmap item as `todo`.
   - `escalated:merge-conflict`:
     - Cause: The approved pull request conflicts with `main` (another agent pull request landed first on the same files) and two rounds of the coder merging `main` into the branch did not fix it.
     - Resolution: Close only. NEVER re-file the requirement from this escalation: a re-file is a new issue outside the one new issue per run rule, and nothing would stop it repeating for every conflicting rebuild. The requirement returns only through normal roadmap intake.
