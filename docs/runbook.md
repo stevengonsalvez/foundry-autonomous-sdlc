@@ -152,7 +152,7 @@ gh pr list --repo stevengonsalvez/foundry-autonomous-sdlc --label agent:pr
 Disabling the routine stops new ticks; a coder job already running continues until it finishes, hits its deadline, or is cancelled.
 
 ```bash
-uv run --project agents python scripts/deploy_agents.py routine --disable
+uv run --project agents python scripts/deploy_agents.py routine --disable --cron '*/10 * * * *'
 ```
 
 ### Inspect or cancel a coder job
@@ -316,7 +316,7 @@ az rest --method post \
   --query "properties.rows" -o json
 ```
 
-Disable the routine (`deploy_agents.py routine --disable --cron '*/10 * * * *'`, always with the cron the routine has: without it the command tries to reset the trigger to `*/5` and Foundry refuses to change a trigger after creation) as soon as a run is finished: hosted sessions are the whole bill.
+Disable the routine (`deploy_agents.py routine --disable --cron '*/10 * * * *'`, always with the cron the routine has: the script replaces the routine when the cron differs, so a bare `--disable` would rewrite the schedule to the `*/5` default instead of only disabling it) as soon as a run is finished: hosted sessions are the whole bill.
 
 ## 9. How the coder isolates and checks its work
 
@@ -456,7 +456,7 @@ What it shows: the service echoes the policy id back on the version, and the fin
 ## 10. Teardown
 
 ```bash
-uv run --project agents python scripts/deploy_agents.py routine --disable
+uv run --project agents python scripts/deploy_agents.py routine --disable --cron '*/10 * * * *'
 cd infra/terraform
 terraform destroy
 terraform -chdir=bootstrap destroy -var-file=bootstrap.tfvars
