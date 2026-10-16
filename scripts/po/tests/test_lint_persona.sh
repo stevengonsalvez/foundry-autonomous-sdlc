@@ -27,6 +27,7 @@
 # 28. Rejects an agent-error close without the not planned reason
 # 29. Rejects the retired out of roadmap scope wording
 # 30. Rejects a missing no-invented-criteria rule for the requirements answerer
+# 31. Rejects a bare gh issue close (completed) on a dropped-work escalation
 
 set -euo pipefail
 
@@ -240,6 +241,13 @@ M26_CONTENT="${BASE_CONTENT//never add acceptance criteria/may add acceptance cr
 run_mutation_test "Rejects a missing no-invented-criteria rule" \
   "$M26_CONTENT" \
   "Guardrail \(m\)|acceptance criteria"
+
+# 27. Rejects a bare gh issue close on a dropped-work escalation (build-failed, merge-conflict)
+M27_CONTENT="${BASE_CONTENT}
+      - Apply label \`simulated-human\` and close the issue via \`gh issue close <number>\` when done."
+run_mutation_test "Rejects a bare gh issue close" \
+  "$M27_CONTENT" \
+  "Guardrail \(l\)|bare"
 
 echo "----------------------------------------"
 if [ "$failures" -gt 0 ]; then
