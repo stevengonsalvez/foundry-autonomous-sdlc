@@ -307,3 +307,9 @@ def test_unsafe_paths_are_rejected(path: Any) -> None:
 
 def test_paths_normalise() -> None:
     assert paths.normalise_app_path("./app//web/a.ts") == "app/web/a.ts"
+
+
+def test_test_designer_prompt_forbids_throwing_mocks_and_exception_only_reds() -> None:
+    prompt = " ".join(AGENT_BY_NAME["sdlc-test-designer"].instructions.split())
+    assert "never mock a component to throw" in prompt
+    assert "resilience" in prompt
