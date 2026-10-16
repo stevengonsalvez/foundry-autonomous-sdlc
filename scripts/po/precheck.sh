@@ -87,7 +87,12 @@ if [ "$age_s" -gt 2700 ]; then
 fi
 
 # 4. Check billed spend (over 30 USD, the filing stop)
-billed_usd="$(jq -r '.cost.billing.billed_usd // .cost.totals.billed_usd // 0' <<< "$state_json")"
+# A missing, null or non-numeric bill is unknown, not zero: skip rather than file on a blind budget.
+billed_usd="$(jq -r '.cost.billing.billed_usd // .cost.totals.billed_usd // empty' <<< "$state_json")"
+if ! [[ "$billed_usd" =~ ^[0-9]+(\.[0-9]+)?$ ]]; then
+  echo "SKIP: billed spend unknown"
+  exit 1
+fi
 is_over_spend="$(jq -n --arg b "$billed_usd" '($b | tonumber) > 30.0')"
 if [ "$is_over_spend" = "true" ]; then
   echo "SKIP: billed spend ($billed_usd USD) exceeds 30.00 USD cap"
