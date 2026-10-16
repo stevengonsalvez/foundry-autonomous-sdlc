@@ -44,7 +44,7 @@
       "pass": 15
     }
   },
-  "generated_at": "2026-10-16T13:01:23Z",
+  "generated_at": "2026-10-16T13:11:01Z",
   "issues": [
     {
       "closed_at": "2026-10-10T12:28:43Z",
@@ -2462,9 +2462,14 @@
         },
         {
           "entered_at": "2026-10-16T13:00:23Z",
+          "seconds": 603,
+          "stage": "stage:in-review"
+        },
+        {
+          "entered_at": "2026-10-16T13:10:26Z",
           "in_progress": true,
           "seconds": 0,
-          "stage": "stage:in-review"
+          "stage": "stage:merged"
         }
       ],
       "title": "feat(web): add left navigation sidebar with mobile menu",
@@ -2472,18 +2477,18 @@
     }
   ],
   "ledger": {
-    "emitted_at": "2026-10-16T13:01:09Z",
-    "reconciled_at": "2026-10-16T12:10:28Z"
+    "emitted_at": "2026-10-16T13:10:29Z",
+    "reconciled_at": "2026-10-16T13:10:29Z"
   },
   "repo": "stevengonsalvez/foundry-autonomous-sdlc",
   "totals": {
     "deferred": 0,
     "escalated": 19,
     "issues": 31,
-    "ledger_usd": 0.985962,
-    "orchestrator_usd": 7.76118,
+    "ledger_usd": 0.988771,
+    "orchestrator_usd": 7.77482,
     "released": 10,
-    "usd": 12.947651
+    "usd": 12.9641
   },
   "version": 1
 }
