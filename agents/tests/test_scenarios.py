@@ -513,8 +513,8 @@ def test_total_cap_halts_new_work_with_no_agent_calls(world: World) -> None:
     gh.close_issue(old)
     spent = state.State.new(old, "feature", "a")
     spent.enter(state.RELEASED, "2026-10-10T10:00:00Z")
-    spent.data["cost"]["calls"] = [{"agent": "sdlc-req-gate", "in": 1, "out": 1, "usd": 22.6}]
-    spent.data["cost"]["usd"] = 22.6
+    spent.data["cost"]["calls"] = [{"agent": "sdlc-req-gate", "in": 1, "out": 1, "usd": 32.6}]
+    spent.data["cost"]["usd"] = 32.6
     gh.issues[old]["labels"] = ["stage:released", "type:feature"]
     gh.add_comment_as(old, OWNER, state.render(spent))
     n = gh.open_issue("Show the estimated delivery date", A_BODY)
@@ -523,7 +523,7 @@ def test_total_cap_halts_new_work_with_no_agent_calls(world: World) -> None:
 
     assert foundry.calls == []
     assert [o.action for o in report.objects if o.number == n] == ["halt"]
-    assert 22.6 < report.total_usd < 22.61 and report.orchestrator_usd > 0
+    assert 32.6 < report.total_usd < 32.61 and report.orchestrator_usd > 0
 
 
 def test_lock_held_by_a_live_tick_stops_this_tick_before_any_work(world: World) -> None:

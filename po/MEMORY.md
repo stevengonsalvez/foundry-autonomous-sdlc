@@ -40,7 +40,7 @@ Notice: The persona command allow-list permits GitHub CLI operations (`gh issue 
    - Rejected reason: Requires third-party vendor credentials, external webhooks, and production secrets, making it infeasible for autonomous agents (`escalated:not-agent-suitable`).
 3. **Re-releasing rolled-back builds without code fixes**:
    - Rejected reason: Violates CD rollback guardrail; fixes must come through a new passing PR.
-4. **Raising cost caps or overriding 22 USD halt limit**:
+4. **Raising cost caps or overriding 32 USD halt limit**:
    - Rejected reason: Strictly forbidden by spend guardrails; cost overruns must park or close work instead.
 5. **Live carrier integration migration & production secret rotation (#17, #45)**:
    - Rejected reason: Requires external vendor contracts, production credentials/secrets, and manual DNS/firewall changes outside `app/`, violating agent feasibility (`escalated:not-agent-suitable`). Autonomous development must use carrier mock contracts.

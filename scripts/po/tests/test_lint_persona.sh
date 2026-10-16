@@ -2,7 +2,7 @@
 # Note: Linux-only test suite (relies on GNU coreutils).
 #
 # Mutation test suite for scripts/po/lint_persona.sh:
-# 1. Valid persona passes (21 USD accepted)
+# 1. Valid persona passes (30 USD accepted)
 # 2. Rejects gh pr merge in allow-list
 # 3. Rejects --admin in allow-list
 # 4. Rejects --squash in allow-list
@@ -10,21 +10,20 @@
 # 6. Rejects git push in allow-list
 # 7. Rejects bare cat in allow-list
 # 8. Rejects missing author restriction line (only repo slug present)
-# 9. Rejects missing 21 USD threshold
-# 10. Rejects 18 USD as filing stop
-# 11. Rejects 22 USD as filing stop
-# 12. Rejects 25 USD as filing stop
-# 13. Rejects missing 22 halt state stop rule
-# 14. Rejects missing 22 USD threshold
-# 15. Rejects missing 25 USD threshold
-# 16. Rejects missing 3 USD threshold
-# 17. Rejects missing visible surface requirement
-# 18. Rejects missing ui-proof screenshot diff rule
-# 19. Rejects missing highest-visibility preference rule
-# 20. Rejects re-filing on a merge-conflict escalation
-# 21. Rejects a missing merge-conflict rule
-# 22. Rejects closing or re-filing an agent-quota escalation
-# 23. Rejects a missing agent-quota rule
+# 9. Rejects missing 30 USD threshold
+# 10-15. Rejects 18, 21, 22, 25, 32 and 35 USD as filing stop (21, 22 and 25 are the retired caps)
+# 16. Rejects missing 32 halt state stop rule
+# 17. Rejects missing 32 USD threshold
+# 18. Rejects missing 35 USD threshold
+# 19. Rejects a stale 22 USD halt line
+# 20. Rejects missing 3 USD threshold
+# 21. Rejects missing visible surface requirement
+# 22. Rejects missing ui-proof screenshot diff rule
+# 23. Rejects missing highest-visibility preference rule
+# 24. Rejects re-filing on a merge-conflict escalation
+# 25. Rejects a missing merge-conflict rule
+# 26. Rejects closing or re-filing an agent-quota escalation
+# 27. Rejects a missing agent-quota rule
 
 set -euo pipefail
 
@@ -131,58 +130,52 @@ run_mutation_test "Rejects missing author restriction line" \
   "$M8_CONTENT" \
   "Guardrail \(a\)|author stevengonsalvez"
 
-# 9. Rejects missing 21 USD threshold
-M9_CONTENT="${BASE_CONTENT/21.00 USD/19.00 USD}"
-M9_CONTENT="${M9_CONTENT/21.00 USD/19.00 USD}"
-run_mutation_test "Rejects missing 21 USD threshold" \
+# 9. Rejects missing 30 USD threshold
+M9_CONTENT="${BASE_CONTENT/30.00 USD/19.00 USD}"
+M9_CONTENT="${M9_CONTENT/30.00 USD/19.00 USD}"
+run_mutation_test "Rejects missing 30 USD threshold" \
   "$M9_CONTENT" \
-  "Guardrail \(e\)|21/22/25/3"
+  "Guardrail \(e\)|30/32/35/3"
 
-# 10. Rejects 18 USD as filing stop
-M10_CONTENT="${BASE_CONTENT/21.00 USD precheck threshold/18.00 USD precheck threshold}"
-M10_CONTENT="${M10_CONTENT/spend is under 21.00 USD/spend is under 18.00 USD}"
-run_mutation_test "Rejects 18 USD as filing stop" \
-  "$M10_CONTENT" \
-  "Guardrail \(e\)|reject 18/22/25 as filing stop"
+# 10-12. Rejects every other value as the filing stop, the old 21, 22 and 25 included
+for stop in 18 21 22 25 32 35; do
+  M_CONTENT="${BASE_CONTENT/30.00 USD precheck threshold/$stop.00 USD precheck threshold}"
+  M_CONTENT="${M_CONTENT/spend is under 30.00 USD/spend is under $stop.00 USD}"
+  run_mutation_test "Rejects $stop USD as filing stop" \
+    "$M_CONTENT" \
+    "Guardrail \(e\)|reject 18/21/22/25/32/35 as filing stop"
+done
 
-# 11. Rejects 22 USD as filing stop
-M11_CONTENT="${BASE_CONTENT/21.00 USD precheck threshold/22.00 USD precheck threshold}"
-M11_CONTENT="${M11_CONTENT/spend is under 21.00 USD/spend is under 22.00 USD}"
-run_mutation_test "Rejects 22 USD as filing stop" \
-  "$M11_CONTENT" \
-  "Guardrail \(e\)|reject 18/22/25 as filing stop"
-
-# 12. Rejects 25 USD as filing stop
-M12_CONTENT="${BASE_CONTENT/21.00 USD precheck threshold/25.00 USD precheck threshold}"
-M12_CONTENT="${M12_CONTENT/spend is under 21.00 USD/spend is under 25.00 USD}"
-run_mutation_test "Rejects 25 USD as filing stop" \
-  "$M12_CONTENT" \
-  "Guardrail \(e\)|reject 18/22/25 as filing stop"
-
-# 13. Rejects missing 22 halt state stop rule
-M13_CONTENT="${BASE_CONTENT/Hard rule: The PO must also stop when the 22.00 USD halt state is flagged./}"
-M13_CONTENT="${M13_CONTENT/Hard rule: The 22.00 USD halt state is not flagged./}"
-run_mutation_test "Rejects missing 22 halt state stop rule" \
+# 13. Rejects missing 32 halt state stop rule
+M13_CONTENT="${BASE_CONTENT/Hard rule: The PO must also stop when the 32.00 USD halt state is flagged./}"
+M13_CONTENT="${M13_CONTENT/Hard rule: The 32.00 USD halt state is not flagged./}"
+run_mutation_test "Rejects missing 32 halt state stop rule" \
   "$M13_CONTENT" \
-  "Guardrail \(e\)|require stopping when 22 halt state is flagged"
+  "Guardrail \(e\)|require stopping when 32 halt state is flagged"
 
-# 14. Rejects missing 22 USD threshold
-M14_CONTENT="${BASE_CONTENT//22.00 USD/20.00 USD}"
-run_mutation_test "Rejects missing 22 USD threshold" \
+# 14. Rejects missing 32 USD threshold
+M14_CONTENT="${BASE_CONTENT//32.00 USD/20.00 USD}"
+run_mutation_test "Rejects missing 32 USD threshold" \
   "$M14_CONTENT" \
-  "Guardrail \(e\)|21/22/25/3"
+  "Guardrail \(e\)|30/32/35/3"
 
-# 15. Rejects missing 25 USD threshold
-M15_CONTENT="${BASE_CONTENT/25.00 USD/30.00 USD}"
-run_mutation_test "Rejects missing 25 USD threshold" \
+# 15. Rejects missing 35 USD threshold
+M15_CONTENT="${BASE_CONTENT/35.00 USD/40.00 USD}"
+run_mutation_test "Rejects missing 35 USD threshold" \
   "$M15_CONTENT" \
-  "Guardrail \(e\)|21/22/25/3"
+  "Guardrail \(e\)|30/32/35/3"
+
+# 15b. Rejects the old 22 USD halt line left in the persona
+M15B_CONTENT="${BASE_CONTENT/32.00 USD hard pipeline halt/22.00 USD hard pipeline halt}"
+run_mutation_test "Rejects a stale 22 USD halt line" \
+  "$M15B_CONTENT" \
+  "Guardrail \(e\)|reject 18/21/22/25/32/35 as filing stop"
 
 # 16. Rejects missing 3 USD threshold
 M16_CONTENT="${BASE_CONTENT/3.00 USD/5.00 USD}"
 run_mutation_test "Rejects missing 3 USD threshold" \
   "$M16_CONTENT" \
-  "Guardrail \(e\)|21/22/25/3"
+  "Guardrail \(e\)|30/32/35/3"
 
 # 17. Rejects missing visible surface requirement
 M17_CONTENT="${BASE_CONTENT//[Vv]isible [Ss]urface/target interface}"

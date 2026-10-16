@@ -29,8 +29,8 @@ from sdlc_agents.sanitise import one_line, redact_secrets
 
 VERSION = 1
 ISSUE_CAP_USD = 3.0
-HALT_USD = 22.0
-TOTAL_CAP_USD = 25.0
+HALT_USD = 32.0
+TOTAL_CAP_USD = 35.0
 
 BOARD_STAGES = ("backlog", "refining", "feasible", "tests", "building", "review", "staging", "prod", "escalated")
 

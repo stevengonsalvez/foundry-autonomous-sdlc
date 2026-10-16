@@ -231,7 +231,7 @@ def test_billed_spend_is_shown_next_to_the_ledger_estimate_and_the_gap_is_never_
     assert cost["gap"]["gap_usd"] == pytest.approx(11.157, abs=3e-3) and cost["gap"]["ratio"] == pytest.approx(
         6.98, abs=0.02
     )
-    # 13.02 USD is inside the 25 USD cap and the 22 USD halt line
+    # 13.02 USD is inside the 35 USD cap and the 32 USD halt line
     assert (
         cost["totals"]["over_cap"] is False
         and cost["totals"]["halted"] is False
@@ -241,7 +241,7 @@ def test_billed_spend_is_shown_next_to_the_ledger_estimate_and_the_gap_is_never_
     over = events.make(
         "billing.observed",
         later,
-        {"source": "azure-cost-management", "billed_usd": 26.0, "currency": "USD", "as_of": later, "by_meter": []},
+        {"source": "azure-cost-management", "billed_usd": 36.0, "currency": "USD", "as_of": later, "by_meter": []},
         source="ledger",
     )
     past = fold.fold([*all_tickets(real), billed, metrics, invoked, over], later)["cost"]["totals"]
@@ -446,3 +446,11 @@ def test_rollback_on_ticket_with_earlier_resolved_escalation_replaces_with_open_
     assert ticket12["escalation"]["resolved"] is None
     assert ticket12["escalation"]["open"] is True
     assert "smoke failed on staging" in ticket12["escalation"]["reasons"][0]
+
+
+def test_the_caps_block_carries_3_32_and_35_usd() -> None:
+    from sdlc_agents.ledger import fold, model
+
+    assert (model.ISSUE_CAP_USD, model.HALT_USD, model.TOTAL_CAP_USD) == (3.0, 32.0, 35.0)
+    assert fold._caps() == {"issue_usd": 3.0, "halt_usd": 32.0, "total_usd": 35.0}
+

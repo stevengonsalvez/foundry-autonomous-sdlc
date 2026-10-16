@@ -233,9 +233,9 @@
    "source": "azure-cost-management"
   },
   "caps": {
-   "halt_usd": 22.0,
+   "halt_usd": 32.0,
    "issue_usd": 3.0,
-   "total_usd": 25.0
+   "total_usd": 35.0
   },
   "gap": {
    "billed_usd": 13.0194,

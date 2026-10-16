@@ -1716,8 +1716,10 @@ def test_a_revise_without_merge_main_still_squashes_to_one_commit(world: World) 
 
 # -- agent quota: agy dies on the account's quota; the loop fallback must not burn rounds -----------------
 
-QUOTA_RESTRICTED = CommandResult(125, "error: Individual quota reached. Resets in 19h13m22s.\n"
-                                 "[aborted: agy reported a quota or rate limit]")      # the coder's own abort
+AGY_JSON = 'AGY_ERROR: {"short_error":"RESOURCE_EXHAUSTED (code 429)","status":"RESOURCE_EXHAUSTED"}'
+ABORT_MARK = "[aborted: agy reported a quota or rate limit]"
+QUOTA_RESTRICTED = CommandResult(125, f"error: Individual quota reached.\n{AGY_JSON}\n{ABORT_MARK}")
+ECHOED_ABORT = CommandResult(125, f"error: quota exceeded\n{ABORT_MARK}")      # the coder's own abort
 QUOTA_UNRESTRICTED = CommandResult(
     3, "error: Individual quota reached. Please upgrade your subscription to increase your limits. "
        "Resets in 19h13m22s.\nAGY_ERROR: {\"short_error\":\"RESOURCE_EXHAUSTED (code 429)\"}")        # agy's own exit
@@ -1784,6 +1786,16 @@ def test_quota_errors_after_edits_are_not_agent_quota(world: World) -> None:
 
     world.engines = [ScriptedEngine("agy", [edit_then_quota]),
                      ScriptedEngine("agy-unrestricted", [edit_then_quota]),
+                     ScriptedEngine("loop", [{"app/web/src/eta.txt": "2026-10-12\n"}])]
+    service = world.service()
+    start(service, job())
+    status = wait(service, "j-12-1")
+    assert status["status"] == "succeeded" and status["engine"] == "loop", status
+
+
+def test_an_echoed_prose_quota_line_at_rc_125_is_not_agent_quota(world: World) -> None:
+    world.engines = [ScriptedEngine("agy", [lambda root: ECHOED_ABORT]),
+                     ScriptedEngine("agy-unrestricted", [lambda root: ECHOED_ABORT]),
                      ScriptedEngine("loop", [{"app/web/src/eta.txt": "2026-10-12\n"}])]
     service = world.service()
     start(service, job())

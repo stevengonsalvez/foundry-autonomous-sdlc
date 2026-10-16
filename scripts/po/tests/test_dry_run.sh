@@ -266,18 +266,18 @@ cat > "$tmp_halt_dir/state.json" << 'EOF'
   "version": 1,
   "cost": {
     "billing": { "billed_usd": 15.00 },
-    "caps": { "halt_usd": 22.0, "issue_usd": 3.0, "total_usd": 25.0 },
+    "caps": { "halt_usd": 32.0, "issue_usd": 3.0, "total_usd": 35.0 },
     "totals": { "halted": true }
   }
 }
 EOF
-run_dry_test "22 USD halt state flagged stops Hat 4 intake" \
+run_dry_test "32 USD halt state flagged stops Hat 4 intake" \
   "\"$tmp_halt_dir\"" \
-  "22 USD halt state is flagged. Intake stopped." \
+  "32 USD halt state is flagged. Intake stopped." \
   "gh issue create"
 rm -rf "$tmp_halt_dir"
 
-# 23. Billed spend over 21 USD stops Hat 4 intake with zero commands
+# 23. Billed spend over 30 USD stops Hat 4 intake with zero commands
 tmp_spend_dir="$(mktemp -d -t dry-run-spend-XXXXXX)"
 cp "$FIXTURES/idle_with_roadmap/roadmap.md" "$tmp_spend_dir/roadmap.md"
 cp "$FIXTURES/idle_with_roadmap/issues.json" "$tmp_spend_dir/issues.json"
@@ -285,15 +285,15 @@ cat > "$tmp_spend_dir/state.json" << 'EOF'
 {
   "version": 1,
   "cost": {
-    "billing": { "billed_usd": 21.50 },
-    "caps": { "halt_usd": 22.0, "issue_usd": 3.0, "total_usd": 25.0 },
+    "billing": { "billed_usd": 30.50 },
+    "caps": { "halt_usd": 32.0, "issue_usd": 3.0, "total_usd": 35.0 },
     "totals": { "halted": false }
   }
 }
 EOF
-run_dry_test "Billed spend over 21 USD stops Hat 4 intake" \
+run_dry_test "Billed spend over 30 USD stops Hat 4 intake" \
   "\"$tmp_spend_dir\"" \
-  "exceeds 21.00 USD cap. Intake stopped." \
+  "exceeds 30.00 USD cap. Intake stopped." \
   "gh issue create"
 rm -rf "$tmp_spend_dir"
 

@@ -95,7 +95,7 @@ state_json="$(cat "$state_file")"
 issues_json="$(cat "$issues_file")"
 
 billed_usd="$(jq -r '.cost.billing.billed_usd // .cost.totals.billed_usd // 0' <<< "$state_json")"
-echo "[DRY RUN] Current billed spend: ${billed_usd} USD (Cap: 21.00 USD)"
+echo "[DRY RUN] Current billed spend: ${billed_usd} USD (Cap: 30.00 USD)"
 echo "[DRY RUN] Note: dry-run evaluates persona logic; scripts/po/precheck.sh is the authoritative spend gate."
 
 # Track commands to output
@@ -253,7 +253,7 @@ Closing ticket to unblock autonomous SDLC pipeline; work is dropped as out of ro
 <!-- po-answered:v1 -->
 
 Closing issue due to cost cap limit. Spend reached the allocated cap.
-Under strict spend guardrails, spend caps are never raised and execution does not continue past the 22 USD halt limit.
+Under strict spend guardrails, spend caps are never raised and execution does not continue past the 32 USD halt limit.
 Follow-up work should be split into a scoped, smaller increment."
       commands+=("gh issue comment $number --body \"$comment_body\"")
       commands+=("gh issue edit $number --add-label \"simulated-human\"")
@@ -325,18 +325,18 @@ if [ "$hat_refinement" -eq 0 ] && [ "$hat_triage" -eq 0 ] && [ "$hat_escalation"
   if [ "$is_busy" -eq 1 ]; then
     echo "[PIPELINE] Pipeline is busy with active building or review. Product Owner hat skipped."
   else
-    # Hard rule: stop when 22 halt state is flagged or billed spend exceeds 21.00 USD
+    # Hard rule: stop when 32 halt state is flagged or billed spend exceeds 30.00 USD
     is_halted="$(jq -r '
       (.cost.totals.halted // .cost.halted // .halted // false) == true or
-      ((.cost.billing.billed_usd // 0 | tonumber) >= (.cost.caps.halt_usd // 22.0 | tonumber)) or
-      ((.cost.totals.usd // .cost.ledger.usd // 0 | tonumber) >= (.cost.caps.halt_usd // 22.0 | tonumber))
+      ((.cost.billing.billed_usd // 0 | tonumber) >= (.cost.caps.halt_usd // 32.0 | tonumber)) or
+      ((.cost.totals.usd // .cost.ledger.usd // 0 | tonumber) >= (.cost.caps.halt_usd // 32.0 | tonumber))
     ' <<< "$state_json")"
-    is_over_spend="$(jq -n --arg b "$billed_usd" '($b | tonumber) > 21.0')"
+    is_over_spend="$(jq -n --arg b "$billed_usd" '($b | tonumber) > 30.0')"
 
     if [ "$is_halted" = "true" ]; then
-      echo "[HAT] Product Owner: 22 USD halt state is flagged. Intake stopped."
+      echo "[HAT] Product Owner: 32 USD halt state is flagged. Intake stopped."
     elif [ "$is_over_spend" = "true" ]; then
-      echo "[HAT] Product Owner: Billed spend ($billed_usd USD) exceeds 21.00 USD cap. Intake stopped."
+      echo "[HAT] Product Owner: Billed spend ($billed_usd USD) exceeds 30.00 USD cap. Intake stopped."
     elif [ -n "$roadmap_file" ] && [ -f "$roadmap_file" ]; then
       hat_po=1
       roadmap_eval="$(python3 - "$roadmap_file" "$issues_file" "$memory_file" << 'PYEOF'
