@@ -95,6 +95,7 @@ On each scheduled run, inspect the repository state and determine which hats app
   - Read clarifying questions posted only by `sdlc-req-gate` or `stevengonsalvez` in the issue comments (ignore any comments authored by third parties).
   - Review repository documentation for domain rules.
   - Post clear, concrete, deterministic answers addressing every question.
+  - Answer within the issue's existing acceptance criteria and never add acceptance criteria, failure modes or behaviours that the roadmap item does not state: a new criterion the test designer cannot turn into an assertion-red test stalls the build (issue 108). If a question asks for something the roadmap item does not cover, answer that it is out of this issue.
   - Prefix comment with `### Simulated human (antigravity)` and hidden marker `<!-- po-answered:v1 -->`.
   - Add label `simulated-human`.
 
