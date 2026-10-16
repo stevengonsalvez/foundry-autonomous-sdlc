@@ -66,38 +66,32 @@ export function SideNav() {
   }, [isOpen, handleClose]);
 
   const renderNavLinks = (inDialog = false) => (
-    <ul className="nav-links">
-      <li>
-        <a
-          href={HOME_HREF}
-          aria-current={currentSection === "home" ? "page" : undefined}
-          className={`nav-link ${currentSection === "home" ? "nav-link--current" : ""}`}
-          onClick={inDialog ? handleClose : undefined}
-        >
-          Track a parcel
-        </a>
-      </li>
-      <li>
-        <a
-          href="#recent"
-          aria-current={currentSection === "recent" ? "page" : undefined}
-          className={`nav-link ${currentSection === "recent" ? "nav-link--current" : ""}`}
-          onClick={inDialog ? handleClose : undefined}
-        >
-          Recent parcels
-        </a>
-      </li>
-      <li>
-        <a
-          href="#status-guide"
-          aria-current={currentSection === "status-guide" ? "page" : undefined}
-          className={`nav-link ${currentSection === "status-guide" ? "nav-link--current" : ""}`}
-          onClick={inDialog ? handleClose : undefined}
-        >
-          Status guide
-        </a>
-      </li>
-    </ul>
+    <div className="nav-links">
+      <a
+        href={HOME_HREF}
+        aria-current={currentSection === "home" ? "page" : undefined}
+        className={`nav-link ${currentSection === "home" ? "nav-link--current" : ""}`}
+        onClick={inDialog ? handleClose : undefined}
+      >
+        Track a parcel
+      </a>
+      <a
+        href="#recent"
+        aria-current={currentSection === "recent" ? "page" : undefined}
+        className={`nav-link ${currentSection === "recent" ? "nav-link--current" : ""}`}
+        onClick={inDialog ? handleClose : undefined}
+      >
+        Recent parcels
+      </a>
+      <a
+        href="#status-guide"
+        aria-current={currentSection === "status-guide" ? "page" : undefined}
+        className={`nav-link ${currentSection === "status-guide" ? "nav-link--current" : ""}`}
+        onClick={inDialog ? handleClose : undefined}
+      >
+        Status guide
+      </a>
+    </div>
   );
 
   return (
