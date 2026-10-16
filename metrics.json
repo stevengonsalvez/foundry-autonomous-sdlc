@@ -44,7 +44,7 @@
       "pass": 13
     }
   },
-  "generated_at": "2026-10-15T15:11:19Z",
+  "generated_at": "2026-10-16T12:11:15Z",
   "issues": [
     {
       "closed_at": "2026-10-10T12:28:43Z",
@@ -2296,7 +2296,7 @@
     },
     {
       "closed_at": null,
-      "coder_engine": "loop",
+      "coder_engine": null,
       "coder_sessions_lost": 0,
       "cost": {
         "calls": 5,
@@ -2306,7 +2306,7 @@
         "usd": 0.713587
       },
       "deferred": null,
-      "escalation": "escalated:build-failed",
+      "escalation": null,
       "gate_attempts": {
         "agent-scope": [
           "success"
@@ -2342,7 +2342,7 @@
       "kind": "issue",
       "number": 96,
       "opened_at": "2026-10-15T08:24:25Z",
-      "outcome": "escalated",
+      "outcome": "open",
       "owner": null,
       "pr": null,
       "quality_score": 88,
@@ -2423,8 +2423,19 @@
         },
         {
           "entered_at": "2026-10-15T12:00:22Z",
-          "seconds": 0,
+          "seconds": 86635,
           "stage": "escalated:build-failed"
+        },
+        {
+          "entered_at": "2026-10-16T12:04:17Z",
+          "seconds": 364,
+          "stage": "stage:tests-written"
+        },
+        {
+          "entered_at": "2026-10-16T12:10:21Z",
+          "in_progress": true,
+          "seconds": 0,
+          "stage": "stage:building"
         }
       ],
       "title": "feat(web): add left navigation sidebar with mobile menu",
@@ -2432,18 +2443,18 @@
     }
   ],
   "ledger": {
-    "emitted_at": "2026-10-15T15:10:24Z",
-    "reconciled_at": "2026-10-15T15:10:24Z"
+    "emitted_at": "2026-10-16T12:10:28Z",
+    "reconciled_at": "2026-10-16T12:10:28Z"
   },
   "repo": "stevengonsalvez/foundry-autonomous-sdlc",
   "totals": {
     "deferred": 0,
-    "escalated": 20,
+    "escalated": 19,
     "issues": 31,
-    "ledger_usd": 0.956674,
-    "orchestrator_usd": 7.6703,
+    "ledger_usd": 0.962645,
+    "orchestrator_usd": 7.684995,
     "released": 10,
-    "usd": 12.376677
+    "usd": 12.397343
   },
   "version": 1
 }
