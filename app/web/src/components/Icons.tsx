@@ -128,3 +128,19 @@ export function MoonIcon({ size = 18 }: { size?: number } = {}) {
   );
 }
 
+export function MenuIcon({ size = 20 }: { size?: number } = {}) {
+  return (
+    <Svg size={size}>
+      <path d="M4 6h16M4 12h16M4 18h16" />
+    </Svg>
+  );
+}
+
+export function CloseIcon({ size = 20 }: { size?: number } = {}) {
+  return (
+    <Svg size={size}>
+      <path d="M18 6 6 18M6 6l12 12" />
+    </Svg>
+  );
+}
+

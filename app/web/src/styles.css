@@ -329,6 +329,142 @@ a:hover {
   display: block;
 }
 
+/* Side navigation and mobile top bar */
+.nav-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.5rem;
+  height: 2.5rem;
+  padding: 0;
+  color: var(--ink);
+  background: var(--button-secondary-bg);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: background-color 150ms var(--ease), border-color 150ms var(--ease), color 150ms var(--ease);
+}
+
+.nav-toggle:hover {
+  color: var(--ink);
+  background: var(--button-secondary-hover);
+  border-color: var(--line-strong-hover);
+}
+
+.nav-toggle svg {
+  display: block;
+}
+
+.site-header__mobile-brand {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.left-nav {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
+}
+
+.left-nav__brand {
+  display: flex;
+  align-items: center;
+}
+
+.nav-links {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.nav-link {
+  display: flex;
+  align-items: center;
+  padding: var(--space-2) var(--space-3);
+  font-weight: 500;
+  color: var(--ink);
+  text-decoration: none;
+  border-radius: var(--radius-sm);
+  transition: background-color 150ms var(--ease), color 150ms var(--ease);
+}
+
+.nav-link:hover {
+  background: var(--button-secondary-hover);
+  color: var(--accent);
+  text-decoration: none;
+}
+
+.nav-link[aria-current="page"],
+.nav-link--current {
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-weight: 700;
+}
+
+.nav-dialog {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: flex;
+}
+
+.nav-dialog__backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgb(15 23 42 / 0.4);
+  border: 0;
+  padding: 0;
+  margin: 0;
+  width: 100%;
+  height: 100%;
+  cursor: pointer;
+}
+
+.nav-dialog__panel {
+  position: relative;
+  width: min(20rem, 85vw);
+  height: 100%;
+  background: var(--surface);
+  box-shadow: var(--shadow-md);
+  display: flex;
+  flex-direction: column;
+  padding: var(--space-5) var(--space-4);
+  gap: var(--space-5);
+  z-index: 1;
+  overflow-y: auto;
+}
+
+.nav-dialog__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.nav-dialog__close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.5rem;
+  height: 2.5rem;
+  padding: 0;
+  color: var(--ink);
+  background: var(--button-secondary-bg);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: background-color 150ms var(--ease), border-color 150ms var(--ease), color 150ms var(--ease);
+}
+
+.nav-dialog__close:hover {
+  color: var(--ink);
+  background: var(--button-secondary-hover);
+  border-color: var(--line-strong-hover);
+}
+
 main {
   flex: 1;
   padding-bottom: var(--space-8);
@@ -979,6 +1115,81 @@ main {
 
   .card {
     padding: var(--space-4);
+  }
+}
+
+/* Status guide */
+.status-guide {
+  margin-top: var(--space-7);
+  padding-top: var(--space-6);
+  border-top: 1px solid var(--line);
+}
+
+.status-guide h2 {
+  font-size: var(--text-xl);
+  margin-bottom: var(--space-2);
+}
+
+.status-guide .lead {
+  margin-top: 0;
+  margin-bottom: var(--space-5);
+}
+
+.status-guide__grid {
+  display: grid;
+  gap: var(--space-4);
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 18rem), 1fr));
+}
+
+.status-guide__card {
+  padding: var(--space-4);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-sm);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.status-guide__desc {
+  font-size: var(--text-sm);
+  color: var(--ink-muted);
+}
+
+/* Layout: Desktop sidebar and mobile top bar */
+@media (min-width: 64rem) {
+  .left-nav {
+    position: fixed;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    width: 16rem;
+    padding: var(--space-6) var(--space-4);
+    background: var(--surface);
+    border-right: 1px solid var(--line);
+    z-index: 20;
+    overflow-y: auto;
+  }
+
+  .site-header,
+  main,
+  .site-footer {
+    margin-left: 16rem;
+  }
+
+  .site-header .container {
+    justify-content: flex-end;
+  }
+
+  .site-header__mobile-brand {
+    display: none !important;
+  }
+}
+
+@media (max-width: 63.99rem) {
+  .left-nav {
+    display: none !important;
   }
 }
 
