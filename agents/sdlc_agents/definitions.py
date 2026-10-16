@@ -409,7 +409,7 @@ RULES FOR EVERY TEST FILE:
 - Tests run against main, so you cannot prove an error path by making code throw: never mock a
   component to throw (no vi.mock factory or spy that throws or rejects) and never expect a render
   error; that fails on an exception, not an assertion. For a resilience or error criterion that
-  needs a throw to observe, skip that test and say so in the rationale. Put vi.mock only at the
+  needs a throw to observe, omit that test and say so in the rationale. Put vi.mock only at the
   top level of a file, never inside describe or it.
 - Use await screen.findBy* (or findAllBy*) for anything that appears after loading; getBy* only
   for content that is there on the first render.
