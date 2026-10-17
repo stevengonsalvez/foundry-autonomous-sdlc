@@ -24,8 +24,8 @@
     {
       "filename": "home-desktop.png",
       "route": "home",
-      "sha256": "6af91a724ed804d651d1b08cb7946b48fab3e1ec84e950a007b099e666e2fdab",
-      "size": 118030,
+      "sha256": "7d9e3d06abaae49afa2e63580e0fe94415c1af37fcc8936408fec8a1a9d9eff6",
+      "size": 118042,
       "viewport": "desktop"
     },
     {
@@ -38,8 +38,8 @@
     {
       "filename": "home-mobile.png",
       "route": "home",
-      "sha256": "262bc7d8bb0e6e1e19cbc1489f5914b5d9245864b22ddc684c320ee3d21ec3ae",
-      "size": 71975,
+      "sha256": "2a55710c61958d86dbeeced800cd6b28b1703f089650155772c49931d59c89e1",
+      "size": 71979,
       "viewport": "mobile"
     },
     {
