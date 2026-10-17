@@ -44,7 +44,7 @@
       "pass": 17
     }
   },
-  "generated_at": "2026-10-17T01:50:39Z",
+  "generated_at": "2026-10-17T01:51:18Z",
   "issues": [
     {
       "closed_at": "2026-10-10T12:28:43Z",
@@ -2571,15 +2571,15 @@
       "type": "feature"
     },
     {
-      "closed_at": null,
+      "closed_at": "2026-10-17T01:50:25Z",
       "coder_engine": "agy-unrestricted",
       "coder_sessions_lost": 0,
       "cost": {
-        "calls": 5,
+        "calls": 6,
         "coder_model_usd": 0.0,
         "coder_usd": 0.537506,
-        "model_usd": 0.015534,
-        "usd": 0.55304
+        "model_usd": 0.017411,
+        "usd": 0.554917
       },
       "deferred": null,
       "escalation": null,
@@ -2625,12 +2625,12 @@
       "kind": "issue",
       "number": 111,
       "opened_at": "2026-10-17T00:03:25Z",
-      "outcome": "open",
+      "outcome": "released",
       "owner": null,
       "pr": 112,
       "quality_score": 85,
-      "release": null,
-      "resolution_seconds": null,
+      "release": "v0.10.0",
+      "resolution_seconds": 6459,
       "scenario": "a",
       "severity": null,
       "stages": [
@@ -2671,9 +2671,13 @@
         },
         {
           "entered_at": "2026-10-17T01:50:24Z",
-          "in_progress": true,
-          "seconds": 0,
+          "seconds": 40,
           "stage": "stage:merged"
+        },
+        {
+          "entered_at": "2026-10-17T01:51:04Z",
+          "seconds": 0,
+          "stage": "stage:released"
         }
       ],
       "title": "feat(web): parcel journey progress stepper on parcel page",
@@ -2681,7 +2685,7 @@
     }
   ],
   "ledger": {
-    "emitted_at": "2026-10-17T01:50:27Z",
+    "emitted_at": "2026-10-17T01:51:06Z",
     "reconciled_at": "2026-10-17T01:00:23Z"
   },
   "repo": "stevengonsalvez/foundry-autonomous-sdlc",
@@ -2689,10 +2693,10 @@
     "deferred": 0,
     "escalated": 20,
     "issues": 33,
-    "ledger_usd": 1.253071,
-    "orchestrator_usd": 9.337433,
-    "released": 11,
-    "usd": 15.682057
+    "ledger_usd": 1.255494,
+    "orchestrator_usd": 9.349774,
+    "released": 12,
+    "usd": 15.698698
   },
   "version": 1
 }
