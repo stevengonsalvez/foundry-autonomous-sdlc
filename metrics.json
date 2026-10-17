@@ -44,7 +44,7 @@
       "pass": 17
     }
   },
-  "generated_at": "2026-10-17T04:42:33Z",
+  "generated_at": "2026-10-17T05:10:59Z",
   "issues": [
     {
       "closed_at": "2026-10-10T12:28:43Z",
@@ -2737,9 +2737,14 @@
         },
         {
           "entered_at": "2026-10-17T04:42:19Z",
+          "seconds": 1682,
+          "stage": "stage:tests-written"
+        },
+        {
+          "entered_at": "2026-10-17T05:10:21Z",
           "in_progress": true,
           "seconds": 0,
-          "stage": "stage:tests-written"
+          "stage": "stage:building"
         }
       ],
       "title": "feat(web): interactive status summary filter chips with parcel counts on home page",
@@ -2747,18 +2752,18 @@
     }
   ],
   "ledger": {
-    "emitted_at": "2026-10-17T04:42:22Z",
-    "reconciled_at": "2026-10-17T04:10:26Z"
+    "emitted_at": "2026-10-17T05:10:28Z",
+    "reconciled_at": "2026-10-17T05:10:28Z"
   },
   "repo": "stevengonsalvez/foundry-autonomous-sdlc",
   "totals": {
     "deferred": 0,
     "escalated": 20,
     "issues": 34,
-    "ledger_usd": 1.299465,
-    "orchestrator_usd": 9.636551,
+    "ledger_usd": 1.302254,
+    "orchestrator_usd": 9.650103,
     "released": 12,
-    "usd": 16.142928
+    "usd": 16.159269
   },
   "version": 1
 }
