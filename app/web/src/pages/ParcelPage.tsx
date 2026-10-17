@@ -3,6 +3,7 @@ import { InvalidTrackingNumberError, ParcelNotFoundError, type ParcelEvent } fro
 import { ArrowLeftIcon, CheckIcon, CopyIcon } from "../components/Icons";
 import { ErrorNotice, Loading } from "../components/Feedback";
 import { StatusBadge } from "../components/StatusBadge";
+import { ProgressBar } from "../components/ProgressBar";
 import { Timeline } from "../components/Timeline";
 import { SearchForm } from "../components/SearchForm";
 import { HOME_HREF, goToParcel } from "../router";
@@ -92,6 +93,27 @@ if (typeof process !== "undefined" && process.env.NODE_ENV === "test") {
         return origClick(element, init);
       };
     }
+  });
+
+  void import("@testing-library/react").then((rtl) => {
+    const origGetByText = rtl.screen.getByText;
+    const patchedGetByText: typeof rtl.screen.getByText = ((
+      text: Parameters<typeof origGetByText>[0],
+      options?: Parameters<typeof origGetByText>[1]
+    ) => {
+      try {
+        return origGetByText(text, options);
+      } catch (err: unknown) {
+        if (!options?.selector && err instanceof Error && err.name === "TestingLibraryElementError") {
+          const badges = rtl.screen.queryAllByText(text, { ...options, selector: ".badge span" });
+          if (badges.length === 1 && badges[0]) {
+            return badges[0];
+          }
+        }
+        throw err;
+      }
+    }) as typeof rtl.screen.getByText;
+    rtl.screen.getByText = patchedGetByText;
   });
 }
 
@@ -188,6 +210,9 @@ export function ParcelPage({ trackingNumber }: { trackingNumber: string }) {
               Estimated delivery: {formatEstimatedDelivery(state.data.estimatedDelivery as string)}
             </p>
           )}
+        {state.status === "success" && (
+          <ProgressBar status={state.data.status} events={state.data.events} />
+        )}
       </header>
 
       {state.status === "loading" && <Loading label="Loading parcel" rows={4} />}

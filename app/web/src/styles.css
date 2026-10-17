@@ -983,6 +983,159 @@ main {
   vertical-align: 0.1em;
 }
 
+/* Journey Progress Stepper */
+.progress-stepper {
+  position: relative;
+  margin-top: var(--space-5);
+  padding: var(--space-4) var(--space-3);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+  box-sizing: border-box;
+  max-width: 100%;
+}
+
+.progress-stepper__track {
+  position: absolute;
+  top: 2rem;
+  left: 12.5%;
+  right: 12.5%;
+  height: 3px;
+  background: var(--line-strong);
+  z-index: 1;
+  border-radius: 999px;
+}
+
+.progress-stepper__bar {
+  height: 100%;
+  background: var(--accent);
+  border-radius: 999px;
+  transition: width 0.3s var(--ease);
+}
+
+.progress-stepper__bar--exception {
+  background: var(--danger-line);
+}
+
+.progress-stepper__stages {
+  position: relative;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  z-index: 2;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  gap: var(--space-1);
+}
+
+.progress-stepper__step {
+  flex: 1 1 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  position: relative;
+}
+
+.progress-stepper__node {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  height: 2rem;
+  border-radius: 50%;
+  font-size: var(--text-xs);
+  font-weight: 600;
+  background: var(--surface);
+  border: 2px solid var(--line-strong);
+  color: var(--ink-muted);
+  margin-bottom: var(--space-2);
+  flex-shrink: 0;
+  transition: all 0.2s var(--ease);
+}
+
+.progress-stepper__step--completed .progress-stepper__node,
+[data-step-state="completed"] .progress-stepper__node {
+  background: var(--badge-delivered-bg);
+  border-color: var(--badge-delivered-line);
+  color: var(--badge-delivered-ink);
+}
+
+.progress-stepper__step--active .progress-stepper__node,
+.progress-stepper__step.is-active .progress-stepper__node,
+[data-step-state="active"] .progress-stepper__node {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #ffffff;
+  box-shadow: 0 0 0 4px var(--accent-soft);
+}
+
+.progress-stepper__step--exception .progress-stepper__node,
+.progress-stepper__step.is-exception .progress-stepper__node,
+[data-step-state="exception"] .progress-stepper__node {
+  background: var(--badge-exception-bg);
+  border-color: var(--danger-line);
+  color: var(--danger-ink);
+  box-shadow: 0 0 0 4px var(--danger-bg);
+}
+
+.progress-stepper__step--upcoming .progress-stepper__node,
+[data-step-state="upcoming"] .progress-stepper__node {
+  background: var(--surface);
+  border-color: var(--line-strong);
+  color: var(--ink-muted);
+}
+
+.progress-stepper__icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.progress-stepper__label {
+  font-size: var(--text-xs);
+  line-height: 1.25;
+  color: var(--ink-muted);
+  text-align: center;
+  overflow-wrap: break-word;
+  word-break: normal;
+  max-width: 100%;
+}
+
+.progress-stepper__step--completed .progress-stepper__label,
+[data-step-state="completed"] .progress-stepper__label {
+  color: var(--ink);
+  font-weight: 500;
+}
+
+.progress-stepper__step--active .progress-stepper__label,
+.progress-stepper__step.is-active .progress-stepper__label,
+[data-step-state="active"] .progress-stepper__label {
+  color: var(--ink);
+  font-weight: 700;
+}
+
+.progress-stepper__step--exception .progress-stepper__label,
+.progress-stepper__step.is-exception .progress-stepper__label,
+[data-step-state="exception"] .progress-stepper__label {
+  color: var(--danger-ink);
+  font-weight: 700;
+}
+
+@media (max-width: 480px) {
+  .progress-stepper {
+    padding: var(--space-3) var(--space-2);
+  }
+
+  .progress-stepper__label {
+    font-size: 0.7rem;
+  }
+}
+
+
 /* Loading, empty, error */
 .loading {
   display: grid;
