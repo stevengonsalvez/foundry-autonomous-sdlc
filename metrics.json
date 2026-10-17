@@ -4,47 +4,47 @@
     "agent-scope": {
       "fail": 0,
       "first_fail": 0,
-      "first_pass": 16,
-      "pass": 21
+      "first_pass": 17,
+      "pass": 22
     },
     "coverage": {
       "fail": 5,
       "first_fail": 5,
-      "first_pass": 11,
-      "pass": 16
+      "first_pass": 12,
+      "pass": 17
     },
     "e2e": {
       "fail": 8,
       "first_fail": 6,
-      "first_pass": 10,
-      "pass": 13
+      "first_pass": 11,
+      "pass": 14
     },
     "evals": {
       "fail": 0,
       "first_fail": 0,
-      "first_pass": 2,
-      "pass": 4
+      "first_pass": 3,
+      "pass": 5
     },
     "gitleaks": {
       "fail": 0,
       "first_fail": 0,
-      "first_pass": 16,
-      "pass": 21
+      "first_pass": 17,
+      "pass": 22
     },
     "tdd-order": {
       "fail": 0,
       "first_fail": 0,
-      "first_pass": 16,
-      "pass": 21
+      "first_pass": 17,
+      "pass": 22
     },
     "test": {
       "fail": 6,
       "first_fail": 6,
-      "first_pass": 10,
-      "pass": 15
+      "first_pass": 11,
+      "pass": 16
     }
   },
-  "generated_at": "2026-10-17T01:00:53Z",
+  "generated_at": "2026-10-17T01:10:42Z",
   "issues": [
     {
       "closed_at": "2026-10-10T12:28:43Z",
@@ -2575,16 +2575,46 @@
       "coder_engine": "agy-unrestricted",
       "coder_sessions_lost": 0,
       "cost": {
-        "calls": 3,
+        "calls": 4,
         "coder_model_usd": 0.0,
         "coder_usd": 0.259123,
-        "model_usd": 0.008977,
-        "usd": 0.2681
+        "model_usd": 0.012193,
+        "usd": 0.271316
       },
       "deferred": null,
       "escalation": null,
-      "gate_attempts": {},
-      "gates": {},
+      "gate_attempts": {
+        "agent-scope": [
+          "success"
+        ],
+        "coverage": [
+          "success"
+        ],
+        "e2e": [
+          "success"
+        ],
+        "evals": [
+          "success"
+        ],
+        "gitleaks": [
+          "success"
+        ],
+        "tdd-order": [
+          "success"
+        ],
+        "test": [
+          "success"
+        ]
+      },
+      "gates": {
+        "agent-scope": "success",
+        "coverage": "success",
+        "e2e": "success",
+        "evals": "success",
+        "gitleaks": "success",
+        "tdd-order": "success",
+        "test": "success"
+      },
       "kind": "issue",
       "number": 111,
       "opened_at": "2026-10-17T00:03:25Z",
@@ -2629,7 +2659,7 @@
     }
   ],
   "ledger": {
-    "emitted_at": "2026-10-17T01:00:23Z",
+    "emitted_at": "2026-10-17T01:10:30Z",
     "reconciled_at": "2026-10-17T01:00:23Z"
   },
   "repo": "stevengonsalvez/foundry-autonomous-sdlc",
@@ -2637,10 +2667,10 @@
     "deferred": 0,
     "escalated": 20,
     "issues": 33,
-    "ledger_usd": 1.202073,
-    "orchestrator_usd": 9.093856,
+    "ledger_usd": 1.204507,
+    "orchestrator_usd": 9.106137,
     "released": 11,
-    "usd": 15.102542
+    "usd": 15.120473
   },
   "version": 1
 }
