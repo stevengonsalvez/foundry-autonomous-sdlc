@@ -1,0 +1,62 @@
+{
+  "version": 1,
+  "head_sha": "f9c9fc0a8faf0f7807becef2654f2a8517968fd5",
+  "screenshots": [
+    {
+      "filename": "home-desktop.png",
+      "route": "home",
+      "viewport": "desktop",
+      "sha256": "6d3784c50692906e3b2dac8fdaf1c8ab2a94b2b7238800eea1b7142506258924",
+      "size": 116736
+    },
+    {
+      "filename": "parcel-found-desktop.png",
+      "route": "parcel-found",
+      "viewport": "desktop",
+      "sha256": "c7ff5c4569913b7ecd93133c2eb64bd7638fca3a9c417a5cbd4da06979d16999",
+      "size": 111326
+    },
+    {
+      "filename": "not-found-desktop.png",
+      "route": "not-found",
+      "viewport": "desktop",
+      "sha256": "04b1afe2163c97a9bea556596d255dc3998431c2de0a353139f64e1a9f94dc06",
+      "size": 86182
+    },
+    {
+      "filename": "invalid-input-desktop.png",
+      "route": "invalid-input",
+      "viewport": "desktop",
+      "sha256": "384e47ed4e028e8033d8c69670c3a2d51e2b61108f42d702e02d5f68c3baa62b",
+      "size": 86629
+    },
+    {
+      "filename": "home-mobile.png",
+      "route": "home",
+      "viewport": "mobile",
+      "sha256": "87623bc4b05e1e359e40731e715f37fc5e1fc5240f95e4eae22ec274fe2c7d1f",
+      "size": 72773
+    },
+    {
+      "filename": "parcel-found-mobile.png",
+      "route": "parcel-found",
+      "viewport": "mobile",
+      "sha256": "b4bc1472b52274205d8af0b0d0efc48db30c9afc04cd085476b00b3f3d9f49fb",
+      "size": 78490
+    },
+    {
+      "filename": "not-found-mobile.png",
+      "route": "not-found",
+      "viewport": "mobile",
+      "sha256": "f80d21b495e64867a9186be7d55876ee5e33c88bdb28d9370f740eab82b6c16e",
+      "size": 55830
+    },
+    {
+      "filename": "invalid-input-mobile.png",
+      "route": "invalid-input",
+      "viewport": "mobile",
+      "sha256": "09967d372b5f1ec07b9c92a0efd892db9cbff41acdb81f9b7a3d05f2047859d1",
+      "size": 56946
+    }
+  ]
+}
