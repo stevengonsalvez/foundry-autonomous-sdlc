@@ -44,7 +44,7 @@
       "pass": 17
     }
   },
-  "generated_at": "2026-10-17T03:50:54Z",
+  "generated_at": "2026-10-17T04:10:57Z",
   "issues": [
     {
       "closed_at": "2026-10-10T12:28:43Z",
@@ -2682,21 +2682,58 @@
       ],
       "title": "feat(web): parcel journey progress stepper on parcel page",
       "type": "feature"
+    },
+    {
+      "closed_at": null,
+      "coder_engine": null,
+      "coder_sessions_lost": 0,
+      "cost": {
+        "calls": 1,
+        "coder_model_usd": 0.0,
+        "coder_usd": 0.0,
+        "model_usd": 0.001305,
+        "usd": 0.001305
+      },
+      "deferred": null,
+      "escalation": null,
+      "gate_attempts": {},
+      "gates": {},
+      "kind": "issue",
+      "number": 113,
+      "opened_at": "2026-10-17T04:03:24Z",
+      "outcome": "open",
+      "owner": null,
+      "pr": null,
+      "quality_score": 88,
+      "release": null,
+      "resolution_seconds": null,
+      "scenario": "a",
+      "severity": null,
+      "stages": [
+        {
+          "entered_at": "2026-10-17T04:10:25Z",
+          "in_progress": true,
+          "seconds": 0,
+          "stage": "stage:ready"
+        }
+      ],
+      "title": "feat(web): interactive status summary filter chips with parcel counts on home page",
+      "type": "feature"
     }
   ],
   "ledger": {
-    "emitted_at": "2026-10-17T03:50:19Z",
-    "reconciled_at": "2026-10-17T03:10:19Z"
+    "emitted_at": "2026-10-17T04:10:26Z",
+    "reconciled_at": "2026-10-17T04:10:26Z"
   },
   "repo": "stevengonsalvez/foundry-autonomous-sdlc",
   "totals": {
     "deferred": 0,
     "escalated": 20,
-    "issues": 33,
-    "ledger_usd": 1.282119,
-    "orchestrator_usd": 9.550281,
+    "issues": 34,
+    "ledger_usd": 1.284897,
+    "orchestrator_usd": 9.563689,
     "released": 12,
-    "usd": 15.92583
+    "usd": 15.943321
   },
   "version": 1
 }
