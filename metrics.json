@@ -44,7 +44,7 @@
       "pass": 16
     }
   },
-  "generated_at": "2026-10-17T01:10:42Z",
+  "generated_at": "2026-10-17T01:20:40Z",
   "issues": [
     {
       "closed_at": "2026-10-10T12:28:43Z",
@@ -2572,7 +2572,7 @@
     },
     {
       "closed_at": null,
-      "coder_engine": "agy-unrestricted",
+      "coder_engine": null,
       "coder_sessions_lost": 0,
       "cost": {
         "calls": 4,
@@ -2649,9 +2649,14 @@
         },
         {
           "entered_at": "2026-10-17T01:00:21Z",
+          "seconds": 1199,
+          "stage": "stage:in-review"
+        },
+        {
+          "entered_at": "2026-10-17T01:20:20Z",
           "in_progress": true,
           "seconds": 0,
-          "stage": "stage:in-review"
+          "stage": "stage:building"
         }
       ],
       "title": "feat(web): parcel journey progress stepper on parcel page",
@@ -2659,7 +2664,7 @@
     }
   ],
   "ledger": {
-    "emitted_at": "2026-10-17T01:10:30Z",
+    "emitted_at": "2026-10-17T01:20:27Z",
     "reconciled_at": "2026-10-17T01:00:23Z"
   },
   "repo": "stevengonsalvez/foundry-autonomous-sdlc",
@@ -2667,10 +2672,10 @@
     "deferred": 0,
     "escalated": 20,
     "issues": 33,
-    "ledger_usd": 1.204507,
-    "orchestrator_usd": 9.106137,
+    "ledger_usd": 1.206945,
+    "orchestrator_usd": 9.118235,
     "released": 11,
-    "usd": 15.120473
+    "usd": 15.135009
   },
   "version": 1
 }
