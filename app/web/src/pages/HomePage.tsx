@@ -4,6 +4,7 @@ import { ErrorNotice, EmptyState, Loading } from "../components/Feedback";
 import { ParcelTable } from "../components/ParcelTable";
 import { SearchForm } from "../components/SearchForm";
 import { StatusBadge, STATUS_LABELS } from "../components/StatusBadge";
+import { StatusSummaryChips } from "../components/StatusSummaryChips";
 import { goToHome, goToParcel, parseStatusFilter, useHash } from "../router";
 import { useParcelService } from "../service-context";
 import { useDocumentTitle } from "../useDocumentTitle";
@@ -89,11 +90,18 @@ export function HomePage() {
           <EmptyState title="No parcels yet">Parcels will appear here as soon as the carrier reports them.</EmptyState>
         )}
         {state.status === "success" && state.data.length > 0 && (
-          filteredParcels.length > 0 ? (
-            <ParcelTable parcels={filteredParcels} labelledBy="recent-heading" />
-          ) : (
-            <p className="notice notice--empty">No parcels match this status.</p>
-          )
+          <>
+            <StatusSummaryChips
+              parcels={state.data}
+              selectedStatus={statusFilter}
+              onSelect={goToHome}
+            />
+            {filteredParcels.length > 0 ? (
+              <ParcelTable parcels={filteredParcels} labelledBy="recent-heading" />
+            ) : (
+              <p className="notice notice--empty">No parcels match this status.</p>
+            )}
+          </>
         )}
       </section>
 
