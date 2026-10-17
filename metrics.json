@@ -44,7 +44,7 @@
       "pass": 18
     }
   },
-  "generated_at": "2026-10-17T06:30:40Z",
+  "generated_at": "2026-10-17T06:40:58Z",
   "issues": [
     {
       "closed_at": "2026-10-10T12:28:43Z",
@@ -2684,15 +2684,15 @@
       "type": "feature"
     },
     {
-      "closed_at": null,
+      "closed_at": "2026-10-17T06:30:26Z",
       "coder_engine": "agy-unrestricted",
       "coder_sessions_lost": 0,
       "cost": {
-        "calls": 6,
+        "calls": 7,
         "coder_model_usd": 0.0,
         "coder_usd": 0.408899,
-        "model_usd": 0.019929,
-        "usd": 0.428828
+        "model_usd": 0.02144,
+        "usd": 0.430339
       },
       "deferred": null,
       "escalation": null,
@@ -2731,12 +2731,12 @@
       "kind": "issue",
       "number": 113,
       "opened_at": "2026-10-17T04:03:24Z",
-      "outcome": "open",
+      "outcome": "released",
       "owner": null,
       "pr": 114,
       "quality_score": 88,
-      "release": null,
-      "resolution_seconds": null,
+      "release": "v0.11.0",
+      "resolution_seconds": 9424,
       "scenario": "a",
       "severity": null,
       "stages": [
@@ -2797,9 +2797,13 @@
         },
         {
           "entered_at": "2026-10-17T06:30:26Z",
-          "in_progress": true,
-          "seconds": 0,
+          "seconds": 602,
           "stage": "stage:merged"
+        },
+        {
+          "entered_at": "2026-10-17T06:40:28Z",
+          "seconds": 0,
+          "stage": "stage:released"
         }
       ],
       "title": "feat(web): interactive status summary filter chips with parcel counts on home page",
@@ -2807,7 +2811,7 @@
     }
   ],
   "ledger": {
-    "emitted_at": "2026-10-17T06:30:28Z",
+    "emitted_at": "2026-10-17T06:40:30Z",
     "reconciled_at": "2026-10-17T06:10:30Z"
   },
   "repo": "stevengonsalvez/foundry-autonomous-sdlc",
@@ -2815,10 +2819,10 @@
     "deferred": 0,
     "escalated": 20,
     "issues": 34,
-    "ledger_usd": 1.327802,
-    "orchestrator_usd": 9.760179,
-    "released": 12,
-    "usd": 16.610239
+    "ledger_usd": 1.33249,
+    "orchestrator_usd": 9.773698,
+    "released": 13,
+    "usd": 16.629957
   },
   "version": 1
 }
