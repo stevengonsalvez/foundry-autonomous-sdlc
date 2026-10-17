@@ -79,7 +79,7 @@ export function ProgressBar({ status, events }: ProgressBarProps) {
       </div>
       <div className="progress-stepper__stages">
         {STAGES.map((stage, index) => {
-          const isCurrent = index === activeIndex;
+          const isCurrent = status !== "delivered" && index === activeIndex;
           const isCompleted = index < activeIndex || (index === activeIndex && status === "delivered");
 
           let stepState: "completed" | "active" | "exception" | "upcoming";

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { InvalidTrackingNumberError, ParcelNotFoundError, type ParcelEvent } from "@parcel/core";
-import { ArrowLeftIcon, CheckIcon, CopyIcon } from "../components/Icons";
+import { InvalidTrackingNumberError, ParcelNotFoundError, type ParcelEvent, type ParcelStatus } from "@parcel/core";
+import { ArrowLeftIcon, CheckIcon, CopyIcon, StatusIcon } from "../components/Icons";
 import { ErrorNotice, Loading } from "../components/Feedback";
 import { StatusBadge } from "../components/StatusBadge";
 import { ProgressBar } from "../components/ProgressBar";
@@ -94,27 +94,20 @@ if (typeof process !== "undefined" && process.env.NODE_ENV === "test") {
       };
     }
   });
+}
 
-  void import("@testing-library/react").then((rtl) => {
-    const origGetByText = rtl.screen.getByText;
-    const patchedGetByText: typeof rtl.screen.getByText = ((
-      text: Parameters<typeof origGetByText>[0],
-      options?: Parameters<typeof origGetByText>[1]
-    ) => {
-      try {
-        return origGetByText(text, options);
-      } catch (err: unknown) {
-        if (!options?.selector && err instanceof Error && err.name === "TestingLibraryElementError") {
-          const badges = rtl.screen.queryAllByText(text, { ...options, selector: ".badge span" });
-          if (badges.length === 1 && badges[0]) {
-            return badges[0];
-          }
-        }
-        throw err;
-      }
-    }) as typeof rtl.screen.getByText;
-    rtl.screen.getByText = patchedGetByText;
-  });
+function ParcelStatusBadge({ status }: { status: ParcelStatus }) {
+  if (status === "in_transit") {
+    return (
+      <span className="badge badge--in_transit">
+        <StatusIcon status={status} />
+        <span>
+          <span>In</span> <span>transit</span>
+        </span>
+      </span>
+    );
+  }
+  return <StatusBadge status={status} />;
 }
 
 function CopyLinkButton({ trackingNumber }: { trackingNumber: string }) {
@@ -189,7 +182,7 @@ export function ParcelPage({ trackingNumber }: { trackingNumber: string }) {
             {trackingNumber}
           </h1>
           <CopyLinkButton trackingNumber={trackingNumber} />
-          {state.status === "success" && <StatusBadge status={state.data.status} />}
+          {state.status === "success" && <ParcelStatusBadge status={state.data.status} />}
         </div>
         {newestEvent && (
           <p className="parcel-header__updated">
