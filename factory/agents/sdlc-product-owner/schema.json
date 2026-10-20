@@ -1,0 +1,34 @@
+{
+  "type": "object",
+  "properties": {
+    "answers": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "question": {
+            "type": "string",
+            "maxLength": 300,
+            "minLength": 1
+          },
+          "answer": {
+            "type": "string",
+            "maxLength": 700,
+            "minLength": 1
+          }
+        },
+        "required": [
+          "question",
+          "answer"
+        ],
+        "additionalProperties": false
+      },
+      "minItems": 1,
+      "maxItems": 5
+    }
+  },
+  "required": [
+    "answers"
+  ],
+  "additionalProperties": false
+}

@@ -1,0 +1,45 @@
+{
+  "type": "object",
+  "properties": {
+    "severity": {
+      "type": "string",
+      "enum": [
+        "s1",
+        "s2",
+        "s3",
+        "s4"
+      ]
+    },
+    "owner": {
+      "type": "string",
+      "enum": [
+        "web",
+        "api",
+        "carrier-mock"
+      ]
+    },
+    "summary": {
+      "type": "string",
+      "maxLength": 200,
+      "minLength": 1
+    },
+    "suspected_area": {
+      "type": "string",
+      "maxLength": 200,
+      "minLength": 1
+    },
+    "rationale": {
+      "type": "string",
+      "maxLength": 300,
+      "minLength": 1
+    }
+  },
+  "required": [
+    "severity",
+    "owner",
+    "summary",
+    "suspected_area",
+    "rationale"
+  ],
+  "additionalProperties": false
+}

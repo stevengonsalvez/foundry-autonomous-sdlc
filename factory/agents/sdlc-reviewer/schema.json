@@ -1,0 +1,69 @@
+{
+  "type": "object",
+  "properties": {
+    "verdict": {
+      "type": "string",
+      "enum": [
+        "approve",
+        "request-changes"
+      ]
+    },
+    "head": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{7,40}$"
+    },
+    "findings": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "severity": {
+            "type": "string",
+            "enum": [
+              "critical",
+              "high",
+              "medium",
+              "low",
+              "info"
+            ]
+          },
+          "area": {
+            "type": "string",
+            "enum": [
+              "tests-first",
+              "scope",
+              "spec",
+              "security",
+              "quality"
+            ]
+          },
+          "detail": {
+            "type": "string",
+            "maxLength": 400,
+            "minLength": 1
+          }
+        },
+        "required": [
+          "severity",
+          "area",
+          "detail"
+        ],
+        "additionalProperties": false
+      },
+      "minItems": 0,
+      "maxItems": 8
+    },
+    "summary": {
+      "type": "string",
+      "maxLength": 400,
+      "minLength": 1
+    }
+  },
+  "required": [
+    "verdict",
+    "head",
+    "findings",
+    "summary"
+  ],
+  "additionalProperties": false
+}

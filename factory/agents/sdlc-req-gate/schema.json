@@ -1,0 +1,75 @@
+{
+  "type": "object",
+  "properties": {
+    "criteria": {
+      "type": "object",
+      "properties": {
+        "clear_goal": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 25
+        },
+        "testable_acceptance_criteria": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 25
+        },
+        "defined_scope": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 25
+        },
+        "edge_cases": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 25
+        }
+      },
+      "required": [
+        "clear_goal",
+        "testable_acceptance_criteria",
+        "defined_scope",
+        "edge_cases"
+      ],
+      "additionalProperties": false
+    },
+    "score": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 100
+    },
+    "summary": {
+      "type": "string",
+      "maxLength": 300,
+      "minLength": 1
+    },
+    "acceptance_criteria": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "maxLength": 300,
+        "minLength": 1
+      },
+      "minItems": 0,
+      "maxItems": 8
+    },
+    "questions": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "maxLength": 300,
+        "minLength": 1
+      },
+      "minItems": 0,
+      "maxItems": 5
+    }
+  },
+  "required": [
+    "criteria",
+    "score",
+    "summary",
+    "acceptance_criteria",
+    "questions"
+  ],
+  "additionalProperties": false
+}

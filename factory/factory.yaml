@@ -1,0 +1,46 @@
+schemaVersion: v1alpha1
+name: foundry-autonomous-sdlc
+
+repositories:
+  - owner: stevengonsalvez
+    name: foundry-autonomous-sdlc
+
+# Per-agent engine, model, effort and timeout live in agents/<name>/agent.md; these fill any gap.
+agentDefaults:
+  engine: agy
+  model: gemini-3.8-flash-medium
+  timeoutS: 300
+  effort: medium
+
+# Auto-merge stays on for this deployment. Set true to hold the workflow for a human_approved signal.
+humanGates:
+  spec: false
+  merge: false
+
+# Calls and wall-clock minutes are the real caps. callUsd and minuteUsd are surrogate rates that map
+# them onto the USD caps in sdlc_agents.ports.Budget (usd_cap_issue 3.00, usd_cap_total 32.00):
+#   perIssue.maxCalls * callUsd = 60 * 0.05 = 3.00      total.maxCalls * callUsd = 640 * 0.05 = 32.00
+#   perIssue.maxMinutes * minuteUsd = 150 * 0.02 = 3.00
+budget:
+  perIssue:
+    maxCalls: 60
+    maxMinutes: 150
+  total:
+    maxCalls: 640
+  callUsd: 0.05
+  minuteUsd: 0.02
+
+engines:
+  agy:
+    binary: agy
+    outputFormat: stream-json
+    # Plan mode, no tools: prompt agents never edit. The coder runner uses accept-edits instead.
+    promptMode: plan
+    coderMode: accept-edits
+    # agy 1.4.2 defaults --print-timeout to unbounded, so every call passes an explicit one.
+    printTimeoutS: 300
+    repairRounds: 2
+
+runners:
+  coder: runners/coder.yaml
+  foreman: runners/foreman.yaml

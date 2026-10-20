@@ -1,0 +1,43 @@
+{
+  "type": "object",
+  "properties": {
+    "suitable": {
+      "type": "boolean"
+    },
+    "reasons": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "maxLength": 300,
+        "minLength": 1
+      },
+      "minItems": 1,
+      "maxItems": 5
+    },
+    "risk": {
+      "type": "string",
+      "enum": [
+        "low",
+        "medium",
+        "high"
+      ]
+    },
+    "affected_paths": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "maxLength": 255,
+        "minLength": 1
+      },
+      "minItems": 0,
+      "maxItems": 10
+    }
+  },
+  "required": [
+    "suitable",
+    "reasons",
+    "risk",
+    "affected_paths"
+  ],
+  "additionalProperties": false
+}
