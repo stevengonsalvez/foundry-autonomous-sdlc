@@ -93,6 +93,7 @@ ledger and the internet. Now:
 | agy's own account token is reachable by any agy run | agy needs it to work | dedicated Google account (section 7); rotate on suspicion |
 | A prompt injection into the reviewer model approves a bad PR, which then auto-merges | Stevie enabled auto-merge (`humanGates.merge: false`) | set `humanGates.merge: true` for any repository whose issues or PRs untrusted people can write |
 | Temporal frontend has no authentication | Temporal OSS default | published on `127.0.0.1` only (`BIND_ADDR`); never change that on a shared host |
+| agy plan-mode `read_file` is the first barrier for files outside the call's cwd | agy 1.4.3 auto-denies it headless (measured, `live-agy-check.sh`); a later agy may not | uid split: `agyagent` cannot read root or `agyuser` 0600 files; rerun the live check after every agy upgrade |
 | An `agyagent` process that escaped its group lives until no agent call is in flight | reaping while a sibling call runs would kill it | the reap runs when the last call ends; `pids_limit: 1024`, `no-new-privileges` on the coder |
 
 ## 2. Bring-up
@@ -144,6 +145,60 @@ with a scripted agy result; the foreman still starts its real adapters with a du
 its poll activity fails with 401 against GitHub and changes nothing. It also checks the boundary: the
 foreman has only `github_pat`, no agy token or binary; `/agent-run` is 401 without the token and 400
 for an `argv` field; ledger `/ingest` is 401 without `LEDGER_TOKEN` from inside the ledger network.
+
+### Live agy check (real agy, spends quota)
+
+```bash
+deploy/compose/live-agy-check.sh                       # about 1 minute warm, 5 agy calls
+LIVE_CHECKS="basic" deploy/compose/live-agy-check.sh   # one call; checks: basic canary auth
+LIVE_BUILD=0 deploy/compose/live-agy-check.sh          # reuse built images
+```
+
+It starts only `coder` and `egress-proxy` as project `sdlc-factory-live`, `FACTORY_MODE=live`, with a
+copy of `~/.gemini/antigravity-cli/antigravity-oauth-token` (override: `AGY_TOKEN_SOURCE`) in a 0700
+temp directory outside the repo (shredded on exit) and a dummy `github_pat` (nothing calls GitHub).
+It POSTs to the coder's `/agent-run` from inside the coder, classifies each reply with the real
+`AgyEngine.classify`, prints the squid CONNECT log, and removes only its own project (`down -v`).
+Run it after an agy upgrade or any change to `proxy/allowlist.txt`.
+
+Measured 2026-10-20, agy 1.4.3, in the coder sandbox (read-only rootfs, `coder_net` only, agy as
+`agyagent` 61001, per-call HOME and cwd):
+
+| Check | Result | Timing | Usage (in/out/think/total) |
+|---|---|---|---|
+| plan call, `--json-schema` `{answer: string}` | `OK`, stderr empty (per-call HOME on a read-only rootfs: no stall) | 12 s wall, agy 10.4 s | 15991/923/900/16914 |
+| `read_file` of a root-only 0600 file | `DENIED`, not disclosed | 10 s | 7532/805/781/8337 |
+| `read_file` of an `agyagent`-owned 0600 file | `DENIED`, not disclosed | 10 s | 7513/857/833/8370 |
+| token with expired access and revoked refresh token | `AUTH`, rc 125 (abort_on) | 0.27 s server | none |
+| garbage token file | `AUTH`, rc 125 (abort_on) | 0.29 s server | none |
+
+Egress agy 1.4.3 needs, measured from the squid access log (each one added after a failed call that
+named it; the call fails in 0.5 to 3 s with `Eligibility check failed: ... Forbidden` without it):
+
+| Host | Role | Allowed |
+|---|---|---|
+| `oauth2.googleapis.com` | OAuth token refresh | yes |
+| `daily-cloudcode-pa.googleapis.com` | model backend: eligibility check and turns | yes |
+| `www.googleapis.com` | account lookup (`oauth2/v2/userinfo`) | yes |
+| `lh3.googleusercontent.com` | account profile picture, fetched by the eligibility check | yes |
+| `play.googleapis.com` | telemetry (clearcut log) | no: denied, calls still OK |
+| `antigravity-unleash.goog` | feature flags | no: denied, calls still OK |
+| `cloudcode-pa.googleapis.com` | the previously inferred entry | removed: never requested |
+
+Findings:
+
+- `read_file` outside the empty per-call cwd is auto-denied by agy 1.4.3 headless plan mode ("a tool
+  required the read_file permission that headless mode cannot prompt for"). So the root-only file was
+  stopped by agy's permission rule, before the uid boundary was tested. The uid boundary (agyagent
+  cannot open root 0600 files, smoke.sh) is the second layer; a future agy that allows reads outside
+  the workspace in plan mode would leave only that layer, and then `agyagent`-owned files (the token
+  copy in the call's HOME, concurrent calls' HOMEs) become readable. Rerun this check after upgrades.
+- Auth failure is prompt: agy prints the device-login prompt ("Authentication required ... Waiting for
+  authentication (timeout 60s)") and `abort_on` kills it in under 0.3 s; it never waits out the
+  timeout. An empty token file never starts agy (500 `token_unavailable`).
+- With `--json-schema`, the response held two lines: `{"answer":"ok"}` and a second object wrapping
+  the first as a string, `{"answer":"{\"answer\":\"ok\"}"}`. `extract_json` picks the longer, wrapped one. One
+  sample with a schema that was a single string field; check real agent schemas before relying on it.
 
 ## 3. Secrets
 
@@ -247,6 +302,7 @@ clear (TLS end to end, no interception); use a dedicated Google account if possi
 | ledger events missing, foreman log `ledger: HTTP 401` | `LEDGER_TOKEN` in both containers | `docker compose up -d` after editing `.env` so both sides have the same value. |
 | prompt agents fail with `sandbox_unavailable` or `token_unavailable` | `docker compose logs coder` | agyuser missing, or `secrets/agy_cli_token.txt` unreadable or empty in the coder. Not retried: fix and remove the escalation label. |
 | prompt agents deferred with HTTP 429 `busy` | coder logs | more calls than `AGENT_RUN_CONCURRENCY`; they retry on the next poll. |
+| agent call `FAILED` in seconds, stderr `Eligibility check failed: ... Forbidden` | `docker compose logs egress-proxy \| grep TCP_DENIED` | a host agy needs is not allow-listed (agy upgrade?): run `live-agy-check.sh`, add the exact host it names to `proxy/allowlist.txt`. |
 | coder job fails with a 403 from the proxy | `docker compose logs egress-proxy \| grep TCP_DENIED` | Add the host to `proxy/allowlist.txt` with a comment, `docker compose up -d --build egress-proxy`. |
 | coder job `sandbox-unavailable` | coder logs | `agyuser` missing or uid drop blocked; the image creates it; do not run the coder with a different `user:`. |
 | prompt agents fail `sandbox_unavailable` | `docker compose exec coder id agyagent` | `agyagent` (61001) missing: rebuild the coder image. |
