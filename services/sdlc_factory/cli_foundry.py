@@ -4,8 +4,13 @@ CliFoundry: `sdlc_agents.ports.FoundryPort` over local CLI engines (decision D4)
 Prompt agents
 - The agent comes from FactoryConfig (factory/agents/<name>/agent.md). The prompt is its
   instructions followed by the input text run_agent built (untrusted sections already nonce-wrapped).
-- Each call runs the agent's engine read-only (agy plan mode) in a fresh empty cwd with a fresh HOME
-  holding only a 0600 copy of the token file; both are deleted after the call.
+- Remote mode (the compose stack): each call is POSTed to the coder service's `/agent-run`
+  (RemoteRunner), which runs agy in plan mode as the unprivileged engine user in a per-call cwd and
+  HOME. This process never reads the agy token and never spawns agy. The reply is the raw process
+  output, classified here by the engine exactly as a local process would be.
+- Local mode (dev and tests, no sandbox URL): each call runs the agent's engine read-only (agy plan
+  mode) in a fresh empty cwd with a fresh HOME holding only a 0600 copy of the token file; both are
+  deleted after the call.
 - JSON agents: fences and prose are stripped with extract_json and the answer is checked against the
   agent's schema; a failure gets ONE internal repair call. Whatever comes back is returned as compact
   JSON text (raw text when nothing parsed), because run_agent owns validation, its own repair and
@@ -45,6 +50,7 @@ from __future__ import annotations
 
 import http.client
 import json
+import math
 import os
 import shutil
 import socket
@@ -55,7 +61,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any
 
@@ -67,6 +73,7 @@ from sdlc_agents.transport import HttpRequest, HttpResponse, Transport
 from sdlc_factory.config import AgentConfig, ConfigError, FactoryConfig, load_factory
 from sdlc_factory.engines import (
     _REPAIR_OVERHEAD_CHARS,
+    HARD_KILL_AFTER_S,
     MAX_PROMPT_CHARS,
     NOT_FOUND_RC,
     AgyEngine,
@@ -74,6 +81,7 @@ from sdlc_factory.engines import (
     EngineResult,
     JsonExtractError,
     Outcome,
+    ProcessOutput,
     Runner,
     Usage,
     _repair_prompt,
@@ -131,6 +139,63 @@ def http_transport(request: HttpRequest) -> HttpResponse:
         return HttpResponse(exc.code, {k.lower(): v for k, v in (exc.headers or {}).items()}, body)
 
 
+# How long /agent-run may queue a call for a free slot (agent_run.DEFAULT_QUEUE_WAIT_S) plus slack.
+_REMOTE_SLACK_S = 90.0
+# 5xx replies that mean the sandbox is misconfigured, not briefly unavailable: never deferred as transient.
+_REMOTE_SETUP_ERRORS = frozenset({"sandbox_unavailable", "token_unavailable"})
+
+
+class RemoteRunner:
+    """One prompt-agent call on the coder service's POST /agent-run, returned as a ProcessOutput.
+
+    Only data goes over the wire (prompt, schema, timeout_s); the server builds argv and env. Failures
+    raise AgentRunError, classified like invoke_hosted's (429 and 5xx transient, setup faults not)."""
+
+    def __init__(self, base_url: str, *, token: str | None, transport: Transport = http_transport):
+        if urllib.parse.urlparse(base_url).scheme not in ("http", "https"):
+            raise ValueError(f"agent sandbox URL must be an http(s) URL, got {base_url!r}")
+        self._url = base_url.rstrip("/") + "/agent-run"
+        self._token = token or None
+        self._transport = transport
+
+    def __call__(self, prompt: str, *, schema: dict[str, Any] | None, timeout_s: float) -> ProcessOutput:
+        seconds = math.ceil(timeout_s)
+        headers = {"Content-Type": "application/json", "Accept": "application/json"}
+        if self._token:
+            headers["x-factory-token"] = self._token
+        body = json.dumps({"prompt": prompt, "schema": schema, "timeout_s": seconds}).encode()
+        request = HttpRequest("POST", self._url, headers, body, float(seconds + HARD_KILL_AFTER_S + _REMOTE_SLACK_S))
+        try:
+            resp = self._transport(request)
+        except OSError as exc:
+            raise AgentRunError(f"agent sandbox unreachable: {type(exc).__name__}", transient=True,
+                                ambiguous=not _never_sent(exc)) from exc
+        except http.client.HTTPException as exc:
+            raise AgentRunError(f"agent sandbox reply cut short: {type(exc).__name__}", transient=True) from exc
+        try:
+            data = json.loads(resp.body)
+        except ValueError:
+            data = None
+        if resp.status != 200:
+            error = data.get("error") if isinstance(data, dict) else None
+            transient = is_transient_status(resp.status) and error not in _REMOTE_SETUP_ERRORS
+            hint = _retry_after(resp)
+            if hint is None and isinstance(data, dict) and _is_int(data.get("retry_after_s")):
+                hint = max(float(data["retry_after_s"]), 0.0)
+            raise AgentRunError(f"agent sandbox returned HTTP {resp.status}: {error or resp.text()[:200]}",
+                                transient=transient, retry_after=hint, ambiguous=resp.status != 429,
+                                http_status=resp.status)
+        if not (isinstance(data, dict) and _is_int(data.get("returncode"))
+                and isinstance(data.get("stdout"), str) and isinstance(data.get("stderr"), str)):
+            raise AgentRunError("agent sandbox returned a reply that is not {returncode, stdout, stderr}",
+                                ambiguous=False)
+        return ProcessOutput(data["returncode"], data["stdout"], data["stderr"])
+
+
+def _is_int(value: Any) -> bool:
+    return isinstance(value, int) and not isinstance(value, bool)
+
+
 def default_engine_factory(config: FactoryConfig) -> EngineFactory:
     """agy for every agent. agy 1.4.2 has no model or effort flag, so those settings are not passed."""
 
@@ -144,14 +209,20 @@ def default_engine_factory(config: FactoryConfig) -> EngineFactory:
 
 
 class CliFoundry:
-    def __init__(self, config: FactoryConfig, *, token_path: str | Path, coder_url: str | None = None,
+    def __init__(self, config: FactoryConfig, *, token_path: str | Path | None = None,
+                 remote: RemoteRunner | None = None, coder_url: str | None = None,
                  engine_factory: EngineFactory | None = None, runner: Runner = subprocess_runner,
                  transport: Transport = http_transport, ledger_handler: LedgerHandler | None = None,
                  coder_token: str | None = None, monotonic: Callable[[], float] = time.monotonic):
+        """`remote` set: prompt agents run on the sandbox and `token_path` and `runner` are never used.
+        Otherwise `token_path` (the agy token file) is required and agy runs locally through `runner`."""
         if coder_url is not None and urllib.parse.urlparse(coder_url).scheme not in ("http", "https"):
             raise ValueError(f"coder_url must be an http(s) URL, got {coder_url!r}")
+        if remote is None and token_path is None:
+            raise ValueError("CliFoundry needs a remote agent sandbox or a local agy token_path")
         self._config = config
-        self._token_path = Path(token_path)
+        self._remote = remote
+        self._token_path = Path(token_path) if remote is None and token_path is not None else None
         self._coder_url = coder_url.rstrip("/") if coder_url else None
         self._coder_token = coder_token or None
         self._engine_factory = engine_factory or default_engine_factory(config)
@@ -170,13 +241,22 @@ class CliFoundry:
 
     @classmethod
     def from_env(cls, **kw: Any) -> CliFoundry:
-        """FACTORY_CONFIG (default factory/factory.yaml), AGY_TOKEN_FILE (required), CODER_URL (optional)."""
-        token = os.environ.get("AGY_TOKEN_FILE", "").strip()
+        """FACTORY_CONFIG (default factory/factory.yaml), CODER_URL, CODER_SERVICE_TOKEN, and either
+        AGENT_SANDBOX_URL (default CODER_URL): remote mode, CODER_SERVICE_TOKEN sent (a live sandbox answers
+        401 without it), AGY_TOKEN_FILE never read; or neither URL: local mode, AGY_TOKEN_FILE required."""
+        env = os.environ
+        config = load_factory(env.get("FACTORY_CONFIG") or DEFAULT_FACTORY_CONFIG)
+        coder_url = env.get("CODER_URL", "").strip() or None
+        service_token = env.get("CODER_SERVICE_TOKEN", "").strip() or None
+        sandbox_url = env.get("AGENT_SANDBOX_URL", "").strip() or coder_url
+        if sandbox_url is not None:
+            remote = RemoteRunner(sandbox_url, token=service_token, transport=kw.get("transport", http_transport))
+            return cls(config, remote=remote, coder_url=coder_url, coder_token=service_token, **kw)
+        token = env.get("AGY_TOKEN_FILE", "").strip()
         if not token:
-            raise ValueError("AGY_TOKEN_FILE is not set: it must name the agy login token file")
-        config = load_factory(os.environ.get("FACTORY_CONFIG") or DEFAULT_FACTORY_CONFIG)
-        return cls(config, token_path=token, coder_url=os.environ.get("CODER_URL") or None,
-                   coder_token=os.environ.get("CODER_SERVICE_TOKEN") or None, **kw)
+            raise ValueError("AGY_TOKEN_FILE is not set: it must name the agy login token file "
+                             "(or set AGENT_SANDBOX_URL to run agents in the sandbox)")
+        return cls(config, token_path=token, coder_url=coder_url, coder_token=service_token, **kw)
 
     # ------------------------------------------------------------------------------ budget (D7)
 
@@ -262,8 +342,32 @@ class CliFoundry:
         return _Answer(text, usage)    # still invalid: run_agent reports it and repairs once more
 
     def _run(self, engine: CliEngine, conf: AgentConfig, prompt: str, spent: Usage) -> EngineResult:
-        """One engine call in a throwaway cwd and HOME. Raises AgentRunError unless the outcome is OK;
-        the error carries `spent` plus this call's usage so run_agent can bill it."""
+        """One engine call, remote or in a throwaway cwd and HOME. Raises AgentRunError unless the outcome
+        is OK; the error carries `spent` plus this call's usage so run_agent can bill it."""
+        result = self._run_remote(engine, conf, prompt) if self._remote is not None else self._run_local(
+            engine, conf, prompt)
+        if result.returncode == NOT_FOUND_RC:
+            raise AgentRunError(f"{conf.name}: {engine.name} binary cannot be run: {result.stderr[:200]}",
+                                ambiguous=False)
+        if result.outcome is Outcome.OK:
+            return result
+        raise _engine_error(conf.name, engine.name, result, spent + result.usage)
+
+    def _run_remote(self, engine: CliEngine, conf: AgentConfig, prompt: str) -> EngineResult:
+        assert self._remote is not None
+        started = self._monotonic()
+        result: EngineResult | None = None
+        try:
+            out = self._remote(prompt, schema=conf.schema, timeout_s=conf.timeout_s)
+            result = replace(engine.classify(out.returncode, out.stdout, out.stderr),
+                             duration_s=self._monotonic() - started)
+        finally:
+            self._count(self._monotonic() - started,
+                        quota=result is not None and result.outcome is Outcome.QUOTA)
+        return result
+
+    def _run_local(self, engine: CliEngine, conf: AgentConfig, prompt: str) -> EngineResult:
+        assert self._token_path is not None
         with tempfile.TemporaryDirectory(prefix="cli-agent-") as tmp:
             cwd, home = Path(tmp) / "cwd", Path(tmp) / "home"
             cwd.mkdir(mode=0o700)
@@ -284,12 +388,7 @@ class CliFoundry:
             finally:
                 self._count(self._monotonic() - started,
                             quota=result is not None and result.outcome is Outcome.QUOTA)
-        if result.returncode == NOT_FOUND_RC:
-            raise AgentRunError(f"{conf.name}: {engine.name} binary cannot be run: {result.stderr[:200]}",
-                                ambiguous=False)
-        if result.outcome is Outcome.OK:
-            return result
-        raise _engine_error(conf.name, engine.name, result, spent + result.usage)
+        return result
 
     # ------------------------------------------------------------------------------ hosted agents
 

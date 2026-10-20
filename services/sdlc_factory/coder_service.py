@@ -2,19 +2,21 @@
 sdlc-coder over plain HTTP: replaces the Foundry hosted-agent host (agents/hosted/coder/main.py).
 
     POST /invoke[?agent_session_id=<id>]   body {"op": "start"|"status"|"cancel", ...}  (Coder contract)
+    POST /agent-run                        one prompt-agent agy call in the sandbox (sdlc_factory.agent_run)
     GET  /healthz                          {"ok": true}, no token
 
 The reply carries `x-agent-session-id`: a fresh uuid when the caller sent none, else the caller's id.
 This process is one session; the id is bookkeeping for the orchestrator, which stores and echoes it.
 
-Exposure: it binds 0.0.0.0 inside its container and must sit on an internal compose network only,
-never a published port. v1 has no user auth; when CODER_SERVICE_TOKEN is set every /invoke must send
-it in `x-factory-token` (constant-time compare). Bodies over 1 MiB are refused unread (413).
+Exposure: it binds CODER_HOST (default 0.0.0.0) inside its container and must sit on an internal compose
+network only, never a published port. Every POST must send CODER_SERVICE_TOKEN in `x-factory-token`
+(constant-time compare), checked before the body is read; live mode refuses to start without the token
+(fake mode may run without one). Bodies over 1 MiB are refused unread (413).
 
 Environment: CODER_HOST (0.0.0.0), CODER_PORT (8088), CODER_SERVICE_TOKEN, FACTORY_MODE (`fake` or
 unset), FAKE_STATUS_POLLS (3), REPO (default: first repository in FACTORY_CONFIG, default
-factory/factory.yaml), plus everything sdlc_agents.coder.local_wiring reads. Run with
-`PYTHONPATH=../agents python -m sdlc_factory.coder_service`.
+factory/factory.yaml), AGENT_RUN_CONCURRENCY (2), AGY_BINARY (/opt/agy/bin/agy), plus everything
+sdlc_agents.coder.local_wiring reads. Run with `PYTHONPATH=../agents python -m sdlc_factory.coder_service`.
 
 FACTORY_MODE=fake answers the same protocol from memory, with no repo, git, agy or secrets: a started job
 reports `running` until its Nth status poll, then `succeeded` with a fake PR (the job's own PR for revise
@@ -41,6 +43,14 @@ from sdlc_agents.coder.job import JobSpec, JobSpecError, JobState, Phase, Redact
 from sdlc_agents.foundry import SESSION_HEADER
 from sdlc_agents.ports import REPO, ClockPort
 
+from sdlc_factory.agent_run import (
+    AGENT_OUTPUT_BYTES,
+    AGENT_RUN_PATH,
+    AgentRunService,
+    FakeAgentRunner,
+    SandboxAgentRunner,
+    build_agent_runner,
+)
 from sdlc_factory.config import load_factory
 
 TOKEN_HEADER = "x-factory-token"   # noqa: S105 (a header name, not a secret)
@@ -49,7 +59,8 @@ SESSION_ID = re.compile(r"[A-Za-z0-9][A-Za-z0-9._:-]{0,127}")
 DEFAULT_PORT = 8088
 DEFAULT_FAKE_POLLS = 3
 DEFAULT_FACTORY_CONFIG = "factory/factory.yaml"
-__all__ = ["MAX_BODY_BYTES", "SESSION_HEADER", "TOKEN_HEADER", "FakeCoder", "build_service", "main", "serve"]
+__all__ = ["AGENT_OUTPUT_BYTES", "MAX_BODY_BYTES", "SESSION_HEADER", "TOKEN_HEADER", "FakeAgentRunner", "FakeCoder",
+           "SandboxAgentRunner", "build_agent_runner", "build_service", "main", "serve"]
 
 
 class Invocable(Protocol):
@@ -67,6 +78,7 @@ class _Handler(BaseHTTPRequestHandler):
     protocol_version = "HTTP/1.1"
     timeout = 60   # per socket read: a client that stops sending cannot hold a thread forever
     service: Invocable
+    agent_runner: AgentRunService | None
     token: str | None
 
     def do_GET(self) -> None:
@@ -77,15 +89,18 @@ class _Handler(BaseHTTPRequestHandler):
 
     def do_POST(self) -> None:
         url = urlsplit(self.path)
-        if url.path != "/invoke":
+        if url.path not in ("/invoke", AGENT_RUN_PATH) or (url.path == AGENT_RUN_PATH and self.agent_runner is None):
             self._reply(404, {"error": "not_found"}, close=True)
+            return
+        if self.token is not None and not hmac.compare_digest(
+                self.headers.get(TOKEN_HEADER, "").encode(), self.token.encode()):
+            self._reply(401, {"error": "unauthorized"}, close=True)   # the body is never read
             return
         raw = self._body()
         if raw is None:
             return
-        if self.token is not None and not hmac.compare_digest(
-                self.headers.get(TOKEN_HEADER, "").encode(), self.token.encode()):
-            self._reply(401, {"error": "unauthorized"})
+        if url.path == AGENT_RUN_PATH:
+            self._agent_run(raw)
             return
         given = parse_qs(url.query).get("agent_session_id")
         session = given[-1] if given else str(uuid.uuid4())
@@ -98,6 +113,16 @@ class _Handler(BaseHTTPRequestHandler):
             print(f"coder: request failed\n{self.service.redact.traceback(exc)}", file=sys.stderr, flush=True)
             status, payload = 500, {"error": "internal_error"}
         self._reply(status, payload, session=session)
+
+    def _agent_run(self, raw: bytes) -> None:
+        assert self.agent_runner is not None
+        try:
+            status, payload = self.agent_runner.handle_raw(raw)
+        except Exception as exc:   # the call dirs are already gone (finally); the server keeps serving
+            print(f"agent-run: request failed\n{self.agent_runner.redact.traceback(exc)}", file=sys.stderr,
+                  flush=True)
+            status, payload = 500, {"error": "internal_error"}
+        self._reply(status, payload)
 
     def _body(self) -> bytes | None:
         """The request body, or None after an error reply. Oversized bodies are never read."""
@@ -136,9 +161,11 @@ class _Handler(BaseHTTPRequestHandler):
 
 
 def serve(service: Invocable, *, host: str = "0.0.0.0", port: int = DEFAULT_PORT,  # noqa: S104 (see module doc)
-          token: str | None = None) -> ThreadingHTTPServer:
-    """A bound server; the caller runs `serve_forever()`. `port=0` picks a free one."""
-    handler = type("CoderHandler", (_Handler,), {"service": service, "token": token or None})
+          token: str | None = None, agent_runner: AgentRunService | None = None) -> ThreadingHTTPServer:
+    """A bound server; the caller runs `serve_forever()`. `port=0` picks a free one. Without an
+    `agent_runner`, /agent-run does not exist (404)."""
+    handler = type("CoderHandler", (_Handler,), {"service": service, "token": token or None,
+                                                 "agent_runner": agent_runner})
     server = ThreadingHTTPServer((host, port), handler)
     server.daemon_threads = True
     return server
@@ -254,7 +281,12 @@ def build_service(env: Mapping[str, str] = os.environ) -> Invocable:
 
 
 def main(env: Mapping[str, str] = os.environ) -> None:
+    token = (env.get("CODER_SERVICE_TOKEN") or "").strip() or None
+    fake = env.get("FACTORY_MODE", "").strip().lower() == "fake"
+    if token is None and not fake:
+        raise SystemExit("sdlc-coder: CODER_SERVICE_TOKEN is not set; live mode never serves without it")
     service = build_service(env)
+    agent_runner = build_agent_runner(env)
 
     def report(where: str, exc: BaseException | None) -> None:
         text = service.redact.traceback(exc) if exc is not None else "(no exception)"
@@ -262,8 +294,7 @@ def main(env: Mapping[str, str] = os.environ) -> None:
 
     threading.excepthook = lambda args: report(f"thread {args.thread.name if args.thread else '?'}", args.exc_value)
     host, port = env.get("CODER_HOST") or "0.0.0.0", int(env.get("CODER_PORT") or DEFAULT_PORT)  # noqa: S104
-    token = env.get("CODER_SERVICE_TOKEN") or None
-    server = serve(service, host=host, port=port, token=token)
+    server = serve(service, host=host, port=port, token=token, agent_runner=agent_runner)
     print(f"sdlc-coder listening on {host}:{server.server_address[1]} "
           f"mode={env.get('FACTORY_MODE') or 'live'} token={'required' if token else 'off'}", flush=True)
     try:
