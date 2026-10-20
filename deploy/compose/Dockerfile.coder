@@ -1,0 +1,92 @@
+# Isolated coder image (coder-service). The service runs as root ONLY to drop every untrusted step (agy,
+# npm, tests) to the unprivileged `agyuser` (agents/sdlc_agents/coder/sandbox.py). Node and agy are baked
+# in, root-owned and not writable by agyuser, so a job never downloads a toolchain at run time.
+# Build context: the repository root.
+#
+#   docker build -f deploy/compose/Dockerfile.coder -t sdlc-factory-coder:latest .
+
+ARG PYTHON_IMAGE=python:3.13-slim-bookworm
+
+# --- toolchain fetch stage: curl and the downloads never reach the runtime image ---------------------
+FROM ${PYTHON_IMAGE} AS fetch
+ARG NODE_VERSION=22.23.3
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends ca-certificates curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# Node 22 from the official tarball, sha256-checked against SHASUMS256.txt (as toolchain.ensure_node does).
+# --no-same-owner: the tarball's numeric owner could otherwise collide with a container uid.
+RUN set -eu; \
+    case "$(dpkg --print-architecture)" in amd64) arch=x64 ;; arm64) arch=arm64 ;; \
+      *) echo "FATAL: unsupported architecture $(dpkg --print-architecture)" >&2; exit 1 ;; esac; \
+    name="node-v${NODE_VERSION}-linux-${arch}.tar.gz"; \
+    cd /tmp; \
+    curl -fsSLO --retry 3 "https://nodejs.org/dist/v${NODE_VERSION}/${name}"; \
+    curl -fsSLO --retry 3 "https://nodejs.org/dist/v${NODE_VERSION}/SHASUMS256.txt"; \
+    grep -E "^[0-9a-f]{64}  ${name}\$" SHASUMS256.txt > node.sha256; \
+    test -s node.sha256 || { echo "FATAL: ${name} not listed in SHASUMS256.txt" >&2; exit 1; }; \
+    sha256sum -c node.sha256; \
+    mkdir -p /opt/node; \
+    tar -xzf "${name}" -C /opt/node --strip-components=1 --no-same-owner; \
+    /opt/node/bin/node --version
+
+# agy via the official installer (it verifies the binary's sha512 against the vendor manifest).
+RUN set -eu; export HOME=/tmp/agy-home; mkdir -p "$HOME"; \
+    if ! curl -fsSL --retry 3 https://antigravity.google/cli/install.sh -o /tmp/agy-install.sh \
+       || ! bash /tmp/agy-install.sh </dev/null; then \
+      echo "FATAL: agy install failed: the build needs HTTPS to antigravity.google," \
+           "antigravity-cli-auto-updater-974169037036.us-central1.run.app and storage.googleapis.com." >&2; \
+      exit 1; \
+    fi; \
+    install -D -m 0755 "$HOME/.local/bin/agy" /out/agy; \
+    /out/agy --version
+
+# --- runtime -----------------------------------------------------------------------------------------
+FROM ${PYTHON_IMAGE}
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    PYTHONPATH=/app/services:/app/agents \
+    FACTORY_CONFIG=/app/factory/factory.yaml \
+    PATH=/opt/node/bin:/opt/agy/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin \
+    WORKROOT=/srv/sdlc-work \
+    STATE_DIR=/var/lib/sdlc-coder/jobs
+
+# git for checkouts. agyuser has a fixed uid far from host uids, so a bind-mounted secret file (owned by
+# the host user, mode 0600) is never readable by it. Its rc files are empty: nothing runs at login.
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends ca-certificates git \
+    && rm -rf /var/lib/apt/lists/* \
+    && groupadd --gid 61000 agyuser \
+    && useradd --uid 61000 --gid 61000 --create-home --shell /bin/bash agyuser \
+    && rm -f /home/agyuser/.bash_logout \
+    && : > /home/agyuser/.bashrc \
+    && : > /home/agyuser/.profile \
+    && chown agyuser:agyuser /home/agyuser/.bashrc /home/agyuser/.profile \
+    && chmod 0700 /home/agyuser \
+    && install -d -m 0755 -o root -g root /srv/sdlc-work /var/lib/sdlc-coder
+
+WORKDIR /app
+
+COPY services/pyproject.toml /app/services/pyproject.toml
+RUN python -c "import tomllib; print('\n'.join(tomllib.load(open('/app/services/pyproject.toml', 'rb'))['project']['dependencies']))" > /tmp/requirements.txt \
+    && pip install -r /tmp/requirements.txt \
+    && rm /tmp/requirements.txt
+
+# COPY writes root-owned files; modes come from the fetch stage (0755 binaries, no group or world write).
+COPY --from=fetch /opt/node /opt/node
+COPY --from=fetch /out/agy /opt/agy/bin/agy
+RUN chmod -R go-w /opt/node /opt/agy \
+    && chown -R root:root /opt/node /opt/agy
+
+COPY agents/sdlc_agents /app/agents/sdlc_agents
+COPY services/sdlc_factory /app/services/sdlc_factory
+COPY factory /app/factory
+COPY deploy/compose/coder-entrypoint.sh /usr/local/bin/coder-entrypoint.sh
+
+USER root
+EXPOSE 8090
+ENTRYPOINT ["/usr/local/bin/coder-entrypoint.sh"]
+CMD ["python", "-m", "sdlc_factory.coder_service"]

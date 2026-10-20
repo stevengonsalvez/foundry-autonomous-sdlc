@@ -1,0 +1,9 @@
+# Allow-list: the build context is the repository root, only these paths are sent.
+*
+!services/pyproject.toml
+!services/sdlc_factory/**
+!agents/sdlc_agents/**
+!factory/**
+!deploy/compose/coder-entrypoint.sh
+**/__pycache__
+**/*.pyc

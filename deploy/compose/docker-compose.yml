@@ -1,0 +1,325 @@
+# sdlc-factory: Temporal + CLI software factory on one Docker host.
+#
+#   cp deploy/compose/.env.example deploy/compose/.env    # then edit, see docs/factory-runbook.md
+#   docker compose -f deploy/compose/docker-compose.yml up -d --build
+#
+# The project name is fixed here. Do NOT set COMPOSE_PROJECT_NAME in .env or the shell: it overrides
+# `name:` (the upstream Temporal sample's .env does exactly that, which is how stacks collide).
+#
+# Networks (who can reach whom):
+#
+#   core       postgres, temporal*, schedule-init, worker-foreman
+#   ledger     dolt, ledger-api, control-center, worker-foreman
+#   coder_net  internal, no route out: coder, worker-foreman, egress-proxy
+#   egress     egress-proxy, worker-foreman (direct HTTPS to GitHub and agy)
+#
+# The coder is ONLY on coder_net: it cannot resolve or reach Temporal, Postgres or Dolt, and its only
+# way out is the allow-list proxy. Host ports bind to ${BIND_ADDR} (127.0.0.1) only.
+
+name: sdlc-factory
+
+x-worker-build: &worker-build
+  context: ../..
+  dockerfile: deploy/compose/Dockerfile.worker
+  args:
+    INSTALL_AGY: ${INSTALL_AGY:-1}
+
+x-hardened: &hardened
+  read_only: true
+  cap_drop: [ALL]
+  security_opt: ["no-new-privileges:true"]
+  tmpfs:
+    - /tmp:size=256m,mode=1777
+
+x-temporal-env: &temporal-env
+  TEMPORAL_ADDRESS: temporal:7233
+  TEMPORAL_NAMESPACE: ${TEMPORAL_NAMESPACE:-factory}
+
+services:
+  # --- Temporal on Postgres (samples-server compose, pinned, project-scoped) -------------------------
+  postgres:
+    image: postgres:${POSTGRES_VERSION:-16}
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: temporal
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    networks: [core]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U temporal"]
+      interval: 5s
+      timeout: 5s
+      retries: 60
+      start_period: 30s
+
+  temporal-admin-tools:
+    image: temporalio/admin-tools:${TEMPORAL_ADMINTOOLS_VERSION:-1.31.4}
+    restart: on-failure:6
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DB: postgres12
+      DB_PORT: "5432"
+      POSTGRES_USER: temporal
+      POSTGRES_PWD: ${POSTGRES_PASSWORD}
+      POSTGRES_SEEDS: postgres
+      SQL_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - ./scripts:/scripts:ro
+    networks: [core]
+    entrypoint: ["/bin/sh"]
+    command: /scripts/setup-postgres.sh
+
+  temporal:
+    image: temporalio/server:${TEMPORAL_VERSION:-1.31.4}
+    restart: unless-stopped
+    depends_on:
+      temporal-admin-tools:
+        condition: service_completed_successfully
+    environment:
+      DB: postgres12
+      DB_PORT: "5432"
+      POSTGRES_USER: temporal
+      POSTGRES_PWD: ${POSTGRES_PASSWORD}
+      POSTGRES_SEEDS: postgres
+      BIND_ON_IP: 0.0.0.0
+      DYNAMIC_CONFIG_FILE_PATH: config/dynamicconfig/development-sql.yaml
+    volumes:
+      - ./temporal/dynamicconfig:/etc/temporal/config/dynamicconfig:ro
+    networks: [core]
+    ports:
+      - "${BIND_ADDR:-127.0.0.1}:${TEMPORAL_HOST_PORT:-17233}:7233"
+    healthcheck:
+      test: ["CMD", "nc", "-z", "localhost", "7233"]
+      interval: 5s
+      timeout: 3s
+      start_period: 30s
+      retries: 60
+
+  temporal-create-namespace:
+    image: temporalio/admin-tools:${TEMPORAL_ADMINTOOLS_VERSION:-1.31.4}
+    restart: on-failure:5
+    depends_on:
+      temporal:
+        condition: service_healthy
+    environment:
+      TEMPORAL_ADDRESS: temporal:7233
+      DEFAULT_NAMESPACE: ${TEMPORAL_NAMESPACE:-factory}
+    volumes:
+      - ./scripts:/scripts:ro
+    networks: [core]
+    entrypoint: ["/bin/sh"]
+    command: /scripts/create-namespace.sh
+
+  temporal-ui:
+    image: temporalio/ui:${TEMPORAL_UI_VERSION:-2.56.0}
+    restart: unless-stopped
+    depends_on:
+      temporal:
+        condition: service_healthy
+    environment:
+      TEMPORAL_ADDRESS: temporal:7233
+      TEMPORAL_DEFAULT_NAMESPACE: ${TEMPORAL_NAMESPACE:-factory}
+      TEMPORAL_CORS_ORIGINS: http://localhost:${TEMPORAL_UI_HOST_PORT:-18233}
+    networks: [core]
+    ports:
+      - "${BIND_ADDR:-127.0.0.1}:${TEMPORAL_UI_HOST_PORT:-18233}:8080"
+
+  # --- ledger: Dolt, ledger-api, control center ------------------------------------------------------
+  dolt:
+    image: dolthub/dolt-sql-server:${DOLT_VERSION:-2.5.1}
+    restart: unless-stopped
+    environment:
+      DOLT_ROOT_PASSWORD: ${DOLT_ROOT_PASSWORD:?set DOLT_ROOT_PASSWORD in .env}
+      DOLT_ROOT_HOST: localhost
+      DOLT_DATABASE: ledger
+      DOLT_USER: ledger
+      # Without this the entrypoint creates ledger@<DOLT_ROOT_HOST>, i.e. localhost only. Dolt has no
+      # host port, so % here means "any container on the ledger network". Applied on first init only.
+      DOLT_USER_HOST: "%"
+      DOLT_PASSWORD: ${DOLT_PASSWORD:?set DOLT_PASSWORD in .env}
+    volumes:
+      - dolt-data:/var/lib/dolt
+    networks: [ledger]
+    # No host port: only ledger-api talks to Dolt. Debug with `docker compose exec dolt dolt sql`.
+    healthcheck:
+      test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/3306"]
+      interval: 3s
+      timeout: 3s
+      retries: 60
+      start_period: 10s
+
+  ledger-api:
+    <<: *hardened
+    # Built once by worker-foreman: parallel builds of one tag race in the image store.
+    image: sdlc-factory-worker:latest
+    pull_policy: never
+    restart: unless-stopped
+    depends_on:
+      dolt:
+        condition: service_healthy
+    environment:
+      DOLT_HOST: dolt
+      DOLT_PORT: "3306"
+      DOLT_DB: ledger
+      DOLT_USER: ledger
+      DOLT_PASSWORD: ${DOLT_PASSWORD}
+      LEDGER_HOST: 0.0.0.0
+      LEDGER_PORT: "8080"
+    networks: [ledger]
+    command: ["python", "-m", "sdlc_factory.ledger_api"]
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/healthz', timeout=2)"]
+      interval: 3s
+      timeout: 3s
+      retries: 60
+      start_period: 5s
+
+  control-center:
+    <<: *hardened
+    image: nginx:${NGINX_VERSION:-1.29-alpine}
+    restart: unless-stopped
+    # The nginx master starts as root to switch its workers to the nginx user.
+    cap_add: [CHOWN, SETUID, SETGID]
+    tmpfs:
+      - /tmp:size=64m,mode=1777
+      - /var/cache/nginx:size=64m
+      - /var/run:size=1m
+    depends_on:
+      ledger-api:
+        condition: service_started
+    volumes:
+      - ../../apps/control-center:/usr/share/nginx/html:ro
+      - ./nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
+    networks: [ledger]
+    ports:
+      - "${BIND_ADDR:-127.0.0.1}:${CONTROL_CENTER_HOST_PORT:-18080}:8080"
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8080/index.html"]
+      interval: 3s
+      timeout: 3s
+      retries: 40
+
+  # --- factory workers --------------------------------------------------------------------------------
+  schedule-init:
+    <<: *hardened
+    image: sdlc-factory-worker:latest
+    pull_policy: never
+    restart: on-failure:5
+    depends_on:
+      temporal-create-namespace:
+        condition: service_completed_successfully
+    environment:
+      <<: *temporal-env
+      # The simulated product owner's schedule is registered paused unless this is 1/true.
+      PO_INTAKE_ENABLED: ${PO_INTAKE_ENABLED:-0}
+    networks: [core]
+    command: ["python", "-m", "sdlc_factory.schedule_init"]
+
+  worker-foreman:
+    <<: *hardened
+    image: sdlc-factory-worker:latest
+    build: *worker-build
+    restart: unless-stopped
+    # Bind-mounted secret files keep their host owner and mode (compose ignores uid/mode for file
+    # secrets), so the worker runs as the uid that owns secrets/*.txt.
+    user: "${FACTORY_UID:-1000}:${FACTORY_GID:-1000}"
+    depends_on:
+      temporal-create-namespace:
+        condition: service_completed_successfully
+      ledger-api:
+        condition: service_healthy
+      coder:
+        condition: service_healthy
+    environment:
+      <<: *temporal-env
+      FACTORY_MODE: ${FACTORY_MODE:-live}
+      # One activity at a time serialises metrics.json and release tag reservation (D6).
+      MAX_CONCURRENT_ACTIVITIES: "1"
+      PO_INTAKE_ENABLED: ${PO_INTAKE_ENABLED:-0}
+      GITHUB_PAT_FILE: /run/secrets/github_pat
+      AGY_TOKEN_FILE: /run/secrets/agy_cli_token
+      CODER_URL: http://coder:8090
+      CODER_SERVICE_TOKEN: ${CODER_SERVICE_TOKEN:?set CODER_SERVICE_TOKEN in .env}
+      LEDGER_URL: http://ledger-api:8080
+    secrets: [github_pat, agy_cli_token]
+    networks: [core, ledger, coder_net, egress]
+    command: ["python", "-m", "sdlc_factory.worker", "--role", "foreman"]
+
+  coder:
+    image: sdlc-factory-coder:latest
+    build:
+      context: ../..
+      dockerfile: deploy/compose/Dockerfile.coder
+    restart: unless-stopped
+    # Root ONLY to drop every untrusted step to agyuser (uid 61000), per the coder sandbox design.
+    user: root
+    read_only: true
+    cap_drop: [ALL]
+    cap_add: [CHOWN, DAC_OVERRIDE, FOWNER, KILL, SETUID, SETGID]
+    # Compatible with the uid drop: setuid()/setgid() by root with CAP_SETUID still work; only
+    # privilege gain through exec (setuid binaries, file caps) is blocked.
+    security_opt: ["no-new-privileges:true"]
+    pids_limit: 1024
+    tmpfs:
+      - /tmp:size=1g,mode=1777
+      - /root:size=64m,mode=0700
+      - /home/agyuser:size=512m,mode=0700,uid=61000,gid=61000
+    environment:
+      FACTORY_MODE: ${FACTORY_MODE:-live}
+      CODER_SERVICE_TOKEN: ${CODER_SERVICE_TOKEN}
+      CODER_PORT: "8090"
+      GITHUB_PAT_FILE: /run/secrets/github_pat
+      AGY_TOKEN_FILE: /run/secrets/agy_cli_token
+      HOME: /root
+      STATE_DIR: /var/lib/sdlc-coder/jobs
+      WORKROOT: /srv/sdlc-work
+      HTTPS_PROXY: http://egress-proxy:3128
+      HTTP_PROXY: http://egress-proxy:3128
+      NO_PROXY: localhost,127.0.0.1
+      SSL_CERT_FILE: /etc/ssl/certs/ca-certificates.crt
+    secrets: [github_pat, agy_cli_token]
+    volumes:
+      - coder-work:/srv/sdlc-work
+      - coder-state:/var/lib/sdlc-coder
+    networks: [coder_net]
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8090/healthz', timeout=2)"]
+      interval: 3s
+      timeout: 3s
+      retries: 60
+      start_period: 5s
+
+  egress-proxy:
+    <<: *hardened
+    image: sdlc-factory-egress-proxy:latest
+    build:
+      context: ./proxy
+    restart: unless-stopped
+    tmpfs:
+      - /tmp:size=64m,mode=1777
+      - /run/squid:size=1m,uid=31,gid=31,mode=0755
+      - /var/cache/squid:size=16m,uid=31,gid=31,mode=0750
+      - /var/log/squid:size=16m,uid=31,gid=31,mode=0750
+    networks: [coder_net, egress]
+
+secrets:
+  github_pat:
+    file: ${GITHUB_PAT_HOST_FILE:-./secrets/github_pat.txt}
+  agy_cli_token:
+    file: ${AGY_TOKEN_HOST_FILE:-./secrets/agy_cli_token.txt}
+
+networks:
+  core: {}
+  ledger: {}
+  coder_net:
+    internal: true
+  egress: {}
+
+volumes:
+  postgres-data: {}
+  dolt-data: {}
+  coder-work: {}
+  coder-state: {}

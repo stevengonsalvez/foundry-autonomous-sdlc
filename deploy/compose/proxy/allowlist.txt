@@ -1,0 +1,26 @@
+# Hosts the coder container may reach, via HTTPS CONNECT on port 443 only. One squid dstdomain per line:
+# an exact host, or a leading dot for a whole domain (none are used: every entry is one host).
+# Why each one is here (sources: docs/architecture.md egress table, docs/runbook.md section 9,
+# agents/sdlc_agents/coder/toolchain.py, the agy installer):
+#
+# git clone, fetch, push over HTTPS
+github.com
+# issues, PRs, owner lookup, lease refs (sdlc_agents.github)
+api.github.com
+# npm ci: every resolved URL in app/package-lock.json is on this host
+registry.npmjs.org
+# node 22 tarball and SHASUMS256.txt, only if /opt/node is ever missing (the image bakes it in)
+nodejs.org
+# apt, only if git is ever missing (the image bakes it in). HTTPS sources only: plain HTTP is denied.
+deb.debian.org
+# agy installer and its release manifest (self-update checks)
+antigravity.google
+antigravity-cli-auto-updater-974169037036.us-central1.run.app
+# the agy binary the manifest points to. One host for every Cloud Storage bucket: this allows any bucket.
+storage.googleapis.com
+# agy runtime with a personal Google OAuth token. INFERRED, not measured from this proxy: Gemini Code
+# Assist backend and the OAuth token endpoint (both named in docs/runbook.md section 9 as hosts agy may
+# need). If a live coder job fails with a proxy 403, read `docker compose logs egress-proxy` for the
+# TCP_DENIED host, add it here with a comment, and restart egress-proxy.
+cloudcode-pa.googleapis.com
+oauth2.googleapis.com

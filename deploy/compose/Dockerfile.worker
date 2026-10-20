@@ -1,0 +1,65 @@
+# Trusted factory worker image: worker-foreman, ledger-api and schedule-init.
+# Build context: the repository root (see docker-compose.yml). Dockerfile.worker.dockerignore keeps the
+# context to services/, agents/sdlc_agents and factory/.
+#
+#   docker build -f deploy/compose/Dockerfile.worker -t sdlc-factory-worker:latest .
+#   docker build -f deploy/compose/Dockerfile.worker --build-arg INSTALL_AGY=0 ...   # no agy (fake mode only)
+
+ARG PYTHON_IMAGE=python:3.13-slim-bookworm
+
+# --- agy, fetched in its own stage so curl never reaches the runtime image ---------------------------
+FROM ${PYTHON_IMAGE} AS agy
+ARG INSTALL_AGY=1
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends ca-certificates curl \
+    && rm -rf /var/lib/apt/lists/*
+# The official installer verifies the binary's sha512 against the vendor manifest.
+RUN set -eu; mkdir -p /out; \
+    if [ "$INSTALL_AGY" != "1" ]; then echo "INSTALL_AGY=$INSTALL_AGY: image built without agy"; exit 0; fi; \
+    export HOME=/tmp/agy-home; mkdir -p "$HOME"; \
+    if ! curl -fsSL --retry 3 https://antigravity.google/cli/install.sh -o /tmp/agy-install.sh \
+       || ! bash /tmp/agy-install.sh </dev/null; then \
+      echo "FATAL: agy install failed: the build needs HTTPS to antigravity.google," \
+           "antigravity-cli-auto-updater-974169037036.us-central1.run.app and storage.googleapis.com." \
+           "Fix network access, or build with --build-arg INSTALL_AGY=0 for a fake-mode-only image." >&2; \
+      exit 1; \
+    fi; \
+    install -m 0755 "$HOME/.local/bin/agy" /out/agy; \
+    /out/agy --version
+
+# --- runtime -----------------------------------------------------------------------------------------
+FROM ${PYTHON_IMAGE}
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    PYTHONPATH=/app/services:/app/agents \
+    FACTORY_CONFIG=/app/factory/factory.yaml \
+    PATH=/opt/agy/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin \
+    HOME=/tmp/home
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends ca-certificates git \
+    && rm -rf /var/lib/apt/lists/* \
+    && groupadd --gid 10001 factory \
+    && useradd --uid 10001 --gid 10001 --no-create-home --home-dir /tmp/home --shell /usr/sbin/nologin factory
+
+WORKDIR /app
+
+# Dependencies come from services/pyproject.toml so the image never drifts from the project. sdlc_agents is
+# on PYTHONPATH rather than installed: its azure dependencies are only imported by Foundry code paths
+# this image never runs.
+COPY services/pyproject.toml /app/services/pyproject.toml
+RUN python -c "import tomllib; print('\n'.join(tomllib.load(open('/app/services/pyproject.toml', 'rb'))['project']['dependencies']))" > /tmp/requirements.txt \
+    && pip install -r /tmp/requirements.txt \
+    && rm /tmp/requirements.txt
+
+COPY --from=agy /out/ /opt/agy/bin/
+COPY agents/sdlc_agents /app/agents/sdlc_agents
+COPY services/sdlc_factory /app/services/sdlc_factory
+COPY factory /app/factory
+
+# Compose overrides the uid with FACTORY_UID so the process can read the bind-mounted secret files.
+USER 10001:10001
+CMD ["python", "-m", "sdlc_factory.worker", "--role", "foreman"]
