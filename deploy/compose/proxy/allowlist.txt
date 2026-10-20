@@ -18,9 +18,21 @@ antigravity.google
 antigravity-cli-auto-updater-974169037036.us-central1.run.app
 # the agy binary the manifest points to. One host for every Cloud Storage bucket: this allows any bucket.
 storage.googleapis.com
-# agy runtime with a personal Google OAuth token. INFERRED, not measured from this proxy: Gemini Code
-# Assist backend and the OAuth token endpoint (both named in docs/runbook.md section 9 as hosts agy may
-# need). If a live coder job fails with a proxy 403, read `docker compose logs egress-proxy` for the
-# TCP_DENIED host, add it here with a comment, and restart egress-proxy.
-cloudcode-pa.googleapis.com
+# agy runtime with a personal Google OAuth token. MEASURED 2026-10-20 with agy 1.4.3 through this proxy
+# (deploy/compose/live-agy-check.sh, squid access log):
+# OAuth token refresh: TCP_TUNNEL/200 on every call.
 oauth2.googleapis.com
+# model backend: agy 1.4.3 posts its eligibility check and every turn here. Denied, the call fails in
+# 0.5 s with "Eligibility check failed: ... Forbidden".
+daily-cloudcode-pa.googleapis.com
+# account lookup (oauth2/v2/userinfo): with the two above allowed and this denied, the call still fails
+# in 3 s with "Eligibility check failed: Get ... Forbidden".
+www.googleapis.com
+# the account's profile picture: agy's eligibility check fetches it and fails hard without it ("failed
+# to get profile picture: Get https://lh3.googleusercontent.com/... Forbidden", 2 s). One CDN host only.
+lh3.googleusercontent.com
+# Not listed, measured as requested but not needed: play.googleapis.com (clearcut telemetry log),
+# antigravity-unleash.goog (feature flags). cloudcode-pa.googleapis.com
+# (the inferred entry this replaced) was never requested by 1.4.3. If a live call fails with a proxy
+# 403, run live-agy-check.sh or read `docker compose logs egress-proxy | grep TCP_DENIED`, add the exact
+# host here with a comment, and `docker compose up -d --build egress-proxy`.
