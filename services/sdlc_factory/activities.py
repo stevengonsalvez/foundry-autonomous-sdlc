@@ -13,6 +13,12 @@ on (detected from the tick's "<ExceptionType>: message" detail, so any FoundryPo
     QuotaError -> "quota"   the account quota is spent; the workflow waits on a durable timer
     AuthError  -> "auth"    the engine token is missing or expired; the workflow stops stepping
 and carries the D7 surrogate spend of the step (CliFoundry.usage_summary delta priced by surrogate_usd).
+
+That surrogate spend is also what the tick bills: run_step passes run_tick a meter returning it, so it
+lands in the issue's cost.usd in place of the token price (never both) and the 3 USD issue cap, the
+32 USD total cap and escalated:cost-cap apply to it. callUsd and minuteUsd are set so perIssue.maxCalls
+and perIssue.maxMinutes each alone reach the issue cap, so both are enforced through it (together,
+as one spend). A foundry without usage_summary (the in-memory fake) keeps token pricing.
 """
 
 from __future__ import annotations
@@ -84,6 +90,20 @@ def _usage(foundry: Any) -> tuple[int, float]:
     return int(usage["calls"]), float(usage["minutes"])
 
 
+def _meter(foundry: Any) -> Callable[[], float] | None:
+    """The surrogate USD the foundry's calls cost since now, or None when it does not meter calls."""
+    price = getattr(foundry, "surrogate_usd", None)
+    if price is None or getattr(foundry, "usage_summary", None) is None:
+        return None
+    calls_before, minutes_before = _usage(foundry)
+
+    def since_start() -> float:
+        calls, minutes = _usage(foundry)
+        return float(price(calls - calls_before, minutes - minutes_before))
+
+    return since_start
+
+
 def _result(result: str, detail: str) -> str:
     error_type = detail.split(":", 1)[0]
     return _ERROR_RESULTS.get(error_type, result) if result in ("deferred", "error") else result
@@ -95,17 +115,18 @@ def build_activities(deps: FactoryDeps) -> list[Callable[..., Any]]:
         if inp.number <= 0:
             raise ApplicationError(f"not an issue number: {inp.number}", type=NON_RETRYABLE, non_retryable=True)
         calls_before, minutes_before = _usage(deps.foundry)
+        meter = _meter(deps.foundry)
         budget = Budget(usd_cap_total=deps.budget.usd_cap_total, usd_cap_issue=deps.budget.usd_cap_issue)
         report = run_tick(deps.github, deps.foundry, _NoSecrets(), deps.clock, budget=budget, sleep=deps.sleep,
-                          emitter=deps.emitter, only=inp.number, use_lock=False, hold=frozenset(inp.hold))
+                          emitter=deps.emitter, only=inp.number, use_lock=False, hold=frozenset(inp.hold),
+                          meter=meter)
         outcome = object_outcome(report, inp.number, deps.github)
         calls_after, minutes_after = _usage(deps.foundry)
         calls, minutes = calls_after - calls_before, round(minutes_after - minutes_before, 4)
-        surrogate = getattr(deps.foundry, "surrogate_usd", None)
         return StepOutput(
             action=outcome.action, result=_result(outcome.result, outcome.detail), detail=outcome.detail,
             stage=outcome.stage, terminal=outcome.terminal, wait_hint_s=outcome.wait_hint_s,
-            calls=calls, minutes=minutes, surrogate_usd=surrogate(calls, minutes) if surrogate else 0.0,
+            calls=calls, minutes=minutes, surrogate_usd=meter() if meter else 0.0,
         )
 
     @activity.defn(name="list_work")

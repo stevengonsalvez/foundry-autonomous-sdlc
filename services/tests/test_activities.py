@@ -162,6 +162,61 @@ def test_run_step_carries_the_surrogate_spend_of_its_own_calls(world: World) -> 
     assert out.surrogate_usd == deps.foundry.surrogate_usd(calls, float(calls))
 
 
+def metered(world: World, call_usd: float) -> FactoryDeps:
+    """fake_deps whose foundry meters calls like CliFoundry, at `call_usd` per call plus the minute rate."""
+    deps = fake_deps(world)
+    config = dataclasses.replace(deps.config, budget=dataclasses.replace(deps.config.budget, call_usd=call_usd))
+    deps.foundry = MeteredFoundry(world.foundry, config)
+    return deps
+
+
+def drive(run_step: Callable[[StepInput], StepOutput], world: World, n: int, until: Callable[[], bool],
+          max_steps: int = 40) -> list[StepOutput]:
+    outs = []
+    for _ in range(max_steps):
+        outs.append(run_step(StepInput(number=n, hold=[])))
+        world.clock.advance(TICK_SPACING_S)
+        if until():
+            break
+    return outs
+
+
+def test_run_step_bills_the_surrogate_spend_to_the_issue_instead_of_tokens(world: World) -> None:
+    deps = metered(world, 0.05)
+    deps.foundry.calls, deps.foundry.minutes = 7, 3.0      # earlier steps, other issues: not this issue's
+    run_step = by_name(build_activities(deps))["run_step"]
+    n = world.gh.open_issue("Show the estimated delivery date", A_BODY, labels=("type:feature",))
+
+    out = run_step(StepInput(number=n, hold=[]))
+
+    assert out.calls >= 1
+    assert world.gh.state_of(n)["cost"]["usd"] == pytest.approx(out.surrogate_usd)   # not tokens + surrogate
+
+
+def test_run_step_escalates_cost_cap_when_the_surrogate_spend_reaches_the_issue_cap(world: World) -> None:
+    deps = metered(world, 1.5)            # 1.52 USD a call with the minute: the 3.00 cap after two calls
+    run_step = by_name(build_activities(deps))["run_step"]
+    n = world.gh.open_issue("Show the estimated delivery date", A_BODY, labels=("type:feature",))
+
+    outs = drive(run_step, world, n, lambda: state.ESC_COST_CAP in world.gh.labels(n))
+
+    assert state.ESC_COST_CAP in world.gh.labels(n)
+    assert outs[-1].action == "escalate" and outs[-1].terminal
+    assert deps.foundry.calls == 2
+    assert world.gh.state_of(n)["cost"]["usd"] >= deps.budget.usd_cap_issue
+
+
+def test_run_step_under_the_cap_does_not_escalate(world: World) -> None:
+    deps = metered(world, 0.05)
+    run_step = by_name(build_activities(deps))["run_step"]
+    n = world.gh.open_issue("Show the estimated delivery date", A_BODY, labels=("type:feature",))
+
+    outs = drive(run_step, world, n, lambda: False, max_steps=3)
+
+    assert not any(label.startswith("escalated:") for label in world.gh.labels(n))
+    assert world.gh.state_of(n)["cost"]["usd"] == pytest.approx(sum(o.surrogate_usd for o in outs))
+
+
 def test_run_step_without_a_usage_meter_reports_no_surrogate_spend(world: World) -> None:
     run_step = by_name(build_activities(fake_deps(world)))["run_step"]
     n = world.gh.open_issue("Show the estimated delivery date", A_BODY, labels=("type:feature",))
