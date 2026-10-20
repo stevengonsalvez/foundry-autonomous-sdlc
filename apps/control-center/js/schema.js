@@ -11,7 +11,7 @@ export const SCHEMA_VERSION = 1;
 export const BOARD_STAGES = Object.freeze(['backlog', 'refining', 'feasible', 'tests', 'building', 'review', 'staging', 'prod', 'escalated']);
 export const ENVS = Object.freeze(['none', 'staging', 'prod', 'rolled-back']);
 export const AGENT_STATES = Object.freeze(['running', 'idle', 'error', 'stale', 'unknown']);
-export const DEFAULT_CAPS = Object.freeze({ issue_usd: 3, halt_usd: 22, total_usd: 25 });
+export const DEFAULT_CAPS = Object.freeze({ issue_usd: 3, halt_usd: 32, total_usd: 35 });
 
 // ------------------------------------------------------------------ coercers
 

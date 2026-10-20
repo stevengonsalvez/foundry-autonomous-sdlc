@@ -307,3 +307,20 @@ def test_unsafe_paths_are_rejected(path: Any) -> None:
 
 def test_paths_normalise() -> None:
     assert paths.normalise_app_path("./app//web/a.ts") == "app/web/a.ts"
+
+
+def _designer_prompt() -> str:
+    return " ".join(AGENT_BY_NAME["sdlc-test-designer"].instructions.split())
+
+
+def test_designer_prompt_forbids_throwing_mocks_and_nested_vi_mock() -> None:
+    prompt = _designer_prompt()
+    assert "never mock a component to throw" in prompt
+    assert "Put vi.mock only at the top level of a file, never inside describe or it" in prompt
+
+
+def test_designer_prompt_tells_it_to_omit_an_unprovable_test_not_skip_it() -> None:
+    prompt = _designer_prompt()
+    assert "omit that test and say so in the rationale" in prompt
+    assert "no .only or .skip" in prompt          # the rule an instruction to "skip" would contradict
+    assert "skip that test" not in prompt

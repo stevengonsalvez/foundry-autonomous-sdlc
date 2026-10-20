@@ -548,7 +548,7 @@ describe('views', { skip }, () => {
     const { context, page } = await open('normal', { hash: '#/cost' });
     const banner = page.locator('.callout');
     assert.match(await banner.innerText(), /Azure billed 13\.02 USD; the ledger estimated 1\.87 USD; the ledger undercounts hosted compute by 7\.0x\./);
-    assert.equal(await page.locator('.callout-danger').count(), 0, '13.02 USD is under the 22 USD halt line');
+    assert.equal(await page.locator('.callout-danger').count(), 0, '13.02 USD is under the 32 USD halt line');
     assert.match(await banner.innerText(), /as of/);
     assert.ok(await page.locator('#estimate-vs-billed svg.chart').count());
     assert.equal(await page.locator('#meters .c-label').count(), 4);
@@ -566,7 +566,7 @@ describe('views', { skip }, () => {
     const context = await browser.newContext();
     const page = await context.newPage();
     const doc = structuredClone(rawSample);
-    doc.cost.billing.billed_usd = 23.5;
+    doc.cost.billing.billed_usd = doc.cost.caps.halt_usd + 1;
     doc.cost.totals.halted = true;
     await page.route('**/state.json', (route) => route.fulfill({ json: doc }));
     await page.goto(`${servers.normal.url}?data=state.json#/cost`);

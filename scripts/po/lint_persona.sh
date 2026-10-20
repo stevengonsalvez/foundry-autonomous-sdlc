@@ -142,20 +142,20 @@ else
   check_fail "Guardrail (d)" "Allow-list failed validation: $allow_list_check"
 fi
 
-# Guardrail (e): Spend cap protection with exact thresholds 21, 22, 25, 3 USD and second hard rule on 22 halt state
+# Guardrail (e): Spend cap protection with exact thresholds 30, 32, 35, 3 USD and second hard rule on 32 halt state
 if grep -qi "never raise.*spend cap" "$PERSONA_FILE" && \
-   grep -qE "\b21(\.00)?\s*USD\b" "$PERSONA_FILE" && \
-   grep -qE "\b22(\.00)?\s*USD\b" "$PERSONA_FILE" && \
-   grep -qE "\b25(\.00)?\s*USD\b" "$PERSONA_FILE" && \
+   grep -qE "\b30(\.00)?\s*USD\b" "$PERSONA_FILE" && \
+   grep -qE "\b32(\.00)?\s*USD\b" "$PERSONA_FILE" && \
+   grep -qE "\b35(\.00)?\s*USD\b" "$PERSONA_FILE" && \
    grep -qE "\b3(\.00)?\s*USD\b" "$PERSONA_FILE" && \
    grep -qi "close.*shrink.*park" "$PERSONA_FILE" && \
-   grep -qiE "(stop.*22.*halt|halt state.*flagged|22(\.00)?\s*USD halt state)" "$PERSONA_FILE" && \
-   ! grep -qE "\b18(\.00)?\s*USD\b" "$PERSONA_FILE" && \
-   ! grep -qiE "\b(18|22|25)(\.00)?\s*USD\s*(precheck threshold|filing stop)" "$PERSONA_FILE" && \
-   ! grep -qiE "spend (is )?under\s*(18|22|25)(\.00)?\s*USD" "$PERSONA_FILE"; then
-  check_pass "Guardrail (e): Spend cap protection with exact thresholds 21/22/25/3 USD (never raise, 22 USD halt stop rule, close/shrink/park, filing stop 21 USD)"
+   grep -qiE "(stop.*32.*halt|halt state.*flagged|32(\.00)?\s*USD halt state)" "$PERSONA_FILE" && \
+   ! grep -qE "\b(18|21|22|25)(\.00)?\s*USD\b" "$PERSONA_FILE" && \
+   ! grep -qiE "\b(18|21|22|25|32|35)(\.00)?\s*USD\s*(precheck threshold|filing stop)" "$PERSONA_FILE" && \
+   ! grep -qiE "spend (is )?under\s*(18|21|22|25|32|35)(\.00)?\s*USD" "$PERSONA_FILE"; then
+  check_pass "Guardrail (e): Spend cap protection with exact thresholds 30/32/35/3 USD (never raise, 32 USD halt stop rule, close/shrink/park, filing stop 30 USD)"
 else
-  check_fail "Guardrail (e)" "Must forbid raising caps, enforce exact spend thresholds 21/22/25/3 USD, require stopping when 22 halt state is flagged, reject 18/22/25 as filing stop, and restrict cost-cap to close/shrink/park"
+  check_fail "Guardrail (e)" "Must forbid raising caps, enforce exact spend thresholds 30/32/35/3 USD, require stopping when 32 halt state is flagged, reject 18/21/22/25/32/35 as filing stop, and restrict cost-cap to close/shrink/park"
 fi
 
 # Guardrail (f): CD rollback escalations (never re-release rolled back build, retry only after new fix PR exists)
@@ -199,6 +199,27 @@ if grep -q "escalated:merge-conflict" "$PERSONA_FILE" && grep -qi "close only" "
   check_pass "Guardrail (j): merge-conflict escalation is close only, never re-filed"
 else
   check_fail "Guardrail (j)" "Must handle escalated:merge-conflict as close only and forbid re-filing it"
+fi
+
+# Guardrail (k): an agent-quota escalation is a factory fault left for the owner, never closed or re-filed
+if grep -q "escalated:agent-quota" "$PERSONA_FILE" && grep -qi "leave for the owner" "$PERSONA_FILE" && grep -qi "do not close or re-file" "$PERSONA_FILE"; then
+  check_pass "Guardrail (k): agent-quota escalation is left for the owner, never closed or re-filed"
+else
+  check_fail "Guardrail (k)" "Must leave escalated:agent-quota for the owner and forbid closing or re-filing it"
+fi
+
+# Guardrail (l): an agent-error close is "not planned", never "completed", and never claims the item was out of roadmap scope
+if grep -q 'gh issue close <number> --reason "not planned"' "$PERSONA_FILE" && ! grep -qi "out of roadmap scope" "$PERSONA_FILE" && ! grep -E 'gh issue close <number>' "$PERSONA_FILE" | grep -qv -- '--reason "not planned"'; then
+  check_pass "Guardrail (l): agent-error close uses --reason \"not planned\", no out of roadmap scope claim, no bare close of dropped work"
+else
+  check_fail "Guardrail (l)" "Must close escalated:agent-error with gh issue close <number> --reason \"not planned\" must not say the work is out of roadmap scope, and must not close with a bare gh issue close <number> (completed)"
+fi
+
+# Guardrail (m): the requirements answerer must not invent acceptance criteria
+if grep -qi "never add acceptance criteria" "$PERSONA_FILE"; then
+  check_pass "Guardrail (m): requirements answers never add acceptance criteria"
+else
+  check_fail "Guardrail (m)" "Must forbid the requirements answerer from adding acceptance criteria absent from the roadmap item"
 fi
 
 if [ "$failures" -gt 0 ]; then

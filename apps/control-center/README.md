@@ -10,7 +10,7 @@ Live at `https://stevengonsalvez.github.io/foundry-autonomous-sdlc/control-cente
 |-------|-------|
 | `#/` | Kanban of all tickets in the nine board columns, with type filters, search, a "hide finished older than 7 days" switch, cost bar against the 3 USD per-issue cap, flags, and tickets the ledger has not seen yet ("waiting for ledger") |
 | `#/ticket/<n>` | One ticket: stage timeline, gates, cost split, environment hops, pull request and test-first commit order, refinement and coder, questions back, reviewer verdicts, CI triage, escalation |
-| `#/cost` | Ledger estimate against Azure billed spend, against the 22 USD halt line and the 25 USD cap, meter breakdown, ledger compute, per-ticket table (sortable) |
+| `#/cost` | Ledger estimate against Azure billed spend, against the 32 USD halt line and the 35 USD cap, meter breakdown, ledger compute, per-ticket table (sortable) |
 | `#/environments` | Staging and production, rollbacks, releases with outcome, full deploy history |
 | `#/agents` | The 11 agents with state (text and dot), spend, errors, current object, the last tick and ledger notices |
 | `#/escalations` | Every escalation, newest first, with reasons, what the agent tried and evidence |

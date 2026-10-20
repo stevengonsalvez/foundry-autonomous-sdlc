@@ -7,9 +7,9 @@
       "billed_usd": 15.00
     },
     "caps": {
-      "halt_usd": 22.0,
+      "halt_usd": 32.0,
       "issue_usd": 3.0,
-      "total_usd": 25.0
+      "total_usd": 35.0
     },
     "totals": {
       "halted": true

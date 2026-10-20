@@ -97,7 +97,7 @@
     <rect x="548" y="165" width="62" height="16" rx="2" fill="#0f1f2a" stroke="#25df75" stroke-width="0.8" />
     <text x="556" y="177" fill="#25df75" class="mono-xs">HOSTED</text>
     <text x="354" y="200" fill="#b0bdc6" class="mono-sm">Deterministic state machine</text>
-    <text x="354" y="218" fill="#b0bdc6" class="mono-sm">Owns all merges . Enforces $3/$25 cap</text>
+    <text x="354" y="218" fill="#b0bdc6" class="mono-sm">Owns all merges . Enforces $3/$35 cap</text>
     <text x="354" y="236" fill="#87949f" class="mono-xs">PAT from Key Vault . Invocations protocol</text>
     <text x="354" y="250" fill="#87949f" class="mono-xs">Lock holder: tick state lease</text>
   </g>

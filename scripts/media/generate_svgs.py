@@ -137,7 +137,7 @@ def generate_topology_svg():
     <rect x="548" y="165" width="62" height="16" rx="2" fill="{SURFACE_2}" stroke="{TONE_RUN}" stroke-width="0.8" />
     <text x="556" y="177" fill="{TONE_RUN}" class="mono-xs">HOSTED</text>
     <text x="354" y="200" fill="{FG_DIM}" class="mono-sm">Deterministic state machine</text>
-    <text x="354" y="218" fill="{FG_DIM}" class="mono-sm">Owns all merges . Enforces $3/$25 cap</text>
+    <text x="354" y="218" fill="{FG_DIM}" class="mono-sm">Owns all merges . Enforces $3/$35 cap</text>
     <text x="354" y="236" fill="{FG_MUTED}" class="mono-xs">PAT from Key Vault . Invocations protocol</text>
     <text x="354" y="250" fill="{FG_MUTED}" class="mono-xs">Lock holder: tick state lease</text>
   </g>
@@ -1085,7 +1085,7 @@ def generate_hero_svg():
   <!-- Live Spend Pill -->
   <rect x="826" y="24" width="150" height="22" rx="11" fill="{SURFACE_2}" stroke="{TONE_RUN}" stroke-width="1" />
   <circle cx="838" cy="35" r="3.5" fill="{TONE_RUN}" />
-  <text x="846" y="39" fill="{FG}" class="mono-xs">BILLED: $1.86 / $25 CAP</text>
+  <text x="846" y="39" fill="{FG}" class="mono-xs">BILLED: $1.86 / $35 CAP</text>
 
   <!-- ==================== UPPER SECTION: SYSTEM TOPOLOGY NETWORK ==================== -->
   <rect x="28" y="70" width="944" height="162" rx="4" fill="{SURFACE_1}" stroke="{EDGE}" stroke-width="0.8" />

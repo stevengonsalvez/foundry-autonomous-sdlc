@@ -25,6 +25,8 @@
 # 24. merge-conflict escalation is close only, never an issue create
 # 25. two merge-conflict escalations in one run create no issue
 # 26. persona and runbook both document escalated:merge-conflict as close only
+# 27. agent-quota escalation is left for the owner, no commands
+# 28. persona and runbook document escalated:agent-quota as left for the owner
 
 set -euo pipefail
 
@@ -264,18 +266,18 @@ cat > "$tmp_halt_dir/state.json" << 'EOF'
   "version": 1,
   "cost": {
     "billing": { "billed_usd": 15.00 },
-    "caps": { "halt_usd": 22.0, "issue_usd": 3.0, "total_usd": 25.0 },
+    "caps": { "halt_usd": 32.0, "issue_usd": 3.0, "total_usd": 35.0 },
     "totals": { "halted": true }
   }
 }
 EOF
-run_dry_test "22 USD halt state flagged stops Hat 4 intake" \
+run_dry_test "32 USD halt state flagged stops Hat 4 intake" \
   "\"$tmp_halt_dir\"" \
-  "22 USD halt state is flagged. Intake stopped." \
+  "32 USD halt state is flagged. Intake stopped." \
   "gh issue create"
 rm -rf "$tmp_halt_dir"
 
-# 23. Billed spend over 21 USD stops Hat 4 intake with zero commands
+# 23. Billed spend over 30 USD stops Hat 4 intake with zero commands
 tmp_spend_dir="$(mktemp -d -t dry-run-spend-XXXXXX)"
 cp "$FIXTURES/idle_with_roadmap/roadmap.md" "$tmp_spend_dir/roadmap.md"
 cp "$FIXTURES/idle_with_roadmap/issues.json" "$tmp_spend_dir/issues.json"
@@ -283,15 +285,15 @@ cat > "$tmp_spend_dir/state.json" << 'EOF'
 {
   "version": 1,
   "cost": {
-    "billing": { "billed_usd": 21.50 },
-    "caps": { "halt_usd": 22.0, "issue_usd": 3.0, "total_usd": 25.0 },
+    "billing": { "billed_usd": 30.50 },
+    "caps": { "halt_usd": 32.0, "issue_usd": 3.0, "total_usd": 35.0 },
     "totals": { "halted": false }
   }
 }
 EOF
-run_dry_test "Billed spend over 21 USD stops Hat 4 intake" \
+run_dry_test "Billed spend over 30 USD stops Hat 4 intake" \
   "\"$tmp_spend_dir\"" \
-  "exceeds 21.00 USD cap. Intake stopped." \
+  "exceeds 30.00 USD cap. Intake stopped." \
   "gh issue create"
 rm -rf "$tmp_spend_dir"
 
@@ -315,12 +317,33 @@ echo -n "Test $total: persona and runbook document escalated:merge-conflict as c
 doc_ok=1
 for doc in "$SCRIPT_DIR/../../../po/PERSONA.md" "$SCRIPT_DIR/../../../po/RUNBOOK.md"; do
   grep -q "escalated:merge-conflict" "$doc" && grep -qi "close only" "$doc" || doc_ok=0
-  grep -qi "close or re-file" "$doc" && doc_ok=0
+  grep -qiE "merge-conflict.*close or re-file" "$doc" && doc_ok=0
 done
 if [ "$doc_ok" -eq 1 ]; then
   echo "PASS"
 else
   echo "FAIL (po/PERSONA.md and po/RUNBOOK.md must say escalated:merge-conflict is close only, not close or re-file)"
+  failures=$((failures + 1))
+fi
+
+# 27. agent-quota escalation is left for the owner: no comment, label, close or create
+run_dry_test "agent-quota escalation is left for the owner with no commands" \
+  "\"$FIXTURES/agent_quota\"" \
+  "Leaving agent-quota escalation on issue #96 for the owner" \
+  "gh issue (close|create|comment|edit)"
+
+# 28. the persona and the runbook say agent-quota is left for the owner, never closed or re-filed
+total=$((total + 1))
+echo -n "Test $total: persona and runbook document escalated:agent-quota as left for the owner ... "
+doc_ok=1
+for doc in "$SCRIPT_DIR/../../../po/PERSONA.md" "$SCRIPT_DIR/../../../po/RUNBOOK.md"; do
+  grep -q "escalated:agent-quota" "$doc" && grep -qi "leave for the owner" "$doc" \
+    && grep -qi "do not close or re-file" "$doc" || doc_ok=0
+done
+if [ "$doc_ok" -eq 1 ]; then
+  echo "PASS"
+else
+  echo "FAIL (po/PERSONA.md and po/RUNBOOK.md must say escalated:agent-quota is left for the owner, do not close or re-file)"
   failures=$((failures + 1))
 fi
 

@@ -237,10 +237,10 @@ def test_caps_override_spending_steps() -> None:
     building.data["coder"] = {"job_id": "j", "started_at": NOW}
     building.data["cost"]["usd"] = 3.2
     assert machine.next_action(ctx(building)).cancel_coder
-    halted = machine.next_action(ctx(make_state(), budget=Budget(usd_total=22.0)))
+    halted = machine.next_action(ctx(make_state(), budget=Budget(usd_total=32.0)))
     assert halted.kind is Kind.HALT
     waiting = make_state(state.IN_REVIEW)
-    assert machine.next_action(ctx(waiting, budget=Budget(usd_total=23), pr=pull(),
+    assert machine.next_action(ctx(waiting, budget=Budget(usd_total=33), pr=pull(),
                                    checks={**GREEN, "e2e": "pending"})).kind is Kind.WAIT
 
 
@@ -478,3 +478,12 @@ def test_review_marker_matches_the_documented_shape_and_refuses_bad_values() -> 
     for verdict, head in (("merge", HEAD), ("approve", "abc"), ("approve", HEAD + "-->")):
         with pytest.raises(ValueError, match="bad review marker"):
             gates.render_review_marker(verdict, head)
+
+
+def test_default_caps_are_3_per_issue_and_the_32_usd_halt() -> None:
+    budget = Budget()
+    assert (budget.usd_cap_issue, budget.usd_cap_total) == (3.0, 32.0)
+    under = machine.next_action(ctx(make_state(), budget=Budget(usd_total=31.99)))
+    assert under.kind is not Kind.HALT
+    assert machine.next_action(ctx(make_state(), budget=Budget(usd_total=32.0))).kind is Kind.HALT
+

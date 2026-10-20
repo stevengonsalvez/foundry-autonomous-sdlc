@@ -259,6 +259,7 @@ def test_passing_or_uncollected_new_tests_are_not_a_red() -> None:
     ("SyntaxError: The requested module './x' does not provide an export named 'eta'", False),
     ("Error: Test timed out in 5000ms.", False),
     ("Error: something odd", False),
+    ("Error: SearchForm failed to render", False),           # issue 108: a mock that throws is not a red
 ])
 def test_failure_classification(message: str, valid: bool) -> None:
     assert is_valid_red(message) is valid

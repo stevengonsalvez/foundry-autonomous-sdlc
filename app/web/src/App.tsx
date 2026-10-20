@@ -1,11 +1,11 @@
 import { useEffect, useLayoutEffect, useRef, type MouseEvent } from "react";
 import type { ParcelService } from "@parcel/core";
-import { BoxIcon } from "./components/Icons";
+import { SideNav } from "./components/SideNav";
 import { ThemeToggle } from "./components/ThemeToggle";
 import { HomePage } from "./pages/HomePage";
 import { NotFoundPage } from "./pages/NotFoundPage";
 import { ParcelPage } from "./pages/ParcelPage";
-import { HOME_HREF, parseRoute, useHash, type Route } from "./router";
+import { parseRoute, useHash, type Route } from "./router";
 import { ServiceContext } from "./service-context";
 
 function routeKey(route: Route): string {
@@ -51,10 +51,7 @@ export function App({ service }: { service: ParcelService }) {
       </a>
       <header className="site-header">
         <div className="container">
-          <a className="brand" href={HOME_HREF}>
-            <BoxIcon />
-            <span>Parcel Tracker</span>
-          </a>
+          <SideNav />
           <ThemeToggle />
         </div>
       </header>

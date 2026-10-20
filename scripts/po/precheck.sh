@@ -86,22 +86,27 @@ if [ "$age_s" -gt 2700 ]; then
   exit 1
 fi
 
-# 4. Check billed spend (over 21 USD)
-billed_usd="$(jq -r '.cost.billing.billed_usd // .cost.totals.billed_usd // 0' <<< "$state_json")"
-is_over_spend="$(jq -n --arg b "$billed_usd" '($b | tonumber) > 21.0')"
+# 4. Check billed spend (over 30 USD, the filing stop)
+# A missing, null or non-numeric bill is unknown, not zero: skip rather than file on a blind budget.
+billed_usd="$(jq -r '.cost.billing.billed_usd // .cost.totals.billed_usd // empty' <<< "$state_json")"
+if ! [[ "$billed_usd" =~ ^[0-9]+(\.[0-9]+)?$ ]]; then
+  echo "SKIP: billed spend unknown"
+  exit 1
+fi
+is_over_spend="$(jq -n --arg b "$billed_usd" '($b | tonumber) > 30.0')"
 if [ "$is_over_spend" = "true" ]; then
-  echo "SKIP: billed spend ($billed_usd USD) exceeds 21.00 USD cap"
+  echo "SKIP: billed spend ($billed_usd USD) exceeds 30.00 USD cap"
   exit 1
 fi
 
-# Hard rule: Stop when the 22 halt state is flagged
+# Hard rule: Stop when the 32 halt state is flagged
 is_halted="$(jq -r '
   (.cost.totals.halted // .cost.halted // .halted // false) == true or
-  ((.cost.billing.billed_usd // 0 | tonumber) >= (.cost.caps.halt_usd // 22.0 | tonumber)) or
-  ((.cost.totals.usd // .cost.ledger.usd // 0 | tonumber) >= (.cost.caps.halt_usd // 22.0 | tonumber))
+  ((.cost.billing.billed_usd // 0 | tonumber) >= (.cost.caps.halt_usd // 32.0 | tonumber)) or
+  ((.cost.totals.usd // .cost.ledger.usd // 0 | tonumber) >= (.cost.caps.halt_usd // 32.0 | tonumber))
 ' <<< "$state_json")"
 if [ "$is_halted" = "true" ]; then
-  echo "SKIP: 22 USD halt state is flagged"
+  echo "SKIP: 32 USD halt state is flagged"
   exit 1
 fi
 
@@ -163,12 +168,12 @@ fi
 # 7. Decision logic
 # If an open escalation or refinement question needs an answer, that is NOT a skip (answering is the point)
 if [ -n "$open_escalations" ]; then
-  echo "RUN: open escalation needs response (#$open_escalations), spend within budget (${billed_usd} USD <= 21.00 USD)"
+  echo "RUN: open escalation needs response (#$open_escalations), spend within budget (${billed_usd} USD <= 30.00 USD)"
   exit 0
 fi
 
 if [ -n "$open_refinements" ]; then
-  echo "RUN: requirements question needs response (#$open_refinements), spend within budget (${billed_usd} USD <= 21.00 USD)"
+  echo "RUN: requirements question needs response (#$open_refinements), spend within budget (${billed_usd} USD <= 30.00 USD)"
   exit 0
 fi
 
@@ -185,5 +190,5 @@ if [ "$daily_count" -ge 6 ]; then
 fi
 
 # All checks passed, pipeline is idle and ready for new intake
-echo "RUN: pipeline idle, spend within budget (${billed_usd} USD <= 21.00 USD), daily issues ${daily_count}/6"
+echo "RUN: pipeline idle, spend within budget (${billed_usd} USD <= 30.00 USD), daily issues ${daily_count}/6"
 exit 0

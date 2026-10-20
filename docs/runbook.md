@@ -64,7 +64,7 @@ terraform apply tfplan
 cd ../..
 ```
 
-The apply creates the resource group `rg-fsdlcd-demo`, the Foundry account and project, the `sdlc-default` model deployment (gpt-5-mini, 10k tokens per minute), Key Vault, App Insights and a 25 USD budget with alerts. Check the outputs the deploy script reads:
+The apply creates the resource group `rg-fsdlcd-demo`, the Foundry account and project, the `sdlc-default` model deployment (gpt-5-mini, 10k tokens per minute), Key Vault, App Insights and a 35 USD budget with alerts. Check the outputs the deploy script reads:
 
 ```bash
 terraform -chdir=infra/terraform output
@@ -152,7 +152,7 @@ gh pr list --repo stevengonsalvez/foundry-autonomous-sdlc --label agent:pr
 Disabling the routine stops new ticks; a coder job already running continues until it finishes, hits its deadline, or is cancelled.
 
 ```bash
-uv run --project agents python scripts/deploy_agents.py routine --disable
+uv run --project agents python scripts/deploy_agents.py routine --disable --cron '*/10 * * * *'
 ```
 
 ### Inspect or cancel a coder job
@@ -248,9 +248,38 @@ To enable:
 | `failed` / `interrupted` | The sandbox was evicted while the job ran (a restarted server marks such jobs at once). `start` with the same job resumes. |
 | `failed` / `internal-error` | An unexpected exception in the coder itself. `detail` has the redacted traceback tail, the same traceback is in the job log and on stdout (the platform logstream); the lease was released. A coder bug: read the traceback before retrying. |
 | `failed` / `engine-unavailable` | agy could not be set up after one retry (`detail` and the `agy-unavailable` engine event name the step: secret read, install, token or settings write, copy to `/opt/agy`). The job stops rather than run the model loop alone; start a new attempt once the cause is fixed. |
+| `failed` / `agent-quota` | Both agy engines died on the account's quota: agy printed its own `AGY_ERROR: {..."status":"RESOURCE_EXHAUSTED"...}` line and was killed by the coder (exit 125), or exited 3 after `error: Individual quota reached ...` or that line, with no edits made. Lines are matched at the start of a line only; a prose `error: ... quota exceeded` echoed from a repo file proves nothing at exit 125. The job stops at once with no model-loop rounds; the orchestrator escalates `escalated:agent-quota`. See "Rotate the agy token" below. |
 | `failed` / `invalid-allowed-paths` | revise or maintenance: no `allowed_paths` entry matches a file at the head of the branch (`detail` names them). Fix the paths the orchestrator sent. |
 | `timeout` / `deadline` | `deadline_s` elapsed. If the job was stuck, the watchdog (every 30 s heartbeat) records this 60 s past the deadline and cancels it, `detail` starting `watchdog:`. |
 | `cancelled` | A `cancel` call stopped it. |
+
+### Rotate the agy token, and tell quota from auth
+
+The coder's agy runs on ONE Antigravity account: the Key Vault secret `agy-cli-token` is a copy of that account's token file (section 4). Your own agy sessions on other machines draw on the same weekly quota if they use the same account.
+
+| What you see | Meaning |
+|--------------|---------|
+| Job `failed` / `agent-quota`; issue `escalated:agent-quota`; engine events `engine-quota`, then `agent-quota` | Quota spent. In the job output agy printed `Individual quota reached ... Resets in 19h13m` (`RESOURCE_EXHAUSTED`, code 429) and exited 3, or the coder killed it (exit 125, `agy reported a quota or rate limit`). Seconds, not minutes, per round. |
+| Engine event `agy-unavailable`, job `engine-unavailable` | The secret could not be read or agy could not be installed or started. Not the quota. |
+| agy exit 125 with `agy needs authentication (token missing or expired)` | Auth: the token is missing, expired or revoked. The coder falls back to the model loop (`engines-exhausted` if that fails too). Rotating to a fresh token file fixes it; waiting does not. |
+| rounds that run for minutes and exit 0 | agy works. |
+
+To check an account without a coder job, run one word through agy from a throwaway HOME that holds only that token file: `HOME=$tmp agy -p "Reply with the single word ok" --mode accept-edits`. Exit 0 and `ok` means it has quota; exit 3 prints the reset time.
+
+Rotate (needs the Key Vault Secrets Officer role; the deploy principal does not have it):
+
+```bash
+KV=$(terraform -chdir=infra/terraform output -raw key_vault_name)
+OLD=$(az keyvault secret show --vault-name "$KV" --name agy-cli-token --query id -o tsv)   # keep: the rollback target
+# NEW is a token file of the account with headroom (mode 600, outside the repo): the file
+# ~/.gemini/antigravity-cli/antigravity-oauth-token while that account is active, or one built from its refresh token.
+az keyvault secret set --vault-name "$KV" --name agy-cli-token --file "$NEW" --output none
+az keyvault secret show --vault-name "$KV" --name agy-cli-token --query id -o tsv           # the new version id
+# rollback:
+az keyvault secret show --id "$OLD" --query value -o tsv | az keyvault secret set --vault-name "$KV" --name agy-cli-token --file /dev/stdin --output none
+```
+
+The coder reads the secret once per process (`keyvault.py` caches it), and every new job starts in a new session, so the next job uses the new value; to be sure, redeploy (`deploy_agents.py hosted --only sdlc-coder`). Then requeue the issue: remove `escalated:agent-quota`, and reset its state comment (`escalation` to null, a new `stage:tests-written` entry, `pr` and `review` to null). Never print the token; compare accounts by the email claim of the id token or a hash of the refresh token.
 
 ## 7a. Ledger, state branch and control center
 
@@ -289,16 +318,16 @@ Control center: published with the rest of the site at `/control-center/` by `pa
 | Cap | Value | Enforced by |
 |-----|-------|-------------|
 | Per issue | 1.00 USD of model and coder compute | Orchestrator, label `escalated:cost-cap` |
-| All work | New work halts at 22 USD total (25 USD hard cap) (`metrics.json` `totals.usd`) | Orchestrator |
-| Monthly budget | 25 USD, alerts only, data lags up to 72 hours | Terraform budget on the resource group |
+| All work | New work halts at 32 USD total (35 USD hard cap) (`metrics.json` `totals.usd`) | Orchestrator |
+| Monthly budget | 35 USD, alerts only, data lags up to 72 hours | Terraform budget on the resource group |
 | Model throughput | 10k tokens per minute on `sdlc-default` | Model deployment capacity |
 | Coder job | `max_iterations` 5, `deadline_s` 7200 (default and maximum: two hours of coder compute is about 1.15 USD at the real hosted rate, so the 3 USD issue cap does not stop a two hour job; the deadline does), model loop spend 0.50 USD | Coder runtime hard stops |
-| Ledger | Counts toward both the 22 USD halt (`metrics.json` `totals.usd` includes `totals.ledger_usd`) and, as a share per ticket, the 3 USD issue cap in the control center | `cost.ledger_call_usd`; shown in the cost view |
+| Ledger | Counts toward both the 32 USD halt (`metrics.json` `totals.usd` includes `totals.ledger_usd`) and, as a share per ticket, the 3 USD issue cap in the control center | `cost.ledger_call_usd`; shown in the cost view |
 | Hosted compute | Billed twice while a session is active: Foundry 'Hosted vCPU/Memory Usage' (0.10934 USD per vCPU-hour, 0.01298 per GiB-hour) and Azure Container Apps 'Standard vCPU/Memory Active Usage' (0.000034 USD per vCPU-second, 0.000004 per GiB-second), together 0.2318 USD per vCPU-hour and 0.0274 per GiB-hour | Idle timeouts: orchestrator 2 minutes (0.2865 USD per active hour at 1 vCPU, 2 GiB; a one minute tick plus the 2 minute idle tail is about 0.014 USD), coder 10 minutes (0.5730 USD per active hour at 2 vCPU, 4 GiB, and one 10 minute tail per finished job, about 0.095 USD) |
 
 agy usage is billed to the Antigravity plan behind the token and is not metered by the demo.
 
-Check the real spend against Azure, not against the ledger. The ledger (`metrics.json`) is an estimate; on 2026-10-10 it said 1.86 USD while Azure billed 4.80 USD. Cost Management lags by hours, so leave a margin below the 25 USD limit:
+Check the real spend against Azure, not against the ledger. The ledger (`metrics.json`) is an estimate; on 2026-10-10 it said 1.86 USD while Azure billed 4.80 USD. Cost Management lags by hours, so leave a margin below the 35 USD limit:
 
 ```bash
 SUB=$(az account show --query id -o tsv)
@@ -308,7 +337,7 @@ az rest --method post \
   --query "properties.rows" -o json
 ```
 
-Disable the routine (`deploy_agents.py routine --disable`) as soon as a run is finished: hosted sessions are the whole bill.
+Disable the routine (`deploy_agents.py routine --disable --cron '*/10 * * * *'`, always with the cron the routine has: the script replaces the routine when the cron differs, so a bare `--disable` would rewrite the schedule to the `*/5` default instead of only disabling it) as soon as a run is finished: hosted sessions are the whole bill.
 
 ## 9. How the coder isolates and checks its work
 
@@ -448,7 +477,7 @@ What it shows: the service echoes the policy id back on the version, and the fin
 ## 10. Teardown
 
 ```bash
-uv run --project agents python scripts/deploy_agents.py routine --disable
+uv run --project agents python scripts/deploy_agents.py routine --disable --cron '*/10 * * * *'
 cd infra/terraform
 terraform destroy
 terraform -chdir=bootstrap destroy -var-file=bootstrap.tfvars
@@ -471,7 +500,7 @@ Findings from the security review of the coder (2026-10-10) that remain by desig
 
 Orchestrator findings (fail-open spend, trust boundary; 2026-10-10) that remain by design:
 
-- A per-issue spend floor from `metrics.json` only covers objects still listed: if a human both strips an issue's pipeline labels and deletes its state comment, its per-issue figure restarts, but `totals.usd` (and so the 22 USD halt) never decreases, and the issue gets no further spend unless it is relabelled.
+- A per-issue spend floor from `metrics.json` only covers objects still listed: if a human both strips an issue's pipeline labels and deletes its state comment, its per-issue figure restarts, but `totals.usd` (and so the 32 USD halt) never decreases, and the issue gets no further spend unless it is relabelled.
 - The `checks` and `head` sections of the reviewer input are trusted: they hold only the head sha, the PR number, the seven check names and GitHub's own conclusion values; branch names, titles, bodies, commits, diffs and logs are passed as untrusted data.
 - MCP agents can ask `get_file_contents` for any repository the `github-mcp` PAT can read, which is every repository of the account: the orchestrator only narrows this (one read-only tool, a two to four call budget, a prompt rule naming this repository, schema validation and sanitising before anything is posted); it cannot technically prevent a cross-repository read.
 - A coder status that cannot be read is billed as estimated time (wall clock since start, less 15 minutes of normal poll gap), which can over-count briefly; over-counting only stops spend earlier.
