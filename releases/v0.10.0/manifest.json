@@ -3,60 +3,345 @@
   "head_sha": "107993b5d6a22a2f1b28e79e77879fd3bd6e2118",
   "screenshots": [
     {
-      "filename": "home-desktop.png",
+      "filename": "home-dark-desktop.png",
+      "state": "home-dark",
       "route": "home",
       "viewport": "desktop",
+      "title": "Home, dark theme",
+      "caption": "Home page with the dark theme selected via the theme toggle preference.",
+      "sha256": "fa61e2f1ba6d988704f7def5cd535edd40ffad41dc5b0496e0738b12fa859a36",
+      "size": 125645
+    },
+    {
+      "filename": "home-recent-searches-desktop.png",
+      "state": "home-recent-searches",
+      "route": "home",
+      "viewport": "desktop",
+      "title": "Home, recent searches",
+      "caption": "Home page after searching PK1000000001 and PK1000000002: recent search chips under the form.",
+      "sha256": "46907a24012e343f7b2990eda5dae5ef1c21dbc558be43ad7c0c2f81cc12c4be",
+      "size": 111899
+    },
+    {
+      "filename": "home-filtered-desktop.png",
+      "state": "home-filtered",
+      "route": "home",
+      "viewport": "desktop",
+      "title": "Home, status filter",
+      "caption": "Home page with the status filter set to In transit.",
+      "sha256": "95ad16a518ef679cc7abadfe3101552007927e03fa18bc035a36366cf9981b2b",
+      "size": 107819
+    },
+    {
+      "filename": "home-empty-search-desktop.png",
+      "state": "home-empty-search",
+      "route": "home",
+      "viewport": "desktop",
+      "title": "Home, empty search error",
+      "caption": "Home page after pressing Track with no tracking number: inline field error.",
+      "sha256": "577921bab7bd1a465914199b6f209431b970260e9c35d570314475cc553902a9",
+      "size": 114043
+    },
+    {
+      "filename": "home-left-nav-desktop.png",
+      "state": "home-left-nav",
+      "route": "home",
+      "viewport": "desktop",
+      "title": "Home, left navigation",
+      "caption": "Home page with the left navigation sidebar: Track a parcel, Recent parcels, Status guide.",
       "sha256": "6af91a724ed804d651d1b08cb7946b48fab3e1ec84e950a007b099e666e2fdab",
       "size": 118030
     },
     {
-      "filename": "parcel-found-desktop.png",
+      "filename": "parcel-stepper-desktop.png",
+      "state": "parcel-stepper",
       "route": "parcel-found",
       "viewport": "desktop",
+      "title": "Parcel, journey stepper",
+      "caption": "Parcel PK1000000001 journey progress stepper: label created, in transit, out for delivery, delivered.",
       "sha256": "c7ff5c4569913b7ecd93133c2eb64bd7638fca3a9c417a5cbd4da06979d16999",
       "size": 111326
     },
     {
-      "filename": "not-found-desktop.png",
-      "route": "not-found",
+      "filename": "parcel-dark-desktop.png",
+      "state": "parcel-dark",
+      "route": "parcel-found",
       "viewport": "desktop",
-      "sha256": "04b1afe2163c97a9bea556596d255dc3998431c2de0a353139f64e1a9f94dc06",
-      "size": 86182
+      "title": "Parcel timeline, dark theme",
+      "caption": "Parcel PK1000000001 shipment history in the dark theme.",
+      "sha256": "34df87ef9d60dadee2df69cd350bb59bd22ad4c614f2ddf3c4e84793cd4a8fec",
+      "size": 119766
     },
     {
-      "filename": "invalid-input-desktop.png",
-      "route": "invalid-input",
+      "filename": "parcel-copy-link-desktop.png",
+      "state": "parcel-copy-link",
+      "route": "parcel-found",
       "viewport": "desktop",
-      "sha256": "384e47ed4e028e8033d8c69670c3a2d51e2b61108f42d702e02d5f68c3baa62b",
-      "size": 86629
+      "title": "Parcel, copy link",
+      "caption": "Parcel page right after pressing Copy link: button shows the Copied confirmation.",
+      "sha256": "4b042321a988318126def8881e9dddd845eefc7c2e1dae9af1805c8794f1b42d",
+      "size": 111066
     },
     {
-      "filename": "home-mobile.png",
+      "filename": "home-dark-mobile.png",
+      "state": "home-dark",
       "route": "home",
       "viewport": "mobile",
-      "sha256": "262bc7d8bb0e6e1e19cbc1489f5914b5d9245864b22ddc684c320ee3d21ec3ae",
-      "size": 71975
+      "title": "Home, dark theme",
+      "caption": "Home page with the dark theme selected via the theme toggle preference.",
+      "sha256": "17ea57d6c10e37aa7a4899389cc62154f2df5f519e292bf718bffe4af2bc4262",
+      "size": 75237
     },
     {
-      "filename": "parcel-found-mobile.png",
+      "filename": "home-recent-searches-mobile.png",
+      "state": "home-recent-searches",
+      "route": "home",
+      "viewport": "mobile",
+      "title": "Home, recent searches",
+      "caption": "Home page after searching PK1000000001 and PK1000000002: recent search chips under the form.",
+      "sha256": "366ac9776e3c66749b26706b24e5c0d4bcf4d9edcebebc2a11cf8e30831218bb",
+      "size": 70137
+    },
+    {
+      "filename": "home-filtered-mobile.png",
+      "state": "home-filtered",
+      "route": "home",
+      "viewport": "mobile",
+      "title": "Home, status filter",
+      "caption": "Home page with the status filter set to In transit.",
+      "sha256": "52985d630ac2ab0c6c849f59d1f749bb814e9ae9fe121558b7c4f8feccfc2a70",
+      "size": 69669
+    },
+    {
+      "filename": "home-empty-search-mobile.png",
+      "state": "home-empty-search",
+      "route": "home",
+      "viewport": "mobile",
+      "title": "Home, empty search error",
+      "caption": "Home page after pressing Track with no tracking number: inline field error.",
+      "sha256": "ec90875849fd2d6556e6826292ec5ad7ec25e26f79c025a70e3d93b4b8ecf011",
+      "size": 70141
+    },
+    {
+      "filename": "home-mobile-nav-mobile.png",
+      "state": "home-mobile-nav",
+      "route": "home",
+      "viewport": "mobile",
+      "title": "Home, mobile navigation",
+      "caption": "Mobile home page with the navigation drawer opened from the menu button.",
+      "sha256": "904fb3008587b4ecaf021ba932ab7ef32191778eb17d3ef16e8e42e2f0b2217e",
+      "size": 24734
+    },
+    {
+      "filename": "parcel-stepper-mobile.png",
+      "state": "parcel-stepper",
       "route": "parcel-found",
       "viewport": "mobile",
+      "title": "Parcel, journey stepper",
+      "caption": "Parcel PK1000000001 journey progress stepper: label created, in transit, out for delivery, delivered.",
       "sha256": "b4bc1472b52274205d8af0b0d0efc48db30c9afc04cd085476b00b3f3d9f49fb",
       "size": 78490
     },
     {
-      "filename": "not-found-mobile.png",
+      "filename": "parcel-dark-mobile.png",
+      "state": "parcel-dark",
+      "route": "parcel-found",
+      "viewport": "mobile",
+      "title": "Parcel timeline, dark theme",
+      "caption": "Parcel PK1000000001 shipment history in the dark theme.",
+      "sha256": "d2f9f62566dc8c173833cb04f8994251976d8da13ef3569a2856efa2e724b1b0",
+      "size": 82238
+    },
+    {
+      "filename": "parcel-copy-link-mobile.png",
+      "state": "parcel-copy-link",
+      "route": "parcel-found",
+      "viewport": "mobile",
+      "title": "Parcel, copy link",
+      "caption": "Parcel page right after pressing Copy link: button shows the Copied confirmation.",
+      "sha256": "0eeff52319f4c0a4abd309aa3071e67304c78bf0868c655e5b1889c9e8efad83",
+      "size": 78502
+    },
+    {
+      "filename": "home-default-desktop.png",
+      "state": "home-default",
+      "route": "home",
+      "viewport": "desktop",
+      "title": "Home",
+      "caption": "Home page in the default light theme: search form and recent parcels table.",
+      "sha256": "6af91a724ed804d651d1b08cb7946b48fab3e1ec84e950a007b099e666e2fdab",
+      "size": 118030
+    },
+    {
+      "filename": "parcel-timeline-desktop.png",
+      "state": "parcel-timeline",
+      "route": "parcel-found",
+      "viewport": "desktop",
+      "title": "Parcel timeline",
+      "caption": "Parcel PK1000000001 shipment history: events, locations and latest marker.",
+      "sha256": "c7ff5c4569913b7ecd93133c2eb64bd7638fca3a9c417a5cbd4da06979d16999",
+      "size": 111326
+    },
+    {
+      "filename": "parcel-not-found-desktop.png",
+      "state": "parcel-not-found",
+      "route": "not-found",
+      "viewport": "desktop",
+      "title": "Parcel not found",
+      "caption": "Unknown tracking number PK9999999999: not found message.",
+      "sha256": "04b1afe2163c97a9bea556596d255dc3998431c2de0a353139f64e1a9f94dc06",
+      "size": 86182
+    },
+    {
+      "filename": "parcel-invalid-input-desktop.png",
+      "state": "parcel-invalid-input",
+      "route": "invalid-input",
+      "viewport": "desktop",
+      "title": "Invalid tracking number",
+      "caption": "Malformed tracking number 12345: invalid tracking number message.",
+      "sha256": "384e47ed4e028e8033d8c69670c3a2d51e2b61108f42d702e02d5f68c3baa62b",
+      "size": 86629
+    },
+    {
+      "filename": "home-default-mobile.png",
+      "state": "home-default",
+      "route": "home",
+      "viewport": "mobile",
+      "title": "Home",
+      "caption": "Home page in the default light theme: search form and recent parcels table.",
+      "sha256": "2a55710c61958d86dbeeced800cd6b28b1703f089650155772c49931d59c89e1",
+      "size": 71979
+    },
+    {
+      "filename": "parcel-timeline-mobile.png",
+      "state": "parcel-timeline",
+      "route": "parcel-found",
+      "viewport": "mobile",
+      "title": "Parcel timeline",
+      "caption": "Parcel PK1000000001 shipment history: events, locations and latest marker.",
+      "sha256": "b4bc1472b52274205d8af0b0d0efc48db30c9afc04cd085476b00b3f3d9f49fb",
+      "size": 78490
+    },
+    {
+      "filename": "parcel-not-found-mobile.png",
+      "state": "parcel-not-found",
       "route": "not-found",
       "viewport": "mobile",
+      "title": "Parcel not found",
+      "caption": "Unknown tracking number PK9999999999: not found message.",
       "sha256": "f80d21b495e64867a9186be7d55876ee5e33c88bdb28d9370f740eab82b6c16e",
       "size": 55830
     },
     {
-      "filename": "invalid-input-mobile.png",
+      "filename": "parcel-invalid-input-mobile.png",
+      "state": "parcel-invalid-input",
       "route": "invalid-input",
       "viewport": "mobile",
+      "title": "Invalid tracking number",
+      "caption": "Malformed tracking number 12345: invalid tracking number message.",
       "sha256": "09967d372b5f1ec07b9c92a0efd892db9cbff41acdb81f9b7a3d05f2047859d1",
       "size": 56946
     }
-  ]
+  ],
+  "skipped": [
+    "home-status-chips"
+  ],
+  "tag": "v0.10.0",
+  "reproducible": true,
+  "commit_sha": "107993b5d6a22a2f1b28e79e77879fd3bd6e2118",
+  "changes": {
+    "vs": "v0.9.0",
+    "fp": {
+      "self": "3b464277cb5e1056fd302c3776bc5867beffc92b4c59f1c10868c528be7856c1",
+      "prev": "c9126402cb1617374490b99a40c9c8a08e93f90a7c2263f1019c1d14635add9e"
+    },
+    "states": {
+      "parcel-timeline": {
+        "status": "changed",
+        "pct": {
+          "desktop": 4.37431640625,
+          "mobile": 11.90545631303925
+        }
+      },
+      "parcel-dark": {
+        "status": "changed",
+        "pct": {
+          "desktop": 6.20380859375,
+          "mobile": 14.786122250577227
+        }
+      },
+      "parcel-copy-link": {
+        "status": "changed",
+        "pct": {
+          "desktop": 4.37080078125,
+          "mobile": 11.90545631303925
+        }
+      },
+      "parcel-stepper": {
+        "status": "new",
+        "pct": {}
+      },
+      "home-default": {
+        "status": "unchanged",
+        "pct": {
+          "desktop": 0.0,
+          "mobile": 0.0
+        }
+      },
+      "home-dark": {
+        "status": "unchanged",
+        "pct": {
+          "desktop": 0.0,
+          "mobile": 0.0
+        }
+      },
+      "home-recent-searches": {
+        "status": "unchanged",
+        "pct": {
+          "desktop": 0.0,
+          "mobile": 0.0
+        }
+      },
+      "home-filtered": {
+        "status": "unchanged",
+        "pct": {
+          "desktop": 0.0,
+          "mobile": 0.0
+        }
+      },
+      "home-empty-search": {
+        "status": "unchanged",
+        "pct": {
+          "desktop": 0.0,
+          "mobile": 0.0
+        }
+      },
+      "home-left-nav": {
+        "status": "unchanged",
+        "pct": {
+          "desktop": 0.0
+        }
+      },
+      "parcel-not-found": {
+        "status": "unchanged",
+        "pct": {
+          "desktop": 0.0,
+          "mobile": 0.0
+        }
+      },
+      "parcel-invalid-input": {
+        "status": "unchanged",
+        "pct": {
+          "desktop": 0.0,
+          "mobile": 0.0
+        }
+      },
+      "home-mobile-nav": {
+        "status": "unchanged",
+        "pct": {
+          "mobile": 0.0
+        }
+      }
+    }
+  }
 }

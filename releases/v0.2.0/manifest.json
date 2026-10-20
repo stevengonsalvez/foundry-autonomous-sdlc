@@ -3,63 +3,159 @@
   "head_sha": "7f7ba0ca14b3c637c9fc73935df46f95a2888b70",
   "screenshots": [
     {
-      "filename": "home-desktop.png",
+      "filename": "home-empty-search-desktop.png",
+      "state": "home-empty-search",
       "route": "home",
       "viewport": "desktop",
+      "title": "Home, empty search error",
+      "caption": "Home page after pressing Track with no tracking number: inline field error.",
+      "sha256": "b2f4e7f719d1bec681cfd11d57f25f89134c0a83fbb0b1d5357ecb6d307dcea9",
+      "size": 109814
+    },
+    {
+      "filename": "home-empty-search-mobile.png",
+      "state": "home-empty-search",
+      "route": "home",
+      "viewport": "mobile",
+      "title": "Home, empty search error",
+      "caption": "Home page after pressing Track with no tracking number: inline field error.",
+      "sha256": "cfd8af1381de2846cc3165ce4cba4ce4923b383e94192468df81d796a84b1744",
+      "size": 71595
+    },
+    {
+      "filename": "home-default-desktop.png",
+      "state": "home-default",
+      "route": "home",
+      "viewport": "desktop",
+      "title": "Home",
+      "caption": "Home page in the default light theme: search form and recent parcels table.",
       "sha256": "2cd1db9dea28bde7a29e8c814ba85b9f76801c04491ec76790ec17cd38ee98f9",
       "size": 112205
     },
     {
-      "filename": "parcel-found-desktop.png",
+      "filename": "parcel-timeline-desktop.png",
+      "state": "parcel-timeline",
       "route": "parcel-found",
       "viewport": "desktop",
+      "title": "Parcel timeline",
+      "caption": "Parcel PK1000000001 shipment history: events, locations and latest marker.",
       "sha256": "e33730d5af6a4d6eaff3e301991660f774e017363bb77072ec57ffd873269405",
       "size": 106392
     },
     {
-      "filename": "not-found-desktop.png",
+      "filename": "parcel-not-found-desktop.png",
+      "state": "parcel-not-found",
       "route": "not-found",
       "viewport": "desktop",
+      "title": "Parcel not found",
+      "caption": "Unknown tracking number PK9999999999: not found message.",
       "sha256": "85a1bc4cededc2a33733894de74eac7718e6f34e8e2ff0a3c990da451d41eeaa",
       "size": 69424
     },
     {
-      "filename": "invalid-input-desktop.png",
+      "filename": "parcel-invalid-input-desktop.png",
+      "state": "parcel-invalid-input",
       "route": "invalid-input",
       "viewport": "desktop",
+      "title": "Invalid tracking number",
+      "caption": "Malformed tracking number 12345: invalid tracking number message.",
       "sha256": "dea585c18d72606665eba6149bad429297c61f0979b0a19338d29d4b3402dac7",
       "size": 69832
     },
     {
-      "filename": "home-mobile.png",
+      "filename": "home-default-mobile.png",
+      "state": "home-default",
       "route": "home",
       "viewport": "mobile",
-      "sha256": "4645e40b9756c114b0344d0780619f0722f55096bebd8f4ecdfaaedc8c41f51c",
-      "size": 70535
+      "title": "Home",
+      "caption": "Home page in the default light theme: search form and recent parcels table.",
+      "sha256": "10e4451bc8ee7ae72b4c39855e37b0ad8eb8bb32fc78ab7f78eda0b69c261284",
+      "size": 70540
     },
     {
-      "filename": "parcel-found-mobile.png",
+      "filename": "parcel-timeline-mobile.png",
+      "state": "parcel-timeline",
       "route": "parcel-found",
       "viewport": "mobile",
+      "title": "Parcel timeline",
+      "caption": "Parcel PK1000000001 shipment history: events, locations and latest marker.",
       "sha256": "dd750c63de10cf551d9a05ee1784ad549f57107fd9edc2de8d30a050c5c2883a",
       "size": 76582
     },
     {
-      "filename": "not-found-mobile.png",
+      "filename": "parcel-not-found-mobile.png",
+      "state": "parcel-not-found",
       "route": "not-found",
       "viewport": "mobile",
+      "title": "Parcel not found",
+      "caption": "Unknown tracking number PK9999999999: not found message.",
       "sha256": "893678496e3a2c2113e17d23a13c882e1f554dceba5759aae44a6d10a7338ff0",
       "size": 42502
     },
     {
-      "filename": "invalid-input-mobile.png",
+      "filename": "parcel-invalid-input-mobile.png",
+      "state": "parcel-invalid-input",
       "route": "invalid-input",
       "viewport": "mobile",
+      "title": "Invalid tracking number",
+      "caption": "Malformed tracking number 12345: invalid tracking number message.",
       "sha256": "2c9322d3ddeb3560754dac9f9931861bcdc0610f1245a6f7c71b14e94d79a752",
       "size": 43716
     }
   ],
+  "skipped": [
+    "home-dark",
+    "home-recent-searches",
+    "home-filtered",
+    "home-left-nav",
+    "parcel-dark",
+    "parcel-copy-link"
+  ],
   "tag": "v0.2.0",
   "reproducible": true,
-  "commit_sha": "7f7ba0ca14b3c637c9fc73935df46f95a2888b70"
+  "commit_sha": "7f7ba0ca14b3c637c9fc73935df46f95a2888b70",
+  "changes": {
+    "vs": "v0.1.1",
+    "fp": {
+      "self": "023c09981a6083f1314179d38b9a6edc5f0154855df04def4ad6f13a37310677",
+      "prev": "fb3c0f65f4ede42a48b44a1a9b3c703f94e52bd073f3c08aa0574b47237ca517"
+    },
+    "states": {
+      "parcel-timeline": {
+        "status": "changed",
+        "pct": {
+          "desktop": 4.2984375,
+          "mobile": 15.158281686717705
+        }
+      },
+      "home-empty-search": {
+        "status": "unchanged",
+        "pct": {
+          "desktop": 0.0,
+          "mobile": 0.0
+        }
+      },
+      "home-default": {
+        "status": "unchanged",
+        "pct": {
+          "desktop": 0.0,
+          "mobile": 0.0
+        }
+      },
+      "parcel-not-found": {
+        "status": "unchanged",
+        "pct": {
+          "desktop": 0.0,
+          "mobile": 0.0
+        }
+      },
+      "parcel-invalid-input": {
+        "status": "unchanged",
+        "pct": {
+          "desktop": 0.0,
+          "mobile": 0.0
+        }
+      }
+    }
+  }
 }
