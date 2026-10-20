@@ -36,7 +36,8 @@ MAX_TOTAL_BYTES = 20 * 1024 * 1024  # 20 MB
 
 SAFE_PNG_NAME_RE = re.compile(r"^[a-zA-Z0-9_-]+\.png$")
 SHA256_HEX_RE = re.compile(r"^[0-9a-f]{64}$")
-ROUTE_RE = re.compile(r"^(home|parcel-found|not-found|invalid-input)$")
+ROUTE_RE = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")  # route names come from states.json
+MAX_ROUTE_LEN = 40
 VIEWPORT_RE = re.compile(r"^(desktop|mobile)$")
 STATE_ID_RE = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
 MAX_STATE_ID_LEN = 40
@@ -54,6 +55,20 @@ LEGACY_ROUTE_STATES = {
     "not-found": "parcel-not-found",
     "invalid-input": "parcel-invalid-input",
 }
+
+
+def fingerprint(triples: Any) -> str:
+    """Stable hash of (state, viewport, sha256) triples: identifies one capture's pixels."""
+    lines = sorted(f"{s}|{v}|{h}" for s, v, h in triples)
+    return hashlib.sha256("\n".join(lines).encode("utf-8")).hexdigest()
+
+
+def manifest_fingerprint(screenshots: list[dict[str, Any]] | None) -> str:
+    return fingerprint(
+        (state_id_of(s), s.get("viewport"), s.get("sha256"))
+        for s in screenshots or []
+        if isinstance(s, dict) and state_id_of(s)
+    )
 
 
 def state_id_of(item: dict[str, Any]) -> str | None:
@@ -336,7 +351,11 @@ def validate_artifact_dir(artifact_dir: str | Path) -> ValidationResult:
             errors.append(f"screenshots[{i}] has invalid or unsafe filename: {filename!r}")
             continue
 
-        if not isinstance(route, str) or not ROUTE_RE.fullmatch(route):
+        if (
+            not isinstance(route, str)
+            or len(route) > MAX_ROUTE_LEN
+            or not ROUTE_RE.fullmatch(route)
+        ):
             errors.append(f"screenshots[{i}] has invalid route: {route!r}")
 
         if not isinstance(viewport, str) or not VIEWPORT_RE.fullmatch(viewport):

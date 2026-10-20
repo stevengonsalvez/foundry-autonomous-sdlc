@@ -592,3 +592,18 @@ def test_legacy_manifest_without_state_still_valid(tmp_path: Path) -> None:
     result = validate_artifact_dir(tmp_path)
     assert result.valid, result.errors
     assert all("state" not in s for s in result.screenshots)
+
+
+def test_new_kebab_case_routes_from_states_json_are_accepted(tmp_path: Path) -> None:
+    _write_state_artifact(tmp_path, [("settings-page", "settings", "desktop")])
+    assert validate_artifact_dir(tmp_path).valid
+
+
+@pytest.mark.parametrize("bad_route", ["Settings", "../x", "a b", "x" * 41, "a\n[l](u)", ""])
+def test_hostile_routes_still_rejected(tmp_path: Path, bad_route: str) -> None:
+    def mutate(m: dict[str, Any]) -> None:
+        m["screenshots"][0]["route"] = bad_route
+
+    _write_state_artifact(tmp_path, [("home-dark", "home", "desktop")], mutate=mutate)
+    result = validate_artifact_dir(tmp_path)
+    assert not result.valid and any("invalid route" in e for e in result.errors)

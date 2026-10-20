@@ -31,8 +31,10 @@ from typing import Any
 from scripts.ui.png_diff import PngDecodeError, diff_pngs, format_pct
 from scripts.ui.validate_artifact import (
     MAX_CAPTION_LEN,
+    MAX_ROUTE_LEN,
     MAX_STATE_ID_LEN,
     MAX_TITLE_LEN,
+    ROUTE_RE,
     SAFE_PNG_NAME_RE,
     STATE_ID_RE,
     TEXT_RE,
@@ -159,7 +161,12 @@ def _clean_items(screenshots: list[dict[str, Any]]) -> list[dict[str, Any]]:
         route = item.get("route")
         viewport = item.get("viewport")
         filename = item.get("filename")
-        if route not in FIXED_ROUTES or viewport not in FIXED_VIEWPORTS:
+        if (
+            not isinstance(route, str)
+            or len(route) > MAX_ROUTE_LEN
+            or not ROUTE_RE.fullmatch(route)
+            or viewport not in FIXED_VIEWPORTS
+        ):
             continue
         if not isinstance(filename, str) or not SAFE_PNG_NAME_RE.fullmatch(filename):
             continue
@@ -324,7 +331,8 @@ def format_pr_comment(
     if have_baseline:
         shown_base = base_sha if base_sha and SHORT_SHA_RE.fullmatch(base_sha) else None
         lines.append(
-            "- Baseline: `main`" + (f" at `{shown_base[:8]}`" if shown_base else "")
+            "- Baseline: the PR base branch"
+            + (f" at `{shown_base[:8]}`" if shown_base else "")
             + " (same states, same renderer)"
         )
     lines += [
@@ -362,7 +370,7 @@ def format_pr_comment(
             lines += ["", "</details>", ""]
     else:
         lines += [
-            "_No baseline available (main could not be captured), showing this PR only._",
+            "_No baseline available (the base could not be captured), showing this PR only._",
             "",
             "<details open>",
             f"<summary><b>Screenshots ({capture_count} captures)</b></summary>",
@@ -399,7 +407,7 @@ def format_pr_comment(
 def _changed_block(state: dict[str, Any], base_url: str) -> list[str]:
     title = html.escape(state["title"])
     if state["status"] == "new":
-        summary = "**New state**, not present on main"
+        summary = "**New state**, not present on the base"
     else:
         parts = []
         for vp in FIXED_VIEWPORTS:
@@ -410,7 +418,7 @@ def _changed_block(state: dict[str, Any], base_url: str) -> list[str]:
     out = [f"#### {title} (`{state['state']}`)", "", summary]
     if state["caption"]:
         out += ["", f"> {html.escape(state['caption'])}"]
-    out += ["", "| | Before (main) | After (this PR) |", "|---|---|---|"]
+    out += ["", "| | Before (base) | After (this PR) |", "|---|---|---|"]
     for vp, width in (("desktop", 320), ("mobile", 160)):
         view = state["viewports"].get(vp)
         if not view:
@@ -418,7 +426,7 @@ def _changed_block(state: dict[str, Any], base_url: str) -> list[str]:
         before = (
             _img(f"{base_url}/before/{view['before']}", f"{state['title']} {vp} before", width)
             if view["before"]
-            else "_not on main_"
+            else "_not on base_"
         )
         after = _img(f"{base_url}/{view['after']}", f"{state['title']} {vp} after", width)
         out.append(f"| **{vp.capitalize()}** | {before} | {after} |")
