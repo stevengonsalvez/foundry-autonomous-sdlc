@@ -215,3 +215,113 @@ def test_a_closed_issue_the_tick_never_loads_is_terminal(world: World) -> None:
 
     assert outcome.result == "skipped" and outcome.terminal
     assert world.gh.issues[n]["author"] == OWNER
+
+
+# -- meter: a surrogate price for the step's engine calls -------------------------------------------
+
+def metered_step(world: World, number: int, usd_per_call: float) -> TickReport:
+    """One step whose engine calls are priced by a meter, as run_step prices CliFoundry's calls."""
+    start = len(world.foundry.calls)
+    report = run_tick(world.gh, world.foundry, NoSecrets(), world.clock, 240, budget=world.budget,
+                      sleep=world.sleep, only=number, use_lock=False,
+                      meter=lambda: usd_per_call * (len(world.foundry.calls) - start))
+    world.clock.advance(300)
+    return report
+
+
+def test_a_meter_prices_the_steps_calls_instead_of_their_tokens(world: World) -> None:
+    n = new_issue(world)
+
+    metered_step(world, n, 0.05)
+
+    calls = len(world.foundry.calls)
+    cost = world.gh.state_of(n)["cost"]
+    assert calls >= 1
+    assert cost["usd"] == round(0.05 * calls, 6)          # no token price on top: not counted twice
+    assert all(c["in"] and c["out"] for c in cost["calls"])  # the tokens are still on record
+
+
+def test_a_meter_that_pushes_an_issue_over_its_cap_escalates_cost_cap(world: World) -> None:
+    n = open_scenario(world, "a")
+
+    for _ in range(10):
+        metered_step(world, n, 1.6)
+        if state.ESC_COST_CAP in world.gh.labels(n):
+            break
+
+    assert state.ESC_COST_CAP in world.gh.labels(n)
+    assert world.gh.state_of(n)["cost"]["usd"] >= 3.0
+    assert len(world.foundry.calls) <= 3                  # stopped at the cap, not after it
+
+
+def test_a_meter_under_the_cap_does_not_escalate(world: World) -> None:
+    n = open_scenario(world, "a")
+
+    for _ in range(40):
+        metered_step(world, n, 0.01)
+        if state.RELEASED in world.gh.labels(n):
+            break
+
+    assert state.RELEASED in world.gh.labels(n)
+    assert not any(label.startswith("escalated:") for label in world.gh.labels(n))
+    assert world.gh.state_of(n)["cost"]["usd"] > 0
+
+
+def test_a_meter_charges_engine_calls_that_returned_nothing(world: World) -> None:
+    n = new_issue(world)
+    metered_step(world, n, 0.05)
+    spent = world.gh.state_of(n)["cost"]["usd"]
+    world.foundry.errors["sdlc-feasibility"] = rate_limited()
+
+    outcome = object_outcome(metered_step(world, n, 0.05), n, world.gh)
+
+    assert outcome.result == "deferred"
+    failed = len(world.foundry.agent_calls("sdlc-feasibility"))
+    assert failed >= 1
+    assert world.gh.state_of(n)["cost"]["usd"] == round(spent + 0.05 * failed, 6)
+
+
+def test_a_meter_charge_counts_in_the_published_totals(world: World) -> None:
+    n = new_issue(world)
+
+    report = metered_step(world, n, 0.5)
+
+    doc = json.loads(world.gh.files[("metrics", "metrics.json")])
+    calls = len(world.foundry.calls)
+    assert report.usd_this_tick == round(0.5 * calls, 8)
+    assert doc["totals"]["usd"] >= 0.5 * calls
+
+
+def test_without_a_meter_the_tokens_are_the_price(world: World) -> None:
+    n = new_issue(world)
+
+    step(world, n)
+
+    cost = world.gh.state_of(n)["cost"]
+    tokens_in, tokens_out = world.foundry.usage
+    assert cost["usd"] == round(len(world.foundry.calls) * (tokens_in * 0.25 + tokens_out * 2.00) / 1e6, 6)
+
+
+def test_a_new_issue_whose_metered_calls_all_fail_keeps_their_spend_against_its_cap(world: World) -> None:
+    world.foundry.errors["sdlc-req-gate"] = rate_limited()
+    n = new_issue(world)
+
+    outcome = object_outcome(metered_step(world, n, 0.05), n, world.gh)
+
+    assert outcome.result == "deferred"
+    calls = len(world.foundry.agent_calls("sdlc-req-gate"))
+    assert calls >= 1
+    assert world.gh.state_of(n)["cost"]["usd"] == round(0.05 * calls, 6)   # on the issue, not totals only
+    assert not any(label.startswith("stage:") for label in world.gh.labels(n))
+
+
+def test_unbilled_meter_growth_counts_against_the_cap_before_a_retry(world: World) -> None:
+    n = new_issue(world)
+    metered_step(world, n, 1.6)
+    world.foundry.errors["sdlc-feasibility"] = rate_limited()
+
+    report = metered_step(world, n, 1.6)
+
+    assert len(world.foundry.agent_calls("sdlc-feasibility")) == 1      # 1.6 + 1.6 is past the cap: no retry
+    assert report.objects[0].result == "capped"
+    assert report.model_calls == 0                 # an unanswered charge is spend, not a model call
