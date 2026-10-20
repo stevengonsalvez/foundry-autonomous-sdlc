@@ -20,8 +20,8 @@
       "title": "Home, dark theme",
       "route": "home",
       "setup": { "localStorage": { "theme": "dark" } },
-      "requires": { "selector": "[data-testid='theme-toggle']" },
-      "waitFor": [{ "selector": "html[data-theme='dark']" }, { "selector": "table" }],
+      "requires": [{ "selector": "[data-testid='theme-toggle']" }, { "selector": "html[data-theme='dark']" }],
+      "waitFor": [{ "selector": "table" }],
       "caption": "Home page with the dark theme selected via the theme toggle preference."
     },
     {
@@ -80,8 +80,8 @@
       "title": "Parcel timeline, dark theme",
       "route": "parcel-found",
       "setup": { "localStorage": { "theme": "dark" } },
-      "requires": { "selector": "[data-testid='theme-toggle']" },
-      "waitFor": [{ "selector": "html[data-theme='dark']" }, { "selector": ".timeline" }],
+      "requires": [{ "selector": "[data-testid='theme-toggle']" }, { "selector": "html[data-theme='dark']" }],
+      "waitFor": [{ "selector": ".timeline" }],
       "caption": "Parcel PK1000000001 shipment history in the dark theme."
     },
     {

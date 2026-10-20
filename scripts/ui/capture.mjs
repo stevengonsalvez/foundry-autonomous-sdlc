@@ -300,6 +300,7 @@ async function capture() {
 
   const browser = await chromium.launch(chromiumLaunchOptions());
   const manifestScreenshots = [];
+  const skippedStates = new Set();
 
   try {
     for (const vp of VIEWPORTS) {
@@ -311,7 +312,9 @@ async function capture() {
         // silently hide a feature that is really there.
         let shot = null;
         let skipReason = "";
-        for (let attempt = 1; attempt <= SKIP_ATTEMPTS && !shot; attempt++) {
+        // A state already confirmed skipped at another viewport gets a single attempt.
+        const attempts = skippedStates.has(state.id) ? 1 : SKIP_ATTEMPTS;
+        for (let attempt = 1; attempt <= attempts && !shot; attempt++) {
           const context = await browser.newContext({
             viewport: { width: vp.width, height: vp.height },
             deviceScaleFactor: 1,
@@ -342,6 +345,7 @@ async function capture() {
         }
 
         if (!shot) {
+          skippedStates.add(state.id);
           console.log(`  skipped ${state.id} (${vp.name}): ${skipReason}`);
           continue;
         }
