@@ -1,0 +1,4 @@
+{"event":"init","conversation_id":"c-0b7e1f42","model":"agy-default","mode":"plan"}
+{"event":"step_update","conversation_id":"c-0b7e1f42","step":{"index":1,"type":"thinking","status":"in_progress"}}
+{"event":"step_update","conversation_id":"c-0b7e1f42","step":{"index":1,"type":"thinking","status":"done"}}
+{"event":"result","result":{"conversation_id":"c-0b7e1f42","status":"SUCCESS","response":"```json\n{\"owner\": \"backend\", \"severity\": \"medium\", \"summary\": \"Login returns 500 when the session cookie is missing\"}\n```","duration_seconds":103.8,"num_turns":1,"usage":{"input_tokens":28104,"output_tokens":1825,"thinking_tokens":12341,"cache_read_tokens":0,"total_tokens":42270},"denied_actions":[]}}
