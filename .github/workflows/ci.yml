@@ -445,9 +445,6 @@ jobs:
         working-directory: app
         run: npx playwright install --with-deps chromium
 
-      - name: Test the state runner
-        run: node --test scripts/tests/ui/states.test.mjs
-
       - name: Capture screenshots
         env:
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
@@ -499,6 +496,10 @@ jobs:
           path: ui-screenshots-base
           if-no-files-found: ignore
           retention-days: 7
+
+      # After the uploads on purpose: a flaky browser test must never cost the PR its proof.
+      - name: Test the state runner
+        run: node --test scripts/tests/ui/states.test.mjs
 
   # Not a required check: dynamic test of the app evolution showcase.
   test-history:
