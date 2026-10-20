@@ -93,9 +93,10 @@ umask 077
 printf 'fake-github-pat-not-used' > "$WORK/github_pat.txt"
 printf 'fake-agy-token-not-used' > "$WORK/agy_cli_token.txt"
 CODER_TOKEN=$(random_secret)
+LEDGER_TOKEN=$(random_secret)
 
 # .env.example supplies the pinned versions; everything a smoke run must own is overridden below.
-grep -vE '^(FACTORY_MODE|BIND_ADDR|TEMPORAL_HOST_PORT|TEMPORAL_UI_HOST_PORT|CONTROL_CENTER_HOST_PORT|FACTORY_UID|FACTORY_GID|POSTGRES_PASSWORD|DOLT_ROOT_PASSWORD|DOLT_PASSWORD|CODER_SERVICE_TOKEN|GITHUB_PAT_HOST_FILE|AGY_TOKEN_HOST_FILE|PO_INTAKE_ENABLED)=' \
+grep -vE '^(FACTORY_MODE|BIND_ADDR|TEMPORAL_HOST_PORT|TEMPORAL_UI_HOST_PORT|CONTROL_CENTER_HOST_PORT|FACTORY_UID|FACTORY_GID|POSTGRES_PASSWORD|DOLT_ROOT_PASSWORD|DOLT_PASSWORD|CODER_SERVICE_TOKEN|LEDGER_TOKEN|GITHUB_PAT_HOST_FILE|AGY_TOKEN_HOST_FILE|PO_INTAKE_ENABLED)=' \
   "$HERE/.env.example" > "$ENV_FILE"
 cat >> "$ENV_FILE" <<EOF
 FACTORY_MODE=fake
@@ -109,6 +110,7 @@ POSTGRES_PASSWORD=$(random_secret)
 DOLT_ROOT_PASSWORD=$(random_secret)
 DOLT_PASSWORD=$(random_secret)
 CODER_SERVICE_TOKEN=$CODER_TOKEN
+LEDGER_TOKEN=$LEDGER_TOKEN
 GITHUB_PAT_HOST_FILE=$WORK/github_pat.txt
 AGY_TOKEN_HOST_FILE=$WORK/agy_cli_token.txt
 PO_INTAKE_ENABLED=0
@@ -170,7 +172,7 @@ check "nginx /issues.json 200 JSON list" issues_is_list
 # One ticket.updated event, built with the ledger's own constructors (as services/tests/test_ledger_api.py).
 ingest_one() {
   dc exec -T ledger-api python - "$SMOKE_ISSUE" <<'PY'
-import json, sys, urllib.request
+import json, os, sys, urllib.request
 from sdlc_agents.ledger import events, model
 
 issue, now = int(sys.argv[1]), "2026-10-20T10:00:00Z"
@@ -178,13 +180,31 @@ ticket = model.ticket(number=issue, kind="issue", title="Smoke test ticket", aut
                       closed_at=None, labels=("type:feature", "stage:refining"), state_data=None)
 body = json.dumps({"events": [events.make("ticket.updated", now, {"ticket": ticket}, issue=issue)]}).encode()
 req = urllib.request.Request("http://127.0.0.1:8080/ingest", data=body, method="POST",
-                             headers={"Content-Type": "application/json"})
+                             headers={"Content-Type": "application/json", "x-factory-token": os.environ["LEDGER_TOKEN"]})
 reply = json.load(urllib.request.urlopen(req, timeout=15))
 assert reply.get("ok") is True and reply.get("tickets", 0) >= 1, reply
 print(reply)
 PY
 }
-check "ledger-api /ingest accepts one ticket.updated" ingest_one
+check "ledger-api /ingest accepts one ticket.updated (with LEDGER_TOKEN)" ingest_one
+
+# From another container on the ledger network: no token, or a wrong one, is 401 and writes nothing.
+ingest_without_token_is_401() {
+  dc exec -T worker-foreman python - <<'PY'
+import json, urllib.error, urllib.request
+
+for headers in ({}, {"x-factory-token": "wrong"}):
+    req = urllib.request.Request("http://ledger-api:8080/ingest", data=json.dumps({"events": []}).encode(),
+                                 method="POST", headers={"Content-Type": "application/json", **headers})
+    try:
+        urllib.request.urlopen(req, timeout=10)
+        raise SystemExit(f"ingest with {headers or 'no token'} succeeded")
+    except urllib.error.HTTPError as exc:
+        assert exc.code == 401, exc.code
+print("401 without token and with a wrong token")
+PY
+}
+check "ledger-api /ingest without token is 401 (from worker-foreman, ledger net)" ingest_without_token_is_401
 
 state_has_ticket() {
   curl -sf --max-time 10 "$CC/state.json" -o "$WORK/state.json"
@@ -234,6 +254,9 @@ agyuser_uid_is_61000() { [ "$(dc exec -T coder runuser -u agyuser -- id -u)" = 6
 check "coder drops to agyuser (uid 61000) under no-new-privileges" agyuser_uid_is_61000
 check_fails "agyuser cannot read /run/secrets/github_pat" dc exec -T coder runuser -u agyuser -- cat /run/secrets/github_pat
 check_fails "agyuser cannot read /run/secrets/agy_cli_token" dc exec -T coder runuser -u agyuser -- cat /run/secrets/agy_cli_token
+agyagent_is_its_own_uid() { [ "$(dc exec -T coder id -u agyagent)" = 61001 ] && [ "$(dc exec -T coder runuser -u agyagent -- id -G)" = 61001 ]; }
+check "coder has agent-run user agyagent (uid 61001, no other groups)" agyagent_is_its_own_uid
+check_fails "agyagent cannot read /run/secrets/agy_cli_token" dc exec -T coder runuser -u agyagent -- cat /run/secrets/agy_cli_token
 check_fails "coder root filesystem is read-only" dc exec -T coder touch /usr/local/smoke-write-test
 
 # --- fake coder over the foreman's network -------------------------------------------------------------
@@ -280,6 +303,44 @@ print(" -> ".join(seen))
 PY
 }
 check "fake coder: 401 without token, start running, status succeeded" fake_coder_flow
+
+# --- prompt agents run in the coder sandbox, never in the foreman ---------------------------------------
+
+foreman_secrets_are_only_github_pat() { [ "$(dc exec -T worker-foreman ls /run/secrets)" = github_pat ]; }
+check "worker-foreman /run/secrets holds only github_pat" foreman_secrets_are_only_github_pat
+check_fails "worker-foreman cannot read an agy token" dc exec -T worker-foreman python -c \
+  "open('/run/secrets/agy_cli_token').read()"
+check_fails "worker-foreman has no AGY_TOKEN_FILE" dc exec -T worker-foreman sh -c 'test -n "${AGY_TOKEN_FILE:-}"'
+check_fails "worker-foreman has no agy binary" dc exec -T worker-foreman sh -c 'command -v agy || test -e /opt/agy/bin/agy'
+
+agent_run_flow() {
+  dc exec -T worker-foreman python - <<'PY'
+import json, os, urllib.error, urllib.request
+from sdlc_factory.agent_run import FakeAgentRunner
+from sdlc_factory.cli_foundry import CliFoundry
+
+url = os.environ["AGENT_SANDBOX_URL"] + "/agent-run"
+body = json.dumps({"prompt": "smoke", "schema": None, "timeout_s": 5}).encode()
+for headers in ({}, {"x-factory-token": "wrong"}):
+    try:
+        urllib.request.urlopen(urllib.request.Request(url, data=body, method="POST", headers=headers), timeout=10)
+        raise SystemExit(f"/agent-run with {headers or 'no token'} succeeded")
+    except urllib.error.HTTPError as exc:
+        assert exc.code == 401, exc.code
+argv = json.dumps({"prompt": "smoke", "schema": None, "timeout_s": 5, "argv": ["/bin/sh"]}).encode()
+try:
+    urllib.request.urlopen(urllib.request.Request(url, data=argv, method="POST",
+                                                  headers={"x-factory-token": os.environ["CODER_SERVICE_TOKEN"]}),
+                           timeout=10)
+    raise SystemExit("/agent-run accepted an argv field")
+except urllib.error.HTTPError as exc:
+    assert exc.code == 400, exc.code
+text = CliFoundry.from_env().call_prompt_agent("sdlc-release-notes", "smoke").text
+assert text == FakeAgentRunner.TEXT, text
+print("401 without token, 400 for argv, CliFoundry round trip:", text)
+PY
+}
+check "foreman /agent-run: 401 no token, 400 argv, CliFoundry round trip (fake)" agent_run_flow
 
 # --- report --------------------------------------------------------------------------------------------
 

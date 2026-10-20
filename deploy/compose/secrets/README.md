@@ -6,11 +6,12 @@ the uid in `.env` `FACTORY_UID`.
 | File | Used by | Content |
 |---|---|---|
 | `github_pat.txt` | worker-foreman, coder | GitHub token for the target repository |
-| `agy_cli_token.txt` | worker-foreman, coder | agy (Antigravity CLI) OAuth token file |
+| `agy_cli_token.txt` | coder only | agy (Antigravity CLI) OAuth token file |
 
 Compose mounts them at `/run/secrets/github_pat` and `/run/secrets/agy_cli_token`. They are never baked
 into an image or passed as environment variables. Inside the coder, root reads them and copies the agy
-token per job into `agyuser`'s home (mode 600); `agyuser` (uid 61000) cannot read `/run/secrets`.
+token per job, and per prompt-agent call, into a HOME owned by `agyuser` (mode 600); `agyuser`
+(uid 61000) cannot read `/run/secrets`. worker-foreman never mounts the agy token.
 
 ## GitHub token: `github_pat.txt`
 

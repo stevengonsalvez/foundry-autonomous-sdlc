@@ -11,10 +11,13 @@
 #   core       postgres, temporal*, schedule-init, worker-foreman
 #   ledger     dolt, ledger-api, control-center, worker-foreman
 #   coder_net  internal, no route out: coder, worker-foreman, egress-proxy
-#   egress     egress-proxy, worker-foreman (direct HTTPS to GitHub and agy)
+#   egress     egress-proxy, worker-foreman (direct HTTPS to GitHub)
 #
 # The coder is ONLY on coder_net: it cannot resolve or reach Temporal, Postgres or Dolt, and its only
 # way out is the allow-list proxy. Host ports bind to ${BIND_ADDR} (127.0.0.1) only.
+#
+# Every agy run (coder jobs AND prompt agents) happens in the coder, as agyuser. worker-foreman holds
+# only github_pat: it POSTs prompt-agent calls to coder /agent-run and never sees the agy token.
 
 name: sdlc-factory
 
@@ -22,7 +25,8 @@ x-worker-build: &worker-build
   context: ../..
   dockerfile: deploy/compose/Dockerfile.worker
   args:
-    INSTALL_AGY: ${INSTALL_AGY:-1}
+    # The worker image never runs agy (prompt agents run in the coder), so it is built without it.
+    INSTALL_AGY: ${INSTALL_AGY:-0}
 
 x-hardened: &hardened
   read_only: true
@@ -168,6 +172,8 @@ services:
       DOLT_PASSWORD: ${DOLT_PASSWORD}
       LEDGER_HOST: 0.0.0.0
       LEDGER_PORT: "8080"
+      # POST /ingest requires it in x-factory-token; ledger-api refuses to start without it.
+      LEDGER_TOKEN: ${LEDGER_TOKEN:?set LEDGER_TOKEN in .env}
     networks: [ledger]
     command: ["python", "-m", "sdlc_factory.ledger_api"]
     healthcheck:
@@ -240,11 +246,13 @@ services:
       MAX_CONCURRENT_ACTIVITIES: "1"
       PO_INTAKE_ENABLED: ${PO_INTAKE_ENABLED:-0}
       GITHUB_PAT_FILE: /run/secrets/github_pat
-      AGY_TOKEN_FILE: /run/secrets/agy_cli_token
       CODER_URL: http://coder:8090
+      # Prompt agents run in the coder sandbox; no agy token or binary in this container.
+      AGENT_SANDBOX_URL: http://coder:8090
       CODER_SERVICE_TOKEN: ${CODER_SERVICE_TOKEN:?set CODER_SERVICE_TOKEN in .env}
       LEDGER_URL: http://ledger-api:8080
-    secrets: [github_pat, agy_cli_token]
+      LEDGER_TOKEN: ${LEDGER_TOKEN:?set LEDGER_TOKEN in .env}
+    secrets: [github_pat]
     networks: [core, ledger, coder_net, egress]
     command: ["python", "-m", "sdlc_factory.worker", "--role", "foreman"]
 
@@ -269,8 +277,12 @@ services:
       - /home/agyuser:size=512m,mode=0700,uid=61000,gid=61000
     environment:
       FACTORY_MODE: ${FACTORY_MODE:-live}
-      CODER_SERVICE_TOKEN: ${CODER_SERVICE_TOKEN}
+      # Required on every POST (/invoke and /agent-run); live mode refuses to start without it.
+      CODER_SERVICE_TOKEN: ${CODER_SERVICE_TOKEN:?set CODER_SERVICE_TOKEN in .env}
+      CODER_HOST: 0.0.0.0
       CODER_PORT: "8090"
+      # Prompt-agent agy calls (/agent-run) running at once; the rest wait up to 60 s, then get 429.
+      AGENT_RUN_CONCURRENCY: ${AGENT_RUN_CONCURRENCY:-2}
       GITHUB_PAT_FILE: /run/secrets/github_pat
       AGY_TOKEN_FILE: /run/secrets/agy_cli_token
       HOME: /root

@@ -14,12 +14,15 @@ Operating the `sdlc-factory` docker compose stack in `deploy/compose/`. Spec:
                  │ schedule-init         │   └─────────▲───────────┘
                  └──────────▲────────────┘             │
                             │      ┌───────────────────┴┐
-                            └──────│ worker-foreman     │──── egress ───▶ GitHub, agy
+                            └──────│ worker-foreman     │──── egress ───▶ GitHub
                                    └─────────┬──────────┘
-                              coder_net      │ (internal, no route out)
+                              coder_net      │ /invoke, /agent-run (internal, no route out)
                                    ┌─────────▼──┐    ┌──────────────┐
                                    │ coder      │───▶│ egress-proxy │── egress ──▶ allow-list
-                                   └────────────┘    └──────────────┘
+                                   │ agy as     │    └──────────────┘
+                                   │ agyuser /  │
+                                   │ agyagent   │
+                                   └────────────┘
 ```
 
 | Service | Role | Networks |
@@ -33,8 +36,8 @@ Operating the `sdlc-factory` docker compose stack in `deploy/compose/`. Spec:
 | ledger-api | `/state.json`, `/issues.json`, `/ingest`, `/healthz` on 8080 | ledger |
 | control-center | nginx: the static app plus same-origin `/state.json`, `/issues.json` on `127.0.0.1:18080` | ledger |
 | schedule-init | one-shot, registers `github-poll` (60 s) and `po-intake` (4 h, paused by default) | core |
-| worker-foreman | workflows plus all foreman activities, one activity at a time (D6) | core, ledger, coder_net, egress |
-| coder | coder-service on 8090; agy, node and git; untrusted steps run as `agyuser` | coder_net only |
+| worker-foreman | workflows plus all foreman activities, one activity at a time (D6); no agy, no agy token | core, ledger, coder_net, egress |
+| coder | coder-service on 8090: coder jobs (`/invoke`) and every prompt-agent call (`/agent-run`); agy, node and git; untrusted steps run as `agyuser` | coder_net only |
 | egress-proxy | squid, HTTPS CONNECT to an allow-list only | coder_net, egress |
 
 Isolation, enforced by the network layout and checked by `smoke.sh`:
@@ -46,7 +49,51 @@ Isolation, enforced by the network layout and checked by `smoke.sh`:
   DAC_OVERRIDE, FOWNER, KILL, SETUID, SETGID`, read-only root filesystem, `no-new-privileges`, tmpfs for
   `/tmp`, `/root` and `/home/agyuser`, volumes for `WORKROOT` and `STATE_DIR`.
 - `agyuser` cannot read `/run/secrets/*`: the files keep the host owner and mode 600.
-- The control center is read only: nginx does not proxy `/ingest`.
+- The control center is read only: nginx does not proxy `/ingest`, and ledger-api refuses `/ingest`
+  without `LEDGER_TOKEN` in `x-factory-token`.
+
+### The agy boundary
+
+```
+┌────────────────┐ POST /agent-run      ┌──────────────────┐ setuid  ┌───────────────────┐
+│ worker-foreman │ {prompt, schema,     │ coder (root)     │────────▶│ agy --mode plan   │
+│ github_pat     │──timeout_s} + token─▶│ builds argv, env │         │ uid agyagent      │
+│ no agy, no     │                      │ per-call cwd+HOME│         │ cwd empty, HOME   │
+│ agy token      │◀── raw stdout/stderr─│ deletes both     │         │ = token copy 0600 │
+└────────────────┘  classified locally  └──────────────────┘         └───────────────────┘
+```
+
+Every agy run, coder jobs and prompt agents alike, happens in the coder: coder jobs as `agyuser`
+(61000), prompt agents as `agyagent` (61001). Separate uids, because coder jobs run unrestricted agy
+and npm on untrusted repositories: with one uid a job could read an agent call's `/proc/<pid>/cwd`
+and rewrite its schema or HOME (forging a reviewer verdict), and a job's process reap would kill
+in-flight agent calls. Prompt agents
+used to run in worker-foreman as the uid that owns `github_pat`, where agy plan mode's `read_file` can
+read any file that uid can (a test proved it reads `/tmp`), next to unauthenticated Temporal, the
+ledger and the internet. Now:
+
+- worker-foreman mounts only `github_pat`; its image has no agy binary (`INSTALL_AGY=0`); with
+  `AGENT_SANDBOX_URL` (or `CODER_URL`) set, `CliFoundry` never reads `AGY_TOKEN_FILE` and never spawns
+  agy. Without either URL (dev and tests only) it runs agy locally as before.
+- `/agent-run` takes exactly `prompt` (1..100000 chars), `schema` (object or null) and `timeout_s`
+  (1..900). Any other field is a 400: the client cannot choose argv, flags, mode, binary or env. The
+  server runs agy in plan mode with an environment built from nothing plus the proxy and CA settings.
+- Each call: a fresh `cwd` (empty) and `HOME` (the token copy, 0600, written without following links;
+  `TMPDIR` inside it), owned by `agyagent`; both deleted afterwards. When the last call in flight ends,
+  any `agyagent` process left behind is killed. At most `AGENT_RUN_CONCURRENCY` (2) run at once; a call
+  that finds no slot within 60 s gets 429 and the object defers.
+- The coder requires `CODER_SERVICE_TOKEN` on every POST, checked before the body is read, and live
+  mode refuses to start without it. Bind address: `CODER_HOST` (0.0.0.0 inside the internal network).
+
+### Residual risks (accepted, know them)
+
+| Risk | Why it remains | Mitigation |
+|---|---|---|
+| `agyuser` can read other coder jobs' working trees and token copies; concurrent agent calls (`agyagent`) can read and write each other's HOME | one uid per role, not per call, in one container | per-call uids or one container per trust level is phase 2; keep `AGENT_RUN_CONCURRENCY` low |
+| agy's own account token is reachable by any agy run | agy needs it to work | dedicated Google account (section 7); rotate on suspicion |
+| A prompt injection into the reviewer model approves a bad PR, which then auto-merges | Stevie enabled auto-merge (`humanGates.merge: false`) | set `humanGates.merge: true` for any repository whose issues or PRs untrusted people can write |
+| Temporal frontend has no authentication | Temporal OSS default | published on `127.0.0.1` only (`BIND_ADDR`); never change that on a shared host |
+| An `agyagent` process that escaped its group lives until no agent call is in flight | reaping while a sibling call runs would kill it | the reap runs when the last call ends; `pids_limit: 1024`, `no-new-privileges` on the coder |
 
 ## 2. Bring-up
 
@@ -56,8 +103,10 @@ nodejs.org, the agy installer hosts), about 3 GB of disk for images.
 ```bash
 cd deploy/compose
 cp .env.example .env
-# Edit .env: generate each password and CODER_SERVICE_TOKEN, set FACTORY_UID/FACTORY_GID to `id -u`/`id -g`.
-python3 -c 'import secrets; print(secrets.token_urlsafe(32))'
+# Edit .env: set FACTORY_UID/FACTORY_GID to `id -u`/`id -g`, and give each of POSTGRES_PASSWORD,
+# DOLT_ROOT_PASSWORD, DOLT_PASSWORD, CODER_SERVICE_TOKEN and LEDGER_TOKEN its own value from:
+openssl rand -hex 32
+# Compose refuses to start while any of them is missing.
 
 # Secrets, see secrets/README.md
 ls -l secrets/github_pat.txt secrets/agy_cli_token.txt    # both -rw------- owned by FACTORY_UID
@@ -90,9 +139,11 @@ deploy/compose/smoke.sh          # about 2 minutes with warm images
 It runs the whole stack as a separate project `sdlc-factory-smoke` on ports 27233, 28233, 28080, with
 `FACTORY_MODE=fake` and dummy secrets in a temp directory, prints a PASS/FAIL table, and removes only
 that project (`docker compose -p sdlc-factory-smoke down -v`). `KEEP=1` leaves it running;
-`SMOKE_BUILD=0` skips the build. Fake mode replaces the coder with an in-memory fake; the foreman still
-starts its real adapters with a dummy GitHub token, so its poll activity fails with 401 against
-GitHub and changes nothing.
+`SMOKE_BUILD=0` skips the build. Fake mode replaces the coder with an in-memory fake and `/agent-run`
+with a scripted agy result; the foreman still starts its real adapters with a dummy GitHub token, so
+its poll activity fails with 401 against GitHub and changes nothing. It also checks the boundary: the
+foreman has only `github_pat`, no agy token or binary; `/agent-run` is 401 without the token and 400
+for an `argv` field; ledger `/ingest` is 401 without `LEDGER_TOKEN` from inside the ledger network.
 
 ## 3. Secrets
 
@@ -101,15 +152,23 @@ GitHub and changes nothing.
 | File | Content | Read by |
 |---|---|---|
 | `secrets/github_pat.txt` | fine-grained PAT scoped to the target repo | worker-foreman, coder |
-| `secrets/agy_cli_token.txt` | `~/.gemini/antigravity-cli/antigravity-oauth-token` from an interactive `agy` login | worker-foreman, coder |
+| `secrets/agy_cli_token.txt` | `~/.gemini/antigravity-cli/antigravity-oauth-token` from an interactive `agy` login | coder only |
 
 Both are docker secrets (bind mounts at `/run/secrets/...`), never in an image or an environment
 variable. Compose ignores `uid`/`mode` for file secrets, so the files keep their host owner and mode:
 keep them 600 and owned by `FACTORY_UID`, which is the uid worker-foreman runs as. The services read the
 files on every use, so replacing a file needs no restart.
 
-`CODER_SERVICE_TOKEN` (in `.env`) is shared by worker-foreman and the coder; the coder rejects
-`/invoke` calls without it in the `x-factory-token` header.
+Tokens in `.env` (generate each with `openssl rand -hex 32`; all required):
+
+| Variable | Shared by | Enforced by |
+|---|---|---|
+| `CODER_SERVICE_TOKEN` | worker-foreman, coder | coder: 401 on `/invoke` and `/agent-run` without it; live mode will not start without it |
+| `LEDGER_TOKEN` | worker-foreman, ledger-api | ledger-api: 401 on `POST /ingest` without it; will not start without it |
+| `DOLT_PASSWORD` | dolt, ledger-api | Dolt creates user `ledger` with it on first init; ledger-api has no default user or password |
+
+Rotating `CODER_SERVICE_TOKEN` or `LEDGER_TOKEN`: edit `.env`, then `docker compose up -d` (both
+sides restart with the new value). `DOLT_PASSWORD` only applies on the first init of `dolt-data`.
 
 ## 4. Configuration
 
@@ -131,6 +190,7 @@ files on every use, so replacing a file needs no restart.
   `callUsd`/`minuteUsd` map them onto the USD caps the tick enforces (D7). An exhausted budget escalates
   the issue; it never spends past the cap.
 - `engines.agy.printTimeoutS`: always passed explicitly (agy defaults to unbounded).
+- `AGENT_RUN_CONCURRENCY` in `.env` (default 2): prompt-agent agy calls the coder runs at once.
 - `PO_INTAKE_ENABLED=1` in `.env` un-pauses the simulated product owner schedule (`po-intake`), which
   files issues on its own.
 
@@ -182,12 +242,18 @@ clear (TLS end to end, no interception); use a dedicated Google account if possi
 | `schedule-init` exits 1 | its logs | Namespace missing or Temporal unreachable for 120 s; `docker compose up -d schedule-init` retries. |
 | worker-foreman restarting, `GITHUB_PAT_FILE ... cannot read` | `stat -c '%a %u' secrets/*.txt`, `FACTORY_UID` | Make the files owned by `FACTORY_UID`, mode 600. |
 | worker-foreman waits forever | `docker compose ps coder` | foreman starts only after the coder is healthy; read `docker compose logs coder`. |
+| coder exits "CODER_SERVICE_TOKEN is not set" | `.env` | Set it (live mode never serves without it). |
+| ledger-api exits "LEDGER_TOKEN is not set" (or DOLT_USER/DOLT_PASSWORD) | `.env` | Set it; compose passes it to ledger-api and worker-foreman. |
+| ledger events missing, foreman log `ledger: HTTP 401` | `LEDGER_TOKEN` in both containers | `docker compose up -d` after editing `.env` so both sides have the same value. |
+| prompt agents fail with `sandbox_unavailable` or `token_unavailable` | `docker compose logs coder` | agyuser missing, or `secrets/agy_cli_token.txt` unreadable or empty in the coder. Not retried: fix and remove the escalation label. |
+| prompt agents deferred with HTTP 429 `busy` | coder logs | more calls than `AGENT_RUN_CONCURRENCY`; they retry on the next poll. |
 | coder job fails with a 403 from the proxy | `docker compose logs egress-proxy \| grep TCP_DENIED` | Add the host to `proxy/allowlist.txt` with a comment, `docker compose up -d --build egress-proxy`. |
 | coder job `sandbox-unavailable` | coder logs | `agyuser` missing or uid drop blocked; the image creates it; do not run the coder with a different `user:`. |
+| prompt agents fail `sandbox_unavailable` | `docker compose exec coder id agyagent` | `agyagent` (61001) missing: rebuild the coder image. |
 | control center shows "not written yet" | `curl -s 127.0.0.1:18080/state.json` | 404 until the first ledger ingest; normal on a fresh stack. |
 | control center blank, CSP error in console | browser devtools | The page must be loaded from the same origin as `/state.json` (port 18080); `connect-src 'self'` allows only that. |
 | port already in use on `up` | `ss -ltn` | Change the `*_HOST_PORT` values in `.env`. |
-| build fails "agy install failed" | network to `antigravity.google` and `storage.googleapis.com` | Fix network; `INSTALL_AGY=0` builds a worker image without agy (fake mode only). |
+| build fails "agy install failed" | network to `antigravity.google` and `storage.googleapis.com` | Fix network (only the coder image installs agy; the worker image is built with `INSTALL_AGY=0`). |
 
 Useful commands (always from `deploy/compose`, so they act on this project only):
 

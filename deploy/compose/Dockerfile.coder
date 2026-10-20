@@ -56,6 +56,8 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 # git for checkouts. agyuser has a fixed uid far from host uids, so a bind-mounted secret file (owned by
 # the host user, mode 0600) is never readable by it. Its rc files are empty: nothing runs at login.
+# agyagent (61001) runs prompt-agent agy calls (/agent-run): a uid apart from the coder jobs' agyuser,
+# so an untrusted job can neither tamper with an agent call's HOME nor be confused with it when reaped.
 RUN apt-get update \
     && apt-get install -y --no-install-recommends ca-certificates git \
     && rm -rf /var/lib/apt/lists/* \
@@ -66,6 +68,8 @@ RUN apt-get update \
     && : > /home/agyuser/.profile \
     && chown agyuser:agyuser /home/agyuser/.bashrc /home/agyuser/.profile \
     && chmod 0700 /home/agyuser \
+    && groupadd --gid 61001 agyagent \
+    && useradd --uid 61001 --gid 61001 --no-create-home --home-dir /nonexistent --shell /usr/sbin/nologin agyagent \
     && install -d -m 0755 -o root -g root /srv/sdlc-work /var/lib/sdlc-coder
 
 WORKDIR /app
