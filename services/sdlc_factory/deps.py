@@ -5,9 +5,11 @@ What the activities are bound to: the tick's ports plus the factory definition.
 
     GITHUB_PAT_FILE   file holding the GitHub token (required)
     FACTORY_CONFIG    factory.yaml (default factory/factory.yaml)
-    AGY_TOKEN_FILE    agy login token file (required by CliFoundry.from_env)
+    AGENT_SANDBOX_URL where prompt agents run (CliFoundry.from_env; default CODER_URL)
     CODER_URL         coder service (optional, CliFoundry.from_env)
+    AGY_TOKEN_FILE    agy login token file, local mode only (no sandbox URL)
     LEDGER_URL        ledger-api base URL (optional; no ledger events without it)
+    LEDGER_TOKEN      sent on every ledger ingest (HttpEmitter)
 
 Tests bind the same dataclass to the in-memory fakes in agents/tests.
 """

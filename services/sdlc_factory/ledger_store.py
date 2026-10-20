@@ -29,8 +29,9 @@ CONFLICT_CODES = frozenset({1213, 1105, 1062})
 Connect = Callable[[], Any]  # a DB-API connection: cursor(), commit(), rollback(), close()
 
 
-def pymysql_connector(host: str, port: int, database: str, *, user: str = "root", password: str = "") -> Connect:
-    """Connection factory for a Dolt (or MySQL) server. Autocommit is off so each call is one transaction."""
+def pymysql_connector(host: str, port: int, database: str, *, user: str, password: str) -> Connect:
+    """Connection factory for a Dolt (or MySQL) server. Autocommit is off so each call is one transaction.
+    The credentials have no default: a forgotten setting must fail, not log in as root without a password."""
 
     def connect() -> Any:
         return pymysql.connect(

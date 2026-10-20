@@ -10,12 +10,18 @@ The control center is served from the same origin, so no CORS headers are sent. 
 behind a lock: this process is the only writer of the store, and a lost compare-and-swap would only cost
 a retry. Stdlib http.server; run with `python -m sdlc_factory.ledger_api`.
 
-Env: DOLT_HOST (127.0.0.1) DOLT_PORT (3306) DOLT_DB (ledger) DOLT_USER (root) DOLT_PASSWORD ()
-     LEDGER_HOST (0.0.0.0) LEDGER_PORT (8080)
+POST /ingest needs `x-factory-token` equal to LEDGER_TOKEN, checked before the body is read; the GET
+routes stay open (the control center reads them through nginx, which never proxies /ingest). Each socket
+read times out after 30 s and at most MAX_CONCURRENT requests are handled at once; a connection that
+finds no free slot is closed unanswered at once (SLOT_WAIT_S 0), so the accept loop never stalls.
+
+Env (main): LEDGER_TOKEN, DOLT_USER and DOLT_PASSWORD are required (no default credentials);
+     DOLT_HOST (127.0.0.1) DOLT_PORT (3306) DOLT_DB (ledger) LEDGER_HOST (0.0.0.0) LEDGER_PORT (8080)
 """
 
 from __future__ import annotations
 
+import hmac
 import json
 import logging
 import os
@@ -36,6 +42,9 @@ from sdlc_factory.ledger_store import DoltBranchStore, pymysql_connector
 ISSUES_FILE = "issues.json"
 MAX_BODY_BYTES = 8 * 1024 * 1024
 SCHEMA_WAIT_S = 60
+TOKEN_HEADER = "x-factory-token"   # noqa: S105 (a header name, not a secret)
+MAX_CONCURRENT = 32
+SLOT_WAIT_S = 0.0   # no free slot: close at once, never stall the accept loop
 
 log = logging.getLogger("ledger_api")
 
@@ -43,21 +52,48 @@ log = logging.getLogger("ledger_api")
 class LedgerApiServer(ThreadingHTTPServer):
     daemon_threads = True
 
-    def __init__(self, address: tuple[str, int], store: BranchStore, ledger: Ledger):
+    def __init__(self, address: tuple[str, int], store: BranchStore, ledger: Ledger, *, token: str | None,
+                 max_concurrent: int, slot_wait_s: float):
         super().__init__(address, _Handler)
         self.store = store
         self.ledger = ledger
+        self.token = token
         self.ingest_lock = threading.Lock()
+        self._slots = threading.BoundedSemaphore(max_concurrent)
+        self._slot_wait_s = slot_wait_s
+
+    def process_request(self, request: Any, client_address: Any) -> None:
+        got = self._slots.acquire(timeout=self._slot_wait_s) if self._slot_wait_s > 0 else self._slots.acquire(
+            blocking=False)
+        if not got:
+            log.warning("no free handler slot: closing the connection from %s", client_address[0])
+            self.shutdown_request(request)
+            return
+        try:
+            super().process_request(request, client_address)
+        except BaseException:
+            self._slots.release()   # the handler thread never started
+            raise
+
+    def process_request_thread(self, request: Any, client_address: Any) -> None:
+        try:
+            super().process_request_thread(request, client_address)
+        finally:
+            self._slots.release()
 
 
-def make_server(store: BranchStore, host: str, port: int, *, ledger: Ledger | None = None) -> LedgerApiServer:
-    """Build (not start) the server. Port 0 picks a free port; read it from server.server_address."""
+def make_server(store: BranchStore, host: str, port: int, *, ledger: Ledger | None = None,
+                token: str | None = None, max_concurrent: int = MAX_CONCURRENT,
+                slot_wait_s: float = SLOT_WAIT_S) -> LedgerApiServer:
+    """Build (not start) the server. Port 0 picks a free port; read it from server.server_address.
+    With `token`, POST /ingest requires it; without, ingest is open (tests only: main always sets one)."""
     ledger = ledger or Ledger(store, SystemClock(), mode="inline")  # no GitHub, billing or model: events only
-    return LedgerApiServer((host, port), store, ledger)
+    return LedgerApiServer((host, port), store, ledger, token=token or None, max_concurrent=max_concurrent,
+                           slot_wait_s=slot_wait_s)
 
 
-def serve(store: BranchStore, host: str, port: int) -> None:
-    server = make_server(store, host, port)
+def serve(store: BranchStore, host: str, port: int, *, token: str) -> None:
+    server = make_server(store, host, port, token=token)
     log.info("ledger-api listening on %s:%s", *server.server_address[:2])
     try:
         server.serve_forever()
@@ -68,6 +104,7 @@ def serve(store: BranchStore, host: str, port: int) -> None:
 class _Handler(BaseHTTPRequestHandler):
     server: LedgerApiServer
     protocol_version = "HTTP/1.1"
+    timeout = 30   # per socket read: a client that stops sending cannot hold a slot forever
 
     GET_ROUTES = ("/state.json", "/issues.json", "/healthz")
     POST_ROUTES = ("/ingest",)
@@ -87,6 +124,12 @@ class _Handler(BaseHTTPRequestHandler):
         path = self.path.split("?", 1)[0]
         if path != "/ingest":
             self._refuse(path)
+            return
+        token = self.server.token
+        if token is not None and not hmac.compare_digest(self.headers.get(TOKEN_HEADER, "").encode(),
+                                                         token.encode()):
+            self.close_connection = True   # the body is never read
+            self._error(HTTPStatus.UNAUTHORIZED, "unauthorized")
             return
         body = self._read_json()
         if body is None:
@@ -189,20 +232,29 @@ def _ensure_schema_when_ready(store: DoltBranchStore, wait_s: float = SCHEMA_WAI
             time.sleep(1)
 
 
+def _required(env: Mapping[str, str], name: str) -> str:
+    value = (env.get(name) or "").strip()
+    if not value:
+        raise SystemExit(f"ledger-api: {name} is not set; refusing to start without it")
+    return value
+
+
 def main(env: Mapping[str, str] | None = None) -> None:
     env = os.environ if env is None else env
+    token = _required(env, "LEDGER_TOKEN")
+    user, password = _required(env, "DOLT_USER"), _required(env, "DOLT_PASSWORD")
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
     store = DoltBranchStore(
         pymysql_connector(
             env.get("DOLT_HOST", "127.0.0.1"),
             int(env.get("DOLT_PORT", "3306")),
             env.get("DOLT_DB", "ledger"),
-            user=env.get("DOLT_USER", "root"),
-            password=env.get("DOLT_PASSWORD", ""),
+            user=user,
+            password=password,
         )
     )
     _ensure_schema_when_ready(store)
-    serve(store, env.get("LEDGER_HOST", "0.0.0.0"), int(env.get("LEDGER_PORT", "8080")))  # noqa: S104
+    serve(store, env.get("LEDGER_HOST", "0.0.0.0"), int(env.get("LEDGER_PORT", "8080")), token=token)  # noqa: S104
 
 
 if __name__ == "__main__":

@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import http.client
 import json
+import socket
 import threading
+import time
 import urllib.error
 import urllib.request
 from collections.abc import Iterator
@@ -144,3 +146,108 @@ def test_an_oversized_body_is_rejected_from_the_header_alone(served: tuple[str, 
     assert resp.status == 413 and json.loads(resp.read())["ok"] is False
     conn.close()
     assert store.commits == []
+
+
+# -- hardening: ingest token, bounded handlers, startup refusals -----------------------------------------
+
+LEDGER_TOKEN = "ledger-token-abc"
+
+
+@pytest.fixture
+def guarded() -> Iterator[tuple[str, MemoryBranchStore]]:
+    store = MemoryBranchStore()
+    server = make_server(store, "127.0.0.1", 0, token=LEDGER_TOKEN)
+    thread = threading.Thread(target=server.serve_forever, kwargs={"poll_interval": 0.05}, daemon=True)
+    thread.start()
+    yield f"http://127.0.0.1:{server.server_address[1]}", store
+    server.shutdown()
+    server.server_close()
+    thread.join(timeout=5)
+
+
+def post_ingest(base: str, body: Any, token: str | None) -> int:
+    req = urllib.request.Request(f"{base}/ingest", data=json.dumps(body).encode(), method="POST",
+                                 headers={"Content-Type": "application/json"})
+    if token is not None:
+        req.add_header("x-factory-token", token)
+    try:
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            return resp.status
+    except urllib.error.HTTPError as exc:
+        return exc.code
+
+
+def test_ingest_requires_the_ledger_token_when_configured(guarded: tuple[str, MemoryBranchStore]) -> None:
+    base, store = guarded
+    assert post_ingest(base, {"events": [ticket_event()]}, None) == 401
+    assert post_ingest(base, {"events": [ticket_event()]}, "wrong") == 401
+    assert store.commits == []
+    assert post_ingest(base, {"events": [ticket_event()]}, LEDGER_TOKEN) == 200
+    assert len(store.commits) == 1
+    assert call(f"{base}/state.json")[0] == 200     # reads stay open: the control center has no token
+
+
+def test_the_ledger_token_is_checked_before_the_body_is_read(guarded: tuple[str, MemoryBranchStore]) -> None:
+    base, _ = guarded
+    host, port = base.removeprefix("http://").split(":")
+    sock = socket.create_connection((host, int(port)), timeout=5)
+    sock.sendall(b"POST /ingest HTTP/1.1\r\nHost: x\r\nContent-Length: 5000\r\n\r\n")
+    reply = sock.recv(4096).decode()
+    sock.close()
+    assert reply.startswith("HTTP/1.1 401"), reply
+
+
+def test_handlers_time_out_idle_sockets() -> None:
+    from sdlc_factory.ledger_api import _Handler
+
+    assert _Handler.timeout == 30
+
+
+def test_concurrent_handlers_are_bounded() -> None:
+    store = MemoryBranchStore()
+    server = make_server(store, "127.0.0.1", 0, max_concurrent=2, slot_wait_s=0.2)
+    thread = threading.Thread(target=server.serve_forever, kwargs={"poll_interval": 0.05}, daemon=True)
+    thread.start()
+    addr = server.server_address[:2]
+    try:
+        idle = [socket.create_connection(addr, timeout=5) for _ in range(2)]   # hold both slots, send nothing
+        time.sleep(0.3)
+        extra = socket.create_connection(addr, timeout=5)
+        extra.sendall(b"GET /healthz HTTP/1.1\r\nHost: x\r\n\r\n")
+        try:
+            refused = extra.recv(4096)
+        except ConnectionResetError:
+            refused = b""
+        assert refused == b""                                                # refused: no slot
+        extra.close()
+        for sock in idle:
+            sock.close()
+        time.sleep(0.3)
+        assert call(f"http://{addr[0]}:{addr[1]}/healthz")[0] == 200         # slots come back
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=5)
+
+
+@pytest.mark.parametrize(("env", "missing"), [
+    ({}, "LEDGER_TOKEN"),
+    ({"LEDGER_TOKEN": "t", "DOLT_USER": "ledger"}, "DOLT_PASSWORD"),
+    ({"LEDGER_TOKEN": "t", "DOLT_PASSWORD": "p"}, "DOLT_USER"),
+    ({"LEDGER_TOKEN": " ", "DOLT_USER": "ledger", "DOLT_PASSWORD": "p"}, "LEDGER_TOKEN"),
+])
+def test_main_refuses_to_start_without_its_credentials(env: dict[str, str], missing: str) -> None:
+    from sdlc_factory import ledger_api
+
+    with pytest.raises(SystemExit, match=missing):
+        ledger_api.main(env)
+
+
+def test_the_dolt_connector_has_no_default_credentials() -> None:
+    import inspect
+
+    from sdlc_factory.ledger_store import pymysql_connector
+
+    params = inspect.signature(pymysql_connector).parameters
+    assert params["user"].default is inspect.Parameter.empty
+    assert params["password"].default is inspect.Parameter.empty

@@ -105,10 +105,11 @@ def _dolt_over_fake() -> tuple[DoltBranchStore, FakeDolt]:
 def _real_dolt_store() -> DoltBranchStore:
     port = int(os.environ["DOLT_TEST_PORT"])
     database = f"ledger_{uuid.uuid4().hex[:8]}"
-    admin = pymysql_connector("127.0.0.1", port, "")()
+    user, password = os.environ.get("DOLT_TEST_USER", "root"), os.environ.get("DOLT_TEST_PASSWORD", "")
+    admin = pymysql_connector("127.0.0.1", port, "", user=user, password=password)()
     admin.cursor().execute(f"CREATE DATABASE {database}")
     admin.close()
-    store = DoltBranchStore(pymysql_connector("127.0.0.1", port, database))
+    store = DoltBranchStore(pymysql_connector("127.0.0.1", port, database, user=user, password=password))
     store.ensure_schema()
     return store
 

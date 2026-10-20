@@ -5,7 +5,8 @@ schedule-init: register the factory's Temporal Schedules, idempotently (create, 
     po-intake    every 4 h    PoIntakeWorkflow, paused unless PO_INTAKE_ENABLED
 
 `python -m sdlc_factory.schedule_init` waits up to 120 s for Temporal to answer, registers both and
-exits 0 (1 when Temporal never answered or registration failed).
+exits 0 (1 when Temporal never answered or registration failed). The exit is `os._exit` after flushing
+the logs: the SDK's runtime threads were seen to hang a normal interpreter shutdown.
 Env: TEMPORAL_ADDRESS (localhost:7233), TEMPORAL_NAMESPACE (default), FACTORY_CONFIG, PO_INTAKE_ENABLED.
 """
 
@@ -16,6 +17,7 @@ import logging
 import os
 import sys
 import time
+from collections.abc import Callable
 from datetime import timedelta
 
 from temporalio.client import (
@@ -109,6 +111,23 @@ async def main() -> int:
     return 0
 
 
+def finish(rc: int, *, exit: Callable[[int], object] = os._exit) -> None:
+    """Flush every log handler and the std streams, then exit hard with `rc` (no interpreter shutdown)."""
+    logging.shutdown()
+    for stream in (sys.stdout, sys.stderr):
+        stream.flush()
+    exit(rc)
+
+
+def run_main() -> None:
+    """main() under asyncio, then finish(); a KeyboardInterrupt still exits hard (rc 1) via finish."""
+    rc = 1
+    try:
+        rc = asyncio.run(main())
+    finally:
+        finish(rc)
+
+
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
-    sys.exit(asyncio.run(main()))
+    run_main()
