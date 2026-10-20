@@ -12,16 +12,33 @@
       "id": "home-default",
       "title": "Home",
       "route": "home",
-      "waitFor": { "selector": "table" },
+      "waitFor": {
+        "selector": "table"
+      },
       "caption": "Home page in the default light theme: search form and recent parcels table."
     },
     {
       "id": "home-dark",
       "title": "Home, dark theme",
       "route": "home",
-      "setup": { "localStorage": { "theme": "dark" } },
-      "requires": [{ "selector": "[data-testid='theme-toggle']" }, { "selector": "html[data-theme='dark']" }],
-      "waitFor": [{ "selector": "table" }],
+      "setup": {
+        "localStorage": {
+          "theme": "dark"
+        }
+      },
+      "requires": [
+        {
+          "selector": "[data-testid='theme-toggle']"
+        },
+        {
+          "selector": "html[data-theme='dark']"
+        }
+      ],
+      "waitFor": [
+        {
+          "selector": "table"
+        }
+      ],
       "caption": "Home page with the dark theme selected via the theme toggle preference."
     },
     {
@@ -29,82 +46,252 @@
       "title": "Home, recent searches",
       "route": "home",
       "steps": [
-        { "fill": ["#tracking-number", "PK1000000001"] },
-        { "press": ["#tracking-number", "Enter"] },
-        { "waitFor": { "selector": ".timeline" } },
-        { "click": ".back-link" },
-        { "fill": ["#tracking-number", "PK1000000002"] },
-        { "press": ["#tracking-number", "Enter"] },
-        { "waitFor": { "selector": ".timeline" } },
-        { "click": ".back-link" }
+        {
+          "fill": [
+            "#tracking-number",
+            "PK1000000001"
+          ]
+        },
+        {
+          "press": [
+            "#tracking-number",
+            "Enter"
+          ]
+        },
+        {
+          "waitFor": {
+            "selector": ".timeline"
+          }
+        },
+        {
+          "click": ".back-link"
+        },
+        {
+          "fill": [
+            "#tracking-number",
+            "PK1000000002"
+          ]
+        },
+        {
+          "press": [
+            "#tracking-number",
+            "Enter"
+          ]
+        },
+        {
+          "waitFor": {
+            "selector": ".timeline"
+          }
+        },
+        {
+          "click": ".back-link"
+        }
       ],
-      "requires": { "selector": ".recent-searches__chip" },
-      "waitFor": [{ "selector": ".recent-searches__chip" }, { "selector": "table" }],
+      "requires": {
+        "selector": ".recent-searches__chip"
+      },
+      "waitFor": [
+        {
+          "selector": ".recent-searches__chip"
+        },
+        {
+          "selector": "table"
+        }
+      ],
       "caption": "Home page after searching PK1000000001 and PK1000000002: recent search chips under the form."
     },
     {
       "id": "home-filtered",
       "title": "Home, status filter",
       "route": "home",
-      "steps": [{ "select": ["#status-filter", "in_transit"] }],
-      "requires": { "selector": "#status-filter" },
-      "waitFor": { "selector": "table" },
+      "steps": [
+        {
+          "select": [
+            "#status-filter",
+            "in_transit"
+          ]
+        }
+      ],
+      "requires": {
+        "selector": "#status-filter"
+      },
+      "waitFor": {
+        "selector": "table"
+      },
       "caption": "Home page with the status filter set to In transit."
     },
     {
       "id": "home-empty-search",
       "title": "Home, empty search error",
       "route": "home",
-      "steps": [{ "click": "form[role='search'] button[type='submit']" }],
-      "requires": { "selector": ".field-error" },
-      "waitFor": { "selector": ".field-error" },
+      "steps": [
+        {
+          "click": "form[role='search'] button[type='submit']"
+        }
+      ],
+      "requires": {
+        "selector": ".field-error"
+      },
+      "waitFor": {
+        "selector": ".field-error"
+      },
       "caption": "Home page after pressing Track with no tracking number: inline field error."
     },
     {
       "id": "home-left-nav",
       "title": "Home, left navigation",
       "route": "home",
-      "requires": { "selector": "nav, [role='navigation']" },
-      "waitFor": [{ "selector": "nav, [role='navigation']" }, { "selector": "table" }],
-      "caption": "Home page with the navigation landmark visible (captured once the app has a nav)."
+      "viewports": [
+        "desktop"
+      ],
+      "requires": {
+        "selector": "[data-testid='left-nav']"
+      },
+      "waitFor": [
+        {
+          "selector": "[data-testid='left-nav']"
+        },
+        {
+          "selector": "table"
+        }
+      ],
+      "caption": "Home page with the left navigation sidebar: Track a parcel, Recent parcels, Status guide."
+    },
+    {
+      "id": "home-mobile-nav",
+      "title": "Home, mobile navigation",
+      "route": "home",
+      "viewports": [
+        "mobile"
+      ],
+      "steps": [
+        {
+          "click": "[data-testid='nav-toggle']"
+        }
+      ],
+      "requires": {
+        "selector": "[role='dialog'][aria-label='Main navigation']"
+      },
+      "waitFor": {
+        "selector": "[role='dialog'][aria-label='Main navigation']"
+      },
+      "caption": "Mobile home page with the navigation drawer opened from the menu button."
+    },
+    {
+      "id": "home-status-chips",
+      "title": "Home, status chips",
+      "route": "home",
+      "steps": [
+        {
+          "click": ".status-summary-chip:has-text('In transit')"
+        }
+      ],
+      "requires": {
+        "selector": "[data-testid='status-summary-chips']"
+      },
+      "waitFor": [
+        {
+          "selector": "[data-testid='status-summary-chips']"
+        },
+        {
+          "selector": "table"
+        }
+      ],
+      "caption": "Home page status summary chips with counts, In transit selected and the table filtered."
+    },
+    {
+      "id": "parcel-stepper",
+      "title": "Parcel, journey stepper",
+      "route": "parcel-found",
+      "requires": {
+        "selector": "[data-testid='journey-progress-stepper']"
+      },
+      "waitFor": [
+        {
+          "selector": "[data-testid='journey-progress-stepper']"
+        },
+        {
+          "selector": ".timeline"
+        }
+      ],
+      "caption": "Parcel PK1000000001 journey progress stepper: label created, in transit, out for delivery, delivered."
     },
     {
       "id": "parcel-timeline",
       "title": "Parcel timeline",
       "route": "parcel-found",
-      "waitFor": [{ "selector": "h1#page-title" }, { "selector": ".timeline" }],
+      "waitFor": [
+        {
+          "selector": "h1#page-title"
+        },
+        {
+          "selector": ".timeline"
+        }
+      ],
       "caption": "Parcel PK1000000001 shipment history: events, locations and latest marker."
     },
     {
       "id": "parcel-dark",
       "title": "Parcel timeline, dark theme",
       "route": "parcel-found",
-      "setup": { "localStorage": { "theme": "dark" } },
-      "requires": [{ "selector": "[data-testid='theme-toggle']" }, { "selector": "html[data-theme='dark']" }],
-      "waitFor": [{ "selector": ".timeline" }],
+      "setup": {
+        "localStorage": {
+          "theme": "dark"
+        }
+      },
+      "requires": [
+        {
+          "selector": "[data-testid='theme-toggle']"
+        },
+        {
+          "selector": "html[data-theme='dark']"
+        }
+      ],
+      "waitFor": [
+        {
+          "selector": ".timeline"
+        }
+      ],
       "caption": "Parcel PK1000000001 shipment history in the dark theme."
     },
     {
       "id": "parcel-copy-link",
       "title": "Parcel, copy link",
       "route": "parcel-found",
-      "steps": [{ "click": ".copy-link-btn" }],
-      "requires": { "selector": ".copy-link-btn.is-copied" },
-      "waitFor": [{ "text": "Copied!" }, { "selector": ".timeline" }],
+      "steps": [
+        {
+          "click": ".copy-link-btn"
+        }
+      ],
+      "requires": {
+        "selector": ".copy-link-btn.is-copied"
+      },
+      "waitFor": [
+        {
+          "text": "Copied!"
+        },
+        {
+          "selector": ".timeline"
+        }
+      ],
       "caption": "Parcel page right after pressing Copy link: button shows the Copied confirmation."
     },
     {
       "id": "parcel-not-found",
       "title": "Parcel not found",
       "route": "not-found",
-      "waitFor": { "selector": ".notice--error" },
+      "waitFor": {
+        "selector": ".notice--error"
+      },
       "caption": "Unknown tracking number PK9999999999: not found message."
     },
     {
       "id": "parcel-invalid-input",
       "title": "Invalid tracking number",
       "route": "invalid-input",
-      "waitFor": { "selector": ".notice--error" },
+      "waitFor": {
+        "selector": ".notice--error"
+      },
       "caption": "Malformed tracking number 12345: invalid tracking number message."
     }
   ]
