@@ -576,3 +576,15 @@ def test_end_to_end_fake_agy_timeout_raises(tmp_path):
                        mode="plan", timeout_s=30)
     assert info.value.outcome is Outcome.TIMEOUT
     assert "print timeout" in info.value.result.stderr
+
+
+def test_extract_json_takes_the_first_of_several_json_lines():
+    # real agy 1.4.3 with --json-schema printed the answer, then a wrapper that nests it as a string
+    text = '{"answer":"ok"}\n{"answer":"{\\"answer\\":\\"ok\\"}"}\n'
+    assert extract_json(text) == {"answer": "ok"}
+
+
+def test_extract_json_ndjson_needs_every_line_to_parse():
+    # prose between objects is not NDJSON: the longest-value rule still applies there
+    text = 'see [1]\n{"a": 1, "b": 2}\n'
+    assert extract_json(text) == {"a": 1, "b": 2}

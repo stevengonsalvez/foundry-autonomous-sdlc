@@ -380,6 +380,16 @@ def extract_json(text: str) -> Any:
     for candidate in (stripped, *(m.group(1).strip() for m in _FENCE.finditer(text))):
         with contextlib.suppress(ValueError):
             return json.loads(candidate)
+    # Several JSON documents, one per line (agy prints the answer and then a wrapper around it): the
+    # first is the answer. Only when every non-blank line parses, so prose never takes this branch.
+    lines = [ln for ln in stripped.splitlines() if ln.strip()]
+    if len(lines) > 1:
+        try:
+            docs = [json.loads(ln) for ln in lines]
+        except ValueError:
+            docs = []
+        if docs and all(isinstance(d, dict | list) for d in docs):
+            return docs[0]
     # Prose can hold small bracketed bits ("see [1]") before the answer: the longest value that decodes
     # wins, and starts inside an already decoded value are skipped, so the scan stays linear.
     decoder = json.JSONDecoder()
