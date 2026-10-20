@@ -18,7 +18,7 @@ from pathlib import Path
 from typing import Any
 
 from scripts.ui.publish_proof import compare_screenshots
-from scripts.ui.validate_artifact import LEGACY_ROUTE_STATES, state_id_of
+from scripts.ui.validate_artifact import LEGACY_ROUTE_STATES, manifest_fingerprint, state_id_of
 
 TAG_RE = re.compile(r"^v(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$")
 
@@ -81,6 +81,7 @@ def annotate_release(releases_dir: Path, key: str) -> dict[str, Any] | None:
         return None
 
     prev_tag = find_previous_release(releases_dir, key)
+    prev: dict[str, Any] = {"screenshots": []}
     if prev_tag is None:
         states = {
             sid: {"status": "new", "pct": {}}
@@ -88,7 +89,7 @@ def annotate_release(releases_dir: Path, key: str) -> dict[str, Any] | None:
             if sid
         }
     else:
-        prev = _load_captured(releases_dir / prev_tag) or {"screenshots": []}
+        prev = _load_captured(releases_dir / prev_tag) or prev
         report = compare_screenshots(
             manifest["screenshots"], release_dir, prev["screenshots"], releases_dir / prev_tag
         )
@@ -104,7 +105,17 @@ def annotate_release(releases_dir: Path, key: str) -> dict[str, Any] | None:
             for entry in report
         }
 
-    changes = {"vs": prev_tag, "states": states}
+    prev_shots = prev["screenshots"] if prev_tag is not None else None
+    # fp ties the stored result to the exact pixels it was computed from, so a re-captured
+    # release (or a re-captured predecessor) makes /history/ fall back to sha256, not go stale.
+    changes = {
+        "vs": prev_tag,
+        "fp": {
+            "self": manifest_fingerprint(manifest["screenshots"]),
+            "prev": manifest_fingerprint(prev_shots) if prev_shots is not None else None,
+        },
+        "states": states,
+    }
     manifest["changes"] = changes
     manifest["screenshots"] = _legacy_reader_order(manifest["screenshots"])
     (release_dir / "manifest.json").write_text(

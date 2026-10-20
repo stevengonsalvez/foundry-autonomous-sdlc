@@ -12,6 +12,7 @@ Tests requirements:
 from __future__ import annotations
 
 import json
+import re
 import tempfile
 from pathlib import Path
 
@@ -730,6 +731,12 @@ def create_state_release(
     (tag_dir / "manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
 
 
+def fp_of(states: dict[str, str]) -> str:
+    from scripts.ui.validate_artifact import fingerprint
+
+    return fingerprint((sid, vp, sha) for sid, sha in states.items() for vp in VIEWPORTS)
+
+
 def _entries(screens: Path, tags: list[str]) -> list[dict]:
     return collect_evolution_entries(state_data={}, screenshots_dir=screens, tags=tags)
 
@@ -772,6 +779,10 @@ def test_precomputed_changes_in_manifest_win_over_sha_compare(tmp_path: Path) ->
         {"home-default": "b", "home-dark": "d"},
         precomputed={
             "vs": "v0.7.0",
+            "fp": {
+                "self": fp_of({"home-default": "b", "home-dark": "d"}),
+                "prev": fp_of({"home-default": "a"}),
+            },
             "states": {
                 "home-default": {"status": "unchanged", "pct": {"desktop": 0.0, "mobile": 0.0}},
                 "home-dark": {"status": "new", "pct": {}},
@@ -790,6 +801,7 @@ def test_precomputed_pct_is_carried_for_changed_states(tmp_path: Path) -> None:
         {"home-default": "b"},
         precomputed={
             "vs": "v0.7.0",
+            "fp": {"self": fp_of({"home-default": "b"}), "prev": fp_of({"home-default": "a"})},
             "states": {
                 "home-default": {"status": "changed", "pct": {"desktop": 12.5, "mobile": 3.0}}
             },
@@ -964,3 +976,45 @@ def test_worst_case_page_stays_inside_the_html_budget(tmp_path: Path) -> None:
     tags = [f"v0.{m}.0" for m in range(1, 31)]
     page = _render(tmp_path, tags)
     assert len(page.encode("utf-8")) < BUDGET_HTML_BYTES
+
+
+def test_capped_changes_stay_findable_by_the_state_filter(tmp_path: Path) -> None:
+    """A changed state beyond the block cap is named in the 'more' list with its state id, so
+    the page script can keep it visible instead of claiming the state did not change."""
+    ids = ["home-default", "home-dark", "parcel-timeline", "parcel-copy-link"]
+    create_state_release(tmp_path, "v0.7.0", dict.fromkeys(ids, "a"))
+    create_state_release(tmp_path, "v0.8.0", dict.fromkeys(ids, "b"))
+    page = _render(tmp_path, ["v0.7.0", "v0.8.0"])
+    card = page.split('<article class="timeline-item">')[1].split("</article>")[0]
+    blocks = set(re.findall(r'class="change" data-state="([^"]+)"', card))
+    listed = set(re.findall(r'data-more-state="([^"]+)"', card))
+    assert len(blocks) == MAX_CHANGE_BLOCKS
+    assert blocks | listed == set(ids) and not (blocks & listed)
+    assert "data-more-state" in generate_js()
+
+
+def test_stored_changes_are_ignored_when_the_captures_were_replaced(tmp_path: Path) -> None:
+    """v0.7.0 was re-captured after v0.8.0's diff was stored: the stale diff says 'unchanged'
+    but the pixels now differ, so the generator must fall back to comparing sha256."""
+    create_state_release(tmp_path, "v0.7.0", {"home-default": "NEW"})
+    create_state_release(
+        tmp_path,
+        "v0.8.0",
+        {"home-default": "b"},
+        precomputed={
+            "vs": "v0.7.0",
+            "fp": {"self": fp_of({"home-default": "b"}), "prev": fp_of({"home-default": "OLD"})},
+            "states": {"home-default": {"status": "unchanged", "pct": {}}},
+        },
+    )
+    latest = _entries(tmp_path, ["v0.7.0", "v0.8.0"])[0]
+    assert [c["state"] for c in latest["changes"]] == ["home-default"]  # sha256 fallback
+
+    # and a stored result without any fingerprint is never trusted
+    create_state_release(
+        tmp_path,
+        "v0.8.0",
+        {"home-default": "b"},
+        precomputed={"vs": "v0.7.0", "states": {"home-default": {"status": "unchanged"}}},
+    )
+    assert _entries(tmp_path, ["v0.7.0", "v0.8.0"])[0]["changes"][0]["state"] == "home-default"

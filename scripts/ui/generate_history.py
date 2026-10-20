@@ -40,6 +40,7 @@ from scripts.ui.validate_artifact import (  # noqa: E402
     SAFE_PNG_NAME_RE,
     STATE_ID_RE,
     TEXT_RE,
+    fingerprint,
 )
 
 REPO_NAME = "stevengonsalvez/foundry-autonomous-sdlc"
@@ -204,12 +205,22 @@ def _compute_changes(
     order: dict[str, int],
 ) -> list[dict[str, Any]]:
     """States that changed in this release versus the previous captured release."""
+    def fp(states: dict[str, dict[str, Any]]) -> str:
+        return fingerprint(
+            (sid, vp, sha) for sid, st in states.items() for vp, sha in st["shas"].items()
+        )
+
     published: dict[str, Any] = {}
+    stamp = precomputed.get("fp") if isinstance(precomputed, dict) else None
     if (
         before is not None
         and isinstance(precomputed, dict)
         and precomputed.get("vs") == before["tag"]
         and isinstance(precomputed.get("states"), dict)
+        # Only trust the stored diff if it was computed from these exact captures
+        and isinstance(stamp, dict)
+        and stamp.get("self") == fp(entry["states"])
+        and stamp.get("prev") == fp(before["states"])
     ):
         published = precomputed["states"]
 
@@ -1095,10 +1106,19 @@ def generate_js() -> str:
         block.hidden = !show;
         if (show) visible += 1;
       });
-      const empty = item.querySelector('.state-empty');
-      if (empty) empty.hidden = visible > 0 || currentState === 'all';
       const more = item.querySelector('.more-changes');
-      if (more) more.hidden = currentState !== 'all';
+      let listed = false;
+      if (more) {
+        more.querySelectorAll('[data-more-state]').forEach(function (span) {
+          const id = span.getAttribute('data-more-state');
+          const hit = currentState === 'all' || id === currentState;
+          span.hidden = !hit;
+          if (hit && currentState !== 'all') listed = true;
+        });
+        more.hidden = currentState !== 'all' && !listed;
+      }
+      const empty = item.querySelector('.state-empty');
+      if (empty) empty.hidden = visible > 0 || listed || currentState === 'all';
       item.querySelectorAll('.change img').forEach(function (img) {
         img.hidden = img.getAttribute('data-viewport') !== currentViewport;
       });
@@ -1254,12 +1274,14 @@ def _changes_html(entry: dict[str, Any]) -> str:
     more = ""
     if rest:
         names = ", ".join(
-            f"{html.escape(c['title'])}"
+            f'<span data-more-state="{html.escape(c["state"], quote=True)}">'
+            + html.escape(c["title"])
             + (
                 f" ({html.escape(format_pct(max(c['pct'].values())))})"
                 if c["status"] == "changed" and c["pct"]
                 else ""
             )
+            + "</span>"
             for c in rest
         )
         more = f'<p class="more-changes">+{len(rest)} more changed: {names}</p>'
