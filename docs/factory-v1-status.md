@@ -28,7 +28,9 @@ GitHub ──poll (Schedule, 60s)──▶ PollWorkflow ──▶ WorkItemWorkfl
 | scenarios a, d, b+c, d-maintenance via workflow | `services/tests/e2e/` | 7 |
 | compose stack + smoke | `deploy/compose/` | smoke: 35 checks |
 
-Last independent run: services 342 passed / 6 skipped, ruff clean; agents 942 passed (agent-reported full run, subset rerun by orchestrator); `deploy/compose/smoke.sh` 35 of 35 in fake mode.
+Live agy 1.4.3 check (`deploy/compose/live-agy-check.sh`, 3 model calls, about 33k tokens): a call through the sandbox and proxy returns OK in about 12 s once four Google hosts are allowed (all measured in the squid log); an expired or garbage token is classified AUTH in under 0.3 s; headless plan mode refuses `read_file` outside the cwd, so the uid boundary is covered only by smoke.sh (rerun the script after every agy upgrade). The check exposed a parser bug (agy printed the answer and then a wrapper line), fixed in `extract_json`.
+
+Last independent run: services 344 passed / 6 skipped, ruff clean; agents 942 passed (agent-reported full run, subset rerun by orchestrator); `deploy/compose/smoke.sh` 35 of 35 in fake mode.
 
 ## Deviations from the spec (all deliberate)
 
@@ -43,7 +45,7 @@ Last independent run: services 342 passed / 6 skipped, ruff clean; agents 942 pa
 
 ## Not done (explicit)
 
-- Live end-to-end run against real GitHub: needs a PAT and merges PRs into the target repo. Checklist in the runbook.
+- Live end-to-end run against real GitHub (real agy through the sandbox is verified, GitHub side is not): needs a PAT and merges PRs into the target repo. Checklist in the runbook.
 - Native coder activity with heartbeats; CD staging on compose (CD stays on GitHub Pages); webhooks and extra work sources; scorers and benchmarks; second CLI adapter; Azure VM; Azure DevOps variant (SCM port boundary not yet cut).
 - Simulated-PO 4-hourly intake: schedule and activity exist, the activity returns `disabled` and raises `NonRetryable` "not implemented" when enabled.
 - `humanGates.merge` is `false` (auto-merge, per Stevie). The remaining merge risk is a prompt-injected reviewer verdict; set `true` for untrusted repos.
