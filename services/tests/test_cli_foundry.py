@@ -542,3 +542,24 @@ def test_coder_urlerror_refused_is_unambiguous_and_cut_reply_is_transient(token_
     with pytest.raises(AgentRunError) as info:
         foundry.invoke_hosted("sdlc-coder", {})
     assert info.value.transient and info.value.ambiguous
+
+
+def test_coder_requests_carry_the_shared_token_when_configured(token_file):
+    transport = FakeTransport(reply(200, {"status": "running"}, {"x-agent-session-id": "s"}))
+    coder(token_file, transport, coder_token="s3cret").invoke_hosted("sdlc-coder", {"op": "status"})
+    assert transport.requests[0].headers["x-factory-token"] == "s3cret"
+
+
+def test_coder_requests_have_no_token_header_by_default(token_file):
+    transport = FakeTransport(reply(200, {"status": "running"}, {"x-agent-session-id": "s"}))
+    coder(token_file, transport).invoke_hosted("sdlc-coder", {"op": "status"})
+    assert "x-factory-token" not in transport.requests[0].headers
+
+
+def test_from_env_reads_the_coder_service_token(token_file, monkeypatch):
+    monkeypatch.setenv("AGY_TOKEN_FILE", str(token_file))
+    monkeypatch.setenv("CODER_SERVICE_TOKEN", "tok")
+    monkeypatch.setenv("CODER_URL", "http://coder:8090")
+    monkeypatch.setenv("FACTORY_CONFIG", str(Path(__file__).resolve().parents[2] / "factory" / "factory.yaml"))
+    foundry = CliFoundry.from_env()
+    assert foundry._coder_token == "tok"

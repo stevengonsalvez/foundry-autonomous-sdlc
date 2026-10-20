@@ -147,12 +147,13 @@ class CliFoundry:
     def __init__(self, config: FactoryConfig, *, token_path: str | Path, coder_url: str | None = None,
                  engine_factory: EngineFactory | None = None, runner: Runner = subprocess_runner,
                  transport: Transport = http_transport, ledger_handler: LedgerHandler | None = None,
-                 monotonic: Callable[[], float] = time.monotonic):
+                 coder_token: str | None = None, monotonic: Callable[[], float] = time.monotonic):
         if coder_url is not None and urllib.parse.urlparse(coder_url).scheme not in ("http", "https"):
             raise ValueError(f"coder_url must be an http(s) URL, got {coder_url!r}")
         self._config = config
         self._token_path = Path(token_path)
         self._coder_url = coder_url.rstrip("/") if coder_url else None
+        self._coder_token = coder_token or None
         self._engine_factory = engine_factory or default_engine_factory(config)
         self._runner = runner
         self._transport = transport
@@ -174,7 +175,8 @@ class CliFoundry:
         if not token:
             raise ValueError("AGY_TOKEN_FILE is not set: it must name the agy login token file")
         config = load_factory(os.environ.get("FACTORY_CONFIG") or DEFAULT_FACTORY_CONFIG)
-        return cls(config, token_path=token, coder_url=os.environ.get("CODER_URL") or None, **kw)
+        return cls(config, token_path=token, coder_url=os.environ.get("CODER_URL") or None,
+                   coder_token=os.environ.get("CODER_SERVICE_TOKEN") or None, **kw)
 
     # ------------------------------------------------------------------------------ budget (D7)
 
@@ -302,8 +304,10 @@ class CliFoundry:
         url = f"{self._coder_url}/invoke"
         if session_id:
             url += "?" + urllib.parse.urlencode({"agent_session_id": session_id})
-        request = HttpRequest("POST", url, {"Content-Type": "application/json", "Accept": "application/json"},
-                              json.dumps(body).encode(), float(timeout_s))
+        headers = {"Content-Type": "application/json", "Accept": "application/json"}
+        if self._coder_token:
+            headers["x-factory-token"] = self._coder_token
+        request = HttpRequest("POST", url, headers, json.dumps(body).encode(), float(timeout_s))
         try:
             resp = self._transport(request)
         except OSError as exc:   # URLError, timeouts, resets
