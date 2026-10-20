@@ -148,7 +148,7 @@ class ObjectReport:
     number: int
     kind: str
     action: str
-    result: str           # ok | error | skipped | ignored
+    result: str           # ok | error | deferred | capped | skipped | ignored | held
     detail: str = ""
 
 
@@ -170,6 +170,45 @@ class TickReport:
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
+
+
+SHORT_WAIT_S = 20                 # a coder is running or checks are pending: look again soon
+LONG_WAIT_S = 60
+_SHORT_WAIT_ACTIONS = frozenset({Kind.WAIT.value, Kind.START_CODER.value, Kind.POLL_CODER.value,
+                                 Kind.RECONCILE.value})
+
+
+@dataclass(frozen=True)
+class ObjectOutcome:
+    """One object's step, read back for a caller that drives it alone (run_tick(only=N))."""
+
+    action: str             # the machine.Kind value, "none" when the object was not stepped
+    result: str             # ObjectReport.result
+    detail: str
+    stage: str | None       # the stage:* label after the step
+    terminal: bool          # nothing further will ever happen to this object
+    wait_hint_s: int        # suggested pause before the next step
+
+
+def object_outcome(report: TickReport, number: int, github: GitHubPort) -> ObjectOutcome:
+    """Object `number`'s outcome in `report`, with its labels re-read from GitHub after the step.
+
+    Terminal: escalated, not the owner's, or closed with nothing owed (released, or the machine
+    found nothing to do). A merged maintenance PR is closed but still owes its release, so it is not.
+    """
+    entry = next((o for o in reversed(report.objects) if o.number == number), None)
+    item = github.get_issue(number)
+    stage = next((label for label in sorted(item.labels) if label.startswith("stage:")), None)
+    escalated = any(label.startswith("escalated:") for label in item.labels)
+    if entry is None:
+        action, result, detail = "none", "skipped", "; ".join(report.errors) or "not loaded by the tick"
+    else:
+        action, result, detail = entry.action, entry.result, entry.detail
+    closed = item.state == "closed"
+    settled = stage == state.RELEASED or entry is None or action == Kind.NOOP.value
+    terminal = escalated or result == "ignored" or (closed and settled)
+    short = stage == state.BUILDING or action in _SHORT_WAIT_ACTIONS
+    return ObjectOutcome(action, result, detail, stage, terminal, SHORT_WAIT_S if short else LONG_WAIT_S)
 
 
 @dataclass
@@ -209,14 +248,46 @@ def run_tick(
     sleep: Callable[[float], None] = time.sleep,
     emitter: Emitter | None = None,
     ui_tester_enabled: bool | None = None,
+    only: int | None = None,
+    use_lock: bool = True,
+    hold: frozenset[str] = frozenset(),
 ) -> TickReport:
     """Run one bounded tick and return its report. Never raises. `sleep` waits out retry backoff.
 
     `secrets` is part of the hosted entrypoint contract; the adapters already hold what they need,
     so the tick itself reads no secret.
+
+    A durable workflow drives one object per call: `only` is the issue or maintenance PR number to
+    step (no other object is loaded or touched), `use_lock=False` skips the lock ref (the caller
+    serialises ticks itself), and `hold` names action kinds (`design-tests`, `merge`) that wait for
+    a human: they are reported as "held" and do nothing.
     """
     del secrets
+
+    def tick(report: TickReport) -> None:
+        _Tick(
+            github,
+            foundry,
+            clock,
+            report,
+            budget or Budget(),
+            budget_wall_s,
+            sleep,
+            emitter or NullEmitter(),
+            ui_tester_enabled=ui_tester_enabled,
+            only=only,
+            hold=hold,
+        ).run()
+
     report = TickReport(started_at=clock.now_iso())
+    if not use_lock:
+        report.lock = "skipped"
+        try:
+            tick(report)
+        except Exception as exc:
+            report.errors.append(f"tick: {type(exc).__name__}: {exc}")
+        report.finished_at = clock.now_iso()
+        return report
     try:
         held = lock.acquire(github, clock, holder=f"tick {report.started_at}")
     except lock.LockHeld as exc:
@@ -231,17 +302,7 @@ def run_tick(
         return report
     report.lock = "took-over-stale" if held.took_over_stale else "acquired"
     try:
-        _Tick(
-            github,
-            foundry,
-            clock,
-            report,
-            budget or Budget(),
-            budget_wall_s,
-            sleep,
-            emitter or NullEmitter(),
-            ui_tester_enabled=ui_tester_enabled,
-        ).run()
+        tick(report)
     except Exception as exc:
         report.errors.append(f"tick: {type(exc).__name__}: {exc}")
     finally:
@@ -308,7 +369,10 @@ def _scenario(body: str) -> str | None:
 class _Tick:
     def __init__(self, github: GitHubPort, foundry: FoundryPort, clock: ClockPort, report: TickReport,
                  budget: Budget, budget_wall_s: int, sleep: Callable[[float], None], emitter: Emitter,
-                 ui_tester_enabled: bool | None = None):
+                 ui_tester_enabled: bool | None = None, only: int | None = None,
+                 hold: frozenset[str] = frozenset()):
+        self.only = only
+        self.hold = hold
         self.sleep = sleep
         self.emitter = emitter
         self.ui_tester_enabled = (
@@ -337,6 +401,9 @@ class _Tick:
             self.budget.known = False        # fail closed: no model call, no coder start this tick
             self.report.errors.append("metrics.json is unreadable: spend unknown, spending steps halted")
         self.previous = ledger or metrics.Ledger()
+        if self.only is not None:
+            # Objects this tick does not load keep their transient-retry streaks in metrics.json.
+            self.streaks.update({n: c for n, c in self.previous.deferrals.items() if n != self.only})
         objects_usd = sum(self._object_usd(o) for o in self.objects)
         self.budget.usd_total = max(objects_usd + self.previous.orchestrator_usd + self.previous.ledger_usd,
                                     self.previous.usd)
@@ -359,6 +426,8 @@ class _Tick:
 
     def _load(self) -> None:
         for item in sorted(self.github.list_issues(state="all"), key=lambda i: i.number):
+            if self.only is not None and item.number != self.only:
+                continue
             relevant = not item.is_pull_request or gates.MAINTENANCE_LABEL in item.labels
             if not relevant:
                 continue          # agent PRs are driven through their issue
@@ -383,6 +452,9 @@ class _Tick:
         try:
             ctx = self._context(obj)
             action = machine.next_action(ctx)
+            if action.kind.value in self.hold:
+                self._note(obj, action.kind.value, "held", f"awaiting human approval: {action.kind.value}")
+                return
             if action.kind in (Kind.NOOP, Kind.WAIT, Kind.HALT):
                 if action.record:
                     if obj.state is None:
