@@ -1,6 +1,6 @@
 {
   "deferrals": {
-    "130": 3
+    "130": 4
   },
   "gate_pass_rates": {
     "agent-scope": {
@@ -46,7 +46,7 @@
       "pass": 19
     }
   },
-  "generated_at": "2026-10-21T22:00:16Z",
+  "generated_at": "2026-10-21T22:00:46Z",
   "issues": [
     {
       "closed_at": "2026-10-10T12:28:43Z",
@@ -3555,7 +3555,7 @@
       "coder_engine": null,
       "coder_sessions_lost": 0,
       "cost": {
-        "calls": 4,
+        "calls": 5,
         "coder_model_usd": 0.0,
         "coder_usd": 0.0,
         "model_usd": 0.098376,
@@ -3621,9 +3621,9 @@
     "escalated": 31,
     "issues": 48,
     "ledger_usd": 1.483118,
-    "orchestrator_usd": 13.041687,
+    "orchestrator_usd": 13.052395,
     "released": 14,
-    "usd": 28.442528
+    "usd": 28.453236
   },
   "version": 1
 }
