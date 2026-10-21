@@ -61,6 +61,24 @@ def test_give_tree_hands_over_everything_but_git(tmp_path: Path) -> None:
                                "app/node_modules/x/index.js", "app/src", "app/src/a.ts"]
 
 
+def test_give_tree_lets_the_engine_user_traverse_the_root_owned_top(tmp_path: Path) -> None:
+    # A coder started with umask 077 creates the job dir and checkout 0700: the engine user could not enter
+    # them, so every command in its workdir failed (live scenario a, npm ci). The top stays root-owned.
+    job = tmp_path / "j-1"
+    checkout = job / "checkout"
+    (checkout / "app").mkdir(parents=True)
+    (checkout / ".git").mkdir()
+    for d in (job, checkout, checkout / ".git"):
+        d.chmod(0o700)
+    chowned: list[Path] = []
+    sandbox.give_tree(checkout, RunAs("agyuser", 1001, 1001, Path("/h")),
+                      chown=lambda path, uid, gid: chowned.append(Path(path)))
+    assert stat.S_IMODE(job.stat().st_mode) == 0o755
+    assert stat.S_IMODE(checkout.stat().st_mode) == 0o755
+    assert stat.S_IMODE((checkout / ".git").stat().st_mode) == 0o700   # .git stays hidden from the user
+    assert job not in chowned and checkout not in chowned              # the top stays with root
+
+
 def test_user_env_is_built_from_nothing(monkeypatch) -> None:  # type: ignore[no-untyped-def]
     monkeypatch.setenv("IDENTITY_HEADER", "secret")
     monkeypatch.setenv("LANG", "C.UTF-8")
