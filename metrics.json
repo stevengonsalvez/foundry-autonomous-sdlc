@@ -1,7 +1,5 @@
 {
-  "deferrals": {
-    "122": 1
-  },
+  "deferrals": {},
   "gate_pass_rates": {
     "agent-scope": {
       "fail": 0,
@@ -46,7 +44,7 @@
       "pass": 18
     }
   },
-  "generated_at": "2026-10-21T16:41:26Z",
+  "generated_at": "2026-10-21T16:58:25Z",
   "issues": [
     {
       "closed_at": "2026-10-10T12:28:43Z",
@@ -3122,13 +3120,13 @@
       "coder_engine": null,
       "coder_sessions_lost": 0,
       "cost": {
-        "calls": 4,
+        "calls": 6,
         "coder_model_usd": 0.0,
         "coder_usd": 0.0,
-        "model_usd": 0.558452,
-        "usd": 0.558452
+        "model_usd": 1.022788,
+        "usd": 1.022788
       },
-      "deferred": "AgentRunError: sdlc-test-designer: agy call ended failed (rc 0)",
+      "deferred": null,
       "escalation": null,
       "gate_attempts": {},
       "gates": {},
@@ -3151,9 +3149,14 @@
         },
         {
           "entered_at": "2026-10-21T16:24:15Z",
+          "seconds": 2047,
+          "stage": "stage:feasible"
+        },
+        {
+          "entered_at": "2026-10-21T16:58:22Z",
           "in_progress": true,
           "seconds": 0,
-          "stage": "stage:feasible"
+          "stage": "stage:tests-written"
         }
       ],
       "title": "Show the estimated delivery date on the parcel page",
@@ -3166,13 +3169,13 @@
   },
   "repo": "stevengonsalvez/foundry-autonomous-sdlc",
   "totals": {
-    "deferred": 1,
+    "deferred": 0,
     "escalated": 26,
     "issues": 41,
     "ledger_usd": 1.483118,
-    "orchestrator_usd": 11.847869,
+    "orchestrator_usd": 11.933318,
     "released": 13,
-    "usd": 23.412421
+    "usd": 23.962206
   },
   "version": 1
 }
