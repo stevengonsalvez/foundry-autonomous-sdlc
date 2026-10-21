@@ -44,7 +44,7 @@
       "pass": 19
     }
   },
-  "generated_at": "2026-10-21T21:39:38Z",
+  "generated_at": "2026-10-21T21:39:49Z",
   "issues": [
     {
       "closed_at": "2026-10-10T12:28:43Z",
@@ -3325,18 +3325,18 @@
       "cost": {
         "calls": 5,
         "coder_model_usd": 0.0,
-        "coder_usd": 0.0,
+        "coder_usd": 0.103458,
         "model_usd": 0.63711,
-        "usd": 0.63711
+        "usd": 0.740568
       },
       "deferred": null,
-      "escalation": null,
+      "escalation": "escalated:build-failed",
       "gate_attempts": {},
       "gates": {},
       "kind": "issue",
       "number": 126,
       "opened_at": "2026-10-21T21:00:06Z",
-      "outcome": "open",
+      "outcome": "escalated",
       "owner": null,
       "pr": null,
       "quality_score": 100,
@@ -3367,9 +3367,13 @@
         },
         {
           "entered_at": "2026-10-21T21:38:32Z",
-          "in_progress": true,
-          "seconds": 0,
+          "seconds": 74,
           "stage": "stage:building"
+        },
+        {
+          "entered_at": "2026-10-21T21:39:46Z",
+          "seconds": 0,
+          "stage": "escalated:build-failed"
         }
       ],
       "title": "Make the parcel tracker better",
@@ -3537,12 +3541,12 @@
   "repo": "stevengonsalvez/foundry-autonomous-sdlc",
   "totals": {
     "deferred": 0,
-    "escalated": 30,
+    "escalated": 31,
     "issues": 47,
     "ledger_usd": 1.483118,
-    "orchestrator_usd": 12.822056,
+    "orchestrator_usd": 12.832175,
     "released": 14,
-    "usd": 27.618556
+    "usd": 27.732133
   },
   "version": 1
 }
