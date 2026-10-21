@@ -44,7 +44,7 @@
       "pass": 19
     }
   },
-  "generated_at": "2026-10-21T17:54:04Z",
+  "generated_at": "2026-10-21T21:03:21Z",
   "issues": [
     {
       "closed_at": "2026-10-10T12:28:43Z",
@@ -3317,6 +3317,43 @@
       ],
       "title": "Show how many shipment events a parcel has next to the history heading",
       "type": "feature"
+    },
+    {
+      "closed_at": null,
+      "coder_engine": null,
+      "coder_sessions_lost": 0,
+      "cost": {
+        "calls": 1,
+        "coder_model_usd": 0.0,
+        "coder_usd": 0.0,
+        "model_usd": 0.09462,
+        "usd": 0.09462
+      },
+      "deferred": null,
+      "escalation": null,
+      "gate_attempts": {},
+      "gates": {},
+      "kind": "issue",
+      "number": 126,
+      "opened_at": "2026-10-21T21:00:06Z",
+      "outcome": "open",
+      "owner": null,
+      "pr": null,
+      "quality_score": 5,
+      "release": null,
+      "resolution_seconds": null,
+      "scenario": "b",
+      "severity": null,
+      "stages": [
+        {
+          "entered_at": "2026-10-21T21:03:17Z",
+          "in_progress": true,
+          "seconds": 0,
+          "stage": "stage:needs-refinement"
+        }
+      ],
+      "title": "Make the parcel tracker better",
+      "type": "feature"
     }
   ],
   "ledger": {
@@ -3327,11 +3364,11 @@
   "totals": {
     "deferred": 0,
     "escalated": 28,
-    "issues": 43,
+    "issues": 44,
     "ledger_usd": 1.483118,
-    "orchestrator_usd": 12.493411,
+    "orchestrator_usd": 12.514074,
     "released": 14,
-    "usd": 25.836524
+    "usd": 25.951807
   },
   "version": 1
 }
