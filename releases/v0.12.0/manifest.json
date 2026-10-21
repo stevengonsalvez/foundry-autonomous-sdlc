@@ -99,8 +99,8 @@
       "viewport": "mobile",
       "title": "Home, dark theme",
       "caption": "Home page with the dark theme selected via the theme toggle preference.",
-      "sha256": "616ef101cdd5bdb0bf705f52259df8db31513f54f5570f7d81ae89169df15d8c",
-      "size": 76466
+      "sha256": "deeb0b097b273147b1495315e38a9fdae4a1fcaef67eee4fed4bae8ea6023b24",
+      "size": 76462
     },
     {
       "filename": "home-recent-searches-mobile.png",
@@ -229,7 +229,7 @@
       "viewport": "mobile",
       "title": "Home",
       "caption": "Home page in the default light theme: search form and recent parcels table.",
-      "sha256": "fd43dee7fed9cb8e5fad246c3df46d9fe5aed7e129c52af847810c137c3b66cb",
+      "sha256": "87623bc4b05e1e359e40731e715f37fc5e1fc5240f95e4eae22ec274fe2c7d1f",
       "size": 72773
     },
     {
@@ -267,7 +267,7 @@
   "changes": {
     "vs": "v0.11.0",
     "fp": {
-      "self": "46d75cb64bebe2e59a33316492c537274986b859b52690f2f5aad1263a8d3931",
+      "self": "c248f54c11168b0fdc3c754a9a22d64f53ca32b8340dd1d3208a50045cab1a7d",
       "prev": "09d9cf557d397619dfb5c3ea7c9f4295af68df0c1e5ba9f5111761b5bc1ccb11"
     },
     "states": {
