@@ -44,7 +44,7 @@
       "pass": 19
     }
   },
-  "generated_at": "2026-10-21T21:21:04Z",
+  "generated_at": "2026-10-21T21:24:21Z",
   "issues": [
     {
       "closed_at": "2026-10-10T12:28:43Z",
@@ -3410,6 +3410,36 @@
         "calls": 1,
         "coder_model_usd": 0.0,
         "coder_usd": 0.0,
+        "model_usd": 0.112044,
+        "usd": 0.112044
+      },
+      "deferred": null,
+      "escalation": null,
+      "gate_attempts": {},
+      "gates": {},
+      "kind": "issue",
+      "number": 128,
+      "opened_at": "2026-10-21T21:01:29Z",
+      "outcome": "open",
+      "owner": "api",
+      "pr": null,
+      "quality_score": null,
+      "release": null,
+      "resolution_seconds": null,
+      "scenario": "d",
+      "severity": "s3",
+      "stages": [],
+      "title": "Tracking numbers with surrounding spaces are rejected by the API",
+      "type": "bug"
+    },
+    {
+      "closed_at": null,
+      "coder_engine": null,
+      "coder_sessions_lost": 0,
+      "cost": {
+        "calls": 1,
+        "coder_model_usd": 0.0,
+        "coder_usd": 0.0,
         "model_usd": 0.071352,
         "usd": 0.071352
       },
@@ -3471,11 +3501,11 @@
   "totals": {
     "deferred": 0,
     "escalated": 28,
-    "issues": 46,
+    "issues": 47,
     "ledger_usd": 1.483118,
-    "orchestrator_usd": 12.653818,
+    "orchestrator_usd": 12.678719,
     "released": 14,
-    "usd": 26.721053
+    "usd": 26.857998
   },
   "version": 1
 }
