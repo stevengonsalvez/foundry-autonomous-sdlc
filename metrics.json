@@ -44,7 +44,7 @@
       "pass": 21
     }
   },
-  "generated_at": "2026-10-21T22:49:56Z",
+  "generated_at": "2026-10-21T22:57:06Z",
   "issues": [
     {
       "closed_at": "2026-10-10T12:28:43Z",
@@ -3679,6 +3679,36 @@
       ],
       "title": "Update the status filter label copy",
       "type": "maintenance"
+    },
+    {
+      "closed_at": null,
+      "coder_engine": null,
+      "coder_sessions_lost": 0,
+      "cost": {
+        "calls": 1,
+        "coder_model_usd": 0.0,
+        "coder_usd": 0.0,
+        "model_usd": 0.129998,
+        "usd": 0.129998
+      },
+      "deferred": null,
+      "escalation": null,
+      "gate_attempts": {},
+      "gates": {},
+      "kind": "issue",
+      "number": 132,
+      "opened_at": "2026-10-21T22:52:41Z",
+      "outcome": "open",
+      "owner": "api",
+      "pr": null,
+      "quality_score": null,
+      "release": null,
+      "resolution_seconds": null,
+      "scenario": "d",
+      "severity": "s3",
+      "stages": [],
+      "title": "Parcel API returns 404 for a tracking number URL with a trailing slash",
+      "type": "bug"
     }
   ],
   "ledger": {
@@ -3689,11 +3719,11 @@
   "totals": {
     "deferred": 0,
     "escalated": 32,
-    "issues": 48,
+    "issues": 49,
     "ledger_usd": 1.483118,
-    "orchestrator_usd": 14.159101,
+    "orchestrator_usd": 14.188205,
     "released": 15,
-    "usd": 30.642941
+    "usd": 30.802043
   },
   "version": 1
 }
