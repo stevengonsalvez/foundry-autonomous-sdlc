@@ -4,47 +4,47 @@
     "agent-scope": {
       "fail": 0,
       "first_fail": 0,
-      "first_pass": 18,
-      "pass": 24
+      "first_pass": 19,
+      "pass": 25
     },
     "coverage": {
       "fail": 5,
       "first_fail": 5,
-      "first_pass": 13,
-      "pass": 19
+      "first_pass": 14,
+      "pass": 20
     },
     "e2e": {
       "fail": 8,
       "first_fail": 6,
-      "first_pass": 12,
-      "pass": 16
+      "first_pass": 13,
+      "pass": 17
     },
     "evals": {
       "fail": 0,
       "first_fail": 0,
-      "first_pass": 4,
-      "pass": 7
+      "first_pass": 5,
+      "pass": 8
     },
     "gitleaks": {
       "fail": 0,
       "first_fail": 0,
-      "first_pass": 18,
-      "pass": 24
+      "first_pass": 19,
+      "pass": 25
     },
     "tdd-order": {
       "fail": 0,
       "first_fail": 0,
-      "first_pass": 18,
-      "pass": 24
+      "first_pass": 19,
+      "pass": 25
     },
     "test": {
       "fail": 6,
       "first_fail": 6,
-      "first_pass": 12,
-      "pass": 18
+      "first_pass": 13,
+      "pass": 19
     }
   },
-  "generated_at": "2026-10-21T17:46:30Z",
+  "generated_at": "2026-10-21T17:49:29Z",
   "issues": [
     {
       "closed_at": "2026-10-10T12:28:43Z",
@@ -3227,16 +3227,46 @@
       "coder_engine": "agy-unrestricted",
       "coder_sessions_lost": 0,
       "cost": {
-        "calls": 3,
+        "calls": 4,
         "coder_model_usd": 0.0,
         "coder_usd": 0.222674,
-        "model_usd": 0.438116,
-        "usd": 0.66079
+        "model_usd": 0.537152,
+        "usd": 0.759826
       },
       "deferred": null,
       "escalation": null,
-      "gate_attempts": {},
-      "gates": {},
+      "gate_attempts": {
+        "agent-scope": [
+          "success"
+        ],
+        "coverage": [
+          "success"
+        ],
+        "e2e": [
+          "success"
+        ],
+        "evals": [
+          "success"
+        ],
+        "gitleaks": [
+          "success"
+        ],
+        "tdd-order": [
+          "success"
+        ],
+        "test": [
+          "success"
+        ]
+      },
+      "gates": {
+        "agent-scope": "success",
+        "coverage": "success",
+        "e2e": "success",
+        "evals": "success",
+        "gitleaks": "success",
+        "tdd-order": "success",
+        "test": "success"
+      },
       "kind": "issue",
       "number": 124,
       "opened_at": "2026-10-21T17:16:37Z",
@@ -3290,9 +3320,9 @@
     "escalated": 28,
     "issues": 43,
     "ledger_usd": 1.483118,
-    "orchestrator_usd": 12.440746,
+    "orchestrator_usd": 12.462683,
     "released": 13,
-    "usd": 25.594369
+    "usd": 25.715342
   },
   "version": 1
 }
