@@ -44,7 +44,7 @@
       "pass": 19
     }
   },
-  "generated_at": "2026-10-21T21:39:25Z",
+  "generated_at": "2026-10-21T21:39:38Z",
   "issues": [
     {
       "closed_at": "2026-10-10T12:28:43Z",
@@ -3460,17 +3460,17 @@
     },
     {
       "closed_at": null,
-      "coder_engine": null,
+      "coder_engine": "agy",
       "coder_sessions_lost": 0,
       "cost": {
         "calls": 1,
         "coder_model_usd": 0.0,
-        "coder_usd": 0.00191,
+        "coder_usd": 0.104891,
         "model_usd": 0.071352,
-        "usd": 0.073262
+        "usd": 0.176243
       },
       "deferred": null,
-      "escalation": null,
+      "escalation": "escalated:build-failed",
       "gate_attempts": {
         "agent-scope": [
           "success"
@@ -3506,7 +3506,7 @@
       "kind": "pr",
       "number": null,
       "opened_at": "2026-10-21T21:01:35Z",
-      "outcome": "open",
+      "outcome": "escalated",
       "owner": null,
       "pr": 129,
       "quality_score": null,
@@ -3517,9 +3517,13 @@
       "stages": [
         {
           "entered_at": "2026-10-21T21:37:34Z",
-          "in_progress": true,
-          "seconds": 0,
+          "seconds": 120,
           "stage": "stage:building"
+        },
+        {
+          "entered_at": "2026-10-21T21:39:34Z",
+          "seconds": 0,
+          "stage": "escalated:build-failed"
         }
       ],
       "title": "Update the status filter label copy",
@@ -3533,12 +3537,12 @@
   "repo": "stevengonsalvez/foundry-autonomous-sdlc",
   "totals": {
     "deferred": 0,
-    "escalated": 29,
+    "escalated": 30,
     "issues": 47,
     "ledger_usd": 1.483118,
-    "orchestrator_usd": 12.811888,
+    "orchestrator_usd": 12.822056,
     "released": 14,
-    "usd": 27.505407
+    "usd": 27.618556
   },
   "version": 1
 }
