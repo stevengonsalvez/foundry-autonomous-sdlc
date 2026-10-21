@@ -44,7 +44,7 @@
       "pass": 18
     }
   },
-  "generated_at": "2026-10-21T17:11:19Z",
+  "generated_at": "2026-10-21T17:12:29Z",
   "issues": [
     {
       "closed_at": "2026-10-10T12:28:43Z",
@@ -3198,13 +3198,13 @@
         "usd": 0.168608
       },
       "deferred": null,
-      "escalation": null,
+      "escalation": "escalated:agent-error",
       "gate_attempts": {},
       "gates": {},
       "kind": "issue",
       "number": 123,
       "opened_at": "2026-10-21T17:07:47Z",
-      "outcome": "open",
+      "outcome": "escalated",
       "owner": null,
       "pr": null,
       "quality_score": null,
@@ -3212,7 +3212,13 @@
       "resolution_seconds": null,
       "scenario": "a",
       "severity": null,
-      "stages": [],
+      "stages": [
+        {
+          "entered_at": "2026-10-21T17:12:26Z",
+          "seconds": 0,
+          "stage": "escalated:agent-error"
+        }
+      ],
       "title": "Show how many shipment events a parcel has next to the history heading",
       "type": "feature"
     }
@@ -3224,12 +3230,12 @@
   "repo": "stevengonsalvez/foundry-autonomous-sdlc",
   "totals": {
     "deferred": 0,
-    "escalated": 27,
+    "escalated": 28,
     "issues": 42,
     "ledger_usd": 1.483118,
-    "orchestrator_usd": 12.047222,
+    "orchestrator_usd": 12.057207,
     "released": 13,
-    "usd": 24.540055
+    "usd": 24.55004
   },
   "version": 1
 }
