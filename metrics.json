@@ -44,7 +44,7 @@
       "pass": 21
     }
   },
-  "generated_at": "2026-10-21T22:49:25Z",
+  "generated_at": "2026-10-21T22:49:56Z",
   "issues": [
     {
       "closed_at": "2026-10-10T12:28:43Z",
@@ -3432,12 +3432,12 @@
       "cost": {
         "calls": 7,
         "coder_model_usd": 0.0,
-        "coder_usd": 0.633165,
+        "coder_usd": 0.733281,
         "model_usd": 0.634072,
-        "usd": 1.267237
+        "usd": 1.367353
       },
       "deferred": null,
-      "escalation": null,
+      "escalation": "escalated:build-failed",
       "gate_attempts": {
         "agent-scope": [
           "success"
@@ -3473,7 +3473,7 @@
       "kind": "issue",
       "number": 128,
       "opened_at": "2026-10-21T21:01:29Z",
-      "outcome": "open",
+      "outcome": "escalated",
       "owner": "api",
       "pr": 131,
       "quality_score": 97,
@@ -3509,9 +3509,13 @@
         },
         {
           "entered_at": "2026-10-21T22:11:21Z",
-          "in_progress": true,
-          "seconds": 0,
+          "seconds": 2312,
           "stage": "stage:building"
+        },
+        {
+          "entered_at": "2026-10-21T22:49:53Z",
+          "seconds": 0,
+          "stage": "escalated:build-failed"
         }
       ],
       "title": "Tracking numbers with surrounding spaces are rejected by the API",
@@ -3684,12 +3688,12 @@
   "repo": "stevengonsalvez/foundry-autonomous-sdlc",
   "totals": {
     "deferred": 0,
-    "escalated": 31,
+    "escalated": 32,
     "issues": 48,
     "ledger_usd": 1.483118,
-    "orchestrator_usd": 14.149052,
+    "orchestrator_usd": 14.159101,
     "released": 15,
-    "usd": 30.532776
+    "usd": 30.642941
   },
   "version": 1
 }
