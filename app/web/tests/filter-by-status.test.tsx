@@ -19,9 +19,9 @@ describe("home page — filter by status control", () => {
     const select = await screen.findByLabelText("Filter by status");
     expect(select).toBeInTheDocument();
 
-    // Options must include All statuses and the same human labels as the badges
+    // Options must include All parcels and the same human labels as the badges
     const withinSelect = within(select as Element);
-    expect(withinSelect.getByRole("option", { name: "All statuses" })).toBeInTheDocument();
+    expect(withinSelect.getByRole("option", { name: "All parcels" })).toBeInTheDocument();
     expect(withinSelect.getByRole("option", { name: "Label created" })).toBeInTheDocument();
     expect(withinSelect.getByRole("option", { name: "In transit" })).toBeInTheDocument();
     expect(withinSelect.getByRole("option", { name: "Out for delivery" })).toBeInTheDocument();
