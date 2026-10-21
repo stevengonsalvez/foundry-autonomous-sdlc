@@ -19,6 +19,7 @@ from sdlc_factory.engines import ABORTED_RC, TIMEOUT_RC, AgyEngine, ProcessOutpu
 REPO = Path(__file__).resolve().parents[2]
 FACTORY = load_factory(REPO / "factory" / "factory.yaml")
 TOKEN = "agy-token-value"
+FEASIBLE = {"suitable": True, "reasons": ["web only"], "risk": "low", "affected_paths": ["app/web/src"]}
 TRIAGE = {"severity": "s2", "owner": "api", "summary": "label lookup 500s",
           "suspected_area": "app/api", "rationale": "stack trace points at the api"}
 AUTH_STDERR = "Authentication required. Open https://accounts.example/device to sign in.\n"
@@ -157,6 +158,22 @@ def test_markdown_agent_passes_text_through(token_file):
     result = make(token_file, runner).call_prompt_agent("sdlc-release-notes", "x")
     assert result.text == notes
     assert runner.calls[0]["schema"] is None
+
+
+def test_agents_that_mention_github_tools_are_told_no_tools_exist(token_file):
+    # agy has no get_file_contents: a call attempt is denied and the run ends empty (live scenario a).
+    runner = ScriptedRunner(ProcessOutput(0, agy_stdout(json.dumps(FEASIBLE)), ""))
+    make(token_file, runner).call_prompt_agent("sdlc-feasibility", "INPUT-TEXT")
+    prompt = runner.prompts[0]
+    assert "get_file_contents" in prompt                          # the shared instructions are untouched
+    notice = prompt.split("INPUT-TEXT")[0].rsplit("\n\n", 2)[-2]
+    assert "NO TOOLS" in notice and "Never call a tool" in notice
+
+
+def test_agents_without_tool_text_get_no_notice(token_file):
+    runner = ScriptedRunner(ProcessOutput(0, agy_stdout(json.dumps(TRIAGE)), ""))
+    make(token_file, runner).call_prompt_agent("sdlc-triage", "INPUT-TEXT")
+    assert "NO TOOLS" not in runner.prompts[0]
 
 
 def test_image_urls_are_listed_in_the_prompt(token_file):
