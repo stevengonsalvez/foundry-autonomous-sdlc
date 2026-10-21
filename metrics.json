@@ -1,5 +1,7 @@
 {
-  "deferrals": {},
+  "deferrals": {
+    "132": 1
+  },
   "gate_pass_rates": {
     "agent-scope": {
       "fail": 0,
@@ -44,7 +46,7 @@
       "pass": 21
     }
   },
-  "generated_at": "2026-10-21T23:20:05Z",
+  "generated_at": "2026-10-21T23:31:03Z",
   "issues": [
     {
       "closed_at": "2026-10-10T12:28:43Z",
@@ -3685,13 +3687,13 @@
       "coder_engine": null,
       "coder_sessions_lost": 0,
       "cost": {
-        "calls": 6,
+        "calls": 8,
         "coder_model_usd": 0.0,
         "coder_usd": 0.0,
-        "model_usd": 0.7197,
-        "usd": 0.7197
+        "model_usd": 0.965122,
+        "usd": 0.965122
       },
-      "deferred": null,
+      "deferred": "QuotaError: sdlc-test-designer: agy quota or rate limit reached (agent-quota)",
       "escalation": null,
       "gate_attempts": {},
       "gates": {},
@@ -3729,13 +3731,13 @@
   },
   "repo": "stevengonsalvez/foundry-autonomous-sdlc",
   "totals": {
-    "deferred": 0,
+    "deferred": 1,
     "escalated": 32,
     "issues": 49,
     "ledger_usd": 1.483118,
-    "orchestrator_usd": 14.311269,
+    "orchestrator_usd": 14.368044,
     "released": 15,
-    "usd": 31.514809
+    "usd": 31.817006
   },
   "version": 1
 }
