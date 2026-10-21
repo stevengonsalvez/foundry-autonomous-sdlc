@@ -32,7 +32,7 @@ with workflow.unsafe.imports_passed_through():
     from sdlc_factory.activities import AUTH, NON_RETRYABLE, QUOTA, StepInput, StepOutput, WorkRef
 
 TASK_QUEUE = "foreman"
-STEP_TIMEOUT = timedelta(minutes=10)
+STEP_TIMEOUT = timedelta(minutes=45)
 LIST_TIMEOUT = timedelta(minutes=2)
 STEP_RETRY = RetryPolicy(initial_interval=timedelta(seconds=5), maximum_attempts=3,
                          non_retryable_error_types=[NON_RETRYABLE])
