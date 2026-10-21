@@ -212,7 +212,9 @@ export function ParcelPage({ trackingNumber }: { trackingNumber: string }) {
       {state.status === "error" && <ParcelError error={state.error} trackingNumber={trackingNumber} onRetry={retry} />}
       {state.status === "success" && (
         <section className="card" aria-labelledby="timeline-heading">
-          <h2 id="timeline-heading">Shipment history</h2>
+          <h2 id="timeline-heading">
+            {eventsCount > 0 ? `Shipment history (${eventsCount})` : "Shipment history"}
+          </h2>
           <Timeline events={state.data.events} labelledBy="timeline-heading" />
         </section>
       )}
