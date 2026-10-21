@@ -44,7 +44,7 @@
       "pass": 18
     }
   },
-  "generated_at": "2026-10-21T07:35:23Z",
+  "generated_at": "2026-10-21T07:36:33Z",
   "issues": [
     {
       "closed_at": "2026-10-10T12:28:43Z",
@@ -2821,13 +2821,13 @@
         "usd": 0.28423
       },
       "deferred": null,
-      "escalation": null,
+      "escalation": "escalated:agent-error",
       "gate_attempts": {},
       "gates": {},
       "kind": "issue",
       "number": 116,
       "opened_at": "2026-10-21T07:28:28Z",
-      "outcome": "open",
+      "outcome": "escalated",
       "owner": null,
       "pr": null,
       "quality_score": 100,
@@ -2838,9 +2838,13 @@
       "stages": [
         {
           "entered_at": "2026-10-21T07:31:27Z",
-          "in_progress": true,
-          "seconds": 0,
+          "seconds": 303,
           "stage": "stage:ready"
+        },
+        {
+          "entered_at": "2026-10-21T07:36:30Z",
+          "seconds": 0,
+          "stage": "escalated:agent-error"
         }
       ],
       "title": "Show the estimated delivery date on the parcel page",
@@ -2854,12 +2858,12 @@
   "repo": "stevengonsalvez/foundry-autonomous-sdlc",
   "totals": {
     "deferred": 0,
-    "escalated": 20,
+    "escalated": 21,
     "issues": 35,
     "ledger_usd": 1.483118,
-    "orchestrator_usd": 10.90418,
+    "orchestrator_usd": 10.914178,
     "released": 13,
-    "usd": 18.195297
+    "usd": 18.205295
   },
   "version": 1
 }
