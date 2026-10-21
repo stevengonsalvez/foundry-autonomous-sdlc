@@ -44,7 +44,7 @@
       "pass": 19
     }
   },
-  "generated_at": "2026-10-21T21:17:09Z",
+  "generated_at": "2026-10-21T21:19:35Z",
   "issues": [
     {
       "closed_at": "2026-10-10T12:28:43Z",
@@ -3365,11 +3365,11 @@
       "coder_engine": null,
       "coder_sessions_lost": 0,
       "cost": {
-        "calls": 2,
+        "calls": 3,
         "coder_model_usd": 0.0,
         "coder_usd": 0.0,
-        "model_usd": 0.226846,
-        "usd": 0.226846
+        "model_usd": 0.322132,
+        "usd": 0.322132
       },
       "deferred": null,
       "escalation": null,
@@ -3381,7 +3381,7 @@
       "outcome": "open",
       "owner": null,
       "pr": null,
-      "quality_score": 40,
+      "quality_score": 92,
       "release": null,
       "resolution_seconds": null,
       "scenario": "c",
@@ -3389,9 +3389,14 @@
       "stages": [
         {
           "entered_at": "2026-10-21T21:06:32Z",
+          "seconds": 780,
+          "stage": "stage:needs-refinement"
+        },
+        {
+          "entered_at": "2026-10-21T21:19:32Z",
           "in_progress": true,
           "seconds": 0,
-          "stage": "stage:needs-refinement"
+          "stage": "stage:ready"
         }
       ],
       "title": "Move the live carrier integration to the new vendor and rotate the production keys",
@@ -3408,9 +3413,9 @@
     "escalated": 28,
     "issues": 45,
     "ledger_usd": 1.483118,
-    "orchestrator_usd": 12.616749,
+    "orchestrator_usd": 12.637605,
     "released": 14,
-    "usd": 26.517346
+    "usd": 26.633488
   },
   "version": 1
 }
