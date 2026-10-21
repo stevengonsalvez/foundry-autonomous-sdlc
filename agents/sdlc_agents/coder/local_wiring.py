@@ -109,11 +109,14 @@ def build_local_service(env: Mapping[str, str] = os.environ, *, repo: str = REPO
     home = Path(env.get("HOME") or Path.home())
     state_dir = Path(env.get("STATE_DIR") or home / "jobs")
     extra = agy_extra_env(env)
+    askpass_dir = Path(env["ASKPASS_DIR"]) if env.get("ASKPASS_DIR") else None
+    if askpass_dir is not None:   # root-only and on a mount that allows exec (the container /tmp is noexec)
+        askpass_dir.mkdir(mode=0o700, parents=True, exist_ok=True)
     deps = CoderDeps(
         home=home,
         secrets=FileSecrets(secret_paths(env)),
         github=github,
-        git=lambda author, cancel: SubprocessGit(author=author, cancel=cancel),
+        git=lambda author, cancel: SubprocessGit(author=author, cancel=cancel, askpass_dir=askpass_dir),
         engines=lambda ctx: agy_chain(ctx, extra),
         toolchain=Toolchain(home, node_dir=NODE_DIR),
         clock=SystemClock(),

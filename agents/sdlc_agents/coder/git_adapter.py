@@ -43,8 +43,9 @@ def resolve_author(owner_user_id: int | None) -> tuple[str, str]:
 
 class SubprocessGit:
     def __init__(self, *, author: tuple[str, str], remote_base: str = "https://github.com/",
-                 cancel: threading.Event | None = None):
+                 cancel: threading.Event | None = None, askpass_dir: Path | None = None):
         self._author = author
+        self._askpass_parent = str(askpass_dir) if askpass_dir else None   # must allow exec: not a noexec /tmp
         self._remote_base = remote_base
         self._cancel = cancel
         self._token = ""
@@ -271,7 +272,8 @@ class SubprocessGit:
         env = self._git_env()
         askpass_dir = None
         if network and self._token:
-            askpass_dir = tempfile.mkdtemp(prefix="sdlc-askpass-")   # 0700, owned by this (root) process
+            # 0700, owned by this (root) process
+            askpass_dir = tempfile.mkdtemp(prefix="sdlc-askpass-", dir=self._askpass_parent)
             script = os.path.join(askpass_dir, "askpass")
             fd = os.open(script, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o700)
             with os.fdopen(fd, "w") as fh:
