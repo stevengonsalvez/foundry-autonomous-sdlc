@@ -44,7 +44,7 @@
       "pass": 19
     }
   },
-  "generated_at": "2026-10-21T21:03:21Z",
+  "generated_at": "2026-10-21T21:06:36Z",
   "issues": [
     {
       "closed_at": "2026-10-10T12:28:43Z",
@@ -3354,6 +3354,43 @@
       ],
       "title": "Make the parcel tracker better",
       "type": "feature"
+    },
+    {
+      "closed_at": null,
+      "coder_engine": null,
+      "coder_sessions_lost": 0,
+      "cost": {
+        "calls": 1,
+        "coder_model_usd": 0.0,
+        "coder_usd": 0.0,
+        "model_usd": 0.11138,
+        "usd": 0.11138
+      },
+      "deferred": null,
+      "escalation": null,
+      "gate_attempts": {},
+      "gates": {},
+      "kind": "issue",
+      "number": 127,
+      "opened_at": "2026-10-21T21:00:07Z",
+      "outcome": "open",
+      "owner": null,
+      "pr": null,
+      "quality_score": 40,
+      "release": null,
+      "resolution_seconds": null,
+      "scenario": "c",
+      "severity": null,
+      "stages": [
+        {
+          "entered_at": "2026-10-21T21:06:32Z",
+          "in_progress": true,
+          "seconds": 0,
+          "stage": "stage:needs-refinement"
+        }
+      ],
+      "title": "Move the live carrier integration to the new vendor and rotate the production keys",
+      "type": "feature"
     }
   ],
   "ledger": {
@@ -3364,11 +3401,11 @@
   "totals": {
     "deferred": 0,
     "escalated": 28,
-    "issues": 44,
+    "issues": 45,
     "ledger_usd": 1.483118,
-    "orchestrator_usd": 12.514074,
+    "orchestrator_usd": 12.53875,
     "released": 14,
-    "usd": 25.951807
+    "usd": 26.087863
   },
   "version": 1
 }
