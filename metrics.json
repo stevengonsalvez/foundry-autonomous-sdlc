@@ -44,7 +44,7 @@
       "pass": 19
     }
   },
-  "generated_at": "2026-10-21T21:38:05Z",
+  "generated_at": "2026-10-21T21:38:36Z",
   "issues": [
     {
       "closed_at": "2026-10-10T12:28:43Z",
@@ -3362,9 +3362,14 @@
         },
         {
           "entered_at": "2026-10-21T21:37:21Z",
+          "seconds": 71,
+          "stage": "stage:tests-written"
+        },
+        {
+          "entered_at": "2026-10-21T21:38:32Z",
           "in_progress": true,
           "seconds": 0,
-          "stage": "stage:tests-written"
+          "stage": "stage:building"
         }
       ],
       "title": "Make the parcel tracker better",
@@ -3524,9 +3529,9 @@
     "escalated": 29,
     "issues": 47,
     "ledger_usd": 1.483118,
-    "orchestrator_usd": 12.788649,
+    "orchestrator_usd": 12.798779,
     "released": 14,
-    "usd": 27.418878
+    "usd": 27.429008
   },
   "version": 1
 }
