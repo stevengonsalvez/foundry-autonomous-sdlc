@@ -263,6 +263,8 @@ false`). It is deliberately not part of any script. Run it only on purpose.
 6. File the scenario inputs: `python scripts/run_scenarios.py --dry-run`, then without `--dry-run`
    (`--only` picks scenarios). It files owner-authored issues and the stale-test PR; the pipeline does
    the rest.
+   Scenarios a, a2, d and d-maintenance were built by earlier runs and already pass on `main`: for a live
+   run use `a3`, `d2` and `d-maintenance2` (b and c never merge code).
 7. Follow each item in the Temporal UI (`issue-N` workflows) and on the control center board.
 8. Afterwards: review merged PRs, release tags and `escalated:*` labels on GitHub. Pause polling if you
    are done: `temporal --address 127.0.0.1:17233 -n factory schedule toggle --schedule-id github-poll --pause --reason done`.
@@ -309,6 +311,13 @@ clear (TLS end to end, no interception); use a dedicated Google account if possi
 | control center shows "not written yet" | `curl -s 127.0.0.1:18080/state.json` | 404 until the first ledger ingest; normal on a fresh stack. |
 | control center blank, CSP error in console | browser devtools | The page must be loaded from the same origin as `/state.json` (port 18080); `connect-src 'self'` allows only that. |
 | port already in use on `up` | `ss -ltn` | Change the `*_HOST_PORT` values in `.env`. |
+| issue escalated, you want a retry | `escalated:*` label plus the state comment | Removing the label does not retry: the stored `escalation` in the state comment puts it back within seconds. Close the issue and file a fresh one. |
+| escalated `agent-error`, "ended denied", text mentions "auto-denied" or "allow-rule" | the escalation comment quotes agy's stderr tail | The model tried a tool; plan mode has none. Every prompt agent already gets a no-tools notice (`NO_TOOLS_NOTICE`); if it still happens, retry by refiling. Never add allow-rules. |
+| escalated `agent-error`, "CancelledError" | Temporal UI, activity timeout | A step outlived `STEP_TIMEOUT` (45 min). Real agy test design can take 10 to 30 min; `test_step_timeout.py` pins the limit to the slowest agent. |
+| coder `failed ... install-failed`, `npm ci` cannot find the lockfile | `ls -ld /srv/sdlc-work/<job>` in the coder | The job dir or checkout is not traversable by `agyuser`: `give_tree` sets both to 0755 (the coder runs with umask 077). |
+| coder `failed ... error`, "agyuser processes survived SIGKILL" | `/proc/<pid>/status` shows `State: Z` | Zombies, not survivors: they are skipped, and the coder runs under `init: true` so orphans are reaped. |
+| coder `internal-error`, `git push` "cannot exec ... askpass" | `mount | grep ' /tmp '` shows `noexec` | The askpass helper lives in `ASKPASS_DIR` (`/var/lib/sdlc-coder/askpass`, root only, on the state volume), not `/tmp`. |
+| coder `failed ... tests-not-red` | the job log: all tests passed before any code | The feature already exists on `main`; the TDD gate is working. Use a scenario for something `main` lacks (a3, d2, d-maintenance2). |
 | build fails "agy install failed" | network to `antigravity.google` and `storage.googleapis.com` | Fix network (only the coder image installs agy; the worker image is built with `INSTALL_AGY=0`). |
 
 Useful commands (always from `deploy/compose`, so they act on this project only):
