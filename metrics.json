@@ -44,7 +44,7 @@
       "pass": 18
     }
   },
-  "generated_at": "2026-10-21T17:40:15Z",
+  "generated_at": "2026-10-21T17:40:43Z",
   "issues": [
     {
       "closed_at": "2026-10-10T12:28:43Z",
@@ -3229,9 +3229,9 @@
       "cost": {
         "calls": 3,
         "coder_model_usd": 0.0,
-        "coder_usd": 0.071625,
+        "coder_usd": 0.0764,
         "model_usd": 0.438116,
-        "usd": 0.509741
+        "usd": 0.514516
       },
       "deferred": null,
       "escalation": null,
@@ -3285,9 +3285,9 @@
     "escalated": 28,
     "issues": 43,
     "ledger_usd": 1.483118,
-    "orchestrator_usd": 12.312283,
+    "orchestrator_usd": 12.322131,
     "released": 13,
-    "usd": 25.314857
+    "usd": 25.32948
   },
   "version": 1
 }
