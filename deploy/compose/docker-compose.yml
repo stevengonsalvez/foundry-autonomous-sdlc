@@ -262,6 +262,8 @@ services:
       context: ../..
       dockerfile: deploy/compose/Dockerfile.coder
     restart: unless-stopped
+    # PID 1 is Python and never reaps: without an init, orphaned children (esbuild after npm test) stay zombies.
+    init: true
     # Root ONLY to drop every untrusted step to agyuser (uid 61000), per the coder sandbox design.
     user: root
     read_only: true
