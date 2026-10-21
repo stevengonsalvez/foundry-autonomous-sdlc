@@ -5,7 +5,7 @@ import { LocationPinIcon } from "./Icons";
 /** Events oldest first; the last one is the latest. */
 export function Timeline({ events, labelledBy }: { events: ParcelEvent[]; labelledBy: string }) {
   return (
-    <ol className="timeline" aria-labelledby={labelledBy}>
+    <ol className="timeline" aria-label="Shipment history" aria-describedby={labelledBy}>
       {events.map((event, index) => {
         const latest = index === events.length - 1;
         return (
