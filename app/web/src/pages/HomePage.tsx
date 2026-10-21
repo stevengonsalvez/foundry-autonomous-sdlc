@@ -70,7 +70,7 @@ export function HomePage() {
                 value={statusFilter}
                 onChange={(e) => goToHome(e.target.value as ParcelStatus | "all")}
               >
-                <option value="all">All statuses</option>
+                <option value="all">All parcels</option>
                 {PARCEL_STATUSES.map((status) => (
                   <option key={status} value={status}>
                     {STATUS_LABELS[status]}
