@@ -63,3 +63,20 @@ def test_dry_run_creates_nothing():
     fake = FakeGh()
     assert rs.run_scenarios(list(rs.FILES), run=fake, dry_run=True) == {}
     assert fake.calls == []
+
+
+def test_stale_test_pr_takes_the_copy_change_from_the_scenario():
+    # a scenario names its own old and new text, so a copy change can be staged again once main has moved on
+    fake = FakeGh()
+    meta = {"pr_title": "Retitle", "branch": "chore/x", "old": "Track your parcel", "new": "Follow it"}
+    rs.create_stale_test_pr(meta, "body", fake, "app/web/src/pages/HomePage.tsx")
+    put = next(json.loads(i) for a, i in fake.calls if "PUT" in a)
+    assert base64.b64decode(put["content"]) == b"<h1>Follow it</h1>"
+
+
+def test_a_scenario_old_text_is_the_one_searched_for(monkeypatch):
+    seen: list[str | None] = []
+    monkeypatch.setattr(rs, "find_heading_file", lambda old=None: seen.append(old) or "app/web/src/x.tsx")
+    monkeypatch.setattr(rs, "create_stale_test_pr", lambda meta, body, run, path: 9)
+    rs.run_scenarios(["d-maintenance2"], run=FakeGh())
+    assert seen == ["All statuses"]
