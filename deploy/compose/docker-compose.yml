@@ -290,6 +290,8 @@ services:
       HOME: /root
       STATE_DIR: /var/lib/sdlc-coder/jobs
       WORKROOT: /srv/sdlc-work
+      # git's askpass helper must be executable; the container /tmp is noexec. Root-only, on the state volume.
+      ASKPASS_DIR: /var/lib/sdlc-coder/askpass
       HTTPS_PROXY: http://egress-proxy:3128
       HTTP_PROXY: http://egress-proxy:3128
       NO_PROXY: localhost,127.0.0.1
