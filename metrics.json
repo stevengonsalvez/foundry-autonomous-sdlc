@@ -44,7 +44,7 @@
       "pass": 18
     }
   },
-  "generated_at": "2026-10-21T17:05:21Z",
+  "generated_at": "2026-10-21T17:08:20Z",
   "issues": [
     {
       "closed_at": "2026-10-10T12:28:43Z",
@@ -3185,6 +3185,36 @@
       ],
       "title": "Show the estimated delivery date on the parcel page",
       "type": "feature"
+    },
+    {
+      "closed_at": null,
+      "coder_engine": null,
+      "coder_sessions_lost": 0,
+      "cost": {
+        "calls": 2,
+        "coder_model_usd": 0.0,
+        "coder_usd": 0.0,
+        "model_usd": 0.054756,
+        "usd": 0.054756
+      },
+      "deferred": null,
+      "escalation": null,
+      "gate_attempts": {},
+      "gates": {},
+      "kind": "issue",
+      "number": 123,
+      "opened_at": "2026-10-21T17:07:47Z",
+      "outcome": "open",
+      "owner": null,
+      "pr": null,
+      "quality_score": null,
+      "release": null,
+      "resolution_seconds": null,
+      "scenario": "a",
+      "severity": null,
+      "stages": [],
+      "title": "Show how many shipment events a parcel has next to the history heading",
+      "type": "feature"
     }
   ],
   "ledger": {
@@ -3195,11 +3225,11 @@
   "totals": {
     "deferred": 0,
     "escalated": 27,
-    "issues": 41,
+    "issues": 42,
     "ledger_usd": 1.483118,
-    "orchestrator_usd": 12.013214,
+    "orchestrator_usd": 12.024236,
     "released": 13,
-    "usd": 24.337439
+    "usd": 24.403217
   },
   "version": 1
 }
