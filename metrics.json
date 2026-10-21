@@ -44,7 +44,7 @@
       "pass": 21
     }
   },
-  "generated_at": "2026-10-21T22:14:19Z",
+  "generated_at": "2026-10-21T22:14:34Z",
   "issues": [
     {
       "closed_at": "2026-10-10T12:28:43Z",
@@ -3659,9 +3659,14 @@
         },
         {
           "entered_at": "2026-10-21T22:11:01Z",
+          "seconds": 210,
+          "stage": "stage:in-review"
+        },
+        {
+          "entered_at": "2026-10-21T22:14:31Z",
           "in_progress": true,
           "seconds": 0,
-          "stage": "stage:in-review"
+          "stage": "stage:merged"
         }
       ],
       "title": "Update the status filter label copy",
@@ -3678,9 +3683,9 @@
     "escalated": 31,
     "issues": 48,
     "ledger_usd": 1.483118,
-    "orchestrator_usd": 13.420963,
+    "orchestrator_usd": 13.431478,
     "released": 14,
-    "usd": 29.295624
+    "usd": 29.306139
   },
   "version": 1
 }
