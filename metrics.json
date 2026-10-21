@@ -44,7 +44,7 @@
       "pass": 19
     }
   },
-  "generated_at": "2026-10-21T21:39:49Z",
+  "generated_at": "2026-10-21T21:44:31Z",
   "issues": [
     {
       "closed_at": "2026-10-10T12:28:43Z",
@@ -3430,11 +3430,11 @@
       "coder_engine": null,
       "coder_sessions_lost": 0,
       "cost": {
-        "calls": 2,
+        "calls": 3,
         "coder_model_usd": 0.0,
         "coder_usd": 0.0,
-        "model_usd": 0.175334,
-        "usd": 0.175334
+        "model_usd": 0.304146,
+        "usd": 0.304146
       },
       "deferred": null,
       "escalation": null,
@@ -3454,9 +3454,14 @@
       "stages": [
         {
           "entered_at": "2026-10-21T21:39:23Z",
+          "seconds": 305,
+          "stage": "stage:ready"
+        },
+        {
+          "entered_at": "2026-10-21T21:44:28Z",
           "in_progress": true,
           "seconds": 0,
-          "stage": "stage:ready"
+          "stage": "stage:feasible"
         }
       ],
       "title": "Tracking numbers with surrounding spaces are rejected by the API",
@@ -3544,9 +3549,9 @@
     "escalated": 31,
     "issues": 47,
     "ledger_usd": 1.483118,
-    "orchestrator_usd": 12.832175,
+    "orchestrator_usd": 12.860955,
     "released": 14,
-    "usd": 27.732133
+    "usd": 27.889725
   },
   "version": 1
 }
