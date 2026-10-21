@@ -44,7 +44,7 @@
       "pass": 18
     }
   },
-  "generated_at": "2026-10-21T17:12:29Z",
+  "generated_at": "2026-10-21T17:17:38Z",
   "issues": [
     {
       "closed_at": "2026-10-10T12:28:43Z",
@@ -3221,6 +3221,43 @@
       ],
       "title": "Show how many shipment events a parcel has next to the history heading",
       "type": "feature"
+    },
+    {
+      "closed_at": null,
+      "coder_engine": null,
+      "coder_sessions_lost": 0,
+      "cost": {
+        "calls": 1,
+        "coder_model_usd": 0.0,
+        "coder_usd": 0.0,
+        "model_usd": 0.060844,
+        "usd": 0.060844
+      },
+      "deferred": null,
+      "escalation": null,
+      "gate_attempts": {},
+      "gates": {},
+      "kind": "issue",
+      "number": 124,
+      "opened_at": "2026-10-21T17:16:37Z",
+      "outcome": "open",
+      "owner": null,
+      "pr": null,
+      "quality_score": 100,
+      "release": null,
+      "resolution_seconds": null,
+      "scenario": "a",
+      "severity": null,
+      "stages": [
+        {
+          "entered_at": "2026-10-21T17:17:35Z",
+          "in_progress": true,
+          "seconds": 0,
+          "stage": "stage:ready"
+        }
+      ],
+      "title": "Show how many shipment events a parcel has next to the history heading",
+      "type": "feature"
     }
   ],
   "ledger": {
@@ -3231,11 +3268,11 @@
   "totals": {
     "deferred": 0,
     "escalated": 28,
-    "issues": 42,
+    "issues": 43,
     "ledger_usd": 1.483118,
-    "orchestrator_usd": 12.057207,
+    "orchestrator_usd": 12.069713,
     "released": 13,
-    "usd": 24.55004
+    "usd": 24.62339
   },
   "version": 1
 }
