@@ -44,7 +44,7 @@
       "pass": 18
     }
   },
-  "generated_at": "2026-10-21T09:58:42Z",
+  "generated_at": "2026-10-21T09:59:55Z",
   "issues": [
     {
       "closed_at": "2026-10-10T12:28:43Z",
@@ -3098,9 +3098,14 @@
         },
         {
           "entered_at": "2026-10-21T09:58:38Z",
+          "seconds": 72,
+          "stage": "stage:tests-written"
+        },
+        {
+          "entered_at": "2026-10-21T09:59:50Z",
           "in_progress": true,
           "seconds": 0,
-          "stage": "stage:tests-written"
+          "stage": "stage:building"
         }
       ],
       "title": "Show the estimated delivery date on the parcel page",
@@ -3117,9 +3122,9 @@
     "escalated": 25,
     "issues": 40,
     "ledger_usd": 1.483118,
-    "orchestrator_usd": 11.652561,
+    "orchestrator_usd": 11.662742,
     "released": 13,
-    "usd": 22.445855
+    "usd": 22.456036
   },
   "version": 1
 }
