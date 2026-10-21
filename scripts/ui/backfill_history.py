@@ -1,13 +1,15 @@
-"""Backfill release screenshots across historical git tags (v0.1.0 to v0.4.0).
+"""Backfill release screenshots across historical git tags (every v* tag by default).
 
 For each tag:
 1. Checks out / archives the tag into an isolated temporary workspace.
 2. Builds app/web with npm ci and npm run build.
 3. If building fails, records 'not reproducible: <reason>' in manifest.
-4. If building succeeds, captures standard routes (home, parcel-found, not-found,
-   invalid-input) at desktop (1280) and mobile (390) using capture.mjs.
+4. If building succeeds, captures every state in scripts/ui/states.json that the tag's app
+   has (states it lacks are skipped, not failed) at desktop (1280) and mobile (390) using the
+   CURRENT capture.mjs, so every release is rendered by the same code.
 5. Validates artifacts as untrusted data using validate_artifact.py.
-6. Stores artifacts on the pr-screenshots branch under releases/<tag>/.
+6. Records which states changed versus the previous release in each manifest (`changes`).
+7. Stores artifacts on the pr-screenshots branch under releases/<tag>/.
 """
 
 from __future__ import annotations
@@ -27,6 +29,7 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
+from scripts.ui.release_changes import annotate_release  # noqa: E402
 from scripts.ui.validate_artifact import validate_artifact_dir  # noqa: E402
 
 SCRIPTS_DIR = Path(__file__).resolve().parent
@@ -237,6 +240,15 @@ def get_remote_url() -> str:
     return url
 
 
+def overlay_release(src: Path, dst: Path) -> None:
+    """Copy a captured release over its stored directory without deleting what is there.
+
+    Files from earlier captures (for example home-desktop.png, linked from the README) stay
+    until nothing references them; the new manifest decides what the history page shows.
+    """
+    shutil.copytree(src, dst, dirs_exist_ok=True)
+
+
 def commit_to_pr_screenshots_branch(
     releases_dir: Path,
     tags: list[str],
@@ -290,10 +302,7 @@ def commit_to_pr_screenshots_branch(
                 src_tag_dir = releases_dir / tag
                 if not src_tag_dir.exists():
                     continue
-                dst_tag_dir = wt_releases / tag
-                if dst_tag_dir.exists():
-                    shutil.rmtree(dst_tag_dir)
-                shutil.copytree(src_tag_dir, dst_tag_dir)
+                overlay_release(src_tag_dir, wt_releases / tag)
                 changed = True
 
             if changed:
@@ -359,6 +368,19 @@ def run_backfill(
         else:
             print(f"Tag {tag} recorded as not reproducible: {manifest.get('reason')}")
 
+    # Pixel-diff each release against the one before it (oldest first)
+    for tag in tags:
+        try:
+            changes = annotate_release(temp_releases, tag)
+        except Exception as exc:
+            print(f"Notice: could not record changes for {tag}: {exc}")
+            continue
+        if changes is not None:
+            counts: dict[str, int] = {}
+            for st in changes["states"].values():
+                counts[st["status"]] = counts.get(st["status"], 0) + 1
+            print(f"{tag}: changes vs {changes['vs']}: {counts}")
+
     # Copy into history/screenshots/ if requested
     if update_local_history:
         history_screenshots = REPO_ROOT / "history" / "screenshots"
@@ -388,12 +410,12 @@ def main() -> None:
     parser.add_argument(
         "--tags",
         nargs="*",
-        help="Explicit list of tags to process (default: all v* tags up to v0.3.1)",
+        help="Explicit list of tags to process (default: every v* tag)",
     )
     parser.add_argument(
         "--max-tag",
-        default="v0.4.0",
-        help="Maximum tag to include (default: v0.4.0)",
+        default=None,
+        help="Maximum tag to include (default: no limit)",
     )
     parser.add_argument(
         "--out-dir",

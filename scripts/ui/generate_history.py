@@ -7,7 +7,11 @@ to generate:
    control center tokens, with 'then vs now' comparison, vertical timeline, and
    side-by-side before/after screenshots for recent releases and compact rows for older entries.
 3. css/styles.css: Dark navy mission-control CSS stylesheet (< 20KB budget).
-4. js/main.js: Vanilla JS for desktop/mobile toggle and route switcher (< 15KB budget).
+4. js/main.js: Vanilla JS for the desktop/mobile toggle and state switcher (< 15KB budget).
+
+Each release card shows the states (scripts/ui/states.json) that changed in that release
+as before/after pairs. "Changed" comes from the pixel diff the publisher stored in the
+release manifest (`changes`); without it the generator falls back to comparing sha256.
 """
 
 from __future__ import annotations
@@ -27,6 +31,19 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
+from scripts.ui.png_diff import format_pct  # noqa: E402
+from scripts.ui.validate_artifact import (  # noqa: E402
+    LEGACY_ROUTE_STATES,
+    MAX_CAPTION_LEN,
+    MAX_STATE_ID_LEN,
+    MAX_TITLE_LEN,
+    SAFE_PNG_NAME_RE,
+    STATE_ID_RE,
+    TEXT_RE,
+    fingerprint,
+)
+
+REPO_NAME = "stevengonsalvez/foundry-autonomous-sdlc"
 DEFAULT_OUTPUT_DIR = REPO_ROOT / "history"
 DEFAULT_SCREENSHOTS_DIR = REPO_ROOT / "history" / "screenshots"
 
@@ -38,6 +55,13 @@ ROUTE_LABELS = {
     "invalid-input": "Invalid Input",
 }
 VIEWPORTS = ["desktop", "mobile"]
+# Cards stay readable and inside the HTML budget: the biggest changes get before/after
+# images, the rest are listed by name.
+MAX_CHANGE_BLOCKS = 3
+FULL_CARD_COUNT = 5
+DEFAULT_STATE = "home-default"
+MERGE_PR_RE = re.compile(r"^Merge pull request #(\d+) from ")
+TRAILING_REF_RE = re.compile(r"\s*\(#\d+\)\s*$")
 
 # Size budget limits (in bytes)
 BUDGET_HTML_BYTES = 50 * 1024
@@ -111,12 +135,135 @@ def get_commit_metadata(ref: str, repo_root: Path = REPO_ROOT) -> dict[str, str]
         )
     parts = res.stdout.strip().split("\t")
     if len(parts) >= 2:
+        body_res = subprocess.run(
+            ["git", "log", "-n", "1", "--format=%b", ref],
+            cwd=repo_root,
+            capture_output=True,
+            text=True,
+        )
+        body_lines = [ln.strip() for ln in body_res.stdout.splitlines() if ln.strip()]
         return {
             "sha": parts[0],
             "date": parts[1],
             "subject": parts[2] if len(parts) > 2 else "",
+            "body": body_lines[0] if body_lines else "",
         }
     raise RuntimeError(f"Unexpected git log output for ref {ref}: {res.stdout.strip()}")
+
+
+def _clean_state_files(tag_dir: Path, m_data: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    """State id -> {title, caption, files, shas} from a release manifest.
+
+    Manifests live on a branch fed by CI artifacts, so every value is re-checked: unsafe
+    ids/filenames are dropped, files must exist on disk (no 404 images), unsafe text
+    degrades to the state id/empty. Legacy route-only manifests map onto state ids.
+    """
+    states: dict[str, dict[str, Any]] = {}
+    for s in m_data.get("screenshots", []):
+        if not isinstance(s, dict):
+            continue
+        vp, fn = s.get("viewport"), s.get("filename")
+        if vp not in VIEWPORTS or not isinstance(fn, str) or not SAFE_PNG_NAME_RE.fullmatch(fn):
+            continue
+        state = s.get("state") if "state" in s else LEGACY_ROUTE_STATES.get(str(s.get("route")))
+        if (
+            not isinstance(state, str)
+            or len(state) > MAX_STATE_ID_LEN
+            or not STATE_ID_RE.fullmatch(state)
+        ):
+            continue
+        if not (tag_dir / fn).is_file():
+            continue
+        title, caption = s.get("title"), s.get("caption")
+        if not (
+            isinstance(title, str) and 0 < len(title) <= MAX_TITLE_LEN and TEXT_RE.fullmatch(title)
+        ):
+            title = ROUTE_LABELS.get(str(s.get("route")), state) if "state" not in s else state
+        if not (
+            isinstance(caption, str)
+            and 0 < len(caption) <= MAX_CAPTION_LEN
+            and TEXT_RE.fullmatch(caption)
+        ):
+            caption = ""
+        entry = states.setdefault(
+            state, {"title": title, "caption": caption, "files": {}, "shas": {}}
+        )
+        entry["files"][vp] = fn
+        entry["shas"][vp] = s.get("sha256")
+    return states
+
+
+def _change_sort_key(change: dict[str, Any], order: dict[str, int]) -> tuple[int, float, int]:
+    pcts = [p if p is not None else 101.0 for p in change["pct"].values()] or [101.0]
+    return (0 if change["status"] == "new" else 1, -max(pcts), order.get(change["state"], 999))
+
+
+def _compute_changes(
+    entry: dict[str, Any],
+    before: dict[str, Any] | None,
+    precomputed: Any,
+    order: dict[str, int],
+) -> list[dict[str, Any]]:
+    """States that changed in this release versus the previous captured release."""
+    def fp(states: dict[str, dict[str, Any]]) -> str:
+        return fingerprint(
+            (sid, vp, sha) for sid, st in states.items() for vp, sha in st["shas"].items()
+        )
+
+    published: dict[str, Any] = {}
+    stamp = precomputed.get("fp") if isinstance(precomputed, dict) else None
+    if (
+        before is not None
+        and isinstance(precomputed, dict)
+        and precomputed.get("vs") == before["tag"]
+        and isinstance(precomputed.get("states"), dict)
+        # Only trust the stored diff if it was computed from these exact captures
+        and isinstance(stamp, dict)
+        and stamp.get("self") == fp(entry["states"])
+        and stamp.get("prev") == fp(before["states"])
+    ):
+        published = precomputed["states"]
+
+    changes: list[dict[str, Any]] = []
+    for sid, st in entry["states"].items():
+        prev = before["states"].get(sid) if before else None
+        info = published.get(sid) if isinstance(published.get(sid), dict) else None
+        pct: dict[str, float | None] = {}
+        if before is None or prev is None:
+            status = "new"
+        elif info and info.get("status") in ("new", "changed", "unchanged"):
+            status = info["status"]
+            raw_pct = info.get("pct")
+            if isinstance(raw_pct, dict):
+                pct = {
+                    vp: float(v)
+                    for vp, v in raw_pct.items()
+                    if vp in VIEWPORTS and isinstance(v, (int, float)) and not isinstance(v, bool)
+                }
+        else:
+            differs = any(
+                st["files"].get(vp) is None
+                or prev["files"].get(vp) is None
+                or st["shas"].get(vp) != prev["shas"].get(vp)
+                for vp in VIEWPORTS
+                if vp in st["files"] or vp in prev["files"]
+            )
+            status = "changed" if differs else "unchanged"
+        if status == "unchanged":
+            continue
+        changes.append(
+            {
+                "state": sid,
+                "title": st["title"],
+                "caption": st["caption"],
+                "status": status,
+                "pct": pct,
+                "after": dict(st["files"]),
+                "before": dict(prev["files"]) if prev and status != "new" else {},
+            }
+        )
+    changes.sort(key=lambda c: _change_sort_key(c, order))
+    return changes
 
 
 def collect_evolution_entries(
@@ -232,13 +379,21 @@ def collect_evolution_entries(
                         pr_num = None
         else:
             title = meta["subject"]
+            merge = MERGE_PR_RE.match(meta["subject"])
+            if merge:
+                pr_num = int(merge.group(1))
+                pr_url = f"https://github.com/{REPO_NAME}/pull/{pr_num}"
+                body = TRAILING_REF_RE.sub("", meta.get("body", "")).strip()
+                if body:
+                    title = body
 
         # Check screenshot directory and manifest
         tag_dir = screenshots_dir / tag
         manifest_file = tag_dir / "manifest.json"
         reproducible = True
         not_reproducible_reason: str | None = None
-        screenshot_map: dict[str, dict[str, str]] = {r: {} for r in ROUTES}
+        states: dict[str, dict[str, Any]] = {}
+        precomputed: Any = None
 
         if manifest_file.exists():
             try:
@@ -247,13 +402,9 @@ def collect_evolution_entries(
                     reproducible = False
                     not_reproducible_reason = m_data.get("reason", "Build failed")
                 else:
-                    for s in m_data.get("screenshots", []):
-                        route = s.get("route")
-                        vp = s.get("viewport")
-                        fn = s.get("filename")
-                        if route in screenshot_map and vp:
-                            screenshot_map[route][vp] = fn
-                    if not any(screenshot_map[r] for r in ROUTES):
+                    states = _clean_state_files(tag_dir, m_data)
+                    precomputed = m_data.get("changes")
+                    if not states:
                         reproducible = False
                         not_reproducible_reason = "not captured"
             except Exception:
@@ -279,7 +430,9 @@ def collect_evolution_entries(
                 "cost_usd": cost_usd,
                 "reproducible": reproducible,
                 "not_reproducible_reason": not_reproducible_reason,
-                "screenshots": screenshot_map,
+                "states": states,
+                "screenshots": {sid: dict(st["files"]) for sid, st in states.items()},
+                "_precomputed": precomputed,
             }
         )
 
@@ -292,17 +445,37 @@ def collect_evolution_entries(
     # Order newest first (highest semver first)
     raw_entries.sort(key=lambda e: parse_semver_key(e["tag"]), reverse=True)
 
-    # Attach 'before' reference (previous entry chronologically)
+    # Canonical state order: first appearance, oldest release first, so core states lead.
+    order: dict[str, int] = {}
+    for entry in reversed(raw_entries):
+        for sid in entry["states"]:
+            order.setdefault(sid, len(order))
+
+    # 'before' is the nearest older release that was actually captured
     for i, entry in enumerate(raw_entries):
-        if i + 1 < len(raw_entries):
-            prev = raw_entries[i + 1]
-            entry["before"] = {
-                "tag": prev["tag"],
-                "reproducible": prev["reproducible"],
-                "screenshots": prev["screenshots"],
+        before = next((e for e in raw_entries[i + 1 :] if e["reproducible"]), None)
+        entry["before"] = (
+            {
+                "tag": before["tag"],
+                "reproducible": before["reproducible"],
+                "screenshots": before["screenshots"],
             }
-        else:
-            entry["before"] = None
+            if before
+            else None
+        )
+        entry["changes"] = (
+            _compute_changes(entry, before, entry["_precomputed"], order)
+            if entry["reproducible"]
+            else []
+        )
+
+    for entry in raw_entries:
+        entry.pop("_precomputed", None)
+        # The hashes were only needed to compute changes
+        entry["states"] = {
+            sid: {"title": st["title"], "caption": st["caption"], "files": st["files"]}
+            for sid, st in entry["states"].items()
+        }
 
     return raw_entries
 
@@ -580,6 +753,7 @@ body {
 }
 .btn-group {
   display: inline-flex;
+  flex-wrap: wrap;
   border: 1px solid var(--edge);
   border-radius: var(--radius-sm);
   overflow: hidden;
@@ -749,6 +923,42 @@ body {
   display: block;
 }
 
+/* State change blocks */
+.change {
+  margin-bottom: 1.5rem;
+}
+[hidden] {
+  display: none !important;
+}
+.change-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 0.75rem;
+  margin-bottom: 0.35rem;
+}
+.change-title {
+  font-size: 1rem;
+  margin: 0;
+}
+.change-caption, .no-change, .more-changes, .state-empty, .compact-changes {
+  color: var(--fg-dim);
+  font-size: 0.85rem;
+  margin: 0 0 0.75rem;
+}
+.compact-changes {
+  padding: 0 1.25rem 0.9rem;
+  margin: 0;
+}
+.badge-new {
+  color: var(--tone-run);
+}
+.no-prior {
+  padding: 1.5rem 0.75rem;
+  color: var(--fg-dim);
+  font-size: 0.85rem;
+  text-align: center;
+}
 /* Not reproducible banner */
 .not-reproducible-box {
   padding: 1.5rem;
@@ -848,40 +1058,28 @@ def generate_js() -> str:
 (function () {
   'use strict';
 
+  const DEFAULT_STATE = 'home-default';
   let currentViewport = 'desktop';
-  let currentRoute = 'home';
+  let currentState = 'all';
 
   function init() {
-    setupViewportToggles();
-    setupRouteToggles();
+    setupToggles('set-viewport', 'data-viewport', function (value) {
+      currentViewport = value;
+    });
+    setupToggles('set-state', 'data-state', function (value) {
+      currentState = value;
+    });
     updateView();
   }
 
-  function setupViewportToggles() {
-    const btns = document.querySelectorAll('[data-action="set-viewport"]');
-    btns.forEach((btn) => {
-      btn.addEventListener('click', () => {
-        const vp = btn.getAttribute('data-viewport');
-        if (!vp || vp === currentViewport) return;
-        currentViewport = vp;
-        btns.forEach((b) => {
-          const active = b === btn;
-          b.classList.toggle('active', active);
-          b.setAttribute('aria-pressed', String(active));
-        });
-        updateView();
-      });
-    });
-  }
-
-  function setupRouteToggles() {
-    const btns = document.querySelectorAll('[data-action="set-route"]');
-    btns.forEach((btn) => {
-      btn.addEventListener('click', () => {
-        const route = btn.getAttribute('data-route');
-        if (!route || route === currentRoute) return;
-        currentRoute = route;
-        btns.forEach((b) => {
+  function setupToggles(action, attr, apply) {
+    const btns = document.querySelectorAll('[data-action="' + action + '"]');
+    btns.forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        const value = btn.getAttribute(attr);
+        if (!value) return;
+        apply(value);
+        btns.forEach(function (b) {
           const active = b === btn;
           b.classList.toggle('active', active);
           b.setAttribute('aria-pressed', String(active));
@@ -892,22 +1090,44 @@ def generate_js() -> str:
   }
 
   function updateView() {
-    const images = document.querySelectorAll('img[data-route]');
-    images.forEach((img) => {
-      const imgRoute = img.getAttribute('data-route');
-      const imgViewport = img.getAttribute('data-viewport');
-      const matches = (imgRoute === currentRoute && imgViewport === currentViewport);
-      img.style.display = matches ? 'block' : 'none';
+    // Then vs Now shows one state; "all changes" falls back to the home page.
+    const previewState = currentState === 'all' ? DEFAULT_STATE : currentState;
+    document.querySelectorAll('.card-preview-body [data-state]').forEach(function (el) {
+      const stateMatch = el.getAttribute('data-state') === previewState;
+      const vp = el.getAttribute('data-viewport');
+      el.hidden = !(stateMatch && (!vp || vp === currentViewport));
     });
 
-    const routeLabels = document.querySelectorAll('.active-route-label');
-    routeLabels.forEach((el) => {
-      el.textContent = currentRoute;
+    // Timeline cards: filter the change blocks by state, switch images by viewport.
+    document.querySelectorAll('.timeline-item').forEach(function (item) {
+      let visible = 0;
+      item.querySelectorAll('.change').forEach(function (block) {
+        const show = currentState === 'all' || block.getAttribute('data-state') === currentState;
+        block.hidden = !show;
+        if (show) visible += 1;
+      });
+      const more = item.querySelector('.more-changes');
+      let listed = false;
+      if (more) {
+        more.querySelectorAll('[data-more-state]').forEach(function (span) {
+          const id = span.getAttribute('data-more-state');
+          const hit = currentState === 'all' || id === currentState;
+          span.hidden = !hit;
+          if (hit && currentState !== 'all') listed = true;
+        });
+        more.hidden = currentState !== 'all' && !listed;
+      }
+      const empty = item.querySelector('.state-empty');
+      if (empty) empty.hidden = visible > 0 || listed || currentState === 'all';
+      item.querySelectorAll('.change img').forEach(function (img) {
+        img.hidden = img.getAttribute('data-viewport') !== currentViewport;
+      });
     });
 
-    const vpLabels = document.querySelectorAll('.active-viewport-label');
-    vpLabels.forEach((el) => {
-      el.textContent = currentViewport === 'desktop' ? 'Desktop (1280px)' : 'Mobile (390px)';
+    const activeBtn = document.querySelector('[data-action="set-state"].active');
+    const label = currentState === 'all' || !activeBtn ? 'Home' : activeBtn.textContent;
+    document.querySelectorAll('.active-state-label').forEach(function (el) {
+      el.textContent = label;
     });
   }
 
@@ -937,25 +1157,152 @@ FAVICON_URI = (
 )
 
 
-def _preview_html(entry: dict[str, Any] | None) -> str:
-    """Render preview card content for the Then vs Now comparison strip."""
+def _entry_states(entry: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    """Per-state title/caption/files for an entry (older data only carries `screenshots`)."""
+    states = entry.get("states")
+    if isinstance(states, dict) and states:
+        return states
+    return {
+        sid: {"title": sid, "caption": "", "files": files}
+        for sid, files in (entry.get("screenshots") or {}).items()
+    }
+
+
+def _state_imgs(
+    tag: str, files: dict[str, str], state: str, alt: str, width: int, height: int, show: str
+) -> str:
+    """One <img> per viewport; the page script shows the one matching the toggles."""
+    tag_q = html.escape(tag, quote=True)
+    alt_q = html.escape(alt, quote=True)
+    state_q = html.escape(state, quote=True)
+    out = []
+    for vp in VIEWPORTS:
+        fn = files.get(vp)
+        if not fn:
+            continue
+        hidden = "" if vp == show else " hidden"
+        out.append(
+            f'<img src="./screenshots/{tag_q}/{html.escape(fn, quote=True)}" '
+            f'alt="{alt_q} {vp}" data-state="{state_q}" '
+            f'data-viewport="{vp}"{hidden} loading="lazy" width="{width}" height="{height}" />'
+        )
+    return "".join(out)
+
+
+def _then_now_html(
+    entry: dict[str, Any] | None, state_order: list[str], titles: dict[str, str]
+) -> str:
+    """Preview card content for Then vs Now: every state, switched by the toolbar."""
     if not entry:
         return ""
-    tag_q = html.escape(entry["tag"], quote=True)
-    desktop_fn = entry.get("screenshots", {}).get("home", {}).get("desktop")
-    if entry.get("reproducible") and desktop_fn:
-        fn_desktop = html.escape(desktop_fn, quote=True)
+    tag = entry["tag"]
+    tag_h = html.escape(tag)
+    if not entry.get("reproducible"):
+        reason = html.escape(entry.get("not_reproducible_reason") or "not captured")
         return (
-            f'<img src="./screenshots/{tag_q}/{fn_desktop}" alt="{tag_q} home desktop" '
-            f'loading="lazy" width="600" height="375" />'
+            f'<div class="not-reproducible-box">'
+            f'<span class="badge-alert">Not Reproducible</span>'
+            f"<p>Reason: {reason}</p>"
+            f"</div>"
         )
-    reason = html.escape(entry.get("not_reproducible_reason") or "not captured")
+    states = _entry_states(entry)
+    out = []
+    for sid in state_order:
+        sid_q = html.escape(sid, quote=True)
+        show = "desktop" if sid == DEFAULT_STATE else ""
+        files = (states.get(sid) or {}).get("files") or {}
+        if files:
+            alt = f"{tag} {titles.get(sid, sid)}"
+            out.append(_state_imgs(tag, files, sid, alt, 600, 375, show))
+        else:
+            title_h = html.escape(titles.get(sid, sid))
+            hide = "" if sid == DEFAULT_STATE else " hidden"
+            out.append(
+                f'<div class="no-prior" data-state="{sid_q}"{hide}>'
+                f"{title_h} did not exist in {tag_h}</div>"
+            )
+    return "".join(out)
+
+
+def _change_block(change: dict[str, Any], before_tag: str | None, tag: str) -> str:
+    sid = html.escape(change["state"], quote=True)
+    title = html.escape(change["title"])
+    if change["status"] == "new":
+        badge = '<span class="badge badge-new">New state</span>'
+    else:
+        parts = [
+            f"{vp} {format_pct(change['pct'].get(vp))}"
+            for vp in VIEWPORTS
+            if vp in change["after"] and vp in change["pct"]
+        ]
+        label = "changed: " + ", ".join(parts) if parts else "changed"
+        badge = f'<span class="badge">{html.escape(label)}</span>'
+    caption = ""
+    if change["caption"]:
+        caption = f'<p class="change-caption">{html.escape(change["caption"])}</p>'
+    sid_raw, name = change["state"], change["title"]
+    after_imgs = _state_imgs(tag, change["after"], sid_raw, f"{tag} {name}", 560, 350, "desktop")
+    if change["before"] and before_tag:
+        before_imgs = _state_imgs(
+            before_tag, change["before"], sid_raw, f"{before_tag} {name}", 560, 350, "desktop"
+        )
+    else:
+        prior = html.escape(before_tag) if before_tag else "any earlier release"
+        before_imgs = f'<div class="no-prior">Not present in {prior}</div>'
+    before_label = html.escape(before_tag) if before_tag else "Initial"
     return (
-        f'<div class="not-reproducible-box">'
-        f'<span class="badge-alert">Not Reproducible</span>'
-        f'<p>Reason: {reason}</p>'
-        f'</div>'
+        f'<div class="change" data-state="{sid}"><div class="change-head">'
+        f'<h4 class="change-title">{title}</h4>{badge}</div>{caption}'
+        f'<div class="compare-grid">'
+        f'<div class="compare-col"><div class="compare-col-header">Before ({before_label})</div>'
+        f'<div class="compare-img-wrap">{before_imgs}</div></div>'
+        f'<div class="compare-col"><div class="compare-col-header">After ({html.escape(tag)})</div>'
+        f'<div class="compare-img-wrap">{after_imgs}</div></div>'
+        f"</div></div>"
     )
+
+
+def _changes_html(entry: dict[str, Any]) -> str:
+    changes = entry.get("changes") or []
+    before = entry.get("before")
+    before_tag = before["tag"] if before else None
+    if not changes:
+        vs = html.escape(before_tag) if before_tag else "the previous release"
+        return f'<p class="no-change">No visible UI change vs {vs}</p>'
+    shown, rest = changes[:MAX_CHANGE_BLOCKS], changes[MAX_CHANGE_BLOCKS:]
+    blocks = "".join(_change_block(c, before_tag, entry["tag"]) for c in shown)
+    more = ""
+    if rest:
+        names = ", ".join(
+            f'<span data-more-state="{html.escape(c["state"], quote=True)}">'
+            + html.escape(c["title"])
+            + (
+                f" ({html.escape(format_pct(max(c['pct'].values())))})"
+                if c["status"] == "changed" and c["pct"]
+                else ""
+            )
+            + "</span>"
+            for c in rest
+        )
+        more = f'<p class="more-changes">+{len(rest)} more changed: {names}</p>'
+    return (
+        blocks
+        + more
+        + '<p class="state-empty" hidden>No change to this state in this release.</p>'
+    )
+
+
+def _compact_changes_html(entry: dict[str, Any]) -> str:
+    changes = entry.get("changes") or []
+    if not entry.get("reproducible"):
+        return ""
+    if not entry.get("before"):
+        return '<p class="compact-changes">Initial release</p>'
+    if not changes:
+        return '<p class="compact-changes">No visible UI change</p>'
+    names = ", ".join(html.escape(c["title"]) for c in changes[:4])
+    extra = f" +{len(changes) - 4} more" if len(changes) > 4 else ""
+    return f'<p class="compact-changes">Changed: {names}{extra}</p>'
 
 
 def render_html(
@@ -966,16 +1313,24 @@ def render_html(
     oldest_entry = entries[-1] if entries else None
     newest_entry = entries[0] if entries else None
 
-    # Then vs Now images (home route)
-    then_img_html = _preview_html(oldest_entry)
-    now_img_html = _preview_html(newest_entry)
+    # Every state seen in any release, oldest first so the core states lead; titles from
+    # the newest release that has the state.
+    state_order: list[str] = []
+    titles: dict[str, str] = {}
+    for entry in reversed(entries):
+        for sid, st in _entry_states(entry).items():
+            if sid not in state_order:
+                state_order.append(sid)
+            titles[sid] = st.get("title") or sid
+
+    then_img_html = _then_now_html(oldest_entry, state_order, titles)
+    now_img_html = _then_now_html(newest_entry, state_order, titles)
 
     # Build timeline items HTML
     timeline_items_html: list[str] = []
 
     for idx, entry in enumerate(entries):
         raw_tag = entry["tag"]
-        tag_q = html.escape(raw_tag, quote=True)
         tag = html.escape(raw_tag)
         title = html.escape(entry["title"])
         sha = html.escape(entry["short_sha"])
@@ -1006,97 +1361,39 @@ def render_html(
             )
 
         badges_str = " ".join(badges)
+        entry_date = entry["date"]
+        dot_html = '<div class="timeline-dot" aria-hidden="true"></div>'
+        header_html = (
+            f'<header class="timeline-card-header">'
+            f'<div class="timeline-meta-left"><span class="tag-badge">{tag}</span>'
+            f'<h3 class="item-title">{title}</h3></div>'
+            f'<div class="timeline-meta-right"><time datetime="{entry_date}">{date}</time>'
+            f"{badges_str}</div></header>"
+        )
 
-        if idx < 5:
-            # Full comparison card for top 5 releases
+        if idx < FULL_CARD_COUNT:
+            # Full card: the states that changed in this release, before and after
             if not reproducible:
                 reason = html.escape(entry.get("not_reproducible_reason") or "Build failed")
-                body_html = f"""
-                  <div class="compare-container">
-                    <div class="not-reproducible-box">
-                      <span class="badge-alert">Not Reproducible</span>
-                      <p>Reason: {reason}</p>
-                    </div>
-                  </div>
-                """
-            else:
-                # Build images for each route and viewport for side-by-side comparison
-                before = entry.get("before")
-                raw_before_tag = before["tag"] if before else "Initial"
-                before_tag_q = html.escape(raw_before_tag, quote=True)
-                before_tag = html.escape(raw_before_tag)
-
-                after_imgs: list[str] = []
-                before_imgs: list[str] = []
-
-                for r in ROUTES:
-                    for vp in VIEWPORTS:
-                        # After
-                        raw_fn_after = entry["screenshots"].get(r, {}).get(vp, f"{r}-{vp}.png")
-                        fn_after = html.escape(raw_fn_after, quote=True)
-                        src_after = f"./screenshots/{tag_q}/{fn_after}"
-                        display = "block" if (r == "home" and vp == "desktop") else "none"
-                        after_imgs.append(
-                            f'<img src="{src_after}" alt="{tag_q} {r} {vp}" '
-                            f'data-route="{r}" data-viewport="{vp}" '
-                            f'style="display:{display};" loading="lazy" width="560" height="350"/>'
-                        )
-
-                        # Before
-                        if before and before.get("reproducible"):
-                            raw_fn_before = (
-                                before["screenshots"].get(r, {}).get(vp, f"{r}-{vp}.png")
-                            )
-                            fn_before = html.escape(raw_fn_before, quote=True)
-                            src_before = f"./screenshots/{before_tag_q}/{fn_before}"
-                            before_imgs.append(
-                                f'<img src="{src_before}" alt="{before_tag_q} {r} {vp}" '
-                                f'data-route="{r}" data-viewport="{vp}" '
-                                f'style="display:{display};" loading="lazy" '
-                                f'width="560" height="350"/>'
-                            )
-                        else:
-                            before_imgs.append(
-                                f'<div class="no-prior" data-route="{r}" data-viewport="{vp}" '
-                                f'style="display:{display};">No prior baseline ({before_tag})</div>'
-                            )
-
-                after_content = "".join(after_imgs)
-                before_content = "".join(before_imgs)
-
-                body_html = (
-                    f'<div class="compare-container"><div class="compare-grid">'
-                    f'<div class="compare-col">'
-                    f'<div class="compare-col-header">Before ({before_tag})</div>'
-                    f'<div class="compare-img-wrap">{before_content}</div></div>'
-                    f'<div class="compare-col">'
-                    f'<div class="compare-col-header">After ({tag})</div>'
-                    f'<div class="compare-img-wrap">{after_content}</div></div>'
-                    f"</div></div>"
+                inner = (
+                    f'<div class="not-reproducible-box">'
+                    f'<span class="badge-alert">Not Reproducible</span>'
+                    f"<p>Reason: {reason}</p>"
+                    f"</div>"
                 )
-
-            entry_date = entry["date"]
-            dot_html = '<div class="timeline-dot" aria-hidden="true"></div>'
+            else:
+                inner = _changes_html(entry)
             item_html = (
                 f'<article class="timeline-item">{dot_html}'
-                f'<div class="timeline-card"><header class="timeline-card-header">'
-                f'<div class="timeline-meta-left"><span class="tag-badge">{tag}</span>'
-                f'<h3 class="item-title">{title}</h3></div>'
-                f'<div class="timeline-meta-right"><time datetime="{entry_date}">{date}</time>'
-                f"{badges_str}</div></header>{body_html}</div></article>"
+                f'<div class="timeline-card">{header_html}'
+                f'<div class="compare-container">{inner}</div></div></article>'
             )
         else:
-            # Compact row for older releases (saves ~4KB per entry, no <img> markup)
-            entry_date = entry["date"]
-            dot_html = '<div class="timeline-dot" aria-hidden="true"></div>'
+            # Compact row for older releases (no <img> markup, names the changed states)
             item_html = (
                 f'<article class="timeline-item timeline-item-compact">{dot_html}'
-                f'<div class="timeline-card timeline-card-compact">'
-                f'<header class="timeline-card-header">'
-                f'<div class="timeline-meta-left"><span class="tag-badge">{tag}</span>'
-                f'<h3 class="item-title">{title}</h3></div>'
-                f'<div class="timeline-meta-right"><time datetime="{entry_date}">{date}</time>'
-                f"{badges_str}</div></header></div></article>"
+                f'<div class="timeline-card timeline-card-compact">{header_html}'
+                f"{_compact_changes_html(entry)}</div></article>"
             )
         timeline_items_html.append(item_html)
 
@@ -1116,6 +1413,17 @@ def render_html(
         )
     else:
         timeline_content = "\n".join(timeline_items_html)
+
+    state_buttons = (
+        '<button type="button" class="btn-toggle active" data-action="set-state" '
+        'data-state="all" aria-pressed="true">All changes</button>'
+        + "".join(
+            f'<button type="button" class="btn-toggle" data-action="set-state" '
+            f'data-state="{html.escape(sid, quote=True)}" aria-pressed="false">'
+            f"{html.escape(titles.get(sid, sid))}</button>"
+            for sid in state_order
+        )
+    )
 
     then_tag = html.escape(oldest_entry["tag"]) if oldest_entry else "v0.1.0"
     now_tag = html.escape(newest_entry["tag"]) if newest_entry else "v0.4.0"
@@ -1185,7 +1493,7 @@ def render_html(
           <div class="card-preview">
             <div class="card-preview-header">
               <span class="card-preview-title">First Release ({then_tag})</span>
-              <span>Home Route</span>
+              <span class="active-state-label">Home</span>
             </div>
             <div class="card-preview-body">
               {then_img_html}
@@ -1194,7 +1502,7 @@ def render_html(
           <div class="card-preview">
             <div class="card-preview-header">
               <span class="card-preview-title">Current Release ({now_tag})</span>
-              <span>Home Route</span>
+              <span class="active-state-label">Home</span>
             </div>
             <div class="card-preview-body">
               {now_img_html}
@@ -1219,24 +1527,9 @@ def render_html(
             </div>
           </div>
           <div class="control-group">
-            <span class="control-label" id="route-label">Route:</span>
-            <div class="btn-group" role="group" aria-labelledby="route-label">
-              <button type="button" class="btn-toggle active"
-                data-action="set-route" data-route="home" aria-pressed="true">
-                Home
-              </button>
-              <button type="button" class="btn-toggle"
-                data-action="set-route" data-route="parcel-found" aria-pressed="false">
-                Parcel Found
-              </button>
-              <button type="button" class="btn-toggle"
-                data-action="set-route" data-route="not-found" aria-pressed="false">
-                Not Found
-              </button>
-              <button type="button" class="btn-toggle"
-                data-action="set-route" data-route="invalid-input" aria-pressed="false">
-                Invalid Input
-              </button>
+            <span class="control-label" id="state-label">State:</span>
+            <div class="btn-group" role="group" aria-labelledby="state-label">
+              {state_buttons}
             </div>
           </div>
         </div>
@@ -1319,26 +1612,16 @@ def build_history_site(
     html_path = output_dir / "index.html"
     html_path.write_text(html_content, encoding="utf-8")
 
-    # 5. Copy screenshot folders only for entries rendered on the timeline with images
+    # 5. Copy only the screenshots the page references (plus each release manifest)
     out_screenshots = output_dir / "screenshots"
     if screenshots_dir.exists() and screenshots_dir.resolve() != out_screenshots.resolve():
-        out_screenshots.mkdir(parents=True, exist_ok=True)
-        rendered_tags: set[str] = set()
-        for entry in entries[:5]:
-            if entry.get("reproducible"):
-                rendered_tags.add(entry["tag"])
-            before = entry.get("before")
-            if before and before.get("reproducible") and before.get("tag"):
-                rendered_tags.add(before["tag"])
-        if entries:
-            oldest = entries[-1]
-            if oldest.get("reproducible"):
-                rendered_tags.add(oldest["tag"])
-            newest = entries[0]
-            if newest.get("reproducible"):
-                rendered_tags.add(newest["tag"])
+        referenced: dict[str, set[str]] = {}
+        for tag_name, fn in re.findall(
+            r'src="\./screenshots/([^"/]+)/([^"/]+\.png)"', html_content
+        ):
+            referenced.setdefault(html.unescape(tag_name), set()).add(html.unescape(fn))
 
-        for tag_name in sorted(rendered_tags):
+        for tag_name in sorted(referenced):
             src_tag_dir = screenshots_dir / tag_name
             if not src_tag_dir.exists():
                 raise RuntimeError(
@@ -1347,14 +1630,14 @@ def build_history_site(
             if src_tag_dir.is_symlink():
                 continue
             dst_tag_dir = out_screenshots / tag_name
-            if not dst_tag_dir.exists():
-                dst_tag_dir.mkdir(parents=True, exist_ok=True)
-                for item in src_tag_dir.iterdir():
-                    if item.is_symlink():
-                        continue
-                    valid_ext = item.name.endswith(".png") or item.name == "manifest.json"
-                    if item.is_file() and valid_ext:
-                        shutil.copy2(item, dst_tag_dir / item.name)
+            dst_tag_dir.mkdir(parents=True, exist_ok=True)
+            for fn in sorted(referenced[tag_name]):
+                item = src_tag_dir / fn
+                if item.is_file() and not item.is_symlink():
+                    shutil.copy2(item, dst_tag_dir / fn)
+            manifest_src = src_tag_dir / "manifest.json"
+            if manifest_src.is_file() and not manifest_src.is_symlink():
+                shutil.copy2(manifest_src, dst_tag_dir / "manifest.json")
 
     print(f"Generated App Evolution Showcase at {output_dir}")
     print(f"HTML: {len(html_content.encode('utf-8'))} bytes (budget: {BUDGET_HTML_BYTES})")

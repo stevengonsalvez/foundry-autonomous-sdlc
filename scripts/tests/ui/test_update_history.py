@@ -65,3 +65,31 @@ def test_resolve_release_key_falls_back_to_sha_when_only_prod_tag() -> None:
         key, sha = resolve_release_key(Path("."))
         assert key == "110ea161"
         assert sha == "110ea16123456789"
+
+
+def test_record_changes_replaces_artifact_supplied_changes(tmp_path: Path) -> None:
+    """A release artifact cannot smuggle in its own `changes`; they are recomputed."""
+    import json
+
+    from scripts.tests.ui.test_publish_proof import write_set
+    from scripts.ui.update_history import _record_changes
+
+    releases = tmp_path / "releases"
+    spec = {"home-default": ("Home", "Home page default.", "home", 0)}
+    write_set(releases / "v0.1.0", spec)
+    write_set(releases / "v0.2.0", spec)
+    manifest_path = releases / "v0.2.0" / "manifest.json"
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    manifest["changes"] = {"vs": "v0.1.0", "states": {"home-default": {"status": "changed"}}}
+    manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+
+    _record_changes(releases, "v0.2.0")
+
+    changes = json.loads(manifest_path.read_text(encoding="utf-8"))["changes"]
+    assert changes["states"]["home-default"]["status"] == "unchanged"
+
+
+def test_record_changes_never_raises(tmp_path: Path) -> None:
+    from scripts.ui.update_history import _record_changes
+
+    _record_changes(tmp_path / "releases", "v0.2.0")  # nothing on disk: must just report

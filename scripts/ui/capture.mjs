@@ -7,11 +7,14 @@ import { createRequire } from "node:module";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { chromiumLaunchOptions, loadStates, runState } from "./states.mjs";
+
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const REPO_ROOT = path.resolve(__dirname, "../..");
 const APP_DIR = path.resolve(REPO_ROOT, "app");
 const DEFAULT_WEB_DIST_DIR = path.resolve(APP_DIR, "web/dist");
+const DEFAULT_STATES_FILE = path.resolve(__dirname, "states.json");
 
 // Resolve Playwright from app dependencies
 const requireFromApp = createRequire(path.resolve(APP_DIR, "package.json"));
@@ -112,37 +115,35 @@ const MOCK_PARCEL_FOUND = {
   ],
 };
 
-const ROUTES = [
-  {
-    name: "home",
-    path: "/#/",
-    waitFor: async (page) => {
-      await page.waitForSelector("table", { state: "visible" });
+const MOCK_PARCEL_OUT_FOR_DELIVERY = {
+  trackingNumber: "PK1000000002",
+  status: "out_for_delivery",
+  estimatedDelivery: "2026-10-10",
+  events: [
+    {
+      timestamp: "2026-10-08T10:10:00Z",
+      location: "Antwerp, BE",
+      description: "Shipping label created",
     },
-  },
-  {
-    name: "parcel-found",
-    path: "/#/parcel/PK1000000001",
-    waitFor: async (page) => {
-      await page.waitForSelector("h1#page-title", { state: "visible" });
-      await page.waitForSelector(".timeline", { state: "visible" });
+    {
+      timestamp: "2026-10-09T08:45:00Z",
+      location: "Antwerp, BE",
+      description: "Picked up from sender",
     },
-  },
-  {
-    name: "not-found",
-    path: "/#/parcel/PK9999999999",
-    waitFor: async (page) => {
-      await page.waitForSelector(".notice--error", { state: "visible" });
+    {
+      timestamp: "2026-10-09T22:30:00Z",
+      location: "Cologne, DE",
+      description: "Arrived at sorting hub",
     },
-  },
-  {
-    name: "invalid-input",
-    path: "/#/parcel/12345",
-    waitFor: async (page) => {
-      await page.waitForSelector(".notice--error", { state: "visible" });
+    {
+      timestamp: "2026-10-10T07:55:00Z",
+      location: "Cologne, DE",
+      description: "Out for delivery",
     },
-  },
-];
+  ],
+};
+
+const SKIP_ATTEMPTS = 2;
 
 const VIEWPORTS = [
   { name: "desktop", width: 1280, height: 800 },
@@ -154,6 +155,7 @@ function parseArgs() {
   let outDir = path.resolve(REPO_ROOT, "ui-screenshots");
   let skipBuild = false;
   let headSha = process.env.HEAD_SHA || "";
+  let statesFile = DEFAULT_STATES_FILE;
   let distDir = process.env.UI_WEB_DIST_DIR
     ? path.resolve(process.env.UI_WEB_DIST_DIR)
     : DEFAULT_WEB_DIST_DIR;
@@ -167,6 +169,8 @@ function parseArgs() {
       skipBuild = true;
     } else if (arg === "--skip-build") {
       skipBuild = true;
+    } else if (arg === "--states" && i + 1 < args.length) {
+      statesFile = path.resolve(process.cwd(), args[++i]);
     } else if (arg === "--head-sha" && i + 1 < args.length) {
       headSha = args[++i];
     } else {
@@ -186,7 +190,7 @@ function parseArgs() {
     }
   }
 
-  return { outDir, skipBuild, headSha, distDir };
+  return { outDir, skipBuild, headSha, distDir, statesFile };
 }
 
 function buildWeb() {
@@ -243,8 +247,40 @@ function createStaticServer(distDir) {
   return server;
 }
 
+function mockResponse(url) {
+  if (url.pathname === "/api/parcels") {
+    return { status: 200, body: { parcels: MOCK_PARCELS } };
+  }
+  const parcelMatch = url.pathname.match(/^\/api\/parcels\/([^/]+)$/);
+  if (!parcelMatch) return null;
+  const id = decodeURIComponent(parcelMatch[1]);
+  if (id === "PK1000000001") return { status: 200, body: MOCK_PARCEL_FOUND };
+  if (id === "PK1000000002") return { status: 200, body: MOCK_PARCEL_OUT_FOR_DELIVERY };
+  if (id === "PK9999999999") return { status: 404, body: { error: "not_found" } };
+  if (!/^PK\d{10}$/.test(id)) return { status: 400, body: { error: "invalid_tracking_number" } };
+  return { status: 404, body: { error: "not_found" } };
+}
+
+// Strict network intercept: mock carrier API and allow only the local static server.
+async function installNetworkMocks(context, serverOrigin) {
+  await context.route("**", async (route) => {
+    const url = new URL(route.request().url());
+    const mock = mockResponse(url);
+    if (mock) {
+      return route.fulfill({
+        status: mock.status,
+        contentType: "application/json",
+        body: JSON.stringify(mock.body),
+      });
+    }
+    if (url.origin === serverOrigin) return route.continue();
+    return route.abort();
+  });
+}
+
 async function capture() {
-  const { outDir, skipBuild, headSha, distDir } = parseArgs();
+  const { outDir, skipBuild, headSha, distDir, statesFile } = parseArgs();
+  const config = await loadStates(statesFile);
 
   if (!skipBuild || !fs.existsSync(distDir)) {
     buildWeb();
@@ -262,131 +298,91 @@ async function capture() {
   const serverOrigin = `http://127.0.0.1:${port}`;
   console.log(`Local web preview running at ${serverOrigin}`);
 
-  const browser = await chromium.launch({ headless: true });
+  const browser = await chromium.launch(chromiumLaunchOptions());
   const manifestScreenshots = [];
+  const skippedStates = new Set();
 
   try {
     for (const vp of VIEWPORTS) {
-      console.log(`Setting up context for viewport ${vp.name} (${vp.width}x${vp.height})...`);
-      const context = await browser.newContext({
-        viewport: { width: vp.width, height: vp.height },
-        deviceScaleFactor: 1,
-        reducedMotion: "reduce",
-        locale: "en-GB",
-        timezoneId: "UTC",
-      });
+      for (const state of config.states) {
+        if (!state.viewports.includes(vp.name)) continue;
 
-      // Strict network intercept: mock carrier API and allow only local static server
-      await context.route("**", async (route) => {
-        const req = route.request();
-        const url = new URL(req.url());
-
-        if (url.pathname === "/api/parcels") {
-          return route.fulfill({
-            status: 200,
-            contentType: "application/json",
-            body: JSON.stringify({ parcels: MOCK_PARCELS }),
+        // A fresh context per attempt keeps localStorage presets and searches from leaking.
+        // A skip is only accepted after a second fresh attempt, so a slow runner cannot
+        // silently hide a feature that is really there.
+        let shot = null;
+        let skipReason = "";
+        // A state already confirmed skipped at another viewport gets a single attempt.
+        const attempts = skippedStates.has(state.id) ? 1 : SKIP_ATTEMPTS;
+        for (let attempt = 1; attempt <= attempts && !shot; attempt++) {
+          const context = await browser.newContext({
+            viewport: { width: vp.width, height: vp.height },
+            deviceScaleFactor: 1,
+            reducedMotion: "reduce",
+            locale: "en-GB",
+            timezoneId: "UTC",
+            permissions: ["clipboard-read", "clipboard-write"],
           });
-        }
-
-        const parcelMatch = url.pathname.match(/^\/api\/parcels\/([^/]+)$/);
-        if (parcelMatch) {
-          const id = decodeURIComponent(parcelMatch[1]);
-          if (id === "PK1000000001") {
-            return route.fulfill({
-              status: 200,
-              contentType: "application/json",
-              body: JSON.stringify(MOCK_PARCEL_FOUND),
+          try {
+            await installNetworkMocks(context, serverOrigin);
+            const page = await context.newPage();
+            console.log(`Capturing state: ${state.id} (${vp.name})${attempt > 1 ? ` retry ${attempt}` : ""}`);
+            const result = await runState(page, context, state, {
+              origin: serverOrigin,
+              routes: config.routes,
             });
-          }
-          if (id === "PK9999999999") {
-            return route.fulfill({
-              status: 404,
-              contentType: "application/json",
-              body: JSON.stringify({ error: "not_found" }),
-            });
-          }
-          if (!/^PK\d{10}$/.test(id)) {
-            return route.fulfill({
-              status: 400,
-              contentType: "application/json",
-              body: JSON.stringify({ error: "invalid_tracking_number" }),
-            });
-          }
-          return route.fulfill({
-            status: 404,
-            contentType: "application/json",
-            body: JSON.stringify({ error: "not_found" }),
-          });
-        }
-
-        if (url.origin === serverOrigin) {
-          return route.continue();
-        }
-
-        // Abort all other external network traffic
-        return route.abort();
-      });
-
-      const page = await context.newPage();
-
-      for (const route of ROUTES) {
-        const targetUrl = `${serverOrigin}${route.path}`;
-        console.log(`Capturing route: ${route.name} (${vp.name}) -> ${targetUrl}`);
-        await page.goto(targetUrl, { waitUntil: "domcontentloaded" });
-
-        // Ensure fonts and DOM are ready
-        await page.evaluate(() => document.fonts.ready);
-        await route.waitFor(page);
-
-        // Enforce reduced motion and eliminate animation delay/duration
-        await page.addStyleTag({
-          content: `
-            *, *::before, *::after {
-              animation-duration: 0s !important;
-              animation-delay: 0s !important;
-              transition-duration: 0s !important;
-              transition-delay: 0s !important;
+            if (result.status === "skipped") {
+              skipReason = result.reason;
+              continue;
             }
-          `,
-        });
+            const filename = `${state.id}-${vp.name}.png`;
+            const filePath = path.join(outDir, filename);
+            await page.screenshot({ path: filePath, fullPage: false });
+            shot = { filename, filePath };
+          } finally {
+            await context.close();
+          }
+        }
 
-        // Small settled delay for rendering stability
-        await page.waitForTimeout(100);
+        if (!shot) {
+          skippedStates.add(state.id);
+          console.log(`  skipped ${state.id} (${vp.name}): ${skipReason}`);
+          continue;
+        }
 
-        const filename = `${route.name}-${vp.name}.png`;
-        const filePath = path.join(outDir, filename);
-
-        await page.screenshot({ path: filePath, fullPage: false });
-
-        const buffer = fs.readFileSync(filePath);
+        const buffer = fs.readFileSync(shot.filePath);
         const sha256 = crypto.createHash("sha256").update(buffer).digest("hex");
-        const size = buffer.length;
-
         manifestScreenshots.push({
-          filename,
-          route: route.name,
+          filename: shot.filename,
+          state: state.id,
+          route: state.route,
           viewport: vp.name,
+          title: state.title,
+          caption: state.caption,
           sha256,
-          size,
+          size: buffer.length,
         });
-
-        console.log(`Saved ${filename} (${size} bytes, sha256: ${sha256.slice(0, 12)}...)`);
+        console.log(`  saved ${shot.filename} (${buffer.length} bytes, sha256: ${sha256.slice(0, 12)}...)`);
       }
-
-      await page.close();
-      await context.close();
     }
+
+    // A state counts as skipped only when no viewport captured it.
+    const captured = new Set(manifestScreenshots.map((s) => s.state));
+    const skipped = config.states.map((s) => s.id).filter((id) => !captured.has(id));
 
     const manifest = {
       version: 1,
       head_sha: headSha || undefined,
       screenshots: manifestScreenshots,
+      skipped,
     };
 
     const manifestPath = path.join(outDir, "manifest.json");
     fs.writeFileSync(manifestPath, JSON.stringify(manifest, null, 2) + "\n");
-    console.log(`Wrote manifest to ${manifestPath} with ${manifestScreenshots.length} screenshots.`);
+    console.log(
+      `Wrote manifest to ${manifestPath}: ${manifestScreenshots.length} screenshots, ` +
+        `${captured.size} states captured, ${skipped.length} skipped (${skipped.join(", ") || "none"}).`,
+    );
   } finally {
     await browser.close();
     await new Promise((resolve) => server.close(resolve));

@@ -430,3 +430,180 @@ def test_png_rejects_invalid_ancillary_chunk_length(tmp_path: Path) -> None:
     assert result.valid is False
     assert any("invalid length" in err for err in result.errors)
 
+
+
+# ---- state-aware manifests (scripts/ui/states.json) -----------------------------------
+
+
+def _write_state_artifact(
+    dir_path: Path,
+    states: list[tuple[str, str, str]],
+    *,
+    mutate: Any = None,
+    extra: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """states: (state id, route, viewport). Filenames follow <state>-<viewport>.png."""
+    shots = []
+    for i, (state, route, viewport) in enumerate(states):
+        width, height = (1280, 800) if viewport == "desktop" else (390, 844)
+        data = make_test_png(width, height, color_byte=i % 256)
+        fn = f"{state}-{viewport}.png"
+        (dir_path / fn).write_bytes(data)
+        shots.append(
+            {
+                "filename": fn,
+                "state": state,
+                "route": route,
+                "viewport": viewport,
+                "title": "Home, dark theme",
+                "caption": "Home page with the dark theme selected.",
+                "sha256": hashlib.sha256(data).hexdigest(),
+                "size": len(data),
+            }
+        )
+    manifest: dict[str, Any] = {"version": 1, "screenshots": shots, **(extra or {})}
+    if mutate:
+        mutate(manifest)
+    (dir_path / "manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
+    return manifest
+
+
+def test_state_manifest_passes_and_keeps_state_fields(tmp_path: Path) -> None:
+    _write_state_artifact(
+        tmp_path,
+        [("home-dark", "home", "desktop"), ("home-dark", "home", "mobile")],
+        extra={"skipped": ["home-left-nav"]},
+    )
+    result = validate_artifact_dir(tmp_path)
+    assert result.valid, result.errors
+    assert {s["state"] for s in result.screenshots} == {"home-dark"}
+    assert result.screenshots[0]["caption"] == "Home page with the dark theme selected."
+    assert result.manifest is not None and result.manifest["skipped"] == ["home-left-nav"]
+
+
+def test_full_state_matrix_fits_file_limit(tmp_path: Path) -> None:
+    states = [(f"state-{n}", "home", vp) for n in range(11) for vp in ("desktop", "mobile")]
+    _write_state_artifact(tmp_path, states)
+    result = validate_artifact_dir(tmp_path)
+    assert result.valid, result.errors
+
+
+@pytest.mark.parametrize(
+    "bad_state",
+    ["../etc", "Home-Dark", "home dark", "home_dark", "x" * 41, "", "-home", "home-", "a--b"],
+)
+def test_state_id_hardening(tmp_path: Path, bad_state: str) -> None:
+    def mutate(m: dict[str, Any]) -> None:
+        m["screenshots"][0]["state"] = bad_state
+
+    _write_state_artifact(tmp_path, [("home-dark", "home", "desktop")], mutate=mutate)
+    result = validate_artifact_dir(tmp_path)
+    assert result.valid is False
+    assert any("invalid state" in e for e in result.errors)
+
+
+def test_filename_must_match_state_and_viewport(tmp_path: Path) -> None:
+    def mutate(m: dict[str, Any]) -> None:
+        m["screenshots"][0]["state"] = "home-default"  # file is home-dark-desktop.png
+
+    _write_state_artifact(tmp_path, [("home-dark", "home", "desktop")], mutate=mutate)
+    result = validate_artifact_dir(tmp_path)
+    assert result.valid is False
+    assert any("does not match state" in e for e in result.errors)
+
+
+@pytest.mark.parametrize(
+    "bad_caption",
+    [
+        "<img src=x onerror=alert(1)>",
+        "see [this](https://evil.example)",
+        "ping @everyone",
+        "<!-- ui-proof:v1 -->",
+        "line one\nline two",
+        "backtick ` injection",
+        "x" * 161,
+        "",
+    ],
+)
+def test_caption_hardening(tmp_path: Path, bad_caption: str) -> None:
+    def mutate(m: dict[str, Any]) -> None:
+        m["screenshots"][0]["caption"] = bad_caption
+
+    _write_state_artifact(tmp_path, [("home-dark", "home", "desktop")], mutate=mutate)
+    result = validate_artifact_dir(tmp_path)
+    assert result.valid is False
+    assert any("caption" in e for e in result.errors)
+
+
+def test_title_hardening(tmp_path: Path) -> None:
+    def mutate(m: dict[str, Any]) -> None:
+        m["screenshots"][0]["title"] = "<b>bold</b>"
+
+    _write_state_artifact(tmp_path, [("home-dark", "home", "desktop")], mutate=mutate)
+    result = validate_artifact_dir(tmp_path)
+    assert result.valid is False
+    assert any("title" in e for e in result.errors)
+
+
+def test_duplicate_state_viewport_rejected(tmp_path: Path) -> None:
+    def mutate(m: dict[str, Any]) -> None:
+        dup = dict(m["screenshots"][0])
+        m["screenshots"].append(dup)
+
+    _write_state_artifact(tmp_path, [("home-dark", "home", "desktop")], mutate=mutate)
+    result = validate_artifact_dir(tmp_path)
+    assert result.valid is False
+    assert any("Duplicate" in e for e in result.errors)
+
+
+@pytest.mark.parametrize(
+    "bad_skipped",
+    ["home-left-nav", ["../x"], [1], ["Home"], ["a"] * 65, {"a": 1}],
+)
+def test_skipped_list_hardening(tmp_path: Path, bad_skipped: Any) -> None:
+    _write_state_artifact(
+        tmp_path, [("home-dark", "home", "desktop")], extra={"skipped": bad_skipped}
+    )
+    result = validate_artifact_dir(tmp_path)
+    assert result.valid is False
+    assert any("skipped" in e for e in result.errors)
+
+
+def test_state_artifact_still_rejects_oversize_png(tmp_path: Path) -> None:
+    _write_state_artifact(tmp_path, [("home-dark", "home", "desktop")])
+    big = tmp_path / "home-dark-desktop.png"
+    big.write_bytes(big.read_bytes() + b"\0" * (MAX_SINGLE_FILE_BYTES + 1))
+    result = validate_artifact_dir(tmp_path)
+    assert result.valid is False
+    assert any("exceeds max" in e for e in result.errors)
+
+
+def test_state_artifact_still_rejects_nested_paths(tmp_path: Path) -> None:
+    def mutate(m: dict[str, Any]) -> None:
+        m["screenshots"][0]["filename"] = "sub/home-dark-desktop.png"
+
+    _write_state_artifact(tmp_path, [("home-dark", "home", "desktop")], mutate=mutate)
+    result = validate_artifact_dir(tmp_path)
+    assert result.valid is False
+
+
+def test_legacy_manifest_without_state_still_valid(tmp_path: Path) -> None:
+    _make_valid_artifact(tmp_path, count=2)
+    result = validate_artifact_dir(tmp_path)
+    assert result.valid, result.errors
+    assert all("state" not in s for s in result.screenshots)
+
+
+def test_new_kebab_case_routes_from_states_json_are_accepted(tmp_path: Path) -> None:
+    _write_state_artifact(tmp_path, [("settings-page", "settings", "desktop")])
+    assert validate_artifact_dir(tmp_path).valid
+
+
+@pytest.mark.parametrize("bad_route", ["Settings", "../x", "a b", "x" * 41, "a\n[l](u)", ""])
+def test_hostile_routes_still_rejected(tmp_path: Path, bad_route: str) -> None:
+    def mutate(m: dict[str, Any]) -> None:
+        m["screenshots"][0]["route"] = bad_route
+
+    _write_state_artifact(tmp_path, [("home-dark", "home", "desktop")], mutate=mutate)
+    result = validate_artifact_dir(tmp_path)
+    assert not result.valid and any("invalid route" in e for e in result.errors)
