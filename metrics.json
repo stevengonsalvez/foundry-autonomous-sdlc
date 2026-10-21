@@ -46,7 +46,7 @@
       "pass": 20
     }
   },
-  "generated_at": "2026-10-21T22:10:53Z",
+  "generated_at": "2026-10-21T22:11:05Z",
   "issues": [
     {
       "closed_at": "2026-10-10T12:28:43Z",
@@ -3592,9 +3592,9 @@
       "cost": {
         "calls": 13,
         "coder_model_usd": 0.0,
-        "coder_usd": 0.033743,
+        "coder_usd": 0.135769,
         "model_usd": 0.098376,
-        "usd": 0.132119
+        "usd": 0.234145
       },
       "deferred": null,
       "escalation": null,
@@ -3644,9 +3644,14 @@
       "stages": [
         {
           "entered_at": "2026-10-21T22:06:44Z",
+          "seconds": 257,
+          "stage": "stage:building"
+        },
+        {
+          "entered_at": "2026-10-21T22:11:01Z",
           "in_progress": true,
           "seconds": 0,
-          "stage": "stage:building"
+          "stage": "stage:in-review"
         }
       ],
       "title": "Update the status filter label copy",
@@ -3663,9 +3668,9 @@
     "escalated": 31,
     "issues": 48,
     "ledger_usd": 1.483118,
-    "orchestrator_usd": 13.335626,
+    "orchestrator_usd": 13.3458,
     "released": 14,
-    "usd": 29.010278
+    "usd": 29.122478
   },
   "version": 1
 }
