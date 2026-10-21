@@ -273,6 +273,15 @@ def test_default_secret_paths_are_the_compose_secrets() -> None:
                                              "agy-cli-token": Path("/run/secrets/agy_cli_token")}
 
 
+def test_the_coder_runs_one_job_at_a_time_unless_told_otherwise() -> None:
+    # Jobs share one engine user and each start reaps it: overlapping jobs kill each other (live #129).
+    assert local_wiring.coder_max_jobs({}) == 1
+    assert local_wiring.coder_max_jobs({"CODER_MAX_JOBS": "3"}) == 3
+    for bad in ("0", "-1", "many", ""):
+        with pytest.raises(ValueError, match="CODER_MAX_JOBS"):
+            local_wiring.coder_max_jobs({"CODER_MAX_JOBS": bad})
+
+
 def test_local_service_fails_closed_without_the_engine_user(tmp_path: Path) -> None:
     if os.geteuid() == 0:
         pytest.skip("as root the engine user can be created")

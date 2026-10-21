@@ -101,6 +101,19 @@ def agy_chain(ctx: EngineContext, extra_env: Mapping[str, str], *, run: Runner =
     return chain
 
 
+def coder_max_jobs(env: Mapping[str, str]) -> int:
+    """Jobs the coder runs at once (CODER_MAX_JOBS, default 1). They share one engine user and every job
+    start kills that user's processes, so overlapping jobs kill each other."""
+    raw = env.get("CODER_MAX_JOBS", "1")
+    try:
+        value = int(raw)
+    except ValueError:
+        raise ValueError(f"CODER_MAX_JOBS must be a whole number of at least 1, got {raw!r}") from None
+    if value < 1:
+        raise ValueError(f"CODER_MAX_JOBS must be a whole number of at least 1, got {raw!r}")
+    return value
+
+
 def build_local_service(env: Mapping[str, str] = os.environ, *, repo: str = REPO,
                         github: Callable[[str], GitHubPort] = GitHubClient) -> CoderService:
     """`repo` must be the coder's repo: JobSpec refuses any other, so a mismatch is a config error now."""
@@ -124,4 +137,4 @@ def build_local_service(env: Mapping[str, str] = os.environ, *, repo: str = REPO
         engine_user=sandbox.ensure_agy_user,
         privileged_work_root=Path(env.get("WORKROOT") or sandbox.PRIVILEGED_WORK_ROOT),
     )
-    return CoderService(JobStore(state_dir, Redactor(env=env)), deps)
+    return CoderService(JobStore(state_dir, Redactor(env=env)), deps, max_running=coder_max_jobs(env))

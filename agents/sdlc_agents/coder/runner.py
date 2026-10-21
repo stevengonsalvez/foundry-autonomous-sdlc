@@ -53,6 +53,7 @@ from sdlc_agents.ports import (
 
 AGENT_PR_LABEL = "agent:pr"
 CONFLICT_MARKER = re.compile(r"^(<<<<<<<|>>>>>>>)( |$)", re.MULTILINE)   # git's conflict markers, resolved or not
+BUSY_RETRY_AFTER_S = 60     # a refused start is retried by the orchestrator on its next poll
 LEASE_PREFIX = "agent-lease/"   # refs/heads/agent-lease/<issue>: one live coder job per issue
 INSTALL_TIMEOUT_S = 1800
 TEST_TIMEOUT_S = 1800
@@ -958,9 +959,10 @@ def _better(new: tuple[float, ...], old: tuple[float, ...]) -> bool:
 class CoderService:
     """Maps Invocations request bodies to jobs. One background thread per running job."""
 
-    def __init__(self, store: JobStore, deps: CoderDeps):
+    def __init__(self, store: JobStore, deps: CoderDeps, *, max_running: int | None = None):
         self._store = store
         self._deps = deps
+        self._max_running = max_running   # jobs sharing one engine user must not overlap: see start()
         self._threads: dict[str, tuple[threading.Thread, threading.Event]] = {}
         self._lock = threading.Lock()
         self._sweep()
@@ -1022,6 +1024,9 @@ class CoderService:
             state = self._settle(self._store.load(spec.job_id))
             if state is not None and state.reason != "interrupted":
                 return 200, self._view(state)
+            if self._max_running is not None and self._running_locked() >= self._max_running:
+                # Every job reaps the engine user's processes when it starts, which would kill this one's.
+                return 429, {"error": "busy", "retry_after_s": BUSY_RETRY_AFTER_S}
             if state is None:
                 refused = self._take_lease(spec)
                 if refused is not None:
@@ -1089,6 +1094,9 @@ class CoderService:
     def _alive(self, job_id: str) -> bool:
         with self._lock:
             return self._alive_locked(job_id)
+
+    def _running_locked(self) -> int:
+        return sum(1 for entry in self._threads.values() if entry[0].is_alive())
 
     def _alive_locked(self, job_id: str) -> bool:
         entry = self._threads.get(job_id)
