@@ -4,47 +4,47 @@
     "agent-scope": {
       "fail": 0,
       "first_fail": 0,
-      "first_pass": 19,
-      "pass": 25
+      "first_pass": 20,
+      "pass": 26
     },
     "coverage": {
-      "fail": 5,
-      "first_fail": 5,
+      "fail": 6,
+      "first_fail": 6,
       "first_pass": 14,
       "pass": 20
     },
     "e2e": {
       "fail": 8,
       "first_fail": 6,
-      "first_pass": 13,
-      "pass": 17
+      "first_pass": 14,
+      "pass": 18
     },
     "evals": {
       "fail": 0,
       "first_fail": 0,
-      "first_pass": 5,
-      "pass": 8
+      "first_pass": 6,
+      "pass": 9
     },
     "gitleaks": {
       "fail": 0,
       "first_fail": 0,
-      "first_pass": 19,
-      "pass": 25
+      "first_pass": 20,
+      "pass": 26
     },
     "tdd-order": {
       "fail": 0,
       "first_fail": 0,
-      "first_pass": 19,
-      "pass": 25
+      "first_pass": 20,
+      "pass": 26
     },
     "test": {
-      "fail": 6,
-      "first_fail": 6,
+      "fail": 7,
+      "first_fail": 7,
       "first_pass": 13,
       "pass": 19
     }
   },
-  "generated_at": "2026-10-21T21:19:35Z",
+  "generated_at": "2026-10-21T21:21:04Z",
   "issues": [
     {
       "closed_at": "2026-10-10T12:28:43Z",
@@ -3401,6 +3401,66 @@
       ],
       "title": "Move the live carrier integration to the new vendor and rotate the production keys",
       "type": "feature"
+    },
+    {
+      "closed_at": null,
+      "coder_engine": null,
+      "coder_sessions_lost": 0,
+      "cost": {
+        "calls": 1,
+        "coder_model_usd": 0.0,
+        "coder_usd": 0.0,
+        "model_usd": 0.071352,
+        "usd": 0.071352
+      },
+      "deferred": null,
+      "escalation": null,
+      "gate_attempts": {
+        "agent-scope": [
+          "success"
+        ],
+        "coverage": [
+          "failure"
+        ],
+        "e2e": [
+          "success"
+        ],
+        "evals": [
+          "success"
+        ],
+        "gitleaks": [
+          "success"
+        ],
+        "tdd-order": [
+          "success"
+        ],
+        "test": [
+          "failure"
+        ]
+      },
+      "gates": {
+        "agent-scope": "success",
+        "coverage": "failure",
+        "e2e": "success",
+        "evals": "success",
+        "gitleaks": "success",
+        "tdd-order": "success",
+        "test": "failure"
+      },
+      "kind": "pr",
+      "number": null,
+      "opened_at": "2026-10-21T21:01:35Z",
+      "outcome": "open",
+      "owner": null,
+      "pr": 129,
+      "quality_score": null,
+      "release": null,
+      "resolution_seconds": null,
+      "scenario": "d-maintenance",
+      "severity": null,
+      "stages": [],
+      "title": "Update the status filter label copy",
+      "type": "maintenance"
     }
   ],
   "ledger": {
@@ -3411,11 +3471,11 @@
   "totals": {
     "deferred": 0,
     "escalated": 28,
-    "issues": 45,
+    "issues": 46,
     "ledger_usd": 1.483118,
-    "orchestrator_usd": 12.637605,
+    "orchestrator_usd": 12.653818,
     "released": 14,
-    "usd": 26.633488
+    "usd": 26.721053
   },
   "version": 1
 }
