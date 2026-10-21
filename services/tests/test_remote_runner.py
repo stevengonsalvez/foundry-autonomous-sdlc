@@ -17,7 +17,7 @@ import pytest
 from sdlc_agents.foundry import AgentRunError
 from sdlc_agents.transport import HttpRequest, HttpResponse
 
-from sdlc_factory.cli_foundry import AuthError, CliFoundry, QuotaError, RemoteRunner
+from sdlc_factory.cli_foundry import NO_TOOLS_NOTICE, AuthError, CliFoundry, QuotaError, RemoteRunner
 from sdlc_factory.coder_service import FakeAgentRunner, FakeCoder, serve
 from sdlc_factory.config import load_factory
 from sdlc_factory.engines import ProcessOutput
@@ -122,7 +122,7 @@ def test_a_schema_agent_round_trips_and_is_classified_locally() -> None:
     assert (result.input_tokens, result.output_tokens) == (7, 7)
     body = json.loads(transport.requests[0].body)
     agent = FACTORY.agent("sdlc-triage")
-    assert body["prompt"] == f"{agent.instructions}\n\nINPUT"
+    assert body["prompt"] == f"{agent.instructions}\n\n{NO_TOOLS_NOTICE}\n\nINPUT"
     assert body["schema"] == agent.schema
     assert body["timeout_s"] == agent.timeout_s
 

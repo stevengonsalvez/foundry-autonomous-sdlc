@@ -214,11 +214,12 @@ _URL = re.compile(r"https?://\S+")
 
 
 # The shared agent instructions were written for Foundry, which offers a GitHub file-read tool. agy plan
-# mode has none: a call attempt is denied and the whole run ends empty (live scenario a, feasibility).
+# mode has no tools: any call (a file read, a shell command) is auto-denied and the whole run ends empty
+# (live scenario a: feasibility; scenario a3: req-gate asked for a command). Every prompt agent gets this.
 NO_TOOLS_NOTICE = (
-    "NO TOOLS IN THIS RUN (overrides the tool text above): get_file_contents and every other tool are "
-    "unavailable here. Never call a tool. Decide only from the input sections, and answer in the "
-    "required format.")
+    "NO TOOLS IN THIS RUN (overrides any tool text above): get_file_contents, shell commands, file "
+    "reads and every other tool are unavailable here. Never call a tool and never run a command. "
+    "Decide only from the input sections, and answer in the required format.")
 
 
 class CliFoundry:
@@ -306,10 +307,7 @@ class CliFoundry:
                           max_output_tokens: int = 8000) -> AgentResult:
         del max_output_tokens   # agy has no output token limit
         conf = self._agent(agent)
-        instructions = conf.instructions
-        if "get_file_contents" in instructions:
-            instructions += "\n\n" + NO_TOOLS_NOTICE
-        prompt = f"{instructions}\n\n{input_text}"
+        prompt = f"{conf.instructions}\n\n{NO_TOOLS_NOTICE}\n\n{input_text}"
         if image_urls:
             prompt += "\n\n## image_urls\n" + "\n".join(f"- {url}" for url in image_urls)
         room = MAX_PROMPT_CHARS - (_REPAIR_OVERHEAD_CHARS if conf.schema is not None else 0)

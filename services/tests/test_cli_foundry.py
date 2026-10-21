@@ -12,7 +12,7 @@ from sdlc_agents.foundry import AgentRunError, RetryPolicy, Section, call_with_r
 from sdlc_agents.ports import AgentResult
 from sdlc_agents.transport import HttpRequest, HttpResponse
 
-from sdlc_factory.cli_foundry import CliFoundry, QuotaError
+from sdlc_factory.cli_foundry import NO_TOOLS_NOTICE, CliFoundry, QuotaError
 from sdlc_factory.config import load_factory
 from sdlc_factory.engines import ABORTED_RC, TIMEOUT_RC, AgyEngine, ProcessOutput
 
@@ -105,7 +105,7 @@ def test_schema_agent_returns_compact_json_and_tokens(token_file):
     assert (result.input_tokens, result.output_tokens) == (7, 7 + 14)   # thinking counts as output
     call = runner.calls[0]
     agent = FACTORY.agent("sdlc-triage")
-    assert runner.prompts[0] == f"{agent.instructions}\n\nINPUT-TEXT"
+    assert runner.prompts[0] == f"{agent.instructions}\n\n{NO_TOOLS_NOTICE}\n\nINPUT-TEXT"
     assert call["argv"][call["argv"].index("--mode") + 1] == "plan"
     assert call["schema"] == agent.schema
     assert call["timeout_s"] > agent.timeout_s
@@ -170,10 +170,14 @@ def test_agents_that_mention_github_tools_are_told_no_tools_exist(token_file):
     assert "NO TOOLS" in notice and "Never call a tool" in notice
 
 
-def test_agents_without_tool_text_get_no_notice(token_file):
-    runner = ScriptedRunner(ProcessOutput(0, agy_stdout(json.dumps(TRIAGE)), ""))
-    make(token_file, runner).call_prompt_agent("sdlc-triage", "INPUT-TEXT")
-    assert "NO TOOLS" not in runner.prompts[0]
+def test_every_prompt_agent_is_told_no_tools_exist(token_file):
+    # Plan mode auto-denies any tool call and the run then ends empty. The req-gate asked for a command on
+    # a feature issue that never mentioned a tool (live #123: "auto-denied ... allow-rule under permissions").
+    for agent, payload in (("sdlc-triage", TRIAGE), ("sdlc-feasibility", FEASIBLE)):
+        runner = ScriptedRunner(ProcessOutput(0, agy_stdout(json.dumps(payload)), ""))
+        make(token_file, runner).call_prompt_agent(agent, "INPUT-TEXT")
+        assert NO_TOOLS_NOTICE in runner.prompts[0], agent
+    assert "Never call a tool" in NO_TOOLS_NOTICE and "command" in NO_TOOLS_NOTICE
 
 
 def test_image_urls_are_listed_in_the_prompt(token_file):
