@@ -44,7 +44,7 @@
       "pass": 19
     }
   },
-  "generated_at": "2026-10-21T21:25:46Z",
+  "generated_at": "2026-10-21T21:30:33Z",
   "issues": [
     {
       "closed_at": "2026-10-10T12:28:43Z",
@@ -3370,20 +3370,20 @@
       "coder_engine": null,
       "coder_sessions_lost": 0,
       "cost": {
-        "calls": 3,
+        "calls": 4,
         "coder_model_usd": 0.0,
         "coder_usd": 0.0,
-        "model_usd": 0.322132,
-        "usd": 0.322132
+        "model_usd": 0.4647,
+        "usd": 0.4647
       },
       "deferred": null,
-      "escalation": null,
+      "escalation": "escalated:not-agent-suitable",
       "gate_attempts": {},
       "gates": {},
       "kind": "issue",
       "number": 127,
       "opened_at": "2026-10-21T21:00:07Z",
-      "outcome": "open",
+      "outcome": "escalated",
       "owner": null,
       "pr": null,
       "quality_score": 92,
@@ -3399,9 +3399,13 @@
         },
         {
           "entered_at": "2026-10-21T21:19:32Z",
-          "in_progress": true,
-          "seconds": 0,
+          "seconds": 658,
           "stage": "stage:ready"
+        },
+        {
+          "entered_at": "2026-10-21T21:30:30Z",
+          "seconds": 0,
+          "stage": "escalated:not-agent-suitable"
         }
       ],
       "title": "Move the live carrier integration to the new vendor and rotate the production keys",
@@ -3505,12 +3509,12 @@
   "repo": "stevengonsalvez/foundry-autonomous-sdlc",
   "totals": {
     "deferred": 0,
-    "escalated": 28,
+    "escalated": 29,
     "issues": 47,
     "ledger_usd": 1.483118,
-    "orchestrator_usd": 12.694689,
+    "orchestrator_usd": 12.726764,
     "released": 14,
-    "usd": 26.94899
+    "usd": 27.123633
   },
   "version": 1
 }
