@@ -44,7 +44,7 @@
       "pass": 18
     }
   },
-  "generated_at": "2026-10-17T16:10:52Z",
+  "generated_at": "2026-10-21T07:29:22Z",
   "issues": [
     {
       "closed_at": "2026-10-10T12:28:43Z",
@@ -2808,6 +2808,36 @@
       ],
       "title": "feat(web): interactive status summary filter chips with parcel counts on home page",
       "type": "feature"
+    },
+    {
+      "closed_at": null,
+      "coder_engine": null,
+      "coder_sessions_lost": 0,
+      "cost": {
+        "calls": 2,
+        "coder_model_usd": 0.0,
+        "coder_usd": 0.0,
+        "model_usd": 0.05543,
+        "usd": 0.05543
+      },
+      "deferred": null,
+      "escalation": null,
+      "gate_attempts": {},
+      "gates": {},
+      "kind": "issue",
+      "number": 116,
+      "opened_at": "2026-10-21T07:28:28Z",
+      "outcome": "open",
+      "owner": null,
+      "pr": null,
+      "quality_score": null,
+      "release": null,
+      "resolution_seconds": null,
+      "scenario": "a",
+      "severity": null,
+      "stages": [],
+      "title": "Show the estimated delivery date on the parcel page",
+      "type": "feature"
     }
   ],
   "ledger": {
@@ -2818,11 +2848,11 @@
   "totals": {
     "deferred": 0,
     "escalated": 20,
-    "issues": 34,
+    "issues": 35,
     "ledger_usd": 1.483118,
-    "orchestrator_usd": 10.846612,
+    "orchestrator_usd": 10.857849,
     "released": 13,
-    "usd": 17.853499
+    "usd": 17.920166
   },
   "version": 1
 }
