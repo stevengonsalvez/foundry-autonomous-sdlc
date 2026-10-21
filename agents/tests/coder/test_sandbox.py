@@ -49,6 +49,17 @@ def test_no_engine_user_without_root_or_when_useradd_fails() -> None:
                                    euid=lambda: 0) is None
 
 
+def test_zombie_processes_are_not_survivors(tmp_path: Path) -> None:
+    # A zombie is already dead and only waits for its parent. A container whose PID 1 never reaps (the
+    # coder runs Python as PID 1) leaves esbuild zombies after npm test; they cannot be killed (live #120).
+    proc = tmp_path / "proc"
+    for pid, state in (("201", "S (sleeping)"), ("202", "Z (zombie)"), ("203", "R (running)")):
+        (proc / pid).mkdir(parents=True)
+        (proc / pid / "status").write_text(f"Name:\tesbuild\nState:\t{state}\nPPid:\t1\n")
+    me = RunAs("agyuser", os.getuid(), os.getgid(), Path("/h"))
+    assert sorted(sandbox.user_pids(me, proc_root=proc)) == [201, 203]
+
+
 def test_give_tree_hands_over_everything_but_git(tmp_path: Path) -> None:
     for rel in ("app/src/a.ts", ".git/config", "app/node_modules/x/index.js", "README.md"):
         (tmp_path / rel).parent.mkdir(parents=True, exist_ok=True)

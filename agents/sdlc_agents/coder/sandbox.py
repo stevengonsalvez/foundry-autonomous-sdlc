@@ -62,11 +62,22 @@ def user_pids(user: RunAs, *, proc_root: Path = Path("/proc")) -> list[int]:
     pids: list[int] = []
     for entry in proc_root.glob("[0-9]*") if proc_root.is_dir() else []:
         try:
-            if entry.stat().st_uid == user.uid:
+            if entry.stat().st_uid == user.uid and not _is_zombie(entry):
                 pids.append(int(entry.name))
         except (OSError, ValueError):
             continue
     return pids
+
+
+def _is_zombie(entry: Path) -> bool:
+    """A zombie is dead and only waits to be reaped: SIGKILL cannot remove it and it holds nothing."""
+    try:
+        for line in (entry / "status").read_text().splitlines():
+            if line.startswith("State:"):
+                return line.split(":", 1)[1].strip().startswith("Z")
+    except OSError:
+        pass
+    return False
 
 
 def reap_user(user: RunAs, *, list_pids: Callable[[RunAs], list[int]] = user_pids,
