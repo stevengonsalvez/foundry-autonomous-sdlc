@@ -44,7 +44,7 @@
       "pass": 18
     }
   },
-  "generated_at": "2026-10-21T17:17:38Z",
+  "generated_at": "2026-10-21T17:21:02Z",
   "issues": [
     {
       "closed_at": "2026-10-10T12:28:43Z",
@@ -3227,11 +3227,11 @@
       "coder_engine": null,
       "coder_sessions_lost": 0,
       "cost": {
-        "calls": 1,
+        "calls": 2,
         "coder_model_usd": 0.0,
         "coder_usd": 0.0,
-        "model_usd": 0.060844,
-        "usd": 0.060844
+        "model_usd": 0.15546,
+        "usd": 0.15546
       },
       "deferred": null,
       "escalation": null,
@@ -3251,9 +3251,14 @@
       "stages": [
         {
           "entered_at": "2026-10-21T17:17:35Z",
+          "seconds": 204,
+          "stage": "stage:ready"
+        },
+        {
+          "entered_at": "2026-10-21T17:20:59Z",
           "in_progress": true,
           "seconds": 0,
-          "stage": "stage:ready"
+          "stage": "stage:feasible"
         }
       ],
       "title": "Show how many shipment events a parcel has next to the history heading",
@@ -3270,9 +3275,9 @@
     "escalated": 28,
     "issues": 43,
     "ledger_usd": 1.483118,
-    "orchestrator_usd": 12.069713,
+    "orchestrator_usd": 12.090398,
     "released": 13,
-    "usd": 24.62339
+    "usd": 24.738691
   },
   "version": 1
 }
