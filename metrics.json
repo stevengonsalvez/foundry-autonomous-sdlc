@@ -44,7 +44,7 @@
       "pass": 19
     }
   },
-  "generated_at": "2026-10-21T21:37:24Z",
+  "generated_at": "2026-10-21T21:37:37Z",
   "issues": [
     {
       "closed_at": "2026-10-10T12:28:43Z",
@@ -3502,7 +3502,14 @@
       "resolution_seconds": null,
       "scenario": "d-maintenance",
       "severity": null,
-      "stages": [],
+      "stages": [
+        {
+          "entered_at": "2026-10-21T21:37:34Z",
+          "in_progress": true,
+          "seconds": 0,
+          "stage": "stage:building"
+        }
+      ],
       "title": "Update the status filter label copy",
       "type": "maintenance"
     }
@@ -3517,9 +3524,9 @@
     "escalated": 29,
     "issues": 47,
     "ledger_usd": 1.483118,
-    "orchestrator_usd": 12.76862,
+    "orchestrator_usd": 12.778808,
     "released": 14,
-    "usd": 27.396939
+    "usd": 27.407127
   },
   "version": 1
 }
