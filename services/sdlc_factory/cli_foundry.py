@@ -52,6 +52,7 @@ import http.client
 import json
 import math
 import os
+import re
 import shutil
 import socket
 import tempfile
@@ -206,6 +207,10 @@ def default_engine_factory(config: FactoryConfig) -> EngineFactory:
         return AgyEngine(binary=Path(shutil.which(binary) or binary))
 
     return build
+
+
+STDERR_HINT_CHARS = 200
+_URL = re.compile(r"https?://\S+")
 
 
 # The shared agent instructions were written for Foundry, which offers a GitHub file-read tool. agy plan
@@ -449,8 +454,14 @@ def _engine_error(agent: str, engine: str, result: EngineResult, usage: Usage) -
         # stderr holds a device-login URL and code: never in the message.
         return AuthError(f"{agent}: {engine} authentication required: the token in AGY_TOKEN_FILE is "
                              "missing or expired", **tokens, ambiguous=False)
-    return AgentRunError(f"{agent}: {engine} call ended {outcome} (rc {result.returncode})", **tokens,
-                         transient=outcome in _TRANSIENT_OUTCOMES)
+    return AgentRunError(f"{agent}: {engine} call ended {outcome} (rc {result.returncode}){_stderr_hint(result)}",
+                         **tokens, transient=outcome in _TRANSIENT_OUTCOMES)
+
+
+def _stderr_hint(result: EngineResult) -> str:
+    """The end of agy's stderr on one line, links removed, so an empty or denied end says why."""
+    tail = " ".join(_URL.sub("<url>", result.stderr).split())[-STDERR_HINT_CHARS:]
+    return f": {tail}" if tail else ""
 
 
 def _retry_after(resp: HttpResponse) -> float | None:

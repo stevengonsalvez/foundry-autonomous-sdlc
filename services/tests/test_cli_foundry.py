@@ -217,6 +217,17 @@ def test_timeout_empty_failed_are_transient_and_carry_usage(token_file, output, 
     assert not isinstance(info.value, QuotaError)
 
 
+def test_a_denied_or_empty_failure_names_what_agy_said_without_urls(token_file):
+    # "ended denied (rc 0)" alone cannot tell a denied tool from a model that answered nothing (live #119).
+    stderr = "no output produced; see https://example.test/trace?id=1 for details\n"
+    with pytest.raises(AgentRunError) as info:
+        make(token_file, ScriptedRunner(ProcessOutput(0, agy_stdout(""), stderr))).call_prompt_agent(
+            "sdlc-triage", "x")
+    assert "no output produced" in str(info.value)
+    assert "example.test" not in str(info.value)
+    assert "\n" not in str(info.value)
+
+
 def test_failed_engine_usage_is_carried_for_billing(token_file):
     runner = ScriptedRunner(ProcessOutput(0, agy_stdout("", tokens=5), TIMEOUT_STDERR))
     with pytest.raises(AgentRunError) as info:
