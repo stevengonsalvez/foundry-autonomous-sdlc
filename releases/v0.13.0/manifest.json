@@ -9,8 +9,8 @@
       "viewport": "desktop",
       "title": "Home, dark theme",
       "caption": "Home page with the dark theme selected via the theme toggle preference.",
-      "sha256": "133d8d59e05fc035e323e401c47acd703f7a5ec7c1439c1a898ce3b1e891c265",
-      "size": 124855
+      "sha256": "9ff66b4e98afb83a1473ea9c66b884017198b2873272426cd69411483fb4e934",
+      "size": 124862
     },
     {
       "filename": "home-recent-searches-desktop.png",
@@ -99,8 +99,8 @@
       "viewport": "mobile",
       "title": "Home, dark theme",
       "caption": "Home page with the dark theme selected via the theme toggle preference.",
-      "sha256": "12af88da6cd1c8c2ee1c99ea28f02a3c670d25e005bb9438cd0c61de61b00051",
-      "size": 76292
+      "sha256": "fa1fafe058cd2d7af5f4a7c3ac6092e6e52975d19ef97e35eb22c10a0fd1a2d0",
+      "size": 76296
     },
     {
       "filename": "home-recent-searches-mobile.png",
@@ -189,8 +189,8 @@
       "viewport": "desktop",
       "title": "Home",
       "caption": "Home page in the default light theme: search form and recent parcels table.",
-      "sha256": "b0ea8fb8e7ee2061a0805fc4b5597696f4c4e0b4fd01ad3afbfb756855414833",
-      "size": 116706
+      "sha256": "2f5e8e95aa65d0b50cda5a2e3f38a934e5b8ea2c41972272a548a33ce21624b5",
+      "size": 116692
     },
     {
       "filename": "parcel-timeline-desktop.png",
@@ -229,8 +229,8 @@
       "viewport": "mobile",
       "title": "Home",
       "caption": "Home page in the default light theme: search form and recent parcels table.",
-      "sha256": "ff113f6ad5c1c8eee5294ee48b3acba3730e3dfd41f00aef729659370a2cb4d1",
-      "size": 72650
+      "sha256": "a3fe31d2489e1b99659f3fbd06c10c5f0644aea12954bae32917babfd00485cc",
+      "size": 72649
     },
     {
       "filename": "parcel-timeline-mobile.png",
@@ -267,7 +267,7 @@
   "changes": {
     "vs": "v0.12.2",
     "fp": {
-      "self": "0defe15c050c428e287dfe2dbe93477a9c32e25a113c8667abe4367de5ba260f",
+      "self": "53dab4615100939f8322e9a55d63284f7c7a60fcf864a898114e9743e8a01527",
       "prev": "b6b862dabe72904c94b480e6d0bb23b5b3a3f247ead92581c635f159c606d60c"
     },
     "states": {
