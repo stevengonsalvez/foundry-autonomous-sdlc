@@ -1,21 +1,21 @@
 {
   "version": 1,
   "staging": {
-    "sha": "d03dcdb0675e63aef411415b9084a7a39b231f79",
-    "short": "d03dcdb",
-    "version": "v0.12.1",
-    "built_at": "2026-10-21T22:18:48Z",
-    "deployed_at": "2026-10-21T22:19:02Z",
-    "run_id": 39685502190,
-    "run_url": "https://github.com/stevengonsalvez/foundry-autonomous-sdlc/actions/runs/39685502190",
-    "status": "promoted",
-    "pr": 130,
-    "issue": null,
+    "sha": "cbf911807a5028a2cfeb4e46a9e4096c6ed78e73",
+    "short": "cbf9118",
+    "version": "v0.12.2",
+    "built_at": "2026-10-22T03:23:58Z",
+    "deployed_at": "2026-10-22T03:24:12Z",
+    "run_id": 39716565789,
+    "run_url": "https://github.com/stevengonsalvez/foundry-autonomous-sdlc/actions/runs/39716565789",
+    "status": "deployed",
+    "pr": 134,
+    "issue": 133,
     "includes": [
       {
-        "pr": 130,
-        "issue": null,
-        "sha": "d03dcdb0675e63aef411415b9084a7a39b231f79"
+        "pr": 134,
+        "issue": 133,
+        "sha": "cbf911807a5028a2cfeb4e46a9e4096c6ed78e73"
       }
     ]
   },
@@ -68,17 +68,6 @@
     ]
   },
   "history": [
-    {
-      "at": "2026-10-14T19:18:40Z",
-      "action": "fail",
-      "env": "prod",
-      "sha": "b5ff373831c126b37c8a5b01d7ec923be25a7d00",
-      "version": "main-b5ff373",
-      "run_url": "https://github.com/stevengonsalvez/foundry-autonomous-sdlc/actions/runs/38619435770",
-      "reason": "job promote failed",
-      "issue": null,
-      "pr": 81
-    },
     {
       "at": "2026-10-14T19:18:40Z",
       "action": "rollback",
@@ -1150,6 +1139,24 @@
           "pr": 130,
           "issue": null,
           "sha": "d03dcdb0675e63aef411415b9084a7a39b231f79"
+        }
+      ]
+    },
+    {
+      "at": "2026-10-22T03:24:12Z",
+      "action": "stage",
+      "env": "staging",
+      "sha": "cbf911807a5028a2cfeb4e46a9e4096c6ed78e73",
+      "version": "v0.12.2",
+      "run_url": "https://github.com/stevengonsalvez/foundry-autonomous-sdlc/actions/runs/39716565789",
+      "reason": "deployed to staging",
+      "issue": 133,
+      "pr": 134,
+      "includes": [
+        {
+          "pr": 134,
+          "issue": 133,
+          "sha": "cbf911807a5028a2cfeb4e46a9e4096c6ed78e73"
         }
       ]
     }
