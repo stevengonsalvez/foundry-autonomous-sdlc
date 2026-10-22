@@ -26,7 +26,7 @@ FILES = {
     "c": "c-not-suitable.md",
     "d": "d-bug.md",
     "d-maintenance": "d-maintenance.md",
-    "d2": "d2-bug.md",
+    "d3": "d3-bug.md",
     "d-maintenance2": "d-maintenance2.md",
 }
 OLD_HEADING, NEW_HEADING = "Track your parcel", "Track a parcel"
