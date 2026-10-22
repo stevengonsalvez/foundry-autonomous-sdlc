@@ -311,7 +311,7 @@ def test_build_from_env_builds_the_real_adapters(tmp_path: Path, monkeypatch: py
     assert isinstance(deps.github, GitHubClient)
     assert type(deps.foundry).__name__ == "CliFoundry"
     assert isinstance(deps.emitter, HttpEmitter)
-    assert (deps.budget.usd_cap_issue, deps.budget.usd_cap_total) == (3.0, 32.0)
+    assert (deps.budget.usd_cap_issue, deps.budget.usd_cap_total) == (3.0, 100.0)
     assert deps.config.name
 
 

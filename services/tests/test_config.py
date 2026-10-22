@@ -211,7 +211,7 @@ def test_scorers_readme_says_phase_2():
 # --- budget math -----------------------------------------------------------------------------------
 
 
-def test_budget_rates_are_positive_and_caps_match_ports_budget():
+def test_budget_rates_are_positive_and_caps_cover_ports_budget():
     from sdlc_agents.ports import Budget
 
     budget = load_factory(FACTORY_YAML).budget
@@ -221,7 +221,8 @@ def test_budget_rates_are_positive_and_caps_match_ports_budget():
     assert budget.per_issue_max_calls > 0
     assert budget.per_issue_max_minutes > 0
     assert budget.issue_cap_usd() == pytest.approx(Budget().usd_cap_issue)
-    assert budget.total_cap_usd() == pytest.approx(Budget().usd_cap_total)
+    # the deployment may raise the total above the upstream default, never lower it (live runs need room)
+    assert budget.total_cap_usd() >= Budget().usd_cap_total
 
 
 # --- validation errors name file and key -----------------------------------------------------------
