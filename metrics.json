@@ -44,7 +44,7 @@
       "pass": 23
     }
   },
-  "generated_at": "2026-10-22T11:08:02Z",
+  "generated_at": "2026-10-22T11:13:32Z",
   "issues": [
     {
       "closed_at": "2026-10-10T12:28:43Z",
@@ -3838,15 +3838,15 @@
       "type": "bug"
     },
     {
-      "closed_at": null,
+      "closed_at": "2026-10-22T11:07:58Z",
       "coder_engine": "agy-unrestricted",
       "coder_sessions_lost": 0,
       "cost": {
-        "calls": 4,
+        "calls": 5,
         "coder_model_usd": 0.0,
         "coder_usd": 0.219491,
-        "model_usd": 0.49995,
-        "usd": 0.719441
+        "model_usd": 0.634298,
+        "usd": 0.853789
       },
       "deferred": null,
       "escalation": null,
@@ -3885,12 +3885,12 @@
       "kind": "issue",
       "number": 136,
       "opened_at": "2026-10-22T10:33:33Z",
-      "outcome": "open",
+      "outcome": "released",
       "owner": null,
       "pr": 137,
       "quality_score": 100,
-      "release": null,
-      "resolution_seconds": null,
+      "release": "v0.13.0",
+      "resolution_seconds": 2395,
       "scenario": "a",
       "severity": null,
       "stages": [
@@ -3921,9 +3921,13 @@
         },
         {
           "entered_at": "2026-10-22T11:07:58Z",
-          "in_progress": true,
-          "seconds": 0,
+          "seconds": 330,
           "stage": "stage:merged"
+        },
+        {
+          "entered_at": "2026-10-22T11:13:28Z",
+          "seconds": 0,
+          "stage": "stage:released"
         }
       ],
       "title": "Show where the parcel was last seen on the parcel page",
@@ -3931,7 +3935,7 @@
     }
   ],
   "ledger": {
-    "emitted_at": "2026-10-22T11:08:02Z",
+    "emitted_at": "2026-10-22T11:13:32Z",
     "reconciled_at": "2026-10-22T10:37:32Z"
   },
   "repo": "stevengonsalvez/foundry-autonomous-sdlc",
@@ -3940,9 +3944,9 @@
     "escalated": 33,
     "issues": 51,
     "ledger_usd": 1.483118,
-    "orchestrator_usd": 16.333264,
-    "released": 16,
-    "usd": 37.098452
+    "orchestrator_usd": 16.363826,
+    "released": 17,
+    "usd": 37.263362
   },
   "version": 1
 }
