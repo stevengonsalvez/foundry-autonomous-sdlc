@@ -1,6 +1,9 @@
 schemaVersion: v1alpha1
 name: engineering-software-factory
 
+# Added to every issue or PR this factory runs, to tell it from the Azure Foundry one on the same repo.
+ticketLabel: factory:independent
+
 repositories:
   - owner: stevengonsalvez
     name: foundry-autonomous-sdlc
