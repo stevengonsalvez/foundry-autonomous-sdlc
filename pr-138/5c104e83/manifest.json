@@ -34,8 +34,8 @@
       "caption": "Home page status summary chips with counts, In transit selected and the table filtered.",
       "filename": "home-status-chips-desktop.png",
       "route": "home",
-      "sha256": "16c45362bd96c8d25c6dae8ed577caf2b3ab41ea53578d31218517efa365ed70",
-      "size": 109889,
+      "sha256": "ae76a16f1d4b9a1d34611436422e1638a00576712bed0dd52e41c5959775b93c",
+      "size": 109899,
       "state": "home-status-chips",
       "title": "Home, status chips",
       "viewport": "desktop"
@@ -84,8 +84,8 @@
       "caption": "Home page with the dark theme selected via the theme toggle preference.",
       "filename": "home-dark-mobile.png",
       "route": "home",
-      "sha256": "fa1fafe058cd2d7af5f4a7c3ac6092e6e52975d19ef97e35eb22c10a0fd1a2d0",
-      "size": 76296,
+      "sha256": "47d9ae283a2be4f0cd46c3f1be0ab0eecf7eaf5aca5773605824d76e29310d63",
+      "size": 76293,
       "state": "home-dark",
       "title": "Home, dark theme",
       "viewport": "mobile"
@@ -104,8 +104,8 @@
       "caption": "Home page after pressing Track with no tracking number: inline field error.",
       "filename": "home-empty-search-desktop.png",
       "route": "home",
-      "sha256": "57d740c18b3ae093fd963d0dca2a861c9d511712db43d67a3f21d21ca429180a",
-      "size": 116275,
+      "sha256": "f076e32cb2adf6db38e6c913bca6c825ff9f0fbe4f3d4b8114ce8ccb820e612a",
+      "size": 116281,
       "state": "home-empty-search",
       "title": "Home, empty search error",
       "viewport": "desktop"
@@ -121,11 +121,21 @@
       "viewport": "mobile"
     },
     {
+      "caption": "Home page after searching PK1000000001 and PK1000000002: recent search chips under the form.",
+      "filename": "home-recent-searches-mobile.png",
+      "route": "home",
+      "sha256": "8a7226a26417ef67650ee00df8222ee2fd31e7222003c73d4af14d72f9488bc4",
+      "size": 70995,
+      "state": "home-recent-searches",
+      "title": "Home, recent searches",
+      "viewport": "mobile"
+    },
+    {
       "caption": "Parcel page right after pressing Copy link: button shows the Copied confirmation.",
       "filename": "parcel-copy-link-desktop.png",
       "route": "parcel-found",
-      "sha256": "2d04d1c56980b5d2a3fa8eaabc87dafcfe5dddae3f6fe9027f4d1ee647cb44f2",
-      "size": 112033,
+      "sha256": "608298826f63cfcc6bed39c255727e52688a05b6dfa858719de6f003d8466e7e",
+      "size": 112034,
       "state": "parcel-copy-link",
       "title": "Parcel, copy link",
       "viewport": "desktop"
@@ -211,6 +221,16 @@
       "viewport": "mobile"
     },
     {
+      "caption": "Home page after searching PK1000000001 and PK1000000002: recent search chips under the form.",
+      "filename": "home-recent-searches-desktop.png",
+      "route": "home",
+      "sha256": "cf0b6ae5e1fe6ef0a146cf356f5db5b44d90a55957cd48af139c17d7d6825806",
+      "size": 110201,
+      "state": "home-recent-searches",
+      "title": "Home, recent searches",
+      "viewport": "desktop"
+    },
+    {
       "caption": "Parcel PK1000000001 shipment history: events, locations and latest marker.",
       "filename": "parcel-timeline-mobile.png",
       "route": "parcel-found",
@@ -224,8 +244,8 @@
       "caption": "Home page in the default light theme: search form and recent parcels table.",
       "filename": "home-default-desktop.png",
       "route": "home",
-      "sha256": "1e1bd6752428d65c91c4d23091d163557a9d69c8fa674f4787017c46281f4016",
-      "size": 116695,
+      "sha256": "b0ea8fb8e7ee2061a0805fc4b5597696f4c4e0b4fd01ad3afbfb756855414833",
+      "size": 116706,
       "state": "home-default",
       "title": "Home",
       "viewport": "desktop"
@@ -240,9 +260,6 @@
       "title": "Invalid tracking number",
       "viewport": "desktop"
     }
-  ],
-  "skipped": [
-    "home-recent-searches"
   ],
   "version": 1
 }
