@@ -17,7 +17,7 @@ export interface ApiOptions {
   service: ParcelService;
 }
 
-const PARCEL_PATH = /^\/api\/parcels\/([^/]+)$/;
+const PARCEL_PATH = /^\/api\/parcels\/([^/]+)\/?$/;
 
 function sendJson(res: ServerResponse, status: number, body: unknown, headers: Record<string, string> = {}): void {
   const payload = JSON.stringify(body);
@@ -50,7 +50,7 @@ export function createApi(service: ParcelService): Server {
   return createServer((req: IncomingMessage, res: ServerResponse) => {
     const { pathname } = new URL(req.url ?? "/", "http://api.local");
     const single = PARCEL_PATH.exec(pathname);
-    const known = pathname === "/api/parcels" || single !== null;
+    const known = pathname === "/api/parcels" || pathname === "/api/parcels/" || single !== null;
 
     if (!known) return sendJson(res, 404, { error: "not_found" });
     if (req.method !== "GET") return sendJson(res, 405, { error: "method_not_allowed" }, { allow: "GET" });
