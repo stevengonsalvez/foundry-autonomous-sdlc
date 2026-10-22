@@ -44,7 +44,7 @@
       "pass": 21
     }
   },
-  "generated_at": "2026-10-22T03:04:25Z",
+  "generated_at": "2026-10-22T03:04:52Z",
   "issues": [
     {
       "closed_at": "2026-10-10T12:28:43Z",
@@ -3728,14 +3728,14 @@
     },
     {
       "closed_at": null,
-      "coder_engine": "agy",
+      "coder_engine": "agy-unrestricted",
       "coder_sessions_lost": 0,
       "cost": {
         "calls": 6,
         "coder_model_usd": 0.0,
-        "coder_usd": 0.286818,
+        "coder_usd": 0.291593,
         "model_usd": 0.807708,
-        "usd": 1.094526
+        "usd": 1.099301
       },
       "deferred": null,
       "escalation": null,
@@ -3804,9 +3804,9 @@
     "escalated": 33,
     "issues": 50,
     "ledger_usd": 1.483118,
-    "orchestrator_usd": 15.666781,
+    "orchestrator_usd": 15.676606,
     "released": 15,
-    "usd": 35.415433
+    "usd": 35.430033
   },
   "version": 1
 }
