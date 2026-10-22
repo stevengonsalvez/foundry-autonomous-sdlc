@@ -129,11 +129,14 @@ def test_a_bad_ingest_body_is_400_and_writes_nothing(served: tuple[str, MemoryBr
     assert store.commits == []
 
 
-def test_reconcile_without_github_is_a_400_not_a_crash(served: tuple[str, MemoryBranchStore]) -> None:
+def test_events_are_stored_even_when_the_sender_asks_to_reconcile(served: tuple[str, MemoryBranchStore]) -> None:
+    # The foreman sends reconcile=true on its batches, but this server has no GitHub client (the PAT stays
+    # with the foreman). Rejecting the batch left the live ledger empty and the control center blank.
     base, store = served
-    status, _, body = call(f"{base}/ingest", {"events": [], "reconcile": True})
-    assert status == 400 and "GitHub" in json.loads(body)["error"]
-    assert store.commits == []
+    status, _, body = call(f"{base}/ingest", {"events": [ticket_event()], "reconcile": True})
+    assert status == 200, body
+    assert json.loads(call(f"{base}/state.json")[2])["tickets"]
+    assert store.commits != []
 
 
 def test_an_oversized_body_is_rejected_from_the_header_alone(served: tuple[str, MemoryBranchStore]) -> None:

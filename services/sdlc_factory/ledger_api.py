@@ -135,10 +135,12 @@ class _Handler(BaseHTTPRequestHandler):
         if body is None:
             return
         try:
+            ledger = self.server.ledger
+            # No GitHub client here (the PAT stays with the foreman): store the events and skip the reconcile
+            # the sender asked for, instead of rejecting the whole batch.
+            reconcile = bool(body.get("reconcile")) and getattr(ledger, "github", None) is not None
             with self.server.ingest_lock:
-                reply = self.server.ledger.handle(
-                    {"op": "ingest", "events": body.get("events", []), "reconcile": bool(body.get("reconcile"))}
-                )
+                reply = ledger.handle({"op": "ingest", "events": body.get("events", []), "reconcile": reconcile})
         except (LedgerError, ValueError) as exc:  # EventError is a ValueError: nothing was written
             self._error(HTTPStatus.BAD_REQUEST, str(exc))
         except StoreConflict:
