@@ -1,5 +1,5 @@
 schemaVersion: v1alpha1
-name: foundry-autonomous-sdlc
+name: engineering-software-factory
 
 repositories:
   - owner: stevengonsalvez
