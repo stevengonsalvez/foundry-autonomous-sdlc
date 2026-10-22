@@ -44,7 +44,7 @@
       "pass": 21
     }
   },
-  "generated_at": "2026-10-22T03:06:14Z",
+  "generated_at": "2026-10-22T03:06:45Z",
   "issues": [
     {
       "closed_at": "2026-10-10T12:28:43Z",
@@ -3733,9 +3733,9 @@
       "cost": {
         "calls": 6,
         "coder_model_usd": 0.0,
-        "coder_usd": 0.301143,
+        "coder_usd": 0.402851,
         "model_usd": 0.807708,
-        "usd": 1.108851
+        "usd": 1.210559
       },
       "deferred": null,
       "escalation": null,
@@ -3746,7 +3746,7 @@
       "opened_at": "2026-10-22T02:11:15Z",
       "outcome": "open",
       "owner": "api",
-      "pr": null,
+      "pr": 134,
       "quality_score": 95,
       "release": null,
       "resolution_seconds": null,
@@ -3785,9 +3785,14 @@
         },
         {
           "entered_at": "2026-10-22T02:51:50Z",
+          "seconds": 892,
+          "stage": "stage:building"
+        },
+        {
+          "entered_at": "2026-10-22T03:06:42Z",
           "in_progress": true,
           "seconds": 0,
-          "stage": "stage:building"
+          "stage": "stage:in-review"
         }
       ],
       "title": "Parcel API returns 404 for a tracking number URL with a trailing slash",
@@ -3804,9 +3809,9 @@
     "escalated": 33,
     "issues": 50,
     "ledger_usd": 1.483118,
-    "orchestrator_usd": 15.706069,
+    "orchestrator_usd": 15.716176,
     "released": 15,
-    "usd": 35.469046
+    "usd": 35.580861
   },
   "version": 1
 }
