@@ -399,7 +399,6 @@ def test_run_json_agent_max_repairs_zero(engine, tmp_path):
 
 @pytest.mark.parametrize(("output", "outcome"), [
     (ProcessOutput(0, fixture("timeout_empty"), TIMEOUT_STDERR), Outcome.TIMEOUT),
-    (ProcessOutput(0, fixture("denied_empty"), DENIED_STDERR), Outcome.DENIED),
     (ProcessOutput(ABORTED_RC, fixture("auth"), AUTH_STDERR), Outcome.AUTH),
     (ProcessOutput(3, fixture("quota"), QUOTA_STDERR), Outcome.QUOTA),
 ])
@@ -410,6 +409,25 @@ def test_run_json_agent_non_ok_raises_typed_error_without_repair(engine, tmp_pat
     assert info.value.outcome is outcome
     assert info.value.calls == 1
     assert len(runner.calls) == 1
+
+
+def test_run_json_agent_a_denied_call_is_asked_again_once_with_the_denial_quoted(engine, tmp_path):
+    # Plan mode has no tools; a model that reaches for one ends the run empty. One re-ask usually fixes it
+    # (live #132: the test designer wanted a shell command to read the repo).
+    runner = ScriptedRunner([ProcessOutput(0, fixture("denied_empty"), DENIED_STDERR), ok(VALID_TRIAGE, 20)])
+    parsed, _usage, calls = agent(engine, tmp_path, runner)
+    assert parsed["owner"] == "backend" and calls == 2
+    again = runner.calls[1]["argv"][2]
+    assert again.startswith("triage the issue") and "no tools" in again.lower()
+    assert "auto-denied" in again or "denied" in again
+
+
+def test_run_json_agent_a_second_denial_raises(engine, tmp_path):
+    denied = ProcessOutput(0, fixture("denied_empty"), DENIED_STDERR)
+    runner = ScriptedRunner([denied, denied, ok(VALID_TRIAGE)])
+    with pytest.raises(EngineError) as info:
+        agent(engine, tmp_path, runner)
+    assert info.value.outcome is Outcome.DENIED and info.value.calls == 2 and len(runner.calls) == 2
 
 
 def test_run_json_agent_non_ok_during_repair_keeps_earlier_usage(engine, tmp_path):

@@ -411,6 +411,12 @@ def extract_json(text: str) -> Any:
     return best[1]
 
 
+MAX_DENIAL_RETRIES = 1
+_DENIED_NOTICE = ("Your previous attempt tried to use a tool and was denied, so nothing was answered. There are "
+                  "no tools and no commands in this run. Do not call any tool: answer using only the text above, "
+                  "with exactly the required JSON object and nothing else.")
+
+
 def _repair_prompt(prompt: str, error: str) -> str:
     # The error can quote the model's own output, so it is framed as data between markers it cannot guess.
     tag = f"REJECTION-{secrets.token_hex(6)}"
@@ -430,11 +436,15 @@ def run_json_agent(engine: CliEngine, prompt: str, schema: Mapping[str, Any], *,
     if max_repairs and len(prompt) + _REPAIR_OVERHEAD_CHARS > MAX_PROMPT_CHARS:
         # Fail before spending a call, not on the repair round with usage already burned.
         raise ValueError(f"prompt is {len(prompt)} chars: no room for a repair round under {MAX_PROMPT_CHARS}")
-    usage, calls, ask, error = Usage(), 0, prompt, ""
-    for _ in range(max_repairs + 1):
+    usage, calls, ask, error, denials, repairs = Usage(), 0, prompt, "", 0, 0
+    while True:
         result = run_engine(engine, ask, schema=schema, **kw)
         calls += 1
         usage += result.usage
+        if result.outcome is Outcome.DENIED and denials < MAX_DENIAL_RETRIES:
+            denials += 1   # the model reached for a tool plan mode does not have: say so and ask again
+            ask = f"{ask}\n\n{_DENIED_NOTICE}"
+            continue
         if result.outcome is not Outcome.OK:
             raise EngineError(result, usage=usage, calls=calls)
         try:
@@ -444,8 +454,12 @@ def run_json_agent(engine: CliEngine, prompt: str, schema: Mapping[str, Any], *,
                 validate(parsed)
         except ValueError as exc:   # JsonExtractError included; TypeError (a bad schema) propagates
             error = str(exc)
+            if repairs >= max_repairs:
+                raise JsonRepairError(
+                    f"{engine.name}: invalid output after {max_repairs} repair rounds: {error[:500]}",
+                    usage=usage, calls=calls) from None
+            repairs += 1
             ask = _repair_prompt(prompt, error)
             continue
         return parsed, usage, calls
-    raise JsonRepairError(f"{engine.name}: invalid output after {max_repairs} repair rounds: {error[:500]}",
-                          usage=usage, calls=calls)
+
