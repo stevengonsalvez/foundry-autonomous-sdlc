@@ -44,7 +44,7 @@
       "pass": 21
     }
   },
-  "generated_at": "2026-10-22T02:47:06Z",
+  "generated_at": "2026-10-22T02:50:42Z",
   "issues": [
     {
       "closed_at": "2026-10-10T12:28:43Z",
@@ -3731,11 +3731,11 @@
       "coder_engine": null,
       "coder_sessions_lost": 0,
       "cost": {
-        "calls": 5,
+        "calls": 6,
         "coder_model_usd": 0.0,
         "coder_usd": 0.167443,
-        "model_usd": 0.697048,
-        "usd": 0.864491
+        "model_usd": 0.807708,
+        "usd": 0.975151
       },
       "deferred": null,
       "escalation": null,
@@ -3775,9 +3775,14 @@
         },
         {
           "entered_at": "2026-10-22T02:47:02Z",
+          "seconds": 217,
+          "stage": "stage:feasible"
+        },
+        {
+          "entered_at": "2026-10-22T02:50:39Z",
           "in_progress": true,
           "seconds": 0,
-          "stage": "stage:feasible"
+          "stage": "stage:tests-written"
         }
       ],
       "title": "Parcel API returns 404 for a tracking number URL with a trailing slash",
@@ -3794,9 +3799,9 @@
     "escalated": 33,
     "issues": 50,
     "ledger_usd": 1.483118,
-    "orchestrator_usd": 15.366424,
+    "orchestrator_usd": 15.391242,
     "released": 15,
-    "usd": 34.885041
+    "usd": 35.020519
   },
   "version": 1
 }
