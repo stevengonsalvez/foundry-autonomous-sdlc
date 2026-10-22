@@ -44,7 +44,7 @@
       "pass": 21
     }
   },
-  "generated_at": "2026-10-22T02:04:28Z",
+  "generated_at": "2026-10-22T02:05:38Z",
   "issues": [
     {
       "closed_at": "2026-10-10T12:28:43Z",
@@ -3692,13 +3692,13 @@
         "usd": 2.170286
       },
       "deferred": null,
-      "escalation": null,
+      "escalation": "escalated:agent-error",
       "gate_attempts": {},
       "gates": {},
       "kind": "issue",
       "number": 132,
       "opened_at": "2026-10-21T22:52:41Z",
-      "outcome": "open",
+      "outcome": "escalated",
       "owner": "api",
       "pr": null,
       "quality_score": 100,
@@ -3714,9 +3714,13 @@
         },
         {
           "entered_at": "2026-10-21T23:04:45Z",
-          "in_progress": true,
-          "seconds": 0,
+          "seconds": 10850,
           "stage": "stage:feasible"
+        },
+        {
+          "entered_at": "2026-10-22T02:05:35Z",
+          "seconds": 0,
+          "stage": "escalated:agent-error"
         }
       ],
       "title": "Parcel API returns 404 for a tracking number URL with a trailing slash",
@@ -3730,12 +3734,12 @@
   "repo": "stevengonsalvez/foundry-autonomous-sdlc",
   "totals": {
     "deferred": 0,
-    "escalated": 32,
+    "escalated": 33,
     "issues": 49,
     "ledger_usd": 1.483118,
-    "orchestrator_usd": 15.031925,
+    "orchestrator_usd": 15.04194,
     "released": 15,
-    "usd": 33.686051
+    "usd": 33.696066
   },
   "version": 1
 }
