@@ -1,0 +1,73 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 470" width="100%" role="img" aria-label="LIVE PROOF // real GitHub, real agy, real merges">
+<title>LIVE PROOF // real GitHub, real agy, real merges</title>
+<style>
+  text { font-family: ui-monospace, "SF Mono", Monaco, Menlo, Consolas, "Liberation Mono", monospace; user-select: none; }
+  .xs { font-size: 8.5px; font-weight: 500; } .sm { font-size: 10px; font-weight: 500; }
+  .md { font-size: 11.5px; font-weight: 600; } .lg { font-size: 13px; font-weight: 700; }
+  .ttl { font-size: 13.5px; font-weight: 700; letter-spacing: 0.05em; }
+  .flow { stroke-dasharray: 5 5; animation: dash 1.4s linear infinite; }
+  @keyframes dash { to { stroke-dashoffset: -20; } }
+  @media (prefers-reduced-motion: reduce) { * { animation: none !important; } animate { display: none !important; } }
+</style>
+<defs>
+  <filter id="glow" x="-30%" y="-30%" width="160%" height="160%"><feGaussianBlur stdDeviation="3" result="b"/><feComposite in="SourceGraphic" in2="b" operator="over"/></filter>
+  <pattern id="grid" width="20" height="20" patternUnits="userSpaceOnUse"><path d="M 20 0 L 0 0 0 20" fill="none" stroke="#101a21" stroke-width="0.5"/></pattern>
+  <marker id="arr" viewBox="0 0 6 6" refX="5" refY="3" markerWidth="5" markerHeight="5" orient="auto-start-reverse"><path d="M0 0 L6 3 L0 6 z" fill="#87949f"/></marker>
+  <marker id="arrg" viewBox="0 0 6 6" refX="5" refY="3" markerWidth="5" markerHeight="5" orient="auto-start-reverse"><path d="M0 0 L6 3 L0 6 z" fill="#25df75"/></marker>
+  <marker id="arrc" viewBox="0 0 6 6" refX="5" refY="3" markerWidth="5" markerHeight="5" orient="auto-start-reverse"><path d="M0 0 L6 3 L0 6 z" fill="#ff4979"/></marker>
+</defs>
+<rect width="960" height="470" fill="#02080f"/><rect width="960" height="470" fill="url(#grid)" opacity="0.6"/>
+<rect x="12" y="12" width="936" height="446" rx="6" fill="none" stroke="#202d37"/>
+<rect x="12" y="12" width="936" height="42" rx="6" fill="#040f17"/><line x1="12" y1="54" x2="948" y2="54" stroke="#202d37"/>
+<circle cx="32" cy="33" r="5" fill="#25df75" filter="url(#glow)"><animate attributeName="opacity" values="1;0.4;1" dur="2s" repeatCount="indefinite"/></circle>
+<text x="46" y="37" fill="#dfe9f1" class="ttl">LIVE PROOF // real GitHub, real agy, real merges</text>
+<rect x="795" y="24" width="137" height="18" rx="3" fill="#0f1f2a" stroke="#202d37"/><text x="863.5" y="36" fill="#b0bdc6" class="sm" text-anchor="middle">2026-10-21 and 22</text>
+<rect x="24" y="70" width="560" height="250" rx="6" fill="#040f17" fill-opacity="0.55" stroke="#25df75" stroke-dasharray="4 4"/><text x="34" y="84" fill="#25df75" class="xs">FIVE PATHS RUN LIVE</text>
+<rect x="38" y="92" width="532" height="40" rx="4" fill="#0f1f2a" stroke="#25df75" stroke-width="1.2"/><rect x="38" y="92" width="3" height="40" rx="1.5" fill="#25df75"/>
+<text x="49" y="108" fill="#dfe9f1" class="md">feature</text>
+<text x="49" y="121" fill="#87949f" class="xs">#124 / PR #125   merged, released, 15 of 15 checks</text>
+<rect x="38" y="138" width="532" height="40" rx="4" fill="#0f1f2a" stroke="#25df75" stroke-width="1.2"/><rect x="38" y="138" width="3" height="40" rx="1.5" fill="#25df75"/>
+<text x="49" y="154" fill="#dfe9f1" class="md">maintenance</text>
+<text x="49" y="167" fill="#87949f" class="xs">PR #130   reviewer approved, merged, 15 of 15</text>
+<rect x="38" y="184" width="532" height="40" rx="4" fill="#0f1f2a" stroke="#25df75" stroke-width="1.2"/><rect x="38" y="184" width="3" height="40" rx="1.5" fill="#25df75"/>
+<text x="49" y="200" fill="#dfe9f1" class="md">bug + revision loop</text>
+<text x="49" y="213" fill="#87949f" class="xs">#133 / PR #134   review sent it back once, then merged</text>
+<rect x="38" y="230" width="532" height="40" rx="4" fill="#0f1f2a" stroke="#25df75" stroke-width="1.2"/><rect x="38" y="230" width="3" height="40" rx="1.5" fill="#25df75"/>
+<text x="49" y="246" fill="#dfe9f1" class="md">vague issue</text>
+<text x="49" y="259" fill="#87949f" class="xs">#126   questions asked, answered, stopped at the TDD gate</text>
+<rect x="38" y="276" width="532" height="40" rx="4" fill="#0f1f2a" stroke="#25df75" stroke-width="1.2"/><rect x="38" y="276" width="3" height="40" rx="1.5" fill="#25df75"/>
+<text x="49" y="292" fill="#dfe9f1" class="md">not suitable</text>
+<text x="49" y="305" fill="#87949f" class="xs">#127   escalated: credentials, vendor, infrastructure</text>
+<rect x="600" y="70" width="336" height="250" rx="6" fill="#040f17" fill-opacity="0.55" stroke="#ff4979" stroke-dasharray="4 4"/><text x="610" y="84" fill="#ff4979" class="xs">9 BUGS ONLY LIVE RUNS FOUND, ALL FIXED</text>
+<circle cx="618" cy="96" r="4" fill="#ff4979"/>
+<text x="630" y="100" fill="#b0bdc6" class="xs" text-anchor="start">1. agent asked for a tool agy lacks</text>
+<circle cx="618" cy="120" r="4" fill="#ff4979"/>
+<text x="630" y="124" fill="#b0bdc6" class="xs" text-anchor="start">2. job dir not enterable (umask 077)</text>
+<circle cx="618" cy="144" r="4" fill="#ff4979"/>
+<text x="630" y="148" fill="#b0bdc6" class="xs" text-anchor="start">3. 10 min step timeout cut test design</text>
+<circle cx="618" cy="168" r="4" fill="#ff4979"/>
+<text x="630" y="172" fill="#b0bdc6" class="xs" text-anchor="start">4. denied tool call ended the run empty</text>
+<circle cx="618" cy="192" r="4" fill="#ff4979"/>
+<text x="630" y="196" fill="#b0bdc6" class="xs" text-anchor="start">5. zombie processes counted as survivors</text>
+<circle cx="618" cy="216" r="4" fill="#ff4979"/>
+<text x="630" y="220" fill="#b0bdc6" class="xs" text-anchor="start">6. git push could not exec askpass</text>
+<circle cx="618" cy="240" r="4" fill="#ff4979"/>
+<text x="630" y="244" fill="#b0bdc6" class="xs" text-anchor="start">7. two coder jobs killed each other</text>
+<circle cx="618" cy="264" r="4" fill="#ff4979"/>
+<text x="630" y="268" fill="#b0bdc6" class="xs" text-anchor="start">8. total spend cap halted the factory</text>
+<circle cx="618" cy="288" r="4" fill="#ff4979"/>
+<text x="630" y="292" fill="#b0bdc6" class="xs" text-anchor="start">9. ledger rejected every event (empty mission control)</text>
+<rect x="24" y="336" width="912" height="120" rx="6" fill="#040f17" fill-opacity="0.55" stroke="#e8a838" stroke-dasharray="4 4"/><text x="34" y="350" fill="#e8a838" class="xs">STILL OPEN</text>
+<rect x="38" y="358" width="270" height="84" rx="4" fill="#0f1f2a" stroke="#e8a838" stroke-width="1.2"/><rect x="38" y="358" width="3" height="84" rx="1.5" fill="#e8a838"/>
+<text x="49" y="374" fill="#dfe9f1" class="md">net-empty revision</text>
+<text x="49" y="387" fill="#87949f" class="xs">ends as internal-error</text>
+<text x="49" y="400" fill="#87949f" class="xs">job still escalates, message is rough</text>
+<rect x="322" y="358" width="290" height="84" rx="4" fill="#0f1f2a" stroke="#ff4979" stroke-width="1.2"/><rect x="322" y="358" width="3" height="84" rx="1.5" fill="#ff4979"/>
+<text x="333" y="374" fill="#dfe9f1" class="md">main has no branch protection</text>
+<text x="333" y="387" fill="#87949f" class="xs">factory gates are the only guard</text>
+<text x="333" y="400" fill="#87949f" class="xs">turn protection on before polling</text>
+<rect x="626" y="358" width="296" height="84" rx="4" fill="#0f1f2a" stroke="#e8a838" stroke-width="1.2"/><rect x="626" y="358" width="3" height="84" rx="1.5" fill="#e8a838"/>
+<text x="637" y="374" fill="#dfe9f1" class="md">not built yet</text>
+<text x="637" y="387" fill="#87949f" class="xs">scorers, Azure VM, ADO variant</text>
+<text x="637" y="400" fill="#87949f" class="xs">PO intake is a stub</text>
+</svg>

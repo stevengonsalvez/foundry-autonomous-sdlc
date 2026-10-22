@@ -1,0 +1,22 @@
+# Isolated container for the long-running coder activity: agent code must not reach Temporal or Dolt.
+image: sdlc-factory-coder:latest
+taskQueue: coder
+maxConcurrentActivities: 1
+user: agyuser
+network: internal
+egress: allow-list-proxy
+capDrop:
+  - ALL
+capAdd:
+  - CHOWN
+  - DAC_OVERRIDE
+  - FOWNER
+  - KILL
+  - SETUID
+  - SETGID
+secrets:
+  - github_pat
+  - agy_token
+heartbeat:
+  intervalS: 30
+  timeoutS: 120

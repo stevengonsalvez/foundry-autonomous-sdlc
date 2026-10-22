@@ -1,4 +1,86 @@
-# foundry-autonomous-sdlc
+# Engineering Software Factory
+
+An issue goes in. Agents score the requirement, check an agent can do it, write failing tests first, build until they pass, get an independent review, clear the CI gates, merge and release. A human only sees what the factory could not decide. The demo app is a parcel tracker; the factory is the point.
+
+There are **two ways to run the same factory**. They share the app, the state machine, the gates, the ledger event schema and the control center. They differ in what runs the agents and where it lives.
+
+<p align="center">
+  <img src="docs/media/two-approaches.svg" alt="Two approaches side by side: Azure native with Azure AI Foundry hosted agents, and the independent factory with Temporal and a CLI agent on docker compose. Shared parts underneath." width="100%" />
+</p>
+
+| | A. Azure native | B. Independent factory |
+|---|---|---|
+| Orchestration | Foundry hosted orchestrator agent on a routine timer | Temporal workflows and a 60 second Schedule |
+| Agents | Azure AI Foundry models (9 prompt agents) and a hosted coder | A CLI agent (Antigravity `agy` first, Copilot or Claude Code next) in a sandbox |
+| Ledger | git branch `state` (`events.jsonl`, `state.json`) | Dolt, a git-style SQL database, behind `ledger-api` |
+| Control center | GitHub Pages, read only | Same UI behind nginx, read only |
+| Secrets and infra | Key Vault, Terraform | Docker secrets as files, `docker compose` |
+| Cost model | Pay per Foundry call | Your CLI plan quota, tracked as calls and minutes |
+| Runs on | Your Azure subscription | Any Docker host: a laptop now, an Azure VM next |
+| Start here | [`docs/runbook.md`](docs/runbook.md) | [`docs/factory-runbook.md`](docs/factory-runbook.md) |
+
+Pick **A** when the platform is Azure and you want managed agents. Pick **B** for portability, a private Azure DevOps variant, other CLIs, or when you want workflow history and retries from Temporal.
+
+## Approach B: the independent factory
+
+### How it fits together
+
+<p align="center">
+  <img src="docs/media/factory-architecture.svg" alt="Architecture of the independent factory on docker compose: Temporal and Postgres, the foreman worker, the coder sandbox behind an egress proxy, ledger-api with Dolt, and the nginx mission control." width="100%" />
+</p>
+
+| Component | Where | What it does |
+|---|---|---|
+| Temporal 1.31 and Postgres 16 | `deploy/compose` | Durable workflows, the `github-poll` Schedule, retries, timeouts, human gate signals |
+| `worker-foreman` | `services/sdlc_factory` | One `WorkItemWorkflow` per issue. Each step runs the existing tick, gates and state machine for that one issue |
+| coder | `services/sdlc_factory/coder_service.py` | HTTP service that runs `agy` as two unprivileged users: `agyuser` for builds and tests, `agyagent` for prompt agents. One coder job at a time |
+| egress proxy | `deploy/compose/proxy` | Squid allow-list. The coder network has no direct internet |
+| `ledger-api` and Dolt | `services/sdlc_factory/ledger_*.py` | Events in, `state.json` and `issues.json` out. One Dolt commit per write |
+| Mission control | `apps/control-center` | The same read-only UI. It reads only `state.json` and `issues.json` |
+| Factory definition | `factory/` | `factory.yaml`, one `agent.md` plus a JSON schema per agent, automations, runners. Shaped like Warp Factories |
+
+### What happens to one issue
+
+<p align="center">
+  <img src="docs/media/work-item-lifecycle.svg" alt="Work item lifecycle: intake and triage, spec with feasibility and test design, implement with TDD and scope gates, review, merge and release. A revision loop returns request-changes to the coder." width="100%" />
+</p>
+
+Choices live in `factory/factory.yaml`: the engine per stage, `humanGates` for spec and merge, and the call and minute budget. Auto-merge is on in this deployment.
+
+### Proven on real GitHub
+
+<p align="center">
+  <img src="docs/media/live-proof.svg" alt="Live proof: five paths run on real GitHub with real agy, nine bugs found only by live runs and fixed, and the items still open." width="100%" />
+</p>
+
+Details, evidence and the known gaps are in [`docs/factory-v1-status.md`](docs/factory-v1-status.md).
+
+### Run it
+
+```bash
+cd deploy/compose
+cp .env.example .env                 # then set the generated credentials, see secrets/README.md
+docker compose up -d --build         # FACTORY_MODE=fake for a no-secrets dry run
+./smoke.sh                           # 35 checks in fake mode
+```
+
+Mission control is at `http://127.0.0.1:18080` and the Temporal UI at `http://127.0.0.1:18233`. To open mission control privately from other machines on your tailnet:
+
+```bash
+sudo tailscale serve --bg --https=18443 http://127.0.0.1:18080
+```
+
+Going live (real GitHub, real agy, real merges) is a deliberate step: follow the checklist in [`docs/factory-runbook.md`](docs/factory-runbook.md). Turn on branch protection on the target repo first.
+
+### Not built yet
+
+Scorers and benchmarks, an Azure VM deployment, an Azure DevOps variant, a second CLI adapter, webhook work sources, and the simulated product owner intake (a stub).
+
+---
+
+## Approach A in detail: Azure native
+
+The rest of this README describes the original Azure AI Foundry version, with its live demo, scenario traces, gates and safety model.
 
 ## Live demo
 

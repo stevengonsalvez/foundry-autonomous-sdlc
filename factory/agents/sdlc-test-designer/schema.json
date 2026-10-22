@@ -1,0 +1,40 @@
+{
+  "type": "object",
+  "properties": {
+    "tests": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string",
+            "maxLength": 255,
+            "minLength": 1
+          },
+          "content": {
+            "type": "string",
+            "maxLength": 15000,
+            "minLength": 1
+          }
+        },
+        "required": [
+          "path",
+          "content"
+        ],
+        "additionalProperties": false
+      },
+      "minItems": 1,
+      "maxItems": 3
+    },
+    "rationale": {
+      "type": "string",
+      "maxLength": 800,
+      "minLength": 1
+    }
+  },
+  "required": [
+    "tests",
+    "rationale"
+  ],
+  "additionalProperties": false
+}

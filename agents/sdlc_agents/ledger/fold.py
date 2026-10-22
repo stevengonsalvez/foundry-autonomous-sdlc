@@ -41,6 +41,8 @@ AGENTS: tuple[tuple[str, str, str], ...] = (
     ("sdlc-ledger", "hosted", "Keeps the event log and the state this page reads"),
 )
 
+CLI_AGENT_ROLE = "Factory agent run through a CLI engine"
+
 # The orchestrator action that makes each prompt agent run (machine.Kind values).
 ACTION_AGENT = {
     "gate": "sdlc-req-gate",
@@ -415,6 +417,13 @@ def _env_row(name: str, entry: dict[str, Any] | None) -> dict[str, Any] | None:
 # ---------------------------------------------------------------------------
 
 
+def _factory_agents(usage: dict[str, Any], tick: dict[str, Any] | None) -> list[tuple[str, str, str]]:
+    """Agents the fixed Foundry roster does not name, seen in spend or tick calls: the factory's CLI agents."""
+    known = {name for name, _, _ in AGENTS}
+    seen = set(usage) | set((tick or {}).get("calls_by_agent", {}))
+    return [(name, "cli", CLI_AGENT_ROLE) for name in sorted(seen - known)]
+
+
 def _agents(doc: dict[str, Any], now: str) -> list[dict[str, Any]]:
     tickets = doc["tickets"]
     usage: dict[str, dict[str, Any]] = defaultdict(lambda: {"calls": 0, "in": 0, "out": 0, "usd": 0.0})
@@ -431,7 +440,7 @@ def _agents(doc: dict[str, Any], now: str) -> list[dict[str, Any]]:
         (t for t in tickets if (t.get("coder") or {}).get("status") in CODER_RUNNING and t["stage"] == "building"), None
     )
     rows = []
-    for name, kind, role in AGENTS:
+    for name, kind, role in [*AGENTS, *_factory_agents(usage, tick)]:
         row: dict[str, Any] = {
             "name": name,
             "kind": kind,
@@ -486,7 +495,7 @@ def _agents(doc: dict[str, Any], now: str) -> list[dict[str, Any]]:
             row["state"] = "idle" if led["invocations"] else "unknown"
         elif row["last_error"]:
             row["state"] = "error"
-        elif not row["calls_total"]:
+        elif not (row["calls_total"] or row["calls_last_tick"]):
             row["state"] = "unknown"
         rows.append(row)
     return rows

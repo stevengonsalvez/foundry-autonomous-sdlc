@@ -1,0 +1,7 @@
+# Local configuration and secrets never leave this machine.
+.env
+secrets/*
+!secrets/README.md
+# The repository root ignores `.env.*`, `*secret*` and `*token*`; re-include the tracked templates here.
+!.env.example
+!secrets/

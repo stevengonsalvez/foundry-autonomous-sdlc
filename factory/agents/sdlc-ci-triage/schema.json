@@ -1,0 +1,33 @@
+{
+  "type": "object",
+  "properties": {
+    "cause": {
+      "type": "string",
+      "enum": [
+        "stale-test",
+        "real-bug"
+      ]
+    },
+    "explanation": {
+      "type": "string",
+      "maxLength": 600,
+      "minLength": 1
+    },
+    "test_files": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "maxLength": 255,
+        "minLength": 1
+      },
+      "minItems": 0,
+      "maxItems": 5
+    }
+  },
+  "required": [
+    "cause",
+    "explanation",
+    "test_files"
+  ],
+  "additionalProperties": false
+}

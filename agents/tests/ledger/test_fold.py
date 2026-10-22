@@ -200,6 +200,33 @@ def test_a_tick_event_shows_up_as_last_tick_lock_holder_errors_and_retries(real)
     assert next(a for a in stale["agents"] if a["name"] == "sdlc-orchestrator")["state"] == "error"
 
 
+def test_agents_outside_the_foundry_roster_get_a_cli_row_after_the_eleven_known_ones() -> None:
+    tick = events.make(
+        "tick.finished",
+        "2026-10-10T21:00:00Z",
+        {
+            "started_at": "2026-10-10T20:59:00Z",
+            "finished_at": "2026-10-10T21:00:00Z",
+            "lock": "acquired",
+            "objects": [],
+            "errors": ["metrics: boom"],
+            "calls": [
+                {"agent": "sdlc-ui-tester", "in": 100, "out": 20, "usd": 0.0},
+                {"agent": "sdlc-ui-tester", "in": 50, "out": 5, "usd": 0.0},
+                {"agent": "sdlc-reviewer", "in": 10, "out": 5, "usd": 0.001},
+            ],
+            "model_calls": 3,
+        },
+    )
+    doc = fold.fold([tick], "2026-10-10T21:01:00Z")
+    rows = doc["agents"]
+    assert [a["name"] for a in rows[:11]] == [name for name, _, _ in fold.AGENTS]
+    extra = rows[11:]
+    assert [(a["name"], a["kind"]) for a in extra] == [("sdlc-ui-tester", "cli")]
+    assert extra[0]["calls_last_tick"] == 2 and extra[0]["state"] == "idle" and extra[0]["role"]
+    assert set(extra[0]) == set(rows[0])  # same row shape, so the control center schema reads it unchanged
+
+
 def test_billed_spend_is_shown_next_to_the_ledger_estimate_and_the_gap_is_never_hidden(real) -> None:
     billed = events.make(
         "billing.observed",

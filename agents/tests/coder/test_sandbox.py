@@ -49,6 +49,17 @@ def test_no_engine_user_without_root_or_when_useradd_fails() -> None:
                                    euid=lambda: 0) is None
 
 
+def test_zombie_processes_are_not_survivors(tmp_path: Path) -> None:
+    # A zombie is already dead and only waits for its parent. A container whose PID 1 never reaps (the
+    # coder runs Python as PID 1) leaves esbuild zombies after npm test; they cannot be killed (live #120).
+    proc = tmp_path / "proc"
+    for pid, state in (("201", "S (sleeping)"), ("202", "Z (zombie)"), ("203", "R (running)")):
+        (proc / pid).mkdir(parents=True)
+        (proc / pid / "status").write_text(f"Name:\tesbuild\nState:\t{state}\nPPid:\t1\n")
+    me = RunAs("agyuser", os.getuid(), os.getgid(), Path("/h"))
+    assert sorted(sandbox.user_pids(me, proc_root=proc)) == [201, 203]
+
+
 def test_give_tree_hands_over_everything_but_git(tmp_path: Path) -> None:
     for rel in ("app/src/a.ts", ".git/config", "app/node_modules/x/index.js", "README.md"):
         (tmp_path / rel).parent.mkdir(parents=True, exist_ok=True)
@@ -59,6 +70,24 @@ def test_give_tree_hands_over_everything_but_git(tmp_path: Path) -> None:
                       chown=lambda path, uid, gid: chowned.append(os.path.relpath(path, tmp_path)))
     assert sorted(chowned) == ["README.md", "app", "app/link", "app/node_modules", "app/node_modules/x",
                                "app/node_modules/x/index.js", "app/src", "app/src/a.ts"]
+
+
+def test_give_tree_lets_the_engine_user_traverse_the_root_owned_top(tmp_path: Path) -> None:
+    # A coder started with umask 077 creates the job dir and checkout 0700: the engine user could not enter
+    # them, so every command in its workdir failed (live scenario a, npm ci). The top stays root-owned.
+    job = tmp_path / "j-1"
+    checkout = job / "checkout"
+    (checkout / "app").mkdir(parents=True)
+    (checkout / ".git").mkdir()
+    for d in (job, checkout, checkout / ".git"):
+        d.chmod(0o700)
+    chowned: list[Path] = []
+    sandbox.give_tree(checkout, RunAs("agyuser", 1001, 1001, Path("/h")),
+                      chown=lambda path, uid, gid: chowned.append(Path(path)))
+    assert stat.S_IMODE(job.stat().st_mode) == 0o755
+    assert stat.S_IMODE(checkout.stat().st_mode) == 0o755
+    assert stat.S_IMODE((checkout / ".git").stat().st_mode) == 0o700   # .git stays hidden from the user
+    assert job not in chowned and checkout not in chowned              # the top stays with root
 
 
 def test_user_env_is_built_from_nothing(monkeypatch) -> None:  # type: ignore[no-untyped-def]

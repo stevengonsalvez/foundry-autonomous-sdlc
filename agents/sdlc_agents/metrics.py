@@ -9,11 +9,17 @@ Schema version 1, validated on every build. Beyond the documented fields it adds
 - per gate in `gate_pass_rates`, `first_pass`/`first_fail` next to the run counts `pass`/`fail`.
 The maintenance PR is its own entry: kind pr, number null, pr set, scenario d-maintenance.
 The file lives on branch `metrics` and is rewritten when anything but `generated_at` changed.
+
+A single-object tick (run_tick(only=N)) loads one object, so it merges instead of rebuilding: its
+fresh entry replaces that object's published entry, every other published entry is kept as it was,
+and the published gate counts move by the difference the step made to that object's gate history.
+A full tick rebuilds the whole document from every object it loads.
 """
 
 from __future__ import annotations
 
 import json
+from collections.abc import Sequence
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -186,17 +192,42 @@ def _gate_pass_rates(states: list[State]) -> dict[str, dict[str, int]]:
     return rates
 
 
+def _key(entry: dict[str, Any]) -> int:
+    """The issue or PR number an entry belongs to (a maintenance PR entry has number null)."""
+    return int(entry["pr"] if entry.get("kind") == "pr" else entry["number"])
+
+
+def _shifted(published: dict[str, dict[str, int]], before: dict[str, dict[str, int]],
+             after: dict[str, dict[str, int]]) -> dict[str, dict[str, int]]:
+    """Published gate counts with the stepped objects' old contribution swapped for their new one.
+    Clamped at zero so a published file that lags the state comments never goes negative."""
+    return {name: {k: max(published.get(name, {}).get(k, 0) - before[name][k], 0) + after[name][k]
+                   for k in after[name]}
+            for name in after}
+
+
 def build(objects: list[tuple[Issue, State]], now: str, *, orchestrator_usd: float = 0.0,
           floor_usd: float = 0.0, deferred: dict[int, str] | None = None,
           deferrals: dict[int, int] | None = None, ledger_usd: float = 0.0,
-          ledger_marks: dict[str, str | None] | None = None) -> dict[str, Any]:
+          ledger_marks: dict[str, str | None] | None = None,
+          merge_into: Ledger | None = None, before: Sequence[State] = ()) -> dict[str, Any]:
     """The metrics document. `orchestrator_usd` is the cumulative orchestrator compute and `ledger_usd`
     the cumulative compute of the state-keeper agent (both inside totals.usd); `floor_usd` keeps
     totals.usd monotonic when objects drop out of view. `ledger_marks` records when the ledger was last
-    sent events and last reconciled, so a stateless tick knows when a heartbeat or reconcile is due."""
+    sent events and last reconciled, so a stateless tick knows when a heartbeat or reconcile is due.
+
+    `merge_into` (a single-object tick): keep its published entries for every object not in `objects`
+    and shift its gate counts by `objects`' states now against `before`, their states as loaded."""
     deferred = deferred or {}
     entries = [{**_issue_entry(item, st), "deferred": deferred.get(item.number)}
                for item, st in sorted(objects, key=lambda p: p[0].number)]
+    rates = _gate_pass_rates([st for _, st in objects])
+    if merge_into is not None:
+        stepped = {_key(e) for e in entries}
+        # A published entry that no longer validates is dropped, not kept: it would stop every publish.
+        kept = [e for e in merge_into.issues if _key(e) not in stepped and _valid(e)]
+        entries = sorted([*kept, *entries], key=_key)
+        rates = _shifted(merge_into.gate_pass_rates, _gate_pass_rates(list(before)), rates)
     objects_usd = sum(e["cost"]["usd"] for e in entries)
     doc = {
         "version": 1,
@@ -212,7 +243,7 @@ def build(objects: list[tuple[Issue, State]], now: str, *, orchestrator_usd: flo
             "escalated": sum(e["outcome"] == "escalated" for e in entries),
         },
         "issues": entries,
-        "gate_pass_rates": _gate_pass_rates([st for _, st in objects]),
+        "gate_pass_rates": rates,
         # Consecutive deferred ticks per object: the tick reads them back to bound transient retries.
         "deferrals": {str(k): v for k, v in sorted((deferrals or {}).items())},
         "ledger": {"emitted_at": (ledger_marks or {}).get("emitted_at"),
@@ -233,12 +264,33 @@ class Ledger:
     ledger_usd: float = 0.0
     ledger_emitted_at: str | None = None
     ledger_reconciled_at: str | None = None
+    issues: tuple[dict[str, Any], ...] = ()                    # the published entries, for a merge
+    gate_pass_rates: dict[str, dict[str, int]] = field(default_factory=dict)
 
 
 def _number(value: Any) -> float:
     if isinstance(value, bool) or not isinstance(value, int | float) or value < 0:
         raise ValueError(f"not a spend figure: {value!r}")
     return float(value)
+
+
+def _rates(value: Any) -> dict[str, dict[str, int]]:
+    """Published gate counts for a merge. Display data, not spend: what is not a count reads as zero
+    rather than making the ledger unreadable (which would halt spending)."""
+    rates: dict[str, dict[str, int]] = {}
+    for name, counts in (value.items() if isinstance(value, dict) else ()):
+        if isinstance(counts, dict):
+            rates[str(name)] = {str(k): v for k, v in counts.items()
+                                if isinstance(v, int) and not isinstance(v, bool) and v >= 0}
+    return rates
+
+
+def _valid(entry: dict[str, Any]) -> bool:
+    try:
+        schema_check.check(METRICS_SCHEMA["properties"]["issues"]["items"], entry, "metrics entry")
+    except ValueError:
+        return False
+    return True
 
 
 def _mark(value: Any) -> str | None:
@@ -263,14 +315,15 @@ def previous_totals(github: GitHubPort) -> Ledger | None:
         doc = json.loads(current)
         totals = doc["totals"]
         objects = {}
-        for entry in doc.get("issues") or []:
-            number = entry["pr"] if entry.get("kind") == "pr" else entry["number"]
-            objects[int(number)] = _number(entry["cost"]["usd"])
+        entries = tuple(doc.get("issues") or [])
+        for entry in entries:
+            objects[_key(entry)] = _number(entry["cost"]["usd"])
         deferrals = {int(k): int(v) for k, v in (doc.get("deferrals") or {}).items()}
         raw_marks = doc.get("ledger") if isinstance(doc.get("ledger"), dict) else {}
         marks = {k: _mark(v) for k, v in raw_marks.items()}
         return Ledger(_number(totals["usd"]), _number(totals.get("orchestrator_usd", 0.0)), objects, deferrals,
-                      _number(totals.get("ledger_usd", 0.0)), marks.get("emitted_at"), marks.get("reconciled_at"))
+                      _number(totals.get("ledger_usd", 0.0)), marks.get("emitted_at"), marks.get("reconciled_at"),
+                      entries, _rates(doc.get("gate_pass_rates")))
     except (ValueError, KeyError, TypeError, AttributeError):
         return None
 

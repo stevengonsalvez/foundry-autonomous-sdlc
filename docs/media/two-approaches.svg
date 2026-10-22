@@ -1,0 +1,114 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 600" width="100%" role="img" aria-label="ENGINEERING SOFTWARE FACTORY // TWO APPROACHES">
+<title>ENGINEERING SOFTWARE FACTORY // TWO APPROACHES</title>
+<style>
+  text { font-family: ui-monospace, "SF Mono", Monaco, Menlo, Consolas, "Liberation Mono", monospace; user-select: none; }
+  .xs { font-size: 8.5px; font-weight: 500; } .sm { font-size: 10px; font-weight: 500; }
+  .md { font-size: 11.5px; font-weight: 600; } .lg { font-size: 13px; font-weight: 700; }
+  .ttl { font-size: 13.5px; font-weight: 700; letter-spacing: 0.05em; }
+  .flow { stroke-dasharray: 5 5; animation: dash 1.4s linear infinite; }
+  @keyframes dash { to { stroke-dashoffset: -20; } }
+  @media (prefers-reduced-motion: reduce) { * { animation: none !important; } animate { display: none !important; } }
+</style>
+<defs>
+  <filter id="glow" x="-30%" y="-30%" width="160%" height="160%"><feGaussianBlur stdDeviation="3" result="b"/><feComposite in="SourceGraphic" in2="b" operator="over"/></filter>
+  <pattern id="grid" width="20" height="20" patternUnits="userSpaceOnUse"><path d="M 20 0 L 0 0 0 20" fill="none" stroke="#101a21" stroke-width="0.5"/></pattern>
+  <marker id="arr" viewBox="0 0 6 6" refX="5" refY="3" markerWidth="5" markerHeight="5" orient="auto-start-reverse"><path d="M0 0 L6 3 L0 6 z" fill="#87949f"/></marker>
+  <marker id="arrg" viewBox="0 0 6 6" refX="5" refY="3" markerWidth="5" markerHeight="5" orient="auto-start-reverse"><path d="M0 0 L6 3 L0 6 z" fill="#25df75"/></marker>
+  <marker id="arrc" viewBox="0 0 6 6" refX="5" refY="3" markerWidth="5" markerHeight="5" orient="auto-start-reverse"><path d="M0 0 L6 3 L0 6 z" fill="#ff4979"/></marker>
+</defs>
+<rect width="960" height="600" fill="#02080f"/><rect width="960" height="600" fill="url(#grid)" opacity="0.6"/>
+<rect x="12" y="12" width="936" height="576" rx="6" fill="none" stroke="#202d37"/>
+<rect x="12" y="12" width="936" height="42" rx="6" fill="#040f17"/><line x1="12" y1="54" x2="948" y2="54" stroke="#202d37"/>
+<circle cx="32" cy="33" r="5" fill="#25df75" filter="url(#glow)"><animate attributeName="opacity" values="1;0.4;1" dur="2s" repeatCount="indefinite"/></circle>
+<text x="46" y="37" fill="#dfe9f1" class="ttl">ENGINEERING SOFTWARE FACTORY // TWO APPROACHES</text>
+<rect x="690" y="24" width="242" height="18" rx="3" fill="#0f1f2a" stroke="#202d37"/><text x="811.0" y="36" fill="#b0bdc6" class="sm" text-anchor="middle">same app, same gates, same board</text>
+<rect x="330" y="70" width="300" height="44" rx="4" fill="#0f1f2a" stroke="#e8a838" stroke-width="1.2"/><rect x="330" y="70" width="3" height="44" rx="1.5" fill="#e8a838"/>
+<text x="341" y="86" fill="#dfe9f1" class="md">GitHub issue (owner filed)</text>
+<text x="341" y="99" fill="#87949f" class="xs">work source for both approaches</text>
+<line x1="400" y1="114" x2="250" y2="150" stroke="#e8a838" stroke-width="1.3" class="flow" marker-end="url(#arr)"/>
+<line x1="560" y1="114" x2="710" y2="150" stroke="#e8a838" stroke-width="1.3" class="flow" marker-end="url(#arr)"/>
+<rect x="26" y="150" width="446" height="360" rx="6" fill="#040f17" fill-opacity="0.55" stroke="#00c1eb" stroke-dasharray="4 4"/><text x="36" y="164" fill="#00c1eb" class="xs">A  AZURE NATIVE (foundry-autonomous-sdlc)</text>
+<rect x="42" y="172" width="190" height="46" rx="4" fill="#0f1f2a" stroke="#00c1eb" stroke-width="1.2"/><rect x="42" y="172" width="3" height="46" rx="1.5" fill="#00c1eb"/>
+<text x="53" y="188" fill="#dfe9f1" class="md">Routine timer</text>
+<text x="53" y="201" fill="#87949f" class="xs">Foundry scheduled agent run</text>
+<rect x="250" y="172" width="206" height="46" rx="4" fill="#0f1f2a" stroke="#00c1eb" stroke-width="1.2"/><rect x="250" y="172" width="3" height="46" rx="1.5" fill="#00c1eb"/>
+<text x="261" y="188" fill="#dfe9f1" class="md">Orchestrator</text>
+<text x="261" y="201" fill="#87949f" class="xs">hosted agent, state machine</text>
+<circle cx="446" cy="182" r="3.5" fill="#00c1eb" filter="url(#glow)"/>
+<rect x="42" y="244" width="190" height="52" rx="4" fill="#0f1f2a" stroke="#00c1eb" stroke-width="1.2"/><rect x="42" y="244" width="3" height="52" rx="1.5" fill="#00c1eb"/>
+<text x="53" y="260" fill="#dfe9f1" class="md">Prompt agents x9</text>
+<text x="53" y="273" fill="#87949f" class="xs">triage, req-gate, spec, review</text>
+<text x="53" y="286" fill="#87949f" class="xs">Azure AI Foundry models</text>
+<rect x="250" y="244" width="206" height="52" rx="4" fill="#0f1f2a" stroke="#00c1eb" stroke-width="1.2"/><rect x="250" y="244" width="3" height="52" rx="1.5" fill="#00c1eb"/>
+<text x="261" y="260" fill="#dfe9f1" class="md">Coder</text>
+<text x="261" y="273" fill="#87949f" class="xs">hosted agent, agy in sandbox</text>
+<text x="261" y="286" fill="#87949f" class="xs">managed identity, egress policy</text>
+<rect x="42" y="322" width="190" height="46" rx="4" fill="#0f1f2a" stroke="#00c1eb" stroke-width="1.2"/><rect x="42" y="322" width="3" height="46" rx="1.5" fill="#00c1eb"/>
+<text x="53" y="338" fill="#dfe9f1" class="md">GitHub Actions</text>
+<text x="53" y="351" fill="#87949f" class="xs">7 required gates + CD</text>
+<rect x="250" y="322" width="206" height="46" rx="4" fill="#0f1f2a" stroke="#00c1eb" stroke-width="1.2"/><rect x="250" y="322" width="3" height="46" rx="1.5" fill="#00c1eb"/>
+<text x="261" y="338" fill="#dfe9f1" class="md">Ledger</text>
+<text x="261" y="351" fill="#87949f" class="xs">git branch `state`</text>
+<text x="261" y="364" fill="#87949f" class="xs">events.jsonl, state.json</text>
+<rect x="42" y="394" width="190" height="46" rx="4" fill="#0f1f2a" stroke="#00c1eb" stroke-width="1.2"/><rect x="42" y="394" width="3" height="46" rx="1.5" fill="#00c1eb"/>
+<text x="53" y="410" fill="#dfe9f1" class="md">Control center</text>
+<text x="53" y="423" fill="#87949f" class="xs">GitHub Pages, read-only</text>
+<rect x="250" y="394" width="206" height="46" rx="4" fill="#0f1f2a" stroke="#00c1eb" stroke-width="1.2"/><rect x="250" y="394" width="3" height="46" rx="1.5" fill="#00c1eb"/>
+<text x="261" y="410" fill="#dfe9f1" class="md">Key Vault + Terraform</text>
+<text x="261" y="423" fill="#87949f" class="xs">secrets, infra as code</text>
+<line x1="232" y1="195" x2="250" y2="195" stroke="#00c1eb" stroke-width="1.3" class="flow" marker-end="url(#arr)"/>
+<line x1="353" y1="218" x2="353" y2="244" stroke="#00c1eb" stroke-width="1.3" class="flow" marker-end="url(#arr)"/>
+<line x1="250" y1="270" x2="232" y2="270" stroke="#00c1eb" stroke-width="1.3" class="flow" marker-end="url(#arr)"/>
+<line x1="353" y1="296" x2="353" y2="322" stroke="#00c1eb" stroke-width="1.3" class="flow" marker-end="url(#arr)"/>
+<line x1="136" y1="296" x2="136" y2="322" stroke="#00c1eb" stroke-width="1.3" class="flow" marker-end="url(#arr)"/>
+<line x1="250" y1="345" x2="232" y2="345" stroke="#00c1eb" stroke-width="1.3" class="flow" marker-end="url(#arr)"/>
+<line x1="250" y1="368" x2="136" y2="394" stroke="#00c1eb" stroke-width="1.3" class="flow" marker-end="url(#arr)"/>
+<text x="42" y="468" fill="#b0bdc6" class="xs" text-anchor="start">Runs in your Azure subscription. Pay per Foundry call.</text>
+<text x="42" y="482" fill="#87949f" class="xs" text-anchor="start">Pick this when the platform is Azure and agents are managed.</text>
+<text x="42" y="496" fill="#87949f" class="xs" text-anchor="start">Docs: docs/architecture.md, docs/runbook.md</text>
+<rect x="488" y="150" width="446" height="360" rx="6" fill="#040f17" fill-opacity="0.55" stroke="#25df75" stroke-dasharray="4 4"/><text x="498" y="164" fill="#25df75" class="xs">B  INDEPENDENT FACTORY (Temporal + CLI agent)</text>
+<rect x="504" y="172" width="190" height="46" rx="4" fill="#0f1f2a" stroke="#25df75" stroke-width="1.2"/><rect x="504" y="172" width="3" height="46" rx="1.5" fill="#25df75"/>
+<text x="515" y="188" fill="#dfe9f1" class="md">Temporal Schedule</text>
+<text x="515" y="201" fill="#87949f" class="xs">github-poll every 60 s</text>
+<rect x="712" y="172" width="206" height="46" rx="4" fill="#0f1f2a" stroke="#25df75" stroke-width="1.2"/><rect x="712" y="172" width="3" height="46" rx="1.5" fill="#25df75"/>
+<text x="723" y="188" fill="#dfe9f1" class="md">foreman worker</text>
+<text x="723" y="201" fill="#87949f" class="xs">WorkItemWorkflow per issue</text>
+<circle cx="908" cy="182" r="3.5" fill="#25df75" filter="url(#glow)"/>
+<rect x="504" y="244" width="190" height="52" rx="4" fill="#0f1f2a" stroke="#25df75" stroke-width="1.2"/><rect x="504" y="244" width="3" height="52" rx="1.5" fill="#25df75"/>
+<text x="515" y="260" fill="#dfe9f1" class="md">Temporal + Postgres</text>
+<text x="515" y="273" fill="#87949f" class="xs">durable workflows, retries</text>
+<text x="515" y="286" fill="#87949f" class="xs">timeouts, signals, human gates</text>
+<rect x="712" y="244" width="206" height="52" rx="4" fill="#0f1f2a" stroke="#25df75" stroke-width="1.2"/><rect x="712" y="244" width="3" height="52" rx="1.5" fill="#25df75"/>
+<text x="723" y="260" fill="#dfe9f1" class="md">coder sandbox</text>
+<text x="723" y="273" fill="#87949f" class="xs">agy CLI (Gemini), 2 uids</text>
+<text x="723" y="286" fill="#87949f" class="xs">Copilot / Claude Code later</text>
+<rect x="504" y="322" width="190" height="46" rx="4" fill="#0f1f2a" stroke="#25df75" stroke-width="1.2"/><rect x="504" y="322" width="3" height="46" rx="1.5" fill="#25df75"/>
+<text x="515" y="338" fill="#dfe9f1" class="md">GitHub Actions</text>
+<text x="515" y="351" fill="#87949f" class="xs">same 7 gates, same CD</text>
+<rect x="712" y="322" width="206" height="46" rx="4" fill="#0f1f2a" stroke="#25df75" stroke-width="1.2"/><rect x="712" y="322" width="3" height="46" rx="1.5" fill="#25df75"/>
+<text x="723" y="338" fill="#dfe9f1" class="md">Ledger</text>
+<text x="723" y="351" fill="#87949f" class="xs">Dolt (git for data)</text>
+<text x="723" y="364" fill="#87949f" class="xs">ledger-api, 1 commit per write</text>
+<rect x="504" y="394" width="190" height="46" rx="4" fill="#0f1f2a" stroke="#25df75" stroke-width="1.2"/><rect x="504" y="394" width="3" height="46" rx="1.5" fill="#25df75"/>
+<text x="515" y="410" fill="#dfe9f1" class="md">Mission control</text>
+<text x="515" y="423" fill="#87949f" class="xs">nginx, same UI, read-only</text>
+<rect x="712" y="394" width="206" height="46" rx="4" fill="#0f1f2a" stroke="#25df75" stroke-width="1.2"/><rect x="712" y="394" width="3" height="46" rx="1.5" fill="#25df75"/>
+<text x="723" y="410" fill="#dfe9f1" class="md">docker compose</text>
+<text x="723" y="423" fill="#87949f" class="xs">laptop now, Azure VM next</text>
+<line x1="694" y1="195" x2="712" y2="195" stroke="#25df75" stroke-width="1.3" class="flow" marker-end="url(#arr)"/>
+<line x1="815" y1="218" x2="815" y2="244" stroke="#25df75" stroke-width="1.3" class="flow" marker-end="url(#arr)"/>
+<line x1="712" y1="270" x2="694" y2="270" stroke="#25df75" stroke-width="1.3" class="flow" marker-end="url(#arr)"/>
+<line x1="815" y1="296" x2="815" y2="322" stroke="#25df75" stroke-width="1.3" class="flow" marker-end="url(#arr)"/>
+<line x1="598" y1="296" x2="598" y2="322" stroke="#25df75" stroke-width="1.3" class="flow" marker-end="url(#arr)"/>
+<line x1="712" y1="345" x2="694" y2="345" stroke="#25df75" stroke-width="1.3" class="flow" marker-end="url(#arr)"/>
+<line x1="712" y1="368" x2="598" y2="394" stroke="#25df75" stroke-width="1.3" class="flow" marker-end="url(#arr)"/>
+<text x="504" y="468" fill="#b0bdc6" class="xs" text-anchor="start">Runs anywhere Docker runs. Pay with your CLI plan, not per call.</text>
+<text x="504" y="482" fill="#87949f" class="xs" text-anchor="start">Pick this for portability, a private ADO variant, other CLIs.</text>
+<text x="504" y="496" fill="#87949f" class="xs" text-anchor="start">Docs: docs/factory-runbook.md, docs/factory-v1-status.md</text>
+<rect x="26" y="522" width="908" height="52" rx="6" fill="#040f17" fill-opacity="0.55" stroke="#e8a838" stroke-dasharray="4 4"/><text x="36" y="536" fill="#e8a838" class="xs">SHARED, UNCHANGED</text>
+<rect x="40" y="540" width="119.4" height="16" rx="3" fill="#0f1f2a" stroke="#e8a838" stroke-opacity="0.7"/><text x="99.7" y="551.5" fill="#e8a838" class="xs" text-anchor="middle">parcel app (app/)</text>
+<rect x="169.4" y="540" width="144.20000000000002" height="16" rx="3" fill="#0f1f2a" stroke="#e8a838" stroke-opacity="0.7"/><text x="241.5" y="551.5" fill="#e8a838" class="xs" text-anchor="middle">state machine + gates</text>
+<rect x="323.6" y="540" width="150.4" height="16" rx="3" fill="#0f1f2a" stroke="#e8a838" stroke-opacity="0.7"/><text x="398.8" y="551.5" fill="#e8a838" class="xs" text-anchor="middle">tests first (TDD gate)</text>
+<rect x="484.0" y="540" width="119.4" height="16" rx="3" fill="#0f1f2a" stroke="#e8a838" stroke-opacity="0.7"/><text x="543.7" y="551.5" fill="#e8a838" class="xs" text-anchor="middle">control center UI</text>
+<rect x="613.4" y="540" width="131.8" height="16" rx="3" fill="#0f1f2a" stroke="#e8a838" stroke-opacity="0.7"/><text x="679.3" y="551.5" fill="#e8a838" class="xs" text-anchor="middle">ledger event schema</text>
+</svg>

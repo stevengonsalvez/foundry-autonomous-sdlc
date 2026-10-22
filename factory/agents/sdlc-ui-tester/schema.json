@@ -1,0 +1,65 @@
+{
+  "type": "object",
+  "properties": {
+    "verdict": {
+      "type": "string",
+      "enum": [
+        "pass",
+        "concerns"
+      ]
+    },
+    "findings": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "route": {
+            "type": "string",
+            "maxLength": 100,
+            "minLength": 1
+          },
+          "viewport": {
+            "type": "string",
+            "maxLength": 100,
+            "minLength": 1
+          },
+          "issue": {
+            "type": "string",
+            "maxLength": 400,
+            "minLength": 1
+          },
+          "severity": {
+            "type": "string",
+            "enum": [
+              "critical",
+              "high",
+              "medium",
+              "low",
+              "info"
+            ]
+          }
+        },
+        "required": [
+          "route",
+          "viewport",
+          "issue",
+          "severity"
+        ],
+        "additionalProperties": false
+      },
+      "minItems": 0,
+      "maxItems": 10
+    },
+    "summary": {
+      "type": "string",
+      "maxLength": 400,
+      "minLength": 1
+    }
+  },
+  "required": [
+    "verdict",
+    "findings",
+    "summary"
+  ],
+  "additionalProperties": false
+}

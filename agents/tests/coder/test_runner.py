@@ -267,7 +267,7 @@ class World:
     def checkout(self) -> Path:
         return self.tmp / "srv/j-12-1/checkout"
 
-    def service(self) -> CoderService:
+    def service(self, **options: Any) -> CoderService:
         home = self.tmp / "home"
         self.engine_user.home.mkdir(exist_ok=True)
         npm = FakeToolchain(home).node_bin() / "npm"
@@ -288,7 +288,7 @@ class World:
             agy_installer=lambda src: Path("/opt/agy/bin/agy"),
             reap=self._reap,   # the real one kills by uid, which here is this test's own
         )
-        return CoderService(JobStore(home / "jobs", Redactor()), deps)
+        return CoderService(JobStore(home / "jobs", Redactor()), deps, **options)
 
     def _reap(self, user: RunAs) -> int:
         self.reaped.append(user)
@@ -731,6 +731,29 @@ def test_start_is_idempotent_and_terminal_jobs_are_final(world: World) -> None:
     again = start(service, job())
     assert again["status"] == "succeeded"
     assert len(world.github.pulls) == 1
+
+
+def test_a_busy_coder_refuses_a_second_job_until_the_first_ends(world: World) -> None:
+    # Jobs share one engine user, and a starting job kills that user's processes: two at once kill each
+    # other (live #129, killed -9 at the second job's start). A busy coder answers 429 for another job.
+    gate = threading.Event()
+
+    def held(root: Path) -> None:
+        gate.wait(30)
+        (root / "app/web/src/eta.txt").write_text("2026-10-12\n")
+
+    world.engines = [ScriptedEngine("agy", [held])]
+    service = world.service(max_running=1)
+    start(service, job())
+    other = job(job_id="j-13-1", branch="agent/issue-13", issue={"number": 13, "title": "Other", "body": "x"})
+    code, resp = service.handle_raw(json.dumps({"op": "start", "job": other}).encode())
+    assert code == 429 and resp["error"] == "busy" and resp["retry_after_s"] > 0
+    assert start(service, job())["status"] == "running"            # the running job's own start still answers
+    assert "agent-lease/13" not in world.github.branches           # a refused job took no lease
+    gate.set()
+    assert wait(service, "j-12-1")["status"] == "succeeded"
+    world.engines = [ScriptedEngine("agy", [{"app/web/src/eta.txt": "2026-10-12\n"}])]
+    assert service.handle_raw(json.dumps({"op": "start", "job": other}).encode())[0] == 200
 
 
 def test_protocol_errors() -> None:

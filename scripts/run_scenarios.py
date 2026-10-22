@@ -21,10 +21,13 @@ SCENARIOS = ROOT / "scenarios"
 FILES = {
     "a": "a-feature.md",
     "a2": "a2-feature.md",
+    "a3": "a3-feature.md",
     "b": "b-vague.md",
     "c": "c-not-suitable.md",
     "d": "d-bug.md",
     "d-maintenance": "d-maintenance.md",
+    "d3": "d3-bug.md",
+    "d-maintenance2": "d-maintenance2.md",
 }
 OLD_HEADING, NEW_HEADING = "Track your parcel", "Track a parcel"
 
@@ -56,28 +59,29 @@ def create_issue(meta: dict[str, str], body: str, run: Gh) -> int:
     return int(json.loads(out)["number"])
 
 
-def find_heading_file() -> str:
+def find_heading_file(old: str = OLD_HEADING) -> str:
     hits = subprocess.run(
-        ["git", "grep", "-l", OLD_HEADING, "--", "app/web/src", ":!*.test.*", ":!*.spec.*"],
+        ["git", "grep", "-l", old, "--", "app/web/src", ":!*.test.*", ":!*.spec.*"],
         cwd=ROOT, capture_output=True, text=True, check=False,
     ).stdout.split()
     if len(hits) != 1:
-        raise RuntimeError(f"expected exactly one source file with the heading, got {hits}")
+        raise RuntimeError(f"expected exactly one source file with {old!r}, got {hits}")
     return hits[0]
 
 
 def create_stale_test_pr(meta: dict[str, str], body: str, run: Gh, path: str) -> int:
     branch = meta["branch"]
+    old, new = meta.get("old", OLD_HEADING), meta.get("new", NEW_HEADING)
     main_sha = run(["api", f"repos/{REPO}/git/ref/heads/main", "--jq", ".object.sha"]).strip()
     run(["api", f"repos/{REPO}/git/refs", "--input", "-"],
         json.dumps({"ref": f"refs/heads/{branch}", "sha": main_sha}))
     current = json.loads(run(["api", f"repos/{REPO}/contents/{path}?ref=main"]))
     text = base64.b64decode(current["content"]).decode()
-    if OLD_HEADING not in text:
-        raise RuntimeError(f"{path} does not contain the heading on main")
+    if old not in text:
+        raise RuntimeError(f"{path} does not contain {old!r} on main")
     run(["api", "-X", "PUT", f"repos/{REPO}/contents/{path}", "--input", "-"], json.dumps({
-        "message": "feat(web): update home page heading copy",
-        "content": base64.b64encode(text.replace(OLD_HEADING, NEW_HEADING).encode()).decode(),
+        "message": f"feat(web): change copy to {new!r}",
+        "content": base64.b64encode(text.replace(old, new).encode()).decode(),
         "sha": current["sha"], "branch": branch,
     }))
     pr = json.loads(run(["api", f"repos/{REPO}/pulls", "--input", "-"], json.dumps({
@@ -95,8 +99,9 @@ def run_scenarios(only: list[str], run: Gh = gh, dry_run: bool = False) -> dict[
         if dry_run:
             print(f"[dry-run] {key}: {meta.get('title') or meta.get('pr_title')}")
             continue
-        if key == "d-maintenance":
-            created[key] = create_stale_test_pr(meta, body, run, find_heading_file())
+        if key.startswith("d-maintenance"):
+            path = find_heading_file(meta["old"]) if "old" in meta else find_heading_file()
+            created[key] = create_stale_test_pr(meta, body, run, path)
         else:
             created[key] = create_issue(meta, body, run)
         print(f"{key}: #{created[key]}")

@@ -54,7 +54,7 @@ const AGENT_CODES = {
 
 export function agentTag(agentName) {
   if (!agentName) return '--';
-  return AGENT_CODES[agentName] ?? agentName.slice(0, 2).toUpperCase();
+  return AGENT_CODES[agentName] ?? agentName.replace(/^sdlc-/, '').slice(0, 2).toUpperCase();
 }
 
 export function agentPill(agentName) {

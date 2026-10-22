@@ -80,9 +80,11 @@ def _recompute(state: State) -> None:
     cost["usd"] = round(model + cost["coder_usd"] + float(cost.get("coder_model_usd", 0.0)), 6)
 
 
-def record_call(state: State, agent: str, input_tokens: int, output_tokens: int) -> float:
-    """Append one model call to the object's cost and return its USD."""
-    usd = round(token_usd(input_tokens, output_tokens), 8)
+def record_call(state: State, agent: str, input_tokens: int, output_tokens: int,
+                usd: float | None = None) -> float:
+    """Append one model call to the object's cost and return its USD: `usd` when the call was priced
+    some other way (a CLI engine's surrogate rate), else its tokens at the prices above."""
+    usd = round(token_usd(input_tokens, output_tokens) if usd is None else max(usd, 0.0), 8)
     calls = state.data["cost"]["calls"]
     calls.append({"agent": agent, "in": input_tokens, "out": output_tokens, "usd": usd})
     if len(calls) > MAX_CALL_ENTRIES:

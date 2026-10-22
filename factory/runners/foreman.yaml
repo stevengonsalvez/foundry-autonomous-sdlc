@@ -1,0 +1,8 @@
+# Trusted worker for workflows plus gate, GitHub and ledger activities.
+image: sdlc-factory-worker:latest
+taskQueue: foreman
+# One activity at a time serialises metrics.json and release tag reservation across work items.
+maxConcurrentActivities: 1
+network: default
+secrets:
+  - github_pat

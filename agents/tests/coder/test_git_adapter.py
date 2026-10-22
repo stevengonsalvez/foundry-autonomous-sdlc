@@ -39,6 +39,24 @@ def test_clone_keeps_the_token_out_of_the_checkout(cloned: tuple[SubprocessGit, 
     assert "SECRET" not in git.run(["git", "remote", "-v"], timeout_s=10).output
 
 
+def test_askpass_lives_under_the_configured_directory(tmp_path: Path) -> None:
+    # A noexec /tmp cannot run the helper: git push failed with "cannot exec ... askpass" (live #121).
+    where = tmp_path / "exec-ok"
+    where.mkdir(mode=0o700)
+    git = SubprocessGit(author=NEUTRAL_AUTHOR, askpass_dir=where)
+    git._token = PAT
+    seen: list[Path] = []
+
+    def spy(cmd: list[str], **kwargs: Any) -> tuple[int, str, str]:
+        seen.append(Path(kwargs["env"]["GIT_ASKPASS"]))
+        return 0, "", ""
+
+    with patch.object(shell, "capture", spy):
+        git._git("push", "origin", cwd=tmp_path)
+    assert seen[0].parent.parent == where
+    assert not seen[0].parent.exists()    # still removed right after the call
+
+
 def test_askpass_hands_the_token_to_git_only_for_network_calls(tmp_path: Path) -> None:
     git = SubprocessGit(author=NEUTRAL_AUTHOR)
     git._token = PAT
