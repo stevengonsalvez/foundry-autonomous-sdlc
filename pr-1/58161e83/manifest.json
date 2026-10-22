@@ -124,8 +124,8 @@
       "caption": "Home page in the default light theme: search form and recent parcels table.",
       "filename": "home-default-mobile.png",
       "route": "home",
-      "sha256": "a3fe31d2489e1b99659f3fbd06c10c5f0644aea12954bae32917babfd00485cc",
-      "size": 72649,
+      "sha256": "da69b33ae359c03efd1c9f7d33a38d867f101b8287e62c88ac9f45ea0ecac522",
+      "size": 72656,
       "state": "home-default",
       "title": "Home",
       "viewport": "mobile"
@@ -234,8 +234,8 @@
       "caption": "Home page with the dark theme selected via the theme toggle preference.",
       "filename": "home-dark-mobile.png",
       "route": "home",
-      "sha256": "fa1fafe058cd2d7af5f4a7c3ac6092e6e52975d19ef97e35eb22c10a0fd1a2d0",
-      "size": 76296,
+      "sha256": "47d9ae283a2be4f0cd46c3f1be0ab0eecf7eaf5aca5773605824d76e29310d63",
+      "size": 76293,
       "state": "home-dark",
       "title": "Home, dark theme",
       "viewport": "mobile"
