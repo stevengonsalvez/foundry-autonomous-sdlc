@@ -344,3 +344,13 @@ def test_unsupported_schema_version_raises(factory_copy: Path):
 
     with pytest.raises(ConfigError, match="schemaVersion"):
         load_factory(yaml_path)
+
+
+def test_ticket_label_marks_work_as_the_independent_factory_and_can_be_overridden(tmp_path):
+    assert load_factory(FACTORY_YAML).ticket_label == "factory:independent"
+    text = FACTORY_YAML.read_text().replace("ticketLabel: factory:independent", "ticketLabel: factory:other")
+    copy = tmp_path / "factory.yaml"
+    copy.write_text(text)
+    for sub in ("agents", "runners"):
+        (tmp_path / sub).symlink_to(FACTORY_YAML.parent / sub)
+    assert load_factory(copy).ticket_label == "factory:other"

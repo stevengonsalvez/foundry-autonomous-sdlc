@@ -29,7 +29,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from sdlc_agents.gates import MAINTENANCE_LABEL
-from sdlc_agents.ports import OWNER, Budget
+from sdlc_agents.ports import OWNER, Budget, GitHubError
 from sdlc_agents.tick import object_outcome, run_tick
 from temporalio import activity
 from temporalio.exceptions import ApplicationError
@@ -109,11 +109,23 @@ def _result(result: str, detail: str) -> str:
     return _ERROR_RESULTS.get(error_type, result) if result in ("deferred", "error") else result
 
 
+def _mark(deps: FactoryDeps, number: int) -> None:
+    """Label the issue or PR as run by this factory, so it can be told from the Azure Foundry one on GitHub.
+    Best effort and once: it reads the labels first and a GitHub error never fails the step."""
+    label = deps.config.ticket_label
+    try:
+        if label not in deps.github.get_issue(number).labels:
+            deps.github.add_labels(number, (label,))
+    except GitHubError as exc:
+        activity.logger.warning("could not mark #%s with %s: %s", number, label, exc)
+
+
 def build_activities(deps: FactoryDeps) -> list[Callable[..., Any]]:
     @activity.defn(name="run_step")
     def run_step(inp: StepInput) -> StepOutput:
         if inp.number <= 0:
             raise ApplicationError(f"not an issue number: {inp.number}", type=NON_RETRYABLE, non_retryable=True)
+        _mark(deps, inp.number)
         calls_before, minutes_before = _usage(deps.foundry)
         meter = _meter(deps.foundry)
         budget = Budget(usd_cap_total=deps.budget.usd_cap_total, usd_cap_issue=deps.budget.usd_cap_issue)

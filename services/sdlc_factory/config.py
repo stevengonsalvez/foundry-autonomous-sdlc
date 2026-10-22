@@ -89,6 +89,9 @@ class AgentConfig:
     schema: dict[str, Any] | None
 
 
+DEFAULT_TICKET_LABEL = "factory:independent"
+
+
 @dataclass(frozen=True)
 class FactoryConfig:
     name: str
@@ -100,6 +103,7 @@ class FactoryConfig:
     engines: Mapping[str, Mapping[str, Any]]
     runners: Mapping[str, Path]
     agents: Mapping[str, AgentConfig]
+    ticket_label: str = DEFAULT_TICKET_LABEL   # added to every issue or PR this factory runs
 
     def agent(self, name: str) -> AgentConfig:
         try:
@@ -329,4 +333,5 @@ def load_factory(path: str | Path) -> FactoryConfig:
         engines=engines,
         runners=_runners(data, path),
         agents=_agents(path.parent, defaults, engines, path),
+        ticket_label=_str(data.get("ticketLabel", DEFAULT_TICKET_LABEL), path, "ticketLabel"),
     )

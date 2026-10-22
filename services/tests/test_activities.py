@@ -21,7 +21,7 @@ from conftest import World
 from sdlc_agents import state
 from sdlc_agents.gates import MAINTENANCE_LABEL
 from sdlc_agents.github import GitHubClient
-from sdlc_agents.ports import Budget
+from sdlc_agents.ports import Budget, GitHubError
 from temporalio import activity
 from temporalio.exceptions import ApplicationError
 from test_scenarios import A_BODY, open_stale_test_pr
@@ -91,6 +91,40 @@ def test_run_step_advances_only_the_named_issue_and_reads_the_outcome_back(world
     assert world.gh.labels(b) == {"type:feature"} and not world.gh.comments[b]
     assert world.gh.state_of(a)       # the state comment was written
     json.dumps(dataclasses.asdict(out))     # JSON-safe for the Temporal data converter
+
+
+def test_run_step_marks_the_issue_as_run_by_this_factory_once(world: World, monkeypatch: pytest.MonkeyPatch) -> None:
+    deps = fake_deps(world)
+    label = deps.config.ticket_label
+    sent: list[tuple[int, tuple[str, ...]]] = []
+    real = world.gh.add_labels
+    monkeypatch.setattr(world.gh, "add_labels", lambda n, labels: (sent.append((n, labels)), real(n, labels))[1])
+    run_step = by_name(build_activities(deps))["run_step"]
+    a = world.gh.open_issue("Show the estimated delivery date", A_BODY, labels=("type:feature",))
+    b = world.gh.open_issue("Filter parcels by status", A_BODY, labels=("type:feature",))
+
+    run_step(StepInput(number=a, hold=[]))
+    world.clock.advance(TICK_SPACING_S)
+    run_step(StepInput(number=a, hold=[]))
+
+    assert label in world.gh.labels(a)
+    assert label not in world.gh.labels(b)                       # an issue this factory never ran stays unmarked
+    assert [n for n, labels in sent if label in labels] == [a]   # added once, not on every step
+
+
+def test_a_failed_marking_never_fails_the_step(world: World, monkeypatch: pytest.MonkeyPatch) -> None:
+    deps = fake_deps(world)
+    real = world.gh.add_labels
+
+    def flaky(n, labels):
+        if deps.config.ticket_label in labels:
+            raise GitHubError(502, "boom")
+        real(n, labels)
+
+    monkeypatch.setattr(world.gh, "add_labels", flaky)
+    a = world.gh.open_issue("Show the estimated delivery date", A_BODY, labels=("type:feature",))
+    out = by_name(build_activities(deps))["run_step"](StepInput(number=a, hold=[]))
+    assert out.result == "ok" and state.READY in world.gh.labels(a)
 
 
 def test_run_step_reports_a_held_step_and_does_nothing(world: World) -> None:
