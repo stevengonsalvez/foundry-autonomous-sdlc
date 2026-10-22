@@ -163,6 +163,8 @@ export function ParcelPage({ trackingNumber }: { trackingNumber: string }) {
       ? getNewestEvent(state.data.events)
       : undefined;
 
+  const lastSeenLocation = newestEvent?.location?.trim();
+
   const eventsCount =
     state.status === "success" && Array.isArray(state.data.events)
       ? state.data.events.length
@@ -189,6 +191,11 @@ export function ParcelPage({ trackingNumber }: { trackingNumber: string }) {
             {`Last updated: ${formatDateTime(newestEvent.timestamp)}`}
           </p>
         )}
+        {lastSeenLocation ? (
+          <p className="parcel-header__last-seen">
+            {`Last seen: ${lastSeenLocation}`}
+          </p>
+        ) : null}
         {eventsCount > 0 ? (
           <p className="parcel-header__events">
             {`Tracking events: ${eventsCount}`}
