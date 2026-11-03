@@ -18,7 +18,7 @@ azure-core-tracing-opentelemetry==1.0.0b13
 azure-identity==1.26.0
 azure-monitor-opentelemetry-exporter==1.0.0b58
 azure-storage-blob==12.31.0
-certifi==2026.7.22
+certifi==2026.10.18
 cffi==2.1.1
 charset-normalizer==3.5.2
 cryptography==50.0.2
